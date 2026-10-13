@@ -369,7 +369,7 @@ def test_too_little_memory_is_refused(paar, programme, monkeypatch) -> None:
     modell.write_bytes(b"GGUF")
     monkeypatch.setattr(sharding, "ollama_gguf", lambda name, url: modell)
     monkeypatch.setattr(sharding, "needed_gb", lambda size: 10_000.0)
-    monkeypatch.setattr(sharding, "node_memory_gb", lambda: 8.0)
+    monkeypatch.setattr(sharding, "node_memory_gb", lambda gpu=None: 8.0)
     monkeypatch.setattr(sharding, "GATHER_SECONDS", 0.0)
     a.set_split(True, "riesig")
     a.loads[b.node_id] = {"split": {"ready": True, "mem_gb": 8.0}}

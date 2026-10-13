@@ -905,15 +905,26 @@ def cluster_command() -> None:
         console.print(f"Im Verbund mit {len(verbund.get('members', []))} Servern.")
         aufteilen = verbund.get("split") if isinstance(verbund.get("split"), dict) else {}
         if aufteilen.get("on"):
-            # Serverlast aufteilen (10.2.0 Luna): braucht llama.cpp auf jedem Server.
-            from aquaticy import sharding
+            # Serverlast aufteilen (10.2.0 Luna). llama.cpp laedt Aquaticy seit
+            # 11.0.0 selbst -- in der Fassung, die der Master gewaehlt hat.
+            from aquaticy import llamacpp, sharding
 
             console.print(f"Serverlast aufteilen: an ({aufteilen.get('model') or '?'}).")
-            for name, env, namen in (("rpc-server", sharding.RPC_ENV, sharding.RPC_NAMES),
-                                     ("llama-server", sharding.SERVER_ENV,
-                                      sharding.SERVER_NAMES)):
-                da = sharding.find_binary(env, namen)
-                console.print(f"[dim]  {name}: {da or 'fehlt auf diesem Server'}[/dim]")
+            fassung = str(aufteilen.get("llama") or "")
+            eintrag = None
+            if llamacpp.TAG_RE.fullmatch(fassung):
+                eintrag = llamacpp.Installer(get_settings().data_dir / "llama.cpp",
+                                             gpu=sharding.nvidia_card).installed(fassung)
+            for name, env, namen, feld in (
+                    ("rpc-server", sharding.RPC_ENV, sharding.RPC_NAMES, "rpc_server"),
+                    ("llama-server", sharding.SERVER_ENV, sharding.SERVER_NAMES,
+                     "llama_server")):
+                da = sharding.find_binary(env, namen) if os.environ.get(env, "").strip() \
+                    else (str(getattr(eintrag, feld)) if eintrag is not None
+                          else sharding.find_binary(env, namen))
+                console.print(f"[dim]  {name}: {da or 'wird beim Start geladen'}[/dim]")
+            if eintrag is not None:
+                console.print(f"[dim]  {eintrag.label()}[/dim]")
     else:
         console.print("Der Server-Verbund ist an, aber noch nicht verbunden.")
     try:
@@ -1720,6 +1731,8 @@ HELP_TEXT = """\
   [cyan]/uploads [clear][/cyan]     Hochgeladenes anzeigen oder loeschen
   [cyan]/help[/cyan]                Diese Uebersicht
   [cyan]/quit, /exit, /q[/cyan]     Terminal beenden; im Browser Fenster schliessen
+  [cyan]/<plugin> <text>[/cyan]     Ein eingeschaltetes Plugin nutzen, z.B. /code-review,
+                         /security-review, /github, /wetter (Add-ons)
 
 [bold]Terminal-Befehle[/bold]
   aquaticy chat                 Interaktiver Chat
@@ -1824,11 +1837,12 @@ def _do_export(turns: list, fmt: str, settings: Settings) -> None:
     console.print(f"[green]Gespeichert:[/green] {path}")
 
 
-def _run_turn(agent, renderer, question: str, stream: bool, show_images: bool) -> object:
+def _run_turn(agent, renderer, question: str, stream: bool, show_images: bool,
+              **optionen: object) -> object:
     """Eine Frage durchlaufen lassen und die Ausgabe erzeugen."""
     renderer.reset()
     console.print()
-    result = agent.ask(question, stream=stream)
+    result = agent.ask(question, stream=stream, **optionen)
     if not stream:
         renderer.print_answer(result.answer)
     if result.error:
@@ -1844,6 +1858,51 @@ def _run_turn(agent, renderer, question: str, stream: bool, show_images: bool) -
         print_visuals(console, result.visuals)
     console.print()
     return result
+
+
+def _plugin_options(line: str, settings: object) -> dict[str, object] | None:
+    """``/code-review ...``, ``/github ...`` -- ein Plugin im Terminal (11.0.0 Luna).
+
+    Returns: None (kein Plugin), {} (nur erklaert, wie es geht) oder die
+    Optionen fuer genau diesen einen Turn.
+    """
+    from aquaticy import plugins
+
+    turn = plugins.match(line, settings, True)  # am eigenen Rechner wie Ultra
+    if turn is None:
+        return None
+    auftrag = turn.argument or plugins.DEFAULT_QUESTIONS.get(turn.addon, "")
+    if not auftrag:
+        from rich.markdown import Markdown
+
+        console.print(Markdown(plugins.usage(turn.addon)))
+        return {}
+    optionen: dict[str, object] = {
+        "plugin_prompt": plugins.prompt(turn, auftrag, settings, True),
+        "structured": False, "recheck": False,
+    }
+    if turn.mode:
+        optionen["mode"] = turn.mode
+    if turn.online is not None:
+        optionen["online"] = turn.online
+    if turn.sandbox is not None:
+        optionen["sandbox"] = turn.sandbox
+    return optionen
+
+
+def _plugin_turn(agent, renderer, line: str, optionen: dict[str, object], stream: bool,
+                 show_images: bool) -> object:
+    """Ein Plugin-Turn -- danach arbeitet der Chat wie vorher weiter."""
+    felder = ("mode", "structured", "recheck", "online", "sandbox")
+    vorher = {feld: getattr(agent, feld, None) for feld in felder}
+    try:
+        return _run_turn(agent, renderer, line, stream, show_images, **optionen)
+    finally:
+        if any(getattr(agent, feld, None) != wert for feld, wert in vorher.items()):
+            for feld, wert in vorher.items():
+                setattr(agent, feld, wert)
+            with contextlib.suppress(Exception):
+                agent._refresh_system()
 
 
 @app.command("chat")
@@ -1919,6 +1978,17 @@ def chat_command(
             # "/max <Frage>" ist eine Recherche, kein Befehl -- sie laeuft
             # ueber den normalen Weg, damit man dabei zusieht. "/max" allein
             # erklaert sich unten wie jeder andere Befehl.
+            plugin = _plugin_options(line, settings) if line.startswith("/") else None
+            if plugin is not None:
+                if plugin:
+                    try:
+                        result = _plugin_turn(agent, renderer, line, plugin, stream, show_images)
+                    except KeyboardInterrupt:
+                        renderer.reset()
+                        console.print("\n[yellow]Abgebrochen.[/yellow]")
+                        continue
+                    _record_turn(turns, line, result)
+                continue
             if line.startswith("/") and not re.match(r"^/max\s+\S", line, re.IGNORECASE):
                 if _handle_slash(line, agent, settings, turns, renderer, stream, show_images):
                     break

@@ -203,7 +203,48 @@ CATALOG: dict[str, AddOn] = {
             anmelden="Keine Anmeldung nötig.",
             hinweis="Daten von Nager.Date. Nur Jahr und Land gehen raus.",
         ),
+        # -- Eigene Plugins (11.0.0 Luna): Wissen statt Werkzeug ---------------
+        AddOn(
+            "code-review", "Code-Review", "🔍", "Plugins",
+            "Prüft Code auf typische Fehler — besonders auf die, die KI-generierter Code oft "
+            "hat: erfundene Funktionen und Pakete, fehlende Randfälle, verschluckte Fehler.",
+            login="keine",
+            anmelden="Keine Anmeldung nötig. Im Chat: /code-review und dahinter Code, eine "
+            "angehängte Datei oder ein GitHub-Repo.",
+            hinweis="Der Code geht an dein Modell. Mit dem Add-on GitHub liest Aquaticy auch "
+            "Repos und Pull Requests.",
+        ),
+        AddOn(
+            "security-review", "Security-Review", "🛡️", "Plugins",
+            "Sucht Sicherheitslücken wie XSS, SQL-Injection, fehlende Zugriffskontrolle oder "
+            "Prompt-Injection — nach OWASP Top 10 — und sagt, wie man sie schließt.",
+            login="keine",
+            anmelden="Keine Anmeldung nötig. Im Chat: /security-review und dahinter Code, "
+            "eine angehängte Datei oder ein GitHub-Repo.",
+            hinweis="Prüft aus Sicht eines Verteidigers: finden, belegen, beheben — ohne "
+            "Angriffsanleitungen. Der Code geht an dein Modell.",
+        ),
     )
+}
+
+#: Was die beiden Pruef-Plugins abdecken -- fuer das Add-on-Fenster.
+PLUGIN_CONTENT: dict[str, tuple[str, ...]] = {
+    "code-review": (
+        "Logik: Bedingungen, Randfälle (leer, None, 0, negativ), um eins daneben",
+        "Fehlerbehandlung: verschluckte Ausnahmen, ungeprüfte Rückgaben, fehlende Zeitlimits",
+        "Ressourcen und Nebenläufigkeit: offene Dateien, Race Conditions, async ohne await",
+        "Daten und Zeit: Zeitzonen, Rundung, Kodierung, Kommazahlen mit ==",
+        "KI-Code: erfundene Funktionen und Pakete (Slopsquatting), Platzhalter, Tests, die "
+        "nur den Erfolgsfall prüfen, veraltete Bibliotheken",
+    ),
+    "security-review": (
+        "OWASP Top 10:2025 — Zugriffskontrolle, Fehlkonfiguration, Lieferkette, "
+        "Kryptografie, Injection, Design, Anmeldung, Integrität, Protokolle, Ausnahmen",
+        "Injection: SQL, Shell, XSS (innerHTML & Co.), Templates, Logs",
+        "Geheimnisse im Code, unsichere Cookies, JWT, Deserialisierung, Zip Slip",
+        "OWASP LLM Top 10 2025 — Prompt-Injection, Datenabfluss, ungeprüfte Modellausgabe, "
+        "zu viel Handlungsfreiheit für Agenten",
+    ),
 }
 
 # ---------------------------------------------------------------------------
@@ -266,6 +307,18 @@ RIGHTS: dict[str, tuple[Recht, ...]] = {
     ),
     "feiertage": (
         Recht("land", "Länder", (("alle", "Jedes Land"), ("de", "Nur Deutschland")), "alle"),
+    ),
+    "code-review": (
+        Recht("umfang", "Was gemeldet wird",
+              (("alles", "Alle Befunde"), ("wichtig", "Nur Kritisches und Hohes")), "alles"),
+        Recht("fixes", "Korrekturen", (("ja", "Mit Code für den Fix"), ("nein", "Nur Befunde")),
+              "ja"),
+    ),
+    "security-review": (
+        Recht("umfang", "Was gemeldet wird",
+              (("alles", "Alle Lücken"), ("wichtig", "Nur Kritisches und Hohes")), "alles"),
+        Recht("fixes", "Korrekturen", (("ja", "Mit Code für den Fix"), ("nein", "Nur Befunde")),
+              "ja"),
     ),
 }
 
@@ -567,6 +620,9 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
                 **({"token_set": anmeldung["token_set"]} if "token_set" in anmeldung else {}),
             },
             "feeds": feeds_of(settings) if addon.id == "feeds" else [],
+            # Im Chat: /<kennung> (11.0.0 Luna) -- und was ein Pruef-Plugin abdeckt.
+            "command": f"/{addon.id}",
+            "inhalt": list(PLUGIN_CONTENT.get(addon.id, ())),
             "rechte": rights_of(settings, addon.id),
             "rechte_katalog": [
                 {"key": recht.key, "label": recht.label,
@@ -1645,6 +1701,10 @@ in eine Websuche.
 - GitHub nur lesend (Werkzeug github). Schreiben, kommentieren, mergen gibt es \
 nicht -- sag das, wenn danach gefragt wird.
 - Blender: Skripte mit blender_run, die Oberflaeche mit desktop_open app=blender.
+- Code-Review und Security-Review sind Prueflisten, keine Werkzeuge: sie gelten, \
+wenn der Nutzer /code-review oder /security-review schreibt.
+- Jedes eingeschaltete Add-on hat im Chat einen Befehl (/github, /wetter ...). \
+Fragt der Nutzer danach, sag es ihm.
 """
 
 

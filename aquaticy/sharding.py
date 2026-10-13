@@ -25,6 +25,9 @@ Technik: llama.cpp (https://github.com/ggml-org/llama.cpp).
   vertauschte oder veraenderte Stuecke beenden die Verbindung.
 * ``llama-server`` lauscht ebenfalls nur auf 127.0.0.1 und verlangt einen
   zufaelligen Schluessel, den nur dieser Aquaticy-Prozess kennt.
+* Installieren muss man nichts (seit 11.0.0 Luna): Aquaticy laedt die
+  offiziellen Programme von llama.cpp selbst -- auf jedem Server dieselbe
+  Fassung, die der Master waehlt (aquaticy/llamacpp.py).
 """
 
 from __future__ import annotations
@@ -178,22 +181,30 @@ def needed_gb(size_gb: float) -> float:
 _SPEICHER: dict[str, float] = {}
 
 
-def node_memory_gb() -> float:
+def node_memory_gb(gpu: bool | None = None) -> float:
     """Was dieser Server zum Modell beitragen kann (VRAM, sonst Arbeitsspeicher).
 
+    *gpu* ``False``: die Ausgabe von llama.cpp rechnet nur auf dem Prozessor --
+    dann zaehlt der Arbeitsspeicher, auch wenn eine Karte eingebaut ist.
     Teuer genug (nvidia-smi), um es nur alle zehn Minuten neu zu messen.
     """
+    schluessel = "ram" if gpu is False else "gb"
     with _LOCK:
-        if time.monotonic() - _SPEICHER.get("at", -1e9) < 600:
-            return _SPEICHER.get("gb", 0.0)
+        if time.monotonic() - _SPEICHER.get(f"{schluessel}_at", -1e9) < 600:
+            return _SPEICHER.get(schluessel, 0.0)
     try:
-        from aquaticy.local_model import usable_memory_gb
+        if gpu is False:
+            from aquaticy.local_model import total_memory_gb
 
-        gb = float(usable_memory_gb() or 0.0)
+            gb = round(float(total_memory_gb() or 0.0) * 0.7, 1)
+        else:
+            from aquaticy.local_model import usable_memory_gb
+
+            gb = float(usable_memory_gb() or 0.0)
     except Exception:
         gb = 0.0
     with _LOCK:
-        _SPEICHER.update(at=time.monotonic(), gb=gb)
+        _SPEICHER.update({f"{schluessel}_at": time.monotonic(), schluessel: gb})
     return gb
 
 
@@ -202,10 +213,17 @@ def has_own_accelerator() -> bool:
 
     Dann braucht der Master keinen eigenen rpc-server: llama.cpp nutzt seine
     Karte direkt. Ohne Karte (nur Prozessor) traegt er ueber einen eigenen
-    rpc-server bei -- sonst bliebe sein Arbeitsspeicher ungenutzt.
+    rpc-server bei -- sonst bliebe sein Arbeitsspeicher ungenutzt. Gilt fuer
+    selbst gebaute Programme; bei der mitgeladenen Fassung entscheidet deren
+    Ausgabe (Manager._karte).
     """
     if sys.platform == "darwin":
         return True  # Metal nutzt der llama-server selbst
+    return nvidia_card()
+
+
+def nvidia_card() -> bool:
+    """Steckt eine NVIDIA-Karte im Server? (alle zehn Minuten neu gemessen)"""
     with _LOCK:
         if time.monotonic() - _SPEICHER.get("gpu_at", -1e9) < 600:
             return bool(_SPEICHER.get("gpu"))
@@ -584,10 +602,16 @@ class Tunnel:
 class RpcWorker:
     """Der rpc-server dieses Servers -- nur auf 127.0.0.1."""
 
-    def __init__(self, log_dir: Path) -> None:
+    def __init__(self, log_dir: Path,
+                 locate: Callable[[], tuple[str, str, str]] | None = None,
+                 memory: Callable[[], float] = node_memory_gb) -> None:
         self.log = log_dir / "rpc-server.log"
         self.port = 0
         self.error = ""
+        #: Kein Fehler, nur Geduld: llama.cpp wird gerade geladen.
+        self.note = ""
+        self._locate = locate or (lambda: (find_binary(RPC_ENV, RPC_NAMES), "", ""))
+        self._memory = memory
         self._proc: subprocess.Popen | None = None
         self._bereit = False
         self._naechster = 0.0
@@ -604,13 +628,16 @@ class RpcWorker:
         if self._proc is not None:
             self.error = "rpc-server wurde beendet: " + (_tail(self.log) or "ohne Meldung")
             self._proc, self._bereit = None, False
+        binary, wartet, fehler = self._locate()
+        if not binary:
+            self.note = wartet
+            self.error = "" if wartet else (fehler or "rpc-server von llama.cpp fehlt auf "
+                                            "diesem Server.")
+            return
+        self.note = ""
         if time.monotonic() < self._naechster:
             return
         self._naechster = time.monotonic() + RESTART_DELAY
-        binary = find_binary(RPC_ENV, RPC_NAMES)
-        if not binary:
-            self.error = "rpc-server von llama.cpp fehlt auf diesem Server."
-            return
         self.port = free_local_port()
         try:
             self._proc = _start([binary, "-H", "127.0.0.1", "-p", str(self.port),
@@ -627,10 +654,12 @@ class RpcWorker:
     def stop(self) -> None:
         proc, self._proc = self._proc, None
         _beenden(proc)
-        self._bereit, self.port, self.error, self._naechster = False, 0, "", 0.0
+        self._bereit, self.port, self.error, self.note, self._naechster = (
+            False, 0, "", "", 0.0)
 
     def status(self) -> dict[str, Any]:
-        return {"ready": self.ready, "error": self.error, "mem_gb": node_memory_gb()}
+        return {"ready": self.ready, "error": self.error, "note": self.note,
+                "mem_gb": self._memory()}
 
 
 def _horcht(port: int) -> bool:
@@ -757,7 +786,12 @@ class Manager:
         self.ollama_url = ollama_url
         self.context_tokens = context_tokens
         log_dir = Path(verbund.dir)
-        self.worker = RpcWorker(log_dir)
+        from aquaticy.llamacpp import Installer
+
+        #: llama.cpp kommt von selbst (11.0.0 Luna) -- neben dem Ordner des Verbunds.
+        self.llama = Installer(log_dir.parent / "llama.cpp", gpu=nvidia_card)
+        self.worker = RpcWorker(log_dir, locate=lambda: self._programm("rpc"),
+                                memory=lambda: node_memory_gb(self._karte_oder_offen()))
         self.server = SplitServer(log_dir)
         self._lock = threading.RLock()
         self._stop = threading.Event()
@@ -808,6 +842,63 @@ class Manager:
         """Einstellungen im Hintergrund anwenden, ohne den HTTP-Aufruf zu blockieren."""
         self._wake.set()
 
+    # -- llama.cpp -----------------------------------------------------------
+    def _fassung(self) -> str:
+        """Die Fassung von llama.cpp, die der Master fuer den Verbund gewaehlt hat."""
+        from aquaticy.llamacpp import TAG_RE
+
+        tag = str((self.verbund.split() if self.verbund.joined else {}).get("llama") or "")
+        return tag if TAG_RE.fullmatch(tag) else ""
+
+    def _programm(self, art: str, *, laden: bool = True) -> tuple[str, str, str]:
+        """Wo rpc-server oder llama-server liegt. Returns: (Pfad, wartet, Fehler).
+
+        Eine Vorgabe des Betreibers (AQUATICY_RPC_SERVER, AQUATICY_LLAMA_SERVER)
+        hat Vorrang. Sonst die Fassung des Verbunds, die Aquaticy selbst laedt;
+        erst wenn das nicht geht, ein llama.cpp aus dem Suchpfad.
+        """
+        env, namen = (RPC_ENV, RPC_NAMES) if art == "rpc" else (SERVER_ENV, SERVER_NAMES)
+        if os.environ.get(env, "").strip():
+            return find_binary(env, namen), "", ""
+        tag = self._fassung()
+        if tag:
+            eintrag = self.llama.ensure(tag) if laden else self.llama.installed(tag)
+            if eintrag is not None:
+                return str(eintrag.rpc_server if art == "rpc" else eintrag.llama_server), "", ""
+            if self.llama.phase != "fehler":
+                return "", (self.llama.message if self.llama.tag == tag and self.llama.message
+                            else f"Lädt llama.cpp {tag} …"), ""
+        vorhanden = find_binary(env, namen)
+        if vorhanden:
+            return vorhanden, "", ""
+        if self.llama.phase == "fehler" and self.llama.message:
+            return "", "", self.llama.message
+        name = "rpc-server" if art == "rpc" else "llama-server"
+        return "", "", f"{name} von llama.cpp fehlt auf diesem Server."
+
+    @staticmethod
+    def _selbst_gebaut() -> bool:
+        """Gibt der Betreiber beide Programme selbst vor, laedt Aquaticy nichts."""
+        return bool(os.environ.get(RPC_ENV, "").strip()
+                    and os.environ.get(SERVER_ENV, "").strip())
+
+    def _installation(self) -> Any:
+        """Die mitgeladene Fassung, falls dieser Server sie gerade nutzt."""
+        if os.environ.get(RPC_ENV, "").strip() or os.environ.get(SERVER_ENV, "").strip():
+            return None
+        tag = self._fassung()
+        return self.llama.installed(tag) if tag else None
+
+    def _karte(self) -> bool:
+        """Rechnet llama.cpp auf diesem Server mit einer Grafikkarte?"""
+        eintrag = self._installation()
+        return eintrag.accelerated if eintrag is not None else has_own_accelerator()
+
+    def _karte_oder_offen(self) -> bool | None:
+        """Fuer den Speicher: ``False`` = die Ausgabe nutzt nur den Prozessor."""
+        eintrag = self._installation()
+        return None if eintrag is None or eintrag.accelerated else False
+
     # -- Ein Takt ----------------------------------------------------------
     def tick(self) -> None:
         with self._lock:
@@ -824,7 +915,21 @@ class Manager:
             self._wunsch = ()
             return
         master = v.is_master
-        if not master or not has_own_accelerator():
+        if master and not self._fassung() and not self._selbst_gebaut():
+            # Eine Fassung fuer alle (11.0.0 Luna): der Master waehlt sie einmal
+            # und schickt sie mit der Einstellung an die Mitglieder.
+            gewaehlt = self.llama.chosen()
+            if gewaehlt:
+                with contextlib.suppress(Exception):
+                    v.set_split_llama(gewaehlt)
+            elif self.llama.phase != "fehler":
+                # Ohne Netz zu GitHub geht es mit einem llama.cpp aus dem
+                # Suchpfad weiter (wie bis 10.2) -- sonst wird gewartet.
+                self.server.phase = "wartet"
+                self.server.message = self.llama.message or "Sucht die passende Fassung " \
+                                                            "von llama.cpp …"
+                return
+        if not master or not self._karte():
             self.worker.ensure()
         else:
             self.worker.stop()
@@ -857,7 +962,7 @@ class Manager:
         if self.server.phase == "fehler" and (self.server.failures >= MAX_FAILURES
                                              or jetzt < self.server.next_try):
             return
-        eigener = self.worker if not has_own_accelerator() else None
+        eigener = self.worker if not self._karte() else None
         warten = set(bereit) != set(lebendig) or (eigener is not None and not eigener.ready)
         if jetzt < self._sammeln_bis and warten:
             self.server.phase = "wartet"
@@ -870,9 +975,12 @@ class Manager:
     def _starten(self, modell: str, bereit: list[str], eigener: RpcWorker | None) -> None:
         if not modell:
             raise ShardError("Wähle zuerst ein Modell aus.")
-        binary = find_binary(SERVER_ENV, SERVER_NAMES)
+        binary, wartet, fehler = self._programm("server")
         if not binary:
-            raise ShardError("llama-server von llama.cpp fehlt auf dem Master.")
+            if wartet:
+                self.server.phase, self.server.message = "wartet", wartet
+                return
+            raise ShardError(fehler or "llama-server von llama.cpp fehlt auf dem Master.")
         if not bereit and not (eigener is not None and eigener.ready):
             raise ShardError("Kein Server hat einen rpc-server bereit — ist llama.cpp "
                              "auf den Servern installiert?")
@@ -888,7 +996,8 @@ class Manager:
         noetig = needed_gb(gguf.stat().st_size / 1_000_000_000)
         # Der Master traegt bei, wenn er eine Grafikkarte hat (eigener is None)
         # oder sein eigener rpc-server bereit ist -- sonst rechnet er nicht mit.
-        eigen = node_memory_gb() if eigener is None or eigener.ready else 0.0
+        eigen = (node_memory_gb(self._karte_oder_offen())
+                 if eigener is None or eigener.ready else 0.0)
         verfuegbar = eigen + sum(
             _split_status_mem(self.verbund.loads.get(n)) for n in bereit)
         if verfuegbar and noetig > verfuegbar:
@@ -906,8 +1015,8 @@ class Manager:
         Ein Master mit Grafikkarte rechnet ohne eigenen rpc-server mit ("direct").
         """
         status = self.worker.status()
-        if self.verbund.is_master and has_own_accelerator():
-            status.update(ready=True, direct=True, error="")
+        if self.verbund.is_master and self._karte():
+            status.update(ready=True, direct=True, error="", note="")
         return status
 
     def rpc_port(self) -> int:
@@ -942,8 +1051,10 @@ class Manager:
         v = self.verbund
         einstellung = v.split() if v.joined else {}
         mitglieder = [m for m in v.members() if v.alive(m["node"])]
-        speicher = node_memory_gb() + sum(_split_status_mem(v.loads.get(m["node"]))
-                                          for m in mitglieder if m["node"] != v.node_id)
+        speicher = node_memory_gb(self._karte_oder_offen()) + sum(
+            _split_status_mem(v.loads.get(m["node"]))
+            for m in mitglieder if m["node"] != v.node_id)
+        eintrag = self._installation()
         antwort: dict[str, Any] = {
             "on": bool(einstellung.get("on")),
             "model": str(einstellung.get("model") or ""),
@@ -952,9 +1063,14 @@ class Manager:
             "message": self.server.message if v.is_master else self.worker.error,
             "servers": self.servers(),
             "memory_gb": round(speicher, 1),
-            "rpc_binary": bool(find_binary(RPC_ENV, RPC_NAMES)),
-            "server_binary": bool(find_binary(SERVER_ENV, SERVER_NAMES)),
+            "rpc_binary": bool(self._programm("rpc", laden=False)[0]),
+            "server_binary": bool(self._programm("server", laden=False)[0]),
             "self": self.worker.status(),
+            # llama.cpp installiert sich selbst, wenn es fuer dieses System eine
+            # fertige Ausgabe gibt (11.0.0 Luna).
+            "auto_install": bool(self.llama.names()),
+            "llama": {**self.llama.status(), "fassung": self._fassung(),
+                      "label": eintrag.label() if eintrag is not None else ""},
         }
         if v.is_master:
             antwort["models"] = [{**m, "needed_gb": needed_gb(m["size_gb"])}

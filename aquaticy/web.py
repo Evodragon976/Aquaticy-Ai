@@ -1173,6 +1173,8 @@ HELP_MARKDOWN = """### Befehle
 - `/forget` — den Langzeitspeicher leeren
 - `/quit`, `/exit`, `/q` — im Browser das Fenster schliessen
 - `/help` — diese Uebersicht
+- `/<plugin>` — ein eingeschaltetes Plugin gezielt nutzen, z. B. `/code-review`,
+  `/security-review`, `/github` oder `/wetter` (Add-ons → einschalten)
 
 Dauerhaft aendern lassen sich Modell, Suche und Ort oben unter **Einstellungen**."""
 
@@ -1567,7 +1569,44 @@ class ChatSession:
                     agent.toolbox.on_settings_changed = self._settings_dirty
                     agent.set_ask_handler(self._ask_browser)
                     agent._agent_limit_override = agents
-                    if message.startswith("/image"):
+                    # Plugins im Chat (11.0.0 Luna): "/code-review ...", "/github ..."
+                    # gilt fuer genau diese Nachricht (aquaticy/plugins.py).
+                    plugin = None
+                    plugin_prompt = ""
+                    if message.startswith("/") and not message.startswith("/image"):
+                        from aquaticy import plugins as plugin_mod
+
+                        plugin = plugin_mod.match(message, self.settings(), self.ultra)
+                    if plugin is not None:
+                        mode = plugin.mode or mode
+                        structured, recheck = False, False
+                        # Ein Plugin malt nicht und beobachtet keine Webcams.
+                        image_mode, visual_sources = False, False
+                        if plugin.online is not None:
+                            online = plugin.online
+                        if plugin.sandbox is not None:
+                            sandbox = plugin.sandbox
+                        context = ""
+                        if attachments:
+                            context = self.attachments_text(
+                                agent, attachments, emit,
+                                workshop=self._workshop_wanted(agent, mode, sandbox))
+                            if context:
+                                from aquaticy.injection import wrap_attachment
+
+                                context = wrap_attachment(context)
+                                if getattr(agent, "toolbox", None) is not None:
+                                    agent.toolbox.untrusted_seen = True
+                        auftrag = plugin.argument or plugin_mod.DEFAULT_QUESTIONS.get(
+                            plugin.addon, "")
+                        if not auftrag and not context:
+                            raise plugin_mod.PluginError(plugin_mod.usage(plugin.addon))
+                        plugin_prompt = plugin_mod.prompt(
+                            plugin, "\n\n".join(t for t in (context, auftrag) if t),
+                            self.settings(), self.ultra)
+                        # Die Rechtspruefung sieht wie sonst auch den Anhang.
+                        message = f"{context}\n\n{message}" if context else message
+                    elif message.startswith("/image"):
                         message = self._image_question(agent, message)
                     elif attachments:
                         context = self.attachments_text(
@@ -1598,6 +1637,8 @@ class ChatSession:
                     if isinstance(agent, BuiltinAgent):
                         ask_options["visual_sources"] = visual_sources
                         ask_options["image_mode"] = image_mode
+                        if plugin_prompt:
+                            ask_options["plugin_prompt"] = plugin_prompt
                         # Sprache aus dem Design-Fenster (9.5.25).
                         with contextlib.suppress(Exception):
                             from aquaticy.uistate import UIState
@@ -1859,7 +1900,14 @@ class ChatSession:
 
         with self._lock:
             if command == "help":
-                return {"text": HELP_MARKDOWN}
+                return {"text": HELP_MARKDOWN + self._plugin_help()}
+            # Ein Plugin ohne Text dahinter (11.0.0 Luna): wie es geht. Mit Text
+            # laeuft es ueber den Chat-Weg (ask), nicht hier.
+            from aquaticy import plugins as plugin_mod
+
+            plugin = plugin_mod.match(line, self.settings(), self.ultra)
+            if plugin is not None:
+                return {"text": plugin_mod.usage(plugin.addon)}
 
             if command == "max":
                 # Allein getippt ist es keine Recherche, sondern eine Frage
@@ -1927,6 +1975,20 @@ class ChatSession:
                 return {"text": "Im Browser reicht es, das Fenster zu schliessen."}
 
         return {"text": f"Unbekannter Befehl `/{command}` — `/help` zeigt alle."}
+
+    def _plugin_help(self) -> str:
+        """Die eingeschalteten Plugins dieses Kontos fuer ``/help``."""
+        from aquaticy import plugins as plugin_mod
+
+        try:
+            liste = plugin_mod.commands(self.settings(), self.ultra)
+        except Exception:
+            return ""
+        if not liste:
+            return ("\n\n### Plugins\nNoch keins eingeschaltet — unter 🧩 **Add-ons** gibt "
+                    "es zum Beispiel Code-Review und Security-Review.")
+        zeilen = "\n".join(f"- `/{eintrag['name']}` — {eintrag['label']}" for eintrag in liste)
+        return f"\n\n### Deine Plugins\n{zeilen}"
 
     def _notes(self, argument: str) -> str:
         """``/notes`` zeigt den Merkzettel, ``/notes delete 3`` und ``/notes clear`` raeumen auf.
@@ -2131,6 +2193,8 @@ class SessionRegistry:
 
 SESSIONS = SessionRegistry()
 USER_SCHEDULERS: dict[str, Any] = {}
+#: Die Taktgeber der Coworker je Konto (11.0.0 Luna, aquaticy/coworker.py).
+USER_COWORKERS: dict[str, Any] = {}
 #: Zwei Anmeldungen desselben Kontos koennen zeitgleich hereinkommen. Ohne
 #: Schloss startet dann jede ihren eigenen Taktgeber -- und jeder Auftrag
 #: liefe doppelt.
@@ -2180,27 +2244,61 @@ def job_abuse(account: Any, job: Any, payload: dict[str, Any]) -> None:
         enforce=not getattr(account, "ultra", False), text=str(getattr(job, "question", "")))
 
 
+def coworker_abuse(account: Any, kollege: Any, payload: dict[str, Any]) -> None:
+    """Missbrauch in einem Coworker -> Ai-guard, wie bei Auftraegen (11.0.0 Luna)."""
+    if AIGUARD is None or account is None:
+        return
+    AIGUARD.record_incident(
+        str(account.id), str(payload.get("art") or ""), payload.get("schwere") or 0,
+        chat=f"coworker:{getattr(kollege, 'id', '')}", detail=str(payload.get("art") or ""),
+        enforce=not getattr(account, "ultra", False), text=str(getattr(kollege, "goal", "")))
+
+
+def _plan_of(konto_id: str, fallback: Any) -> str:
+    """Die Stufe, wie sie JETZT ist -- ein herabgestuftes Konto laesst Coworker ruhen."""
+    if AUTH is not None:
+        with contextlib.suppress(Exception):
+            frisch = AUTH.account(konto_id)
+            return frisch.plan if frisch is not None else ""
+    return str(getattr(fallback, "plan", "") or "")
+
+
 def start_user_scheduler(account: Account) -> None:
-    """Startet den Taktgeber genau einmal fuer das Konto."""
+    """Startet die Taktgeber genau einmal fuer das Konto: Auftraege und Coworker."""
+    from aquaticy import coworker as coworker_mod
     from aquaticy.jobs import Scheduler
 
     with _SCHEDULER_LOCK:
-        if account.id in USER_SCHEDULERS:
-            return
         # Das Kontingent steckt in den Einstellungen des Kontos (settings.quota).
         # Waehrend einer Ai-guard-Sperre bleiben die Auftraege liegen (9.5.24).
         konto_id = account.id
-        scheduler = Scheduler(
-            SESSIONS.get(account).settings,
+
+        def ruht() -> bool:
             # Im Verbund laeuft ein Auftrag nur auf dem Heimserver (9.6.1) --
             # sonst liefe er auf jedem Server einmal.
-            paused=lambda: (AIGUARD is not None
-                            and AIGUARD.is_banned(user_id=konto_id) is not None)
-            or (CLUSTER is not None and not CLUSTER.is_home(konto_id)),
-            on_abuse=lambda job, payload: job_abuse(account, job, payload),
-        )
-        scheduler.start()
-        USER_SCHEDULERS[account.id] = scheduler
+            return (AIGUARD is not None
+                    and AIGUARD.is_banned(user_id=konto_id) is not None) or (
+                CLUSTER is not None and not CLUSTER.is_home(konto_id))
+
+        if account.id not in USER_SCHEDULERS:
+            scheduler = Scheduler(
+                SESSIONS.get(account).settings,
+                paused=ruht,
+                on_abuse=lambda job, payload: job_abuse(account, job, payload),
+            )
+            scheduler.start()
+            USER_SCHEDULERS[account.id] = scheduler
+        if account.id not in USER_COWORKERS:
+            # Coworker (11.0.0 Luna): nur mit Pro und Ultra -- die Stufe wird bei
+            # jedem Takt neu gelesen.
+            kollegen = coworker_mod.Scheduler(
+                SESSIONS.get(account).settings,
+                plan=lambda: _plan_of(konto_id, account),
+                paused=ruht,
+                on_abuse=lambda kollege, payload: coworker_abuse(account, kollege, payload),
+            )
+            kollegen.start()
+            USER_COWORKERS[account.id] = kollegen
 
 
 def _bind_ha_token(settings: Settings, tresor: Any) -> None:
@@ -2228,16 +2326,22 @@ def _bind_ha_token(settings: Settings, tresor: Any) -> None:
 
 def _stop_schedulers() -> None:
     """Haelt alle Planer an -- beim Beenden und vor einem Neustart (9.6.8 Ultra)."""
-    global SCHEDULER
+    global SCHEDULER, COWORKER_SCHEDULER
     with _SCHEDULER_LOCK:
-        planer = list(USER_SCHEDULERS.values())
+        planer = list(USER_SCHEDULERS.values()) + list(USER_COWORKERS.values())
         USER_SCHEDULERS.clear()
-    if SCHEDULER is not None:
-        planer.append(SCHEDULER)
-        SCHEDULER = None
+        USER_COWORKERS.clear()
+    for global_planer in (SCHEDULER, COWORKER_SCHEDULER):
+        if global_planer is not None:
+            planer.append(global_planer)
+    SCHEDULER = COWORKER_SCHEDULER = None
     for eins in planer:
         with contextlib.suppress(Exception):
             eins.stop()
+    with contextlib.suppress(Exception):
+        from aquaticy import coworker as coworker_mod
+
+        coworker_mod.stop_boxes()
 
 
 def forget_account_runtime(account: Account) -> None:
@@ -2247,11 +2351,22 @@ def forget_account_runtime(account: Account) -> None:
     laufender Auftrag gleich wieder in den frisch geleerten Ordner.
     """
     with _SCHEDULER_LOCK:
-        planer = USER_SCHEDULERS.pop(account.id, None)
-    if planer is not None:
-        with contextlib.suppress(Exception):
-            planer.stop()
+        planer = [USER_SCHEDULERS.pop(account.id, None), USER_COWORKERS.pop(account.id, None)]
+    for eins in planer:
+        if eins is not None:
+            with contextlib.suppress(Exception):
+                eins.stop()
     sitzung = SESSIONS.drop(account.id)
+    # Die virtual machines seiner Coworker gehen mit (11.0.0 Luna) -- ohne die
+    # Einstellungen neu zu bauen, das legte Ordner wieder an.
+    with contextlib.suppress(Exception):
+        from aquaticy import coworker as coworker_mod
+
+        gebaut = getattr(sitzung, "_settings", None) if sitzung is not None else None
+        ordner = gebaut.data_dir if gebaut is not None else (
+            AUTH.profile_dir(account.id) if AUTH is not None else None)
+        if ordner is not None:
+            coworker_mod.stop_boxes(ordner)
     if sitzung is not None:
         # Einen laufenden Chat erst anhalten und sein Ende abwarten (9.5.34):
         # sonst schrieb er nach dem Loeschen den Verlauf wieder auf die Platte.
@@ -2280,6 +2395,8 @@ def ui_state() -> Any:
 #: Der Taktgeber fuer die Auftraege. Wird beim Start gesetzt; im Test laeuft
 #: kein Server und damit auch keiner.
 SCHEDULER: Any = None
+#: Coworker ohne Konto (eigener Rechner) -- wie Ultra.
+COWORKER_SCHEDULER: Any = None
 
 
 #: Die Modellfelder mit ihrem Namen fuer "Eigene Modelle" (9.5.17).
@@ -3065,6 +3182,208 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500
     view = addons.public_view(session.settings(), session.ultra)
     return {"ok": True, "message": hinweis, **view}, 200
+
+
+# ---------------------------------------------------------------------------
+# Coworker (11.0.0 Luna, aquaticy/coworker.py)
+# ---------------------------------------------------------------------------
+COWORKER_ACTIONS = frozenset({
+    "create", "message", "approve", "reject", "pause", "resume", "wake", "rules", "edit",
+    "delete", "seen", "reset_notes",
+})
+
+
+def _coworker_scheduler(session: Any) -> Any:
+    """Der Taktgeber, der die Coworker dieses Kontos weckt."""
+    konto = getattr(session, "account", None)
+    if konto is None:
+        return COWORKER_SCHEDULER
+    with _SCHEDULER_LOCK:
+        return USER_COWORKERS.get(konto.id)
+
+
+def coworkers_view(session: Any, *, badge_only: bool = False) -> dict[str, Any]:
+    """Was der Browser von den Coworkern sieht -- ohne ein einziges Geheimnis."""
+    from aquaticy import coworker as coworker_mod
+
+    plan = session.plan
+    erlaubt = plan in coworker_mod.MAX_COWORKERS
+    antwort: dict[str, Any] = {"allowed": erlaubt, "plan": plan, "badge": 0}
+    if not erlaubt:
+        return antwort
+    settings = session.settings()
+    store = coworker_mod.CoworkerStore(settings.db_path)
+    antwort["badge"] = store.unseen()
+    if badge_only:
+        antwort["working"] = any(coworker_mod.is_running(store.db_path, cw.id)
+                                 for cw in store.all())
+        return antwort
+    antwort.update({
+        "max": coworker_mod.MAX_COWORKERS[plan],
+        "vm": coworker_mod.vm_possible(settings, session.ultra),
+        "categories": coworker_mod.catalog(session.ultra),
+        "avatars": list(coworker_mod.AVATARS),
+        "connections": coworker_mod.connections(settings, session.ultra),
+        "min_sleep": coworker_mod.MIN_SLEEP_MINUTES[plan],
+        "daily": coworker_mod.DAILY_RUNS[plan],
+        "coworkers": [coworker_mod.view(store, cw) for cw in store.all()],
+    })
+    return antwort
+
+
+def _coworker_insult(konto: Any, text: str, wo: str) -> str:
+    """Ai-guard: eine Beleidigung in Aufgabe oder Nachricht zaehlt wie im Chat."""
+    if AIGUARD is None or konto is None:
+        return ""
+    from aquaticy.aiguard import demeaning_request, insult_level
+
+    stufe = insult_level(text) or demeaning_request(text)
+    if not stufe:
+        return ""
+    AIGUARD.record_incident(konto.id, "beleidigung", stufe, chat=wo,
+                            detail="Beleidigung an einen Coworker (erkannt)",
+                            enforce=not getattr(konto, "ultra", False))
+    return ("Das schicke ich nicht weiter — Ai-guard hat darin eine Beleidigung oder den "
+            "Auftrag erkannt, jemanden herabzusetzen.")
+
+
+def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any], int]:
+    """Anlegen, schreiben, freigeben, pausieren -- alles aus der Coworker-Uebersicht.
+
+    Returns: (Antwort, HTTP-Status).
+    """
+    from aquaticy import coworker as coworker_mod
+    from aquaticy.agent import new_session_id
+    from aquaticy.cache import Cache
+
+    session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
+    if konto is None:
+        konto = getattr(session, "account", None)
+    if session.plan not in coworker_mod.MAX_COWORKERS:
+        return {"ok": False, "error": "Coworker gibt es mit Pro und Ultra."}, 403
+    if AIGUARD is not None and konto is not None and AIGUARD.is_banned(
+            user_id=konto.id) is not None:
+        return {"ok": False, "error": "Während einer Sperre arbeiten keine Coworker."}, 403
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in COWORKER_ACTIONS:
+        return {"ok": False, "error": "Unbekannte Aktion."}, 400
+    settings = session.settings()
+    store = coworker_mod.CoworkerStore(settings.db_path)
+    takt = _coworker_scheduler(session)
+    hinweis = ""
+    try:
+        if action == "create":
+            name = str(payload.get("name") or "")
+            aufgabe = str(payload.get("goal") or "")
+            nein = _coworker_insult(konto, f"{name}\n{aufgabe}", "coworker")
+            if nein:
+                return {"ok": False, "error": nein}, 400
+            chat = new_session_id()
+            kollege = store.add(name, aufgabe, avatar=str(payload.get("avatar") or ""),
+                                plan=session.plan, chat=chat)
+            # Der Chat des Coworkers: hier erscheinen seine Meldungen.
+            with contextlib.suppress(Exception):
+                Cache(settings.db_path, settings.cache_ttl_hours).add_history(
+                    chat, coworker_mod.chat_title(kollege),
+                    f"Hallo, ich bin {kollege.name}. Ich kümmere mich ab jetzt um:\n\n"
+                    f"> {kollege.goal}\n\nMeine Meldungen erscheinen hier und in der "
+                    "Coworker-Übersicht. Bevor ich etwas verändere, frage ich — so, wie "
+                    "du es in meinen Regeln einstellst. Schreiben kannst du mir in der "
+                    "Coworker-Übersicht; hier im Chat antwortet dir Aquaticy wie sonst auch "
+                    "— mit meinen Meldungen im Blick.", {"coworker": kollege.id})
+            hinweis = f"{kollege.name} fängt gleich an."
+        else:
+            try:
+                nummer = int(payload.get("id"))
+            except (TypeError, ValueError, OverflowError):
+                return {"ok": False, "error": "Keine gültige Kennung."}, 400
+            kollege = store.get(nummer)
+            if kollege is None:
+                return {"ok": False, "error": "Diesen Coworker gibt es nicht."}, 404
+            if action == "message":
+                text = coworker_mod._clean_text(payload.get("text"), coworker_mod.MAX_MESSAGE)
+                if not text:
+                    return {"ok": False, "error": "Schreib erst etwas."}, 400
+                nein = _coworker_insult(konto, text, f"coworker:{kollege.id}")
+                if nein:
+                    return {"ok": False, "error": nein}, 400
+                store.add_log(kollege.id, "nachricht", text)
+                hinweis = (f"{kollege.name} liest es gleich." if kollege.enabled else
+                           f"{kollege.name} ist pausiert und liest es, sobald es weitergeht.")
+            elif action in ("approve", "reject"):
+                try:
+                    anfrage = int(payload.get("action_id"))
+                except (TypeError, ValueError, OverflowError):
+                    return {"ok": False, "error": "Keine gültige Anfrage."}, 400
+                entschieden = store.decide(kollege.id, anfrage, action == "approve")
+                if entschieden is None:
+                    return {"ok": False, "error": "Diese Anfrage ist schon entschieden."}, 409
+                if action == "approve":
+                    ultra = session.ultra
+
+                    def ausfuehren() -> None:
+                        try:
+                            ok, ergebnis = coworker_mod.run_action(store, entschieden,
+                                                                   settings, ultra)
+                        except Exception as exc:  # die Anfrage darf nie haengen bleiben
+                            ok, ergebnis = False, f"Fehler: {type(exc).__name__}"
+                        try:
+                            store.finish_action(entschieden["id"], ok, ergebnis)
+                            store.add_log(kollege.id, "aktion",
+                                          ("Erledigt: " if ok else "Hat nicht geklappt: ")
+                                          + entschieden["summary"], seen=True)
+                        except sqlite3.Error:
+                            coworker_mod.LOG.exception("Coworker: Ergebnis nicht gespeichert")
+                        if takt is not None:
+                            takt.wake()
+
+                    threading.Thread(target=ausfuehren, name="aquaticy-coworker-aktion",
+                                     daemon=True).start()
+                    hinweis = "Erlaubt — wird ausgeführt."
+                else:
+                    store.add_log(kollege.id, "aktion",
+                                  "Abgelehnt: " + entschieden["summary"], seen=True)
+                    hinweis = "Abgelehnt."
+            elif action in ("pause", "resume"):
+                store.set_enabled(kollege.id, action == "resume")
+                hinweis = "Pausiert." if action == "pause" else "Geht weiter."
+            elif action == "wake":
+                if not kollege.enabled:
+                    return {"ok": False, "error": "Erst fortsetzen, dann wecken."}, 400
+                store.wake(kollege.id, "vom Nutzer geweckt")
+                hinweis = f"{kollege.name} legt gleich los."
+            elif action == "rules":
+                store.set_rules(kollege.id, payload.get("rules"))
+                hinweis = "Regeln gespeichert."
+            elif action == "edit":
+                name = payload.get("name")
+                aufgabe = payload.get("goal")
+                nein = _coworker_insult(konto, f"{name or ''}\n{aufgabe or ''}",
+                                        f"coworker:{kollege.id}")
+                if nein:
+                    return {"ok": False, "error": nein}, 400
+                store.update(kollege.id, name=None if name is None else str(name),
+                             goal=None if aufgabe is None else str(aufgabe),
+                             avatar=None if payload.get("avatar") is None
+                             else str(payload.get("avatar")))
+                hinweis = "Gespeichert."
+            elif action == "reset_notes":
+                store.reset_notes(kollege.id)
+                hinweis = f"Die Notizen von {kollege.name} sind gelöscht."
+            elif action == "delete":
+                store.delete(kollege.id)
+                coworker_mod.stop_boxes(settings.data_dir, kollege.id)
+                hinweis = f"{kollege.name} ist gelöscht. Sein Chat bleibt."
+            else:  # seen
+                store.mark_seen(kollege.id)
+    except coworker_mod.CoworkerError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+    except sqlite3.Error:
+        return {"ok": False, "error": "Das ließ sich nicht speichern. Bitte versuch es gleich "
+                "noch einmal."}, 500
+    if takt is not None and action in ("create", "message", "wake", "resume"):
+        takt.wake()
+    return {"ok": True, "message": hinweis, **coworkers_view(session)}, 200
 
 
 def _addon_login(session: Any, addon: Any) -> str:
@@ -4485,6 +4804,17 @@ class Handler(BaseHTTPRequestHandler):
             from aquaticy import addons
 
             self._json(addons.public_view(SESSION.settings(), SESSION.ultra))
+        elif route == "/api/plugins":
+            # Die Befehle fuer die Liste beim Tippen von "/" (11.0.0 Luna).
+            from aquaticy import plugins as plugin_mod
+
+            self._json({"commands": plugin_mod.commands(SESSION.settings(), SESSION.ultra)})
+        elif route == "/api/coworkers":
+            # Coworker (11.0.0 Luna): "?badge=1" nur fuer das Abzeichen -- leicht genug,
+            # um es jede Minute zu fragen.
+            nur = (parse_qs(urlsplit(self.path).query).get("badge") or [""])[0] == "1"
+            sitzung = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
+            self._json(coworkers_view(sitzung, badge_only=nur))
         elif route == "/api/keys":
             # Nur, was hinterlegt ist -- nie ein Schluessel selbst.
             self._json(keys_view(SESSION.current() if isinstance(SESSION, SessionProxy)
@@ -4848,6 +5178,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self._chat_edit(self._read_json()))
         elif route == "/api/jobs":
             self._json(self._job_edit(self._read_json()))
+        elif route == "/api/coworkers":
+            antwort, status = coworker_action(self._read_json(), self._account())
+            self._json(antwort, status)
         elif route == "/api/prefs":
             # Der Browser schlaegt vor, der Server entscheidet -- zurueck
             # kommt, was wirklich gilt, nicht was geschickt wurde.
@@ -6243,9 +6576,13 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     try:
         from aquaticy.jobs import Scheduler
 
-        global SCHEDULER
+        global SCHEDULER, COWORKER_SCHEDULER
         SCHEDULER = Scheduler(SESSION.settings)
         SCHEDULER.start()
+        from aquaticy import coworker as coworker_mod
+
+        COWORKER_SCHEDULER = coworker_mod.Scheduler(SESSION.settings, plan=lambda: "ultra")
+        COWORKER_SCHEDULER.start()
         for account in AUTH.accounts():
             start_user_scheduler(account)
     except Exception:  # pragma: no cover - Auftraege duerfen den Start nie kosten

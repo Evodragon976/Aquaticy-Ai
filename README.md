@@ -1,4 +1,4 @@
-# Aquaticy AI 10.2.1 Terra
+# Aquaticy AI 11.0.0 Luna
 
 **Aquaticy** recherchiert für dich. Du stellst eine Frage, Aquaticy sucht im Web, liest die
 passenden Seiten und fasst das Ergebnis zusammen — mit Quelle an jeder Angabe. Es läuft im
@@ -36,6 +36,7 @@ $ aquaticy
 - [Add-ons](#add-ons)
 - [Virtual machine und User mode](#virtual-machine-und-user-mode)
 - [Speicher und Aufträge](#speicher-und-aufträge)
+- [Coworker](#coworker)
 - [Gmail und Kalender](#gmail-und-kalender)
 - [Zuhause: Heimnetz, Home Assistant, Lager](#zuhause-heimnetz-home-assistant-lager)
 - [Gemeinsames Lernen und Auto-Upgrading](#gemeinsames-lernen-und-auto-upgrading)
@@ -84,8 +85,13 @@ $ aquaticy
 - Chats durchsuchen, umbenennen, exportieren (HTML, Markdown, CSV).
 
 **Extras**
+- **Coworker** (Pro und Ultra): arbeiten die ganze Zeit an einer Aufgabe — recherchieren,
+  lesen Gmail, Kalender und GitHub, melden sich mit Ergebnissen und fragen, bevor sie etwas
+  verändern. Mit Ultra zusätzlich in ihrer eigenen virtual machine.
 - **Add-ons:** KI-Konten (Claude, ChatGPT, Gemini), GitHub, Wetter, RSS-Feeds, Tagesschau,
-  Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal, Telegram Web, Blender.
+  Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal, Telegram Web, Blender — und die
+  Plugins **Code-Review** und **Security-Review**. Jedes eingeschaltete Add-on hat im Chat
+  einen Befehl: `/code-review`, `/github`, `/wetter` …
 - **Speicher:** merkt sich auf Wunsch, was länger gilt — verschlüsselt, jederzeit einsehbar.
 - **Aufträge:** regelmäßig recherchieren, Preise, Webcams oder Satellitenbilder beobachten.
 - **Gmail und Kalender:** Termine und Mails lesen, auf Wunsch Termine anlegen und
@@ -93,7 +99,8 @@ $ aquaticy
 - **Zuhause** (Ultra): Geräte im Heimnetz finden, Home Assistant, Lagerverwaltung.
 - **KI-Bilder** erstellen lassen; **Modell automatisch wählen** für jede Nachricht.
 - **Server-Verbund** (Ultra): bis zu 10 Server arbeiten zusammen — entweder verteilen sie die
-  Nutzer, oder sie rechnen gemeinsam an einem großen Modell.
+  Nutzer, oder sie rechnen gemeinsam an einem großen Modell (llama.cpp installiert sich dafür
+  von selbst).
 
 **Stabil im Betrieb**
 - Belegter Port → Aquaticy nimmt den nächsten freien und zeigt die Adresse im Terminal.
@@ -112,7 +119,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 10.2.1 Terra
+aquaticy --version            # 11.0.0 Luna
 
 # 2. Einrichten — fragt nach Modell und Schlüssel und testet beide
 aquaticy setup
@@ -268,6 +275,7 @@ aquaticy install-browser
 | `/memory` / `/forget` | Langzeitspeicher anzeigen oder leeren |
 | `/uploads` / `/uploads clear` | Hochgeladene Dateien anzeigen oder löschen |
 | `/help` | Übersicht |
+| `/<plugin> <text>` | ein eingeschaltetes Plugin gezielt nutzen, z. B. `/code-review`, `/github` |
 | `/quit` / `/exit` / `/q` | Terminal beenden (auch <kbd>Strg</kbd>+<kbd>D</kbd>) |
 
 ### Optionen
@@ -369,6 +377,7 @@ Einstellungen, Speicher und Schlüssel.
 | | Normal | Pro | Ultra |
 |---|---|---|---|
 | Recherche, Chat, Code-Modus, Add-ons ohne virtual machine | ✔ | ✔ | ✔ |
+| Coworker | – | bis zu 2 | bis zu 5, mit eigener virtual machine |
 | Nutzung je 5-Stunden-Sitzung | 300.000 Token | 533.333 Token | unbegrenzt |
 | Nutzung je Woche | 2 Mio. Token | 4 Mio. Token | unbegrenzt |
 | Auslastungsanzeige | – | – | ✔ |
@@ -463,9 +472,39 @@ ob die Lösung trägt, oder schickt Einwände zum Nachbessern zurück (bis zu dr
 | ✈️ Telegram Web | Kanäle und Gruppen lesen, Antworten vorbereiten | QR-Code |
 | 🧊 Blender | 3D-Modelle bauen und rendern in der virtual machine | keine |
 
+| 🔍 Code-Review | prüft Code auf typische Fehler, besonders bei KI-generiertem Code | keine |
+| 🛡️ Security-Review | sucht Sicherheitslücken nach OWASP und sagt, wie man sie schließt | keine |
+
 WhatsApp, Signal, Telegram und Blender laufen in der virtual machine und brauchen den User mode
 (Ultra). Die Tagesschau ist nur für den privaten Gebrauch; Aquaticy hält die erlaubten 60
 Abrufe pro Stunde ein.
+
+### Plugins im Chat
+
+Jedes eingeschaltete Add-on hat im Chat einen Befehl: `/` tippen, und Aquaticy zeigt die
+Befehle deiner Plugins zum Auswählen (Pfeiltasten und Tab oder Antippen). Der Befehl gilt genau
+für diese eine Nachricht — `/wetter Bremen` nimmt das Wetter-Add-on, `/github offene Pull
+Requests in besitzer/repo` das GitHub-Add-on, statt das Modell raten zu lassen.
+
+**Code-Review** und **Security-Review** sind eigene Plugins von Aquaticy: kein Dienst, sondern
+Wissen. Hinter den Befehl kommt, was geprüft werden soll — eingefügter Code, eine angehängte
+Datei oder ein GitHub-Repo bzw. Pull Request (mit eingeschaltetem GitHub-Add-on). Geprüft wird
+im Code-Modus mit dem stärksten erreichbaren Modell; die Befunde kommen nach Schwere sortiert,
+jeder mit Stelle, konkretem Fall und Korrektur.
+
+- **Code-Review** kennt die typischen Fehler — Logik und Randfälle, Fehlerbehandlung,
+  Ressourcen, Nebenläufigkeit, Zeitzonen — und vor allem die von KI-generiertem Code:
+  erfundene Funktionen und Pakete („Slopsquatting“), Platzhalter, Tests, die nur den
+  Erfolgsfall prüfen, veraltete Bibliotheken. (Studien von 2025 fanden in KI-Pull-Requests
+  rund 1,7-mal so viele Befunde wie bei Menschen.)
+- **Security-Review** prüft nach OWASP Top 10:2025 — Zugriffskontrolle, Fehlkonfiguration,
+  Lieferkette, Kryptografie, Injection (SQL, Shell, XSS), Anmeldung, Integrität, Protokolle,
+  Ausnahmen — und nach den OWASP Top 10 für LLM-Anwendungen: Prompt-Injection, Datenabfluss,
+  ungeprüfte Modellausgabe, zu viel Handlungsfreiheit für Agenten. Aus Sicht eines
+  Verteidigers: finden, belegen, beheben — keine Angriffsanleitungen.
+
+Unter **Rechte** stellst du ein, ob alle Befunde oder nur kritische und hohe kommen und ob
+Aquaticy den Code für die Korrektur gleich mitschreibt.
 
 ---
 
@@ -515,6 +554,44 @@ oder alle auf einmal löschen.
 
 Tritt ein, worauf du wartest, bekommst du einen neuen Chat — mit Bild und Uhrzeit. Nur
 öffentliche Quellen, keine privaten Kameras, keine Anmeldungen.
+
+---
+
+## Coworker
+
+*Seitenleiste → 🤝 Coworker* (Pro und Ultra). Ein Auftrag stellt eine feste Frage in festem
+Takt. Ein **Coworker** übernimmt eine *Aufgabe* und bleibt dran, solange sie dauert — nach dem
+Vorbild von „dots“ in ChatGPT. Zum Beispiel: „Sag mir jeden Morgen, welche Mails wichtig sind
+und welche Termine anstehen“ oder „Behalte meine GitHub-Repos im Blick“.
+
+- **Er arbeitet in Schritten — die ganze Zeit.** Am Ende jedes Schritts entscheidet er selbst,
+  wann er wieder aufwacht: nach wenigen Minuten, wenn er mitten in der Arbeit steckt, oder erst
+  morgen, wenn er auf etwas wartet. Schreibst du ihm, wacht er sofort auf.
+- **Er hat ein Gedächtnis.** Seine Notizen pflegt er selbst; du kannst sie jederzeit lesen.
+- **Er nutzt deine Verbindungen.** Gmail, Google Kalender, GitHub und die anderen Add-ons —
+  dieselben Werkzeuge und Rechte wie im Chat.
+- **Er meldet sich.** Ergebnisse und Fragen stehen in der Coworker-Übersicht und als eigener
+  Chat in der Seitenleiste; das Abzeichen zeigt, was neu ist und was auf dich wartet.
+- **Er fragt, bevor er etwas verändert.** Für jede Art Aktion stellst du eine **Regel** ein:
+  *Erlauben*, *Fragen* oder *Sperren* — Termine eintragen, Mail-Entwürfe, Speicher und (Ultra)
+  Lagerverwaltung, Home Assistant, Heimnetz. Bei „Fragen“ siehst du genau die Angaben, die
+  ausgeführt würden, und erlaubst oder lehnst ab; ausgeführt wird dann genau das, vom Code und
+  nicht noch einmal vom Modell. Hat er im selben Schritt Webseiten oder Mails gelesen, fragt er
+  auch bei „Erlauben“ — so kann ihn ein fremder Text zu nichts überreden. Einstellungen ändern,
+  Rückfragen im Chat, Bilder malen und den Desktop bedienen gibt es für Coworker gar nicht.
+- **Ultra: mit eigenem Rechner.** Mit Ultra bekommt jeder Coworker eine eigene virtual machine
+  (ohne Desktop) zum Rechnen und Auswerten — die des Chats bleibt unberührt.
+
+| | Pro | Ultra |
+|---|---|---|
+| Coworker | bis zu 2 | bis zu 5 |
+| Frühestens wieder wach nach | 15 Minuten | 5 Minuten |
+| Arbeitsschritte je Coworker und Tag | 48 | 288 |
+| Eigene virtual machine | – | ✔ (mit Docker oder Podman) |
+
+Coworker zählen wie der Chat ins Kontingent; ist es aufgebraucht, macht der Coworker weiter,
+sobald es sich zurücksetzt. Lehnt der Rechtsrahmen die Aufgabe ab, hält er an. Im Server-Verbund
+arbeitet er nur auf dem Heimserver seines Kontos.
 
 ---
 
@@ -634,27 +711,33 @@ passt — zum Beispiel ein 70B-Modell auf drei Rechnern mit je 24 GB.
 | Größtes Modell | was ein Server allein schafft | was alle Server zusammen schaffen |
 | Wer bedient die Konten? | der jeweilige Heimserver | der Master |
 
-**Was es braucht:**
+**Was es braucht:** nur **das Modell in Ollama auf dem Master** (`ollama pull llama3.3:70b`).
+Herunterladen reicht — laufen muss es dort nicht. Die anderen Server brauchen das Modell nicht;
+llama.cpp schickt ihnen ihre Schichten beim Start.
 
-- **[llama.cpp](https://github.com/ggml-org/llama.cpp) mit RPC** auf jedem Server: `rpc-server`
-  auf allen, `llama-server` zusätzlich auf dem Master — am besten überall dieselbe Version.
+**llama.cpp installiert sich selbst.** Installieren musst du nichts: Sobald der Schalter an ist,
+lädt Aquaticy auf jedem Server die offiziellen, fertig gebauten Programme von
+[llama.cpp](https://github.com/ggml-org/llama.cpp) (`rpc-server` und `llama-server`):
 
-  ```bash
-  git clone https://github.com/ggml-org/llama.cpp
-  cd llama.cpp
-  cmake -B build -DGGML_RPC=ON        # mit NVIDIA-Karte zusätzlich -DGGML_CUDA=ON
-  cmake --build build --config Release -j
-  # rpc-server und llama-server liegen jetzt in build/bin
-  ```
+- **Eine Fassung für alle.** llama.cpp verlangt auf allen Servern dieselbe Fassung. Der Master
+  wählt sie einmal — die, die er schon hat, sonst die neueste Veröffentlichung — und schickt sie
+  mit der Einstellung an alle Server.
+- **Die passende Ausgabe je Server:** Apple Silicon mit Metal, Linux und Windows mit
+  NVIDIA-Karte in der Vulkan-Ausgabe, alle anderen in der für den Prozessor. Startet die
+  Grafik-Ausgabe nicht (fehlender Treiber), nimmt Aquaticy die für den Prozessor.
+- **Geprüft:** nur von GitHub, nur mit der veröffentlichten Prüfsumme (SHA-256) — ohne
+  Prüfsumme wird nichts installiert —, entpackt nur in den eigenen Ordner
+  (`~/.aquaticy/llama.cpp`). Alte Fassungen räumt Aquaticy weg.
+- **Im Container schon dabei:** Das Abbild bringt llama.cpp mit.
 
-  Aquaticy findet die Programme im `PATH` oder unter `AQUATICY_RPC_SERVER` und
-  `AQUATICY_LLAMA_SERVER`. `aquaticy cluster` zeigt, ob sie gefunden werden.
-- **Das Modell in Ollama auf dem Master** (`ollama pull llama3.3:70b`). Herunterladen reicht —
-  laufen muss es dort nicht. Die anderen Server brauchen das Modell nicht; llama.cpp schickt
-  ihnen ihre Schichten beim Start.
+Wer llama.cpp lieber selbst baut, gibt die Programme mit `AQUATICY_RPC_SERVER` und
+`AQUATICY_LLAMA_SERVER` vor — das hat Vorrang; `AQUATICY_LLAMA_TAG` legt eine Fassung fest.
+`aquaticy cluster` zeigt, welche Fassung läuft. Für andere Systeme (etwa FreeBSD) gibt es keine
+fertige Ausgabe; dort baut man llama.cpp mit `-DGGML_RPC=ON` selbst.
 
 **So geht es:** Im Server-Verbund auf dem Master das Modell wählen und **Serverlast aufteilen**
-einschalten. Aquaticy startet auf den anderen Servern den `rpc-server` (auf dem Master nur, wenn
+einschalten. Aquaticy lädt llama.cpp (beim ersten Mal ein paar Minuten, der Fortschritt steht
+im Verbund-Bereich), startet auf den anderen Servern den `rpc-server` (auf dem Master nur, wenn
 er keine Grafikkarte hat — sonst rechnet er direkt mit ihr), wartet, bis alle bereit sind,
 prüft, ob das Modell in den gemeinsamen Speicher passt (die Auswahl zeigt den geschätzten
 Bedarf), und startet dann auf dem Master `llama-server`. Sobald das Modell geladen ist, steht es
@@ -838,8 +921,8 @@ Nach einem `git pull` muss auch das Container-Image neu gebaut werden
 
 Der Container trennt das Dateisystem vom Rechner; ins Internet darf Aquaticy weiterhin, sonst
 könnte es nicht recherchieren. Noch strenger abgeschottet: `compose.sandbox.yaml`
-(`aquaticy sandbox` zeigt, was offen steht). „Serverlast aufteilen“ braucht llama.cpp im
-selben System wie Aquaticy — am einfachsten läuft es direkt auf dem Rechner.
+(`aquaticy sandbox` zeigt, was offen steht). Für „Serverlast aufteilen“ bringt das Abbild
+llama.cpp schon mit (`/opt/aquaticy/llama.cpp`).
 
 ---
 
@@ -891,7 +974,9 @@ setzt du die meisten unter *Einstellungen*.
 | `AQUATICY_LAN_ENABLED` / `AQUATICY_LAN_SUBNET` | Heimnetz ansehen (Ultra) | `true` / automatisch |
 | `AQUATICY_STORAGE_URL` / `AQUATICY_STORAGE_ACCESS` | Lagerverwaltung: Adresse / `off`, `read`, `write` (Ultra) | — / `read` |
 | `AQUATICY_CLUSTER_PORT` | UDP-Port zum Finden anderer Server im Verbund | `8766` |
-| `AQUATICY_RPC_SERVER` / `AQUATICY_LLAMA_SERVER` | Pfad zu `rpc-server` / `llama-server` von llama.cpp | aus dem `PATH` |
+| `AQUATICY_RPC_SERVER` / `AQUATICY_LLAMA_SERVER` | eigener Pfad zu `rpc-server` / `llama-server` von llama.cpp | lädt Aquaticy selbst |
+| `AQUATICY_LLAMA_TAG` | feste Fassung von llama.cpp für den Verbund, z. B. `b7000` | der Master wählt |
+| `AQUATICY_LLAMA_DIR` | Ordner mit einer mitgelieferten Fassung | `/opt/aquaticy/llama.cpp` |
 | `AQUATICY_PRO_CODE` | Code für neue Pro-Konten | zufällig |
 | `AQUATICY_ULTRA_CODE` | Code für neue Ultra-Konten (14 Zeichen) | zufällig |
 | `MISTRAL_API_KEY`, `NVIDIA_NIM_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` | Schlüssel der Anbieter | — |
@@ -929,7 +1014,7 @@ python tools/rundgang.py --bilder   # dabei Bildschirmfotos ablegen
 ```
 
 Die Ergebnisse und Grenzen der aktuellen Prüfung stehen im
-[Prüfbericht zu 10.2.1 Terra](TESTREPORT-10.2.1-Terra.md).
+[Prüfbericht](TESTREPORT-11.0.0-Luna.md).
 
 ---
 

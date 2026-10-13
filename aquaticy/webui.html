@@ -572,6 +572,24 @@ textarea::placeholder{color:var(--text-3)}
 #input.is-command{color:transparent;caret-color:var(--text)}
 #input.is-command::selection{color:var(--text);background:var(--accent-soft)}
 #input.is-command + .input-mirror{visibility:visible}
+/* Befehle beim Tippen von "/" (11.0.0 Luna): eingebaute und die Plugins des Kontos. */
+.composer{position:relative}
+.slash-liste{position:absolute;left:0;right:0;bottom:calc(100% + 8px);z-index:30;
+  max-height:min(320px,45vh);overflow-y:auto;overscroll-behavior:contain;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow);padding:6px}
+/* Auf dem Startbildschirm steht das Eingabefeld in der Mitte -- dort ist unten Platz. */
+body.start .slash-liste{top:calc(100% + 8px);bottom:auto}
+.slash-gruppe{font-size:calc(11px * var(--fs));letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text-3);padding:6px 10px 2px}
+.slash-item{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;border:0;
+  background:none;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;
+  font:inherit;min-height:40px}
+.slash-item .icon{flex:none;width:1.3em;text-align:center}
+.slash-item .wort{font-weight:600;color:var(--accent-text);white-space:nowrap}
+.slash-item .was{color:var(--text-2);font-size:calc(13px * var(--fs));min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slash-item[aria-selected="true"],.slash-item:hover{background:var(--accent-soft)}
 .crow{display:flex;align-items:center;gap:6px;margin-top:6px}
 .crow .spacer{flex:1}
 /* Ein eigenes `display` schlaegt sonst das `hidden`-Attribut, und der
@@ -1267,7 +1285,78 @@ input:focus,select:focus{border-color:var(--accent)}
 .addon-login textarea{border:1px solid var(--line-2);border-radius:10px;background:var(--bg);
   padding:8px 10px;font:calc(12.5px * var(--fs)) var(--mono);min-height:5.5em;resize:vertical;margin-top:6px}
 .addon-hint{font-size:calc(12px * var(--fs));color:var(--text-3);margin-top:8px;line-height:1.45}
+.addon-befehl code{color:var(--accent-text);font-weight:600}
+.addon-inhalt{margin-top:8px;font-size:calc(12.5px * var(--fs));color:var(--text-2)}
+.addon-inhalt summary{cursor:pointer;color:var(--accent-text);font-weight:600}
+.addon-inhalt ul{margin:6px 0 0;padding-left:18px;line-height:1.5}
 .addon-rechte{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-2)}
+/* Coworker (11.0.0 Luna) */
+.side-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--accent);color:var(--bg);font:600 calc(11px * var(--fs))/18px var(--mono);
+  text-align:center}
+.coworker-lock{margin-top:12px;padding:12px 14px;border:1px dashed var(--line-2);
+  border-radius:13px;color:var(--text-2)}
+.coworker-list{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.cw-karte{background:var(--surface);border:1px solid var(--line-2);border-radius:13px;
+  padding:12px 14px;animation:rise var(--t-mid) var(--ease-out) both}
+.cw-karte.arbeitet{border-color:var(--accent)}
+.coworker-list.ruhig .cw-karte{animation:none}
+.cw-kopf{display:flex;gap:12px;align-items:flex-start}
+.cw-avatar{font-size:calc(26px * var(--fs));line-height:1.1;flex:none;width:34px;
+  text-align:center}
+.cw-karte.arbeitet .cw-avatar{animation:atmen 2.4s ease-in-out infinite}
+@keyframes atmen{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.cw-kopf-text{flex:1;min-width:0}
+.cw-name{font-weight:600;font-size:calc(15px * var(--fs))}
+.cw-status{display:block;font-size:calc(12.5px * var(--fs));color:var(--text-2);margin-top:2px}
+.cw-aufgabe{font-size:calc(13.5px * var(--fs));color:var(--text);margin-top:8px;
+  line-height:1.5;white-space:pre-line;overflow-wrap:anywhere}
+.cw-abschnitt{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-2)}
+.cw-abschnitt>.how{font-size:calc(12.5px * var(--fs));color:var(--text-2);margin-bottom:6px}
+.cw-freigabe{border:1px solid var(--accent);border-radius:11px;padding:9px 11px;margin-top:6px;
+  background:var(--bg)}
+.cw-freigabe .was{font-size:calc(13px * var(--fs));overflow-wrap:anywhere}
+.cw-freigabe summary{cursor:pointer;margin-top:6px;color:var(--accent-text);
+  font-size:calc(12.5px * var(--fs));font-weight:600}
+.cw-freigabe pre{white-space:pre-wrap;overflow-wrap:anywhere;font:calc(12px * var(--fs)) var(--mono);
+  max-height:12em;overflow:auto;margin:6px 0 0;color:var(--text-2)}
+.cw-freigabe .reihe{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.cw-verlauf{display:flex;flex-direction:column;gap:6px;max-height:22rem;overflow-y:auto;
+  overscroll-behavior:contain}
+.cw-eintrag{display:flex;gap:8px;font-size:calc(13px * var(--fs));line-height:1.5}
+.cw-eintrag .art{flex:none;width:1.4em;text-align:center}
+.cw-eintrag .inhalt{flex:1;min-width:0;overflow-wrap:anywhere}
+.cw-eintrag .zeit{color:var(--text-3);font-size:calc(11.5px * var(--fs))}
+.cw-eintrag.du .inhalt{color:var(--text-2)}
+.cw-eintrag.neu .zeit{color:var(--accent-text);font-weight:600}
+.cw-eintrag .inhalt p{margin:0 0 4px}
+.cw-schreiben{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+.cw-schreiben textarea{flex:1;min-width:0;border:1px solid var(--line-2);border-radius:10px;
+  background:var(--bg);padding:8px 10px;min-height:2.6em;max-height:9em;resize:vertical}
+.cw-knoepfe{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cw-knoepfe .btn,.cw-freigabe .btn,.cw-schreiben .btn{padding:7px 13px;
+  font-size:calc(13px * var(--fs))}
+.cw-mehr{margin-top:10px;font-size:calc(13px * var(--fs))}
+.cw-mehr summary{cursor:pointer;color:var(--accent-text);font-weight:600}
+.cw-mehr .inhalt{margin-top:8px;color:var(--text-2);overflow-wrap:anywhere}
+.cw-mehr textarea{width:100%;border:1px solid var(--line-2);border-radius:10px;background:var(--bg);
+  padding:8px 10px;min-height:5em;resize:vertical;margin-top:6px}
+.coworker-new{margin-top:16px;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:13px;padding:12px 14px}
+.coworker-new summary{cursor:pointer;font-weight:600;color:var(--accent-text)}
+.coworker-new label.block{display:block;margin-top:10px}
+.coworker-new textarea{width:100%;border:1px solid var(--line-2);border-radius:10px;
+  background:var(--bg);padding:8px 10px;min-height:5em;resize:vertical}
+.cw-avatars{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.cw-avatars button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line-2);
+  background:var(--bg);font-size:calc(19px * var(--fs));cursor:pointer}
+.cw-avatars button[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.cw-beispiele{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+/* Wie die Vorschlaege im Chat -- aber eigene Klasse: die fuellen das Chat-Feld. */
+.cw-beispiel{background:var(--surface);border:1px solid var(--line);border-radius:999px;
+  padding:7px 13px;font:inherit;font-size:calc(12.5px * var(--fs));cursor:pointer;
+  color:var(--text-2);text-align:left}
+.cw-beispiel:hover{border-color:var(--accent);color:var(--accent-text)}
 .recht{display:flex;gap:10px;align-items:center;justify-content:space-between;
   flex-wrap:wrap;margin-top:7px}
 .recht-name{font-size:calc(13px * var(--fs));color:var(--text-2)}
@@ -1579,6 +1668,7 @@ button{touch-action:manipulation}
   </div>
   <div class="recents" id="recents"></div>
   <div class="side-foot">
+    <button class="side-btn" id="btn-coworker" title="Coworker: arbeiten die ganze Zeit für dich">🤝 Coworker<span class="side-badge" id="coworker-badge" hidden></span></button>
     <button class="side-btn" id="btn-notes">☰ Merkzettel</button>
     <button class="side-btn" id="btn-settings">⚙ Einstellungen</button>
     <button class="side-btn" id="btn-theme">◐ Design</button>
@@ -1727,7 +1817,9 @@ button{touch-action:manipulation}
     </div>
     <div class="files" id="files"></div>
     <div class="composer">
-      <div class="input-wrap"><textarea id="input" rows="1" placeholder="Frag etwas …"></textarea>
+      <div class="slash-liste" id="slash-liste" role="listbox" aria-label="Befehle" hidden></div>
+      <div class="input-wrap"><textarea id="input" rows="1" placeholder="Frag etwas …"
+        aria-autocomplete="list" aria-controls="slash-liste" aria-expanded="false"></textarea>
         <div class="input-mirror" id="input-mirror" aria-hidden="true"></div></div>
       <input type="file" id="picker" multiple hidden aria-label="Dateien anhängen"
              accept="image/*,.pdf,.txt,.md,.csv,.json,.log,.yaml,.yml">
@@ -1909,6 +2001,43 @@ button{touch-action:manipulation}
     <div class="addon-list" id="addon-list"></div>
     <div class="actions">
       <button type="button" class="btn primary" id="addon-close">Fertig</button>
+    </div>
+  </div>
+</div>
+
+<!-- Coworker (11.0.0 Luna): arbeiten die ganze Zeit an einer Aufgabe (aquaticy/coworker.py). -->
+<div class="overlay" id="coworkerbox">
+  <div class="sheet addon-sheet" role="dialog" aria-modal="true" aria-labelledby="coworker-title">
+    <h2 id="coworker-title">Coworker</h2>
+    <p class="lead">Ein Coworker arbeitet die ganze Zeit für dich an einer Aufgabe: Er
+      recherchiert, liest deine Verbindungen wie Gmail, Kalender und GitHub, meldet sich,
+      sobald es etwas Neues gibt, und fragt, bevor er etwas verändert. Er wacht von selbst
+      auf — und sofort, wenn du ihm schreibst.</p>
+    <div class="note" id="coworker-note" role="status" aria-live="polite"></div>
+    <div class="coworker-lock" id="coworker-lock" hidden>🔒 Coworker gibt es mit Pro und
+      Ultra. Mit Ultra arbeiten sie zusätzlich in ihrer eigenen virtual machine.</div>
+    <div class="coworker-list" id="coworker-list"></div>
+    <details class="coworker-new" id="coworker-new">
+      <summary>＋ Neuer Coworker</summary>
+      <label class="block"><span class="lbl">Name</span>
+        <input type="text" id="cw-name" maxlength="40" placeholder="z. B. Ava"
+               autocomplete="off"></label>
+      <div class="cw-avatars" id="cw-avatars" role="radiogroup" aria-label="Bild des Coworkers"></div>
+      <label class="block"><span class="lbl">Aufgabe</span>
+        <textarea id="cw-goal" rows="3" maxlength="2000"
+                  placeholder="z. B. Sag mir jeden Morgen, welche Mails wichtig sind und welche Termine anstehen."></textarea></label>
+      <div class="cw-beispiele" id="cw-beispiele">
+        <button type="button" class="cw-beispiel">Fasse mir jeden Morgen meine wichtigen Mails und die Termine des Tages zusammen.</button>
+        <button type="button" class="cw-beispiel">Behalte meine GitHub-Repos im Blick: neue Issues und Pull Requests, die auf mich warten.</button>
+        <button type="button" class="cw-beispiel">Recherchiere laufend Neuigkeiten zu meinem Thema und melde dich, wenn sich etwas Wichtiges ändert.</button>
+      </div>
+      <p class="note" id="cw-info"></p>
+      <div class="actions section">
+        <button type="button" class="btn primary" id="cw-create">Coworker anlegen</button>
+      </div>
+    </details>
+    <div class="actions">
+      <button type="button" class="btn primary" id="coworker-close">Fertig</button>
     </div>
   </div>
 </div>
@@ -2588,7 +2717,8 @@ button{touch-action:manipulation}
                     eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine
                     Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen
                     Server allein in den Speicher passen. Alle Konten werden dann vom Master
-                    bedient. Braucht llama.cpp auf jedem Server.</span></label>
+                    bedient. llama.cpp installiert Aquaticy dafür auf jedem Server von
+                    selbst.</span></label>
               </div>
               <div class="split-row">
                 <select id="split-model" aria-label="Modell, das verteilt laufen soll"></select>
@@ -2656,7 +2786,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "10.2.1 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.0.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -3795,7 +3925,14 @@ async function ask(text){
   // "/max" ohne Frage ist keine Recherche, sondern eine Frage an Aquaticy, was
   // der Befehl tut -- die beantwortet der Befehlsweg.
   const eingabe = text.trim();
-  if (eingabe.startsWith("/") && !/^\/image\b/i.test(eingabe)
+  // Ein Plugin (11.0.0 Luna) recherchiert oder prueft -- also der Chat-Weg mit
+  // Live-Anzeige. Nur ohne Text und ohne Anhang erklaert der Befehlsweg, wie es geht.
+  const befehl = BEFEHL_RE.exec(eingabe);
+  const plugin = befehl ? pluginNamen.get(befehl[2].toLowerCase()) : null;
+  if (plugin){
+    const rest = eingabe.slice(befehl[0].length).trim();
+    if (!rest && !pending.length && plugin.needs_text) return runCommand(eingabe);
+  } else if (eingabe.startsWith("/") && !/^\/image\b/i.test(eingabe)
       && !/^\/max\s+\S/i.test(eingabe)){
     return runCommand(eingabe);
   }
@@ -4362,12 +4499,32 @@ async function wiederAufnehmen(){
 /* ---------- Eingabe ---------- */
 const slashBefehle = new Set(["location","model","max","image","export",
   "history","notes","clear","memory","uploads","forget","help","quit","exit","q"]);
+// Die Plugins dieses Kontos (11.0.0 Luna): jedes eingeschaltete Add-on hat einen
+// Befehl -- /code-review, /github, /wetter ... Der Server kennt die Liste.
+let pluginBefehle = [];
+const pluginNamen = new Map();   // Befehl oder anderer Name -> Plugin
+async function pluginsLaden(){
+  try {
+    const res = await api("/api/plugins");
+    if (!res.ok){ await res.text().catch(() => ""); return; }
+    const daten = await res.json();
+    pluginBefehle = Array.isArray(daten.commands) ? daten.commands : [];
+  } catch { return; }
+  pluginNamen.clear();
+  for (const p of pluginBefehle){
+    pluginNamen.set(p.name, p);
+    for (const anders of p.aliases || []) pluginNamen.set(anders, p);
+  }
+  markiereBefehl();
+}
+const BEFEHL_RE = /^(\s*)\/([a-zäöü][a-zäöü0-9-]*)(?=\s|$)/i;
 const inputMirror = $("#input-mirror");
 // Nur ein vollstaendiger, bekannter Befehl bekommt den Akzentton. Der Rest
 // wird als normaler Text gespiegelt, auch wenn ein Argument folgt.
 function markiereBefehl(){
-  const match = /^(\s*)\/([a-z]+)(?=\s|$)/i.exec(input.value);
-  const erkannt = match && slashBefehle.has(match[2].toLowerCase());
+  const match = BEFEHL_RE.exec(input.value);
+  const wort = match ? match[2].toLowerCase() : "";
+  const erkannt = match && (slashBefehle.has(wort) || pluginNamen.has(wort));
   input.classList.toggle("is-command", Boolean(erkannt));
   inputMirror.replaceChildren();
   if (erkannt){
@@ -4380,16 +4537,103 @@ function markiereBefehl(){
     inputMirror.scrollLeft = input.scrollLeft;
   }
 }
+/* Die Liste beim Tippen von "/" -- solange nur das Befehlswort dasteht. */
+const EINGEBAUT = [
+  ["help", "Alle Befehle"], ["model", "Modell wechseln"],
+  ["max", "Pro-Modus mit voller Mannschaft"], ["image", "Ein Bild ansehen lassen"],
+  ["export", "Recherchen herunterladen"], ["history", "Frühere Recherchen"],
+  ["notes", "Merkzettel"], ["memory", "Was im Speicher liegt"],
+  ["uploads", "Hochgeladene Dateien"], ["clear", "Verlauf verwerfen"],
+  ["forget", "Speicher leeren"], ["location", "Ortsfilter"],
+];
+const slashListe = $("#slash-liste");
+let slashTreffer = [], slashAuswahl = 0;
+function slashSchliessen(){
+  slashListe.hidden = true;
+  slashTreffer = [];
+  input.setAttribute("aria-expanded", "false");
+  input.removeAttribute("aria-activedescendant");
+}
+function slashZeigen(){
+  const m = /^\/([a-zäöü0-9-]*)$/i.exec(input.value);
+  if (!m || document.activeElement !== input){ slashSchliessen(); return; }
+  const anfang = m[1].toLowerCase();
+  const plugins = pluginBefehle
+    .filter(p => p.name.startsWith(anfang) || (p.aliases || []).some(a => a.startsWith(anfang)))
+    .map(p => ({ name: p.name, was: p.label, icon: p.icon, gruppe: "Plugins" }));
+  const eigene = EINGEBAUT.filter(([name]) => name.startsWith(anfang))
+    .map(([name, was]) => ({ name, was, icon: "", gruppe: "Befehle" }));
+  slashTreffer = [...plugins, ...eigene];
+  if (!slashTreffer.length){ slashSchliessen(); return; }
+  slashAuswahl = Math.max(0, Math.min(slashAuswahl, slashTreffer.length - 1));
+  slashListe.replaceChildren();
+  let gruppe = "";
+  slashTreffer.forEach((t, i) => {
+    if (t.gruppe !== gruppe){
+      gruppe = t.gruppe;
+      const kopf = document.createElement("div");
+      kopf.className = "slash-gruppe"; kopf.textContent = gruppe;
+      kopf.setAttribute("role", "presentation");
+      slashListe.appendChild(kopf);
+    }
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "slash-item"; b.id = "slash-" + i;
+    b.setAttribute("role", "option");
+    b.setAttribute("aria-selected", String(i === slashAuswahl));
+    b.innerHTML = '<span class="icon" aria-hidden="true"></span><span class="wort"></span>'
+      + '<span class="was"></span>';
+    b.querySelector(".icon").textContent = t.icon || "/";
+    b.querySelector(".wort").textContent = "/" + t.name;
+    b.querySelector(".was").textContent = t.was;
+    b.addEventListener("click", () => slashNehmen(i));
+    slashListe.appendChild(b);
+  });
+  slashListe.hidden = false;
+  input.setAttribute("aria-expanded", "true");
+  input.setAttribute("aria-activedescendant", "slash-" + slashAuswahl);
+  $("#slash-" + slashAuswahl)?.scrollIntoView({ block: "nearest" });
+}
+function slashNehmen(i){
+  const t = slashTreffer[i];
+  if (!t) return;
+  input.value = "/" + t.name + " ";
+  slashSchliessen();
+  input.focus();
+  markiereBefehl();
+}
+// Ein Tipp in die Liste soll den Fokus nicht aus dem Eingabefeld nehmen.
+slashListe.addEventListener("pointerdown", (e) => e.preventDefault());
+input.addEventListener("blur", () => slashSchliessen());
 input.addEventListener("input", () => {
   input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight,200) + "px";
   markiereBefehl();
+  slashAuswahl = 0;
+  slashZeigen();
 });
 input.addEventListener("scroll", () => {
   inputMirror.scrollTop = input.scrollTop;
   inputMirror.scrollLeft = input.scrollLeft;
 });
 input.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); ask(input.value); }
+  if (!slashListe.hidden && slashTreffer.length){
+    const n = slashTreffer.length;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      slashAuswahl = (slashAuswahl + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+      slashZeigen();
+      return;
+    }
+    if (e.key === "Escape"){ e.preventDefault(); slashSchliessen(); return; }
+    const getippt = input.value.slice(1).toLowerCase();
+    const gewaehlt = slashTreffer[slashAuswahl];
+    // Tab ergaenzt immer; Enter ergaenzt, solange das Wort noch nicht fertig ist.
+    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && gewaehlt.name !== getippt)){
+      e.preventDefault();
+      slashNehmen(slashAuswahl);
+      return;
+    }
+  }
+  if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); slashSchliessen(); ask(input.value); }
 });
 send.addEventListener("click", () => {
   // Der Pfeil schnellt kurz nach oben -- die Frage ist weg.
@@ -4905,8 +5149,59 @@ const EN = {
 "Dafür braucht es mindestens zwei verknüpfte KI-Konten (Add-ons → KI-Konten).": "This needs at least two linked AI accounts (Add-ons → AI accounts).",
 "Server-Verbund": "Server cluster",
 "Serverlast aufteilen": "Split server load",
-"Sonst bedient jeder Server seine eigenen Nutzer mit seinem eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen Server allein in den Speicher passen. Alle Konten werden dann vom Master bedient. Braucht llama.cpp auf jedem Server.": "Otherwise every server serves its own users with its own model. Here all servers compute one model together: its layers are spread across them. That way even models run that fit into no single server's memory. All accounts are then served by the master. Needs llama.cpp on every server.",
+"Sonst bedient jeder Server seine eigenen Nutzer mit seinem eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen Server allein in den Speicher passen. Alle Konten werden dann vom Master bedient. llama.cpp installiert Aquaticy dafür auf jedem Server von selbst.": "Otherwise every server serves its own users with its own model. Here all servers compute one model together: its layers are spread across them. That way even models run that fit into no single server's memory. All accounts are then served by the master. Aquaticy installs llama.cpp on every server by itself.",
+"Für dieses System gibt es llama.cpp nicht fertig gebaut — siehe README.": "There is no prebuilt llama.cpp for this system — see the README.",
+"Sucht die passende Fassung von llama.cpp …": "Looking for the right llama.cpp version …",
+"Sucht die neueste Fassung von llama.cpp …": "Looking for the latest llama.cpp version …",
 "Neu verteilen": "Redistribute",
+"Alle Befehle": "All commands",
+"Pro-Modus mit voller Mannschaft": "Pro mode with the full team",
+"Ein Bild ansehen lassen": "Have an image looked at",
+"Recherchen herunterladen": "Download research",
+"Frühere Recherchen": "Earlier research",
+"Was im Speicher liegt": "What is in memory",
+"Hochgeladene Dateien": "Uploaded files",
+"Verlauf verwerfen": "Discard history",
+"Speicher leeren": "Clear memory",
+"Ortsfilter": "Location filter",
+"Merkzettel": "Notes",
+"Befehle": "Commands",
+"Was geprüft wird": "What is checked",
+"Ein Coworker arbeitet die ganze Zeit für dich an einer Aufgabe: Er recherchiert, liest deine Verbindungen wie Gmail, Kalender und GitHub, meldet sich, sobald es etwas Neues gibt, und fragt, bevor er etwas verändert. Er wacht von selbst auf — und sofort, wenn du ihm schreibst.": "A coworker works on a task for you all the time: it researches, reads your connections such as Gmail, Calendar and GitHub, gets in touch as soon as there is something new, and asks before it changes anything. It wakes up by itself — and right away when you write to it.",
+"🔒 Coworker gibt es mit Pro und Ultra. Mit Ultra arbeiten sie zusätzlich in ihrer eigenen virtual machine.": "🔒 Coworkers come with Pro and Ultra. With Ultra they also work in their own virtual machine.",
+"＋ Neuer Coworker": "＋ New coworker",
+"Aufgabe": "Task",
+"z. B. Ava": "e.g. Ava",
+"z. B. Sag mir jeden Morgen, welche Mails wichtig sind und welche Termine anstehen.": "e.g. Tell me every morning which emails matter and which appointments are coming up.",
+"Fasse mir jeden Morgen meine wichtigen Mails und die Termine des Tages zusammen.": "Every morning, summarise my important emails and the day's appointments.",
+"Behalte meine GitHub-Repos im Blick: neue Issues und Pull Requests, die auf mich warten.": "Keep an eye on my GitHub repos: new issues and pull requests waiting for me.",
+"Recherchiere laufend Neuigkeiten zu meinem Thema und melde dich, wenn sich etwas Wichtiges ändert.": "Keep researching news on my topic and get in touch when something important changes.",
+"Coworker anlegen": "Create coworker",
+"Wartet auf deine Freigabe": "Waiting for your approval",
+"Alle Angaben": "All details",
+"Erlauben": "Allow",
+"Fragen": "Ask",
+"Sperren": "Block",
+"Verlauf": "History",
+"Senden": "Send",
+"Jetzt arbeiten": "Work now",
+"Pausieren": "Pause",
+"Chat öffnen": "Open chat",
+"Aufgabe ändern": "Change task",
+"Noch nichts — der erste Arbeitsschritt kommt gleich.": "Nothing yet — the first work step is coming.",
+"Noch keine — die schreibt er nach dem ersten Arbeitsschritt.": "None yet — it writes them after its first work step.",
+"Notizen löschen": "Delete notes",
+"Notizen löschen?": "Delete notes?",
+"Diese Notizen enthalten Gelesenes aus Webseiten oder Mails — deshalb fragt er vor jeder Aktion nach, bis du sie löschst.": "These notes contain things read from web pages or emails — so it asks before every action until you delete them.",
+"„Fragen“: Er legt die Aktion zur Freigabe hier ab. Nach dem Lesen von Webseiten oder Mails fragt er auch bei „Erlauben“ — so kann ihn ein fremder Text zu nichts überreden.": "“Ask”: it puts the action here for your approval. After reading web pages or emails it asks even with “Allow” — so no outside text can talk it into anything.",
+"Termine eintragen und ändern": "Add and change appointments",
+"Mail-Entwürfe anlegen": "Create email drafts",
+"Sich etwas dauerhaft merken": "Remember something permanently",
+"Die Lagerverwaltung ändern": "Change the inventory",
+"Im Haus etwas schalten": "Switch something at home",
+"Das Heimnetz abfragen": "Query the home network",
+"In seiner virtual machine arbeiten": "Work in its virtual machine",
+"Coworker: arbeiten die ganze Zeit für dich": "Coworkers: working for you all the time",
 "Ungültiger Port. Erlaubt sind ganze Zahlen von 1 bis 65535.": "Invalid port. Enter a whole number from 1 to 65535.",
 "Der Verbundstatus ließ sich nicht laden.": "The cluster status could not be loaded.",
 "Bis zu 10 Server mit Aquaticy arbeiten zusammen: eine gemeinsame Datenbank, die auf jedem Server vollständig liegt, und die Arbeit wird gleichmäßig verteilt. Der Server, der einlädt, wird Master.": "Up to 10 servers running Aquaticy work together: one shared database that is complete on every server, and the work is spread evenly. The server that sends the invitation becomes the master.",
@@ -5843,6 +6138,7 @@ document.addEventListener("keydown", (e) => {
   if (guardBox.classList.contains("open")) { guardSchliessen(false); return; }
   if (screenBox.classList.contains("open")) { bildschirmSchliessen(); return; }
   if (addonBox.classList.contains("open")) { addonsSchliessen(); return; }
+  if (coworkerBox.classList.contains("open")) { coworkerSchliessen(); return; }
   if (minwinOffen) { minwinSchliessen(); return; }
   if (pickerOpen()) { closePicker(true); return; }
   if (vmBox.classList.contains("open")) { closeOverlay(vmBox); return; }
@@ -6292,6 +6588,7 @@ async function addonTun(body, knopf){
     note.textContent = data.message || "";
     addonDaten = data;
     zeigeAddons();
+    pluginsLaden();   // ein- oder ausgeschaltet: die Befehle im Chat folgen
     return data;
   } catch {
     note.className = "note bad";
@@ -6397,6 +6694,29 @@ function addonKarte(a){
   // Und was Aquaticy damit darf -- je Add-on ein, zwei einfache Fragen.
   if (a.installed && !laeuft && (a.rechte_katalog || []).length)
     karte.appendChild(addonRechte(a));
+  // Was ein Pruef-Plugin abdeckt -- aufklappbar (11.0.0 Luna).
+  if ((a.inhalt || []).length){
+    const mehr = document.createElement("details");
+    mehr.className = "addon-inhalt";
+    const titel = document.createElement("summary");
+    titel.textContent = "Was geprüft wird";
+    const liste = document.createElement("ul");
+    for (const punkt of a.inhalt){
+      const li = document.createElement("li");
+      li.textContent = punkt;
+      liste.appendChild(li);
+    }
+    mehr.append(titel, liste);
+    karte.appendChild(mehr);
+  }
+  // Im Chat: /<name> -- sobald das Plugin an ist.
+  if (a.installed && a.enabled && a.usable && a.command){
+    const zeile = document.createElement("div");
+    zeile.className = "addon-hint addon-befehl";
+    zeile.innerHTML = 'Im Chat: <code></code>';
+    zeile.querySelector("code").textContent = a.command;
+    karte.appendChild(zeile);
+  }
   if (a.hinweis){
     const h = document.createElement("div");
     h.className = "addon-hint"; h.textContent = a.hinweis;
@@ -6540,6 +6860,338 @@ $("#btn-addons").addEventListener("click", () => {
   openOverlay(addonBox);
   addonsLaden();
   kontenLaden();
+});
+
+/* ---------- Coworker (11.0.0 Luna) ---------- */
+// Ein Coworker arbeitet die ganze Zeit an einer Aufgabe (aquaticy/coworker.py):
+// hier anlegen, ihm schreiben, Aktionen freigeben, Regeln setzen, pausieren.
+const coworkerBox = $("#coworkerbox");
+let coworkerDaten = null, coworkerTakt = 0, coworkerAvatar = "🤝", coworkerStand = "";
+const coworkerEntwuerfe = new Map();   // Nachricht, die noch nicht abgeschickt ist
+const coworkerOffen = new Set();       // aufgeklappte Abschnitte bleiben offen
+const CW_ART = { nachricht: "💬", meldung: "📣", frage: "❓", schritt: "🛠", aktion: "✅",
+                 fehler: "⚠️" };
+
+function cwZeit(stempel){
+  if (!stempel) return "";
+  const d = new Date(stempel * 1000);
+  const uhr = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? uhr
+    : d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + ", " + uhr;
+}
+function cwStatus(cw){
+  if (cw.working) return "arbeitet gerade …";
+  if (!cw.enabled) return cw.last_state.startsWith("abgelehnt") ? "angehalten — " + cw.last_state : "pausiert";
+  const spaeter = cw.next_wake && cw.next_wake * 1000 > Date.now();
+  return (spaeter ? `wacht ${cwZeit(cw.next_wake)} Uhr auf` : "legt gleich los")
+    + (cw.wake_reason ? " · " + cw.wake_reason : "");
+}
+function coworkerAbzeichen(zahl){
+  const b = $("#coworker-badge");
+  b.hidden = !zahl;
+  b.textContent = zahl > 9 ? "9+" : String(zahl || "");
+}
+async function coworkerTun(body, knopf){
+  if (knopf) knopf.disabled = true;
+  const note = $("#coworker-note");
+  note.className = "note"; note.textContent = "Einen Moment …";
+  try {
+    const res = await api("/api/coworkers", {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok){
+      note.className = "note bad"; note.textContent = data.error || "Das hat nicht geklappt.";
+      return null;
+    }
+    note.className = "note ok"; note.textContent = data.message || "";
+    coworkerDaten = data; coworkerStand = "";
+    coworkerZeigen(true);
+    coworkerAbzeichen(data.badge);
+    return data;
+  } catch {
+    note.className = "note bad";
+    note.textContent = "Keine Verbindung zu Aquaticy. Versuch es gleich noch einmal.";
+    return null;
+  } finally { if (knopf) knopf.disabled = false; }
+}
+async function coworkerLaden(){
+  clearTimeout(coworkerTakt);
+  try {
+    const res = await api("/api/coworkers");
+    if (!res.ok){ await res.text().catch(() => ""); return; }
+    coworkerDaten = await res.json();
+  } catch {
+    $("#coworker-note").textContent = "Die Coworker ließen sich nicht laden.";
+    return;
+  }
+  coworkerZeigen();
+  coworkerAbzeichen(coworkerDaten.badge);
+  if (coworkerBox.classList.contains("open")){
+    // Solange einer arbeitet, öfter nachsehen.
+    const arbeitet = (coworkerDaten.coworkers || []).some(cw => cw.working);
+    coworkerTakt = setTimeout(coworkerLaden, arbeitet ? 4000 : 15000);
+  }
+}
+// Nur das Abzeichen -- jede Minute, solange die Seite offen ist.
+async function coworkerAbzeichenLaden(){
+  if (document.hidden || coworkerBox.classList.contains("open")) return;
+  try {
+    const res = await api("/api/coworkers?badge=1");
+    if (!res.ok){ await res.text().catch(() => ""); return; }
+    const d = await res.json();
+    coworkerAbzeichen(d.allowed ? d.badge : 0);
+  } catch {}
+}
+setInterval(coworkerAbzeichenLaden, 60_000);
+
+function cwElement(tag, klasse, text){
+  const e = document.createElement(tag);
+  if (klasse) e.className = klasse;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function cwKnopf(text, klasse, tun){
+  const b = cwElement("button", "btn" + (klasse ? " " + klasse : ""), text);
+  b.type = "button";
+  b.addEventListener("click", () => tun(b));
+  return b;
+}
+function cwAufklapp(cw, schluessel, titel, inhalt){
+  const mehr = cwElement("details", "cw-mehr");
+  const merk = `${cw.id}:${schluessel}`;
+  mehr.open = coworkerOffen.has(merk);
+  mehr.addEventListener("toggle", () => {
+    if (mehr.open) coworkerOffen.add(merk); else coworkerOffen.delete(merk);
+  });
+  mehr.append(cwElement("summary", "", titel), inhalt);
+  return mehr;
+}
+
+function coworkerKarte(cw, d){
+  const karte = cwElement("div", "cw-karte" + (cw.working ? " arbeitet" : ""));
+  karte.dataset.id = cw.id;
+  const kopf = cwElement("div", "cw-kopf");
+  const text = cwElement("div", "cw-kopf-text");
+  text.append(cwElement("div", "cw-name", cw.name), cwElement("span", "cw-status", cwStatus(cw)));
+  kopf.append(cwElement("span", "cw-avatar", cw.avatar), text);
+  if (cw.unseen){
+    const zahl = cwElement("span", "side-badge", String(cw.unseen));
+    zahl.setAttribute("aria-label", `${cw.unseen} neu`);
+    kopf.appendChild(zahl);
+  }
+  karte.append(kopf, cwElement("div", "cw-aufgabe", cw.goal));
+
+  // Freigaben: genau das, was ausgeführt würde -- dann Erlauben oder Ablehnen.
+  if ((cw.actions || []).length){
+    const box = cwElement("div", "cw-abschnitt");
+    box.appendChild(cwElement("div", "how", "Wartet auf deine Freigabe"));
+    for (const a of cw.actions){
+      const f = cwElement("div", "cw-freigabe");
+      f.appendChild(cwElement("div", "was", a.summary));
+      const genau = cwElement("details", "");
+      genau.append(cwElement("summary", "", "Alle Angaben"),
+                   cwElement("pre", "", `${a.tool}\n${JSON.stringify(a.arguments, null, 2)}`));
+      const reihe = cwElement("div", "reihe");
+      reihe.append(
+        cwKnopf("Erlauben", "primary", (b) => coworkerTun({ action: "approve", id: cw.id, action_id: a.id }, b)),
+        cwKnopf("Ablehnen", "", (b) => coworkerTun({ action: "reject", id: cw.id, action_id: a.id }, b)));
+      f.append(genau, reihe);
+      box.appendChild(f);
+    }
+    karte.appendChild(box);
+  }
+
+  // Der Verlauf: Meldungen, Fragen, deine Nachrichten, Arbeitsschritte.
+  const verlauf = cwElement("div", "cw-abschnitt");
+  verlauf.appendChild(cwElement("div", "how", "Verlauf"));
+  const liste = cwElement("div", "cw-verlauf");
+  for (const e of (cw.log || []).slice(0, 15)){
+    const zeile = cwElement("div", "cw-eintrag" + (e.kind === "nachricht" ? " du" : "")
+      + (!e.seen && (e.kind === "meldung" || e.kind === "frage") ? " neu" : ""));
+    zeile.appendChild(cwElement("span", "art", CW_ART[e.kind] || "·"));
+    const inhalt = cwElement("div", "inhalt");
+    const zeit = cwElement("div", "zeit", cwZeit(e.at) + (e.kind === "nachricht" ? " · du"
+      : e.title ? " · " + e.title : ""));
+    const koerper = cwElement("div", "");
+    // Was der Coworker schreibt, ist Markdown wie eine Antwort im Chat; deins bleibt Text.
+    if (e.kind === "meldung" || e.kind === "frage" || e.kind === "schritt") koerper.innerHTML = md(e.text);
+    else koerper.textContent = e.text;
+    inhalt.append(zeit, koerper);
+    zeile.appendChild(inhalt);
+    liste.appendChild(zeile);
+  }
+  if (!liste.childElementCount)
+    liste.appendChild(cwElement("div", "note", "Noch nichts — der erste Arbeitsschritt kommt gleich."));
+  verlauf.appendChild(liste);
+  karte.appendChild(verlauf);
+
+  // Schreiben: weckt den Coworker sofort.
+  const schreiben = cwElement("div", "cw-schreiben");
+  const feld = cwElement("textarea", "");
+  feld.rows = 1; feld.maxLength = 2000;
+  feld.placeholder = `Nachricht an ${cw.name} …`;
+  feld.setAttribute("aria-label", `Nachricht an ${cw.name}`);
+  feld.value = coworkerEntwuerfe.get(cw.id) || "";
+  feld.addEventListener("input", () => coworkerEntwuerfe.set(cw.id, feld.value));
+  const senden = cwKnopf("Senden", "primary", async (b) => {
+    const textInhalt = feld.value.trim();
+    if (!textInhalt){ feld.focus(); return; }
+    coworkerEntwuerfe.delete(cw.id);
+    feld.value = "";
+    if (!await coworkerTun({ action: "message", id: cw.id, text: textInhalt }, b)){
+      coworkerEntwuerfe.set(cw.id, textInhalt);
+      feld.value = textInhalt;
+    }
+  });
+  feld.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); senden.click(); }
+  });
+  schreiben.append(feld, senden);
+  karte.appendChild(schreiben);
+
+  const knoepfe = cwElement("div", "cw-knoepfe");
+  const jetzt = cwKnopf("Jetzt arbeiten", "", (b) => coworkerTun({ action: "wake", id: cw.id }, b));
+  jetzt.disabled = cw.working || !cw.enabled;
+  knoepfe.appendChild(jetzt);
+  knoepfe.appendChild(cwKnopf(cw.enabled ? "Pausieren" : "Fortsetzen", "",
+    (b) => coworkerTun({ action: cw.enabled ? "pause" : "resume", id: cw.id }, b)));
+  if (cw.chat) knoepfe.appendChild(cwKnopf("Chat öffnen", "", () => {
+    coworkerSchliessen();
+    openChat(cw.chat);
+  }));
+  knoepfe.appendChild(cwKnopf("Löschen", "", async (b) => {
+    if (await frage(`${cw.name} löschen?`, "Aufgabe, Notizen, Regeln und Verlauf werden gelöscht. Der Chat mit seinen Meldungen bleibt."))
+      coworkerTun({ action: "delete", id: cw.id }, b);
+  }));
+  karte.appendChild(knoepfe);
+
+  // Regeln: was der Coworker ohne dich darf.
+  const regeln = cwElement("div", "");
+  for (const kat of d.categories || []){
+    const zeile = cwElement("div", "recht");
+    zeile.appendChild(cwElement("span", "recht-name", kat.label));
+    const gruppe = cwElement("div", "seg");
+    gruppe.setAttribute("role", "radiogroup");
+    gruppe.setAttribute("aria-label", `${cw.name}: ${kat.label}`);
+    for (const option of kat.options){
+      const an = (cw.rules[kat.key] || kat.default) === option.value;
+      const b = cwElement("button", an ? "on" : "", option.label);
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(an));
+      b.addEventListener("click", () => {
+        if (!an) coworkerTun({ action: "rules", id: cw.id, rules: { [kat.key]: option.value } }, b);
+      });
+      gruppe.appendChild(b);
+    }
+    zeile.appendChild(gruppe);
+    regeln.appendChild(zeile);
+  }
+  regeln.appendChild(cwElement("div", "addon-hint", "„Fragen“: Er legt die Aktion zur Freigabe hier ab. Nach dem Lesen von Webseiten oder Mails fragt er auch bei „Erlauben“ — so kann ihn ein fremder Text zu nichts überreden."));
+  karte.appendChild(cwAufklapp(cw, "regeln", `Regeln — was ${cw.name} ohne dich darf`, regeln));
+
+  const notizen = cwElement("div", "inhalt");
+  const notizText = cwElement("div", "");
+  if (cw.notes) notizText.innerHTML = md(cw.notes);
+  else notizText.textContent = "Noch keine — die schreibt er nach dem ersten Arbeitsschritt.";
+  notizen.appendChild(notizText);
+  if (cw.notes){
+    // Stammen sie aus einem Schritt mit fremdem Text, fragt er auch bei „Erlauben“ nach.
+    if (cw.tainted) notizen.appendChild(cwElement("div", "addon-hint",
+      "Diese Notizen enthalten Gelesenes aus Webseiten oder Mails — deshalb fragt er vor jeder Aktion nach, bis du sie löschst."));
+    const reihe = cwElement("div", "cw-knoepfe");
+    reihe.appendChild(cwKnopf("Notizen löschen", "", async (b) => {
+      if (await frage("Notizen löschen?", `${cw.name} fängt beim nächsten Schritt ohne sein bisheriges Gedächtnis an.`))
+        coworkerTun({ action: "reset_notes", id: cw.id }, b);
+    }));
+    notizen.appendChild(reihe);
+  }
+  karte.appendChild(cwAufklapp(cw, "notizen", `Notizen von ${cw.name} (sein Gedächtnis)`, notizen));
+
+  const aendern = cwElement("div", "");
+  const ziel = cwElement("textarea", "");
+  ziel.maxLength = 2000; ziel.value = cw.goal;
+  ziel.setAttribute("aria-label", `Aufgabe von ${cw.name}`);
+  aendern.append(ziel, cwKnopf("Speichern", "primary",
+    (b) => coworkerTun({ action: "edit", id: cw.id, goal: ziel.value }, b)));
+  karte.appendChild(cwAufklapp(cw, "aufgabe", "Aufgabe ändern", aendern));
+  return karte;
+}
+
+function coworkerZeigen(sofort = false){
+  const d = coworkerDaten || {};
+  $("#coworker-lock").hidden = !!d.allowed;
+  $("#coworker-new").hidden = !d.allowed;
+  const liste = $("#coworker-list");
+  if (!d.allowed){ liste.replaceChildren(); return; }
+  // Wer gerade tippt oder auswählt, wird nicht unterbrochen.
+  const fokus = document.activeElement;
+  if (!sofort && fokus && liste.contains(fokus) && /^(TEXTAREA|INPUT|SELECT)$/.test(fokus.tagName)) return;
+  const stand = JSON.stringify(d.coworkers || []);
+  if (!sofort && stand === coworkerStand) return;
+  coworkerStand = stand;
+  const avatare = $("#cw-avatars");
+  if (!avatare.childElementCount){
+    for (const a of d.avatars || []){
+      const b = cwElement("button", "", a);
+      b.type = "button";
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(a === coworkerAvatar));
+      b.setAttribute("aria-label", `Bild ${a}`);
+      b.addEventListener("click", () => {
+        coworkerAvatar = a;
+        avatare.querySelectorAll("button").forEach(x =>
+          x.setAttribute("aria-checked", String(x.textContent === a)));
+      });
+      avatare.appendChild(b);
+    }
+  }
+  const info = [`Mit ${d.plan === "ultra" ? "Ultra" : "Pro"}: bis zu ${d.max} Coworker, je Coworker bis zu ${d.daily} Arbeitsschritte am Tag.`];
+  info.push((d.connections || []).length
+    ? "Er kann lesen: " + d.connections.join(", ") + "."
+    : "Verbindungen wie Gmail, Google Kalender oder GitHub schaltest du in den Einstellungen und unter Add-ons ein.");
+  if (d.vm) info.push("Er bekommt eine eigene virtual machine.");
+  $("#cw-info").textContent = info.join(" ");
+  $("#cw-create").disabled = (d.coworkers || []).length >= (d.max || 0);
+  liste.replaceChildren(...(d.coworkers || []).map(cw => coworkerKarte(cw, d)));
+  // Nur beim Öffnen laufen die Karten ein -- danach bleibt es ruhig.
+  requestAnimationFrame(() => liste.classList.add("ruhig"));
+}
+
+function coworkerSchliessen(){
+  clearTimeout(coworkerTakt);
+  closeOverlay(coworkerBox);
+}
+$("#btn-coworker").addEventListener("click", async () => {
+  if (narrow()) document.body.classList.add("collapsed");
+  $("#coworker-note").textContent = "";
+  coworkerStand = "";
+  $("#coworker-list").classList.remove("ruhig");
+  openOverlay(coworkerBox);
+  await coworkerLaden();
+  // Was jetzt zu sehen ist, gilt als gelesen.
+  for (const cw of coworkerDaten?.coworkers || []){
+    if (cw.unseen && !(cw.actions || []).length)
+      api("/api/coworkers", { method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ action: "seen", id: cw.id }) }).catch(() => {});
+  }
+});
+$("#coworker-close").addEventListener("click", coworkerSchliessen);
+coworkerBox.addEventListener("click", (e) => { if (e.target === coworkerBox) coworkerSchliessen(); });
+$("#cw-beispiele").querySelectorAll(".cw-beispiel").forEach(c => c.addEventListener("click", () => {
+  $("#cw-goal").value = c.textContent; $("#cw-goal").focus();
+}));
+$("#cw-create").addEventListener("click", async (e) => {
+  const name = $("#cw-name").value.trim();
+  const ziel = $("#cw-goal").value.trim();
+  if (ziel.length < 8){ $("#cw-goal").focus(); $("#coworker-note").className = "note bad";
+    $("#coworker-note").textContent = "Beschreib die Aufgabe in ein, zwei Sätzen."; return; }
+  if (await coworkerTun({ action: "create", name, goal: ziel, avatar: coworkerAvatar }, e.currentTarget)){
+    $("#cw-name").value = ""; $("#cw-goal").value = "";
+    $("#coworker-new").open = false;
+    coworkerLaden();
+  }
 });
 
 /* ---------- KI-Konten (9.6.1) ---------- */
@@ -7161,17 +7813,22 @@ function splitAnteil(m, d){
   const s = m.split || {};
   if (s.direct) return ` · rechnet direkt über seine Grafikkarte mit${s.mem_gb ? ` (etwa ${s.mem_gb} GB)` : ""}`;
   if (s.ready) return ` · rechnet mit${s.mem_gb ? ` (etwa ${s.mem_gb} GB)` : ""}`;
+  // llama.cpp wird auf diesem Server gerade geladen (11.0.0) -- kein Fehler.
+  if (s.note) return ` · ${s.note}`;
   return s.error ? ` · ${nutzerFehler(s.error)}` : " · noch nicht bereit";
 }
 function splitText(d, s){
   if (!d.master){
     if (!s.on) return "Das schaltet der Master.";
+    if (s.self && s.self.note) return s.self.note;
     return s.self && s.self.ready ? "Dieser Server rechnet am verteilten Modell mit."
       : nutzerFehler(s.message || "rpc-server startet …");
   }
   if (!s.on){
-    if (!s.server_binary) return "Auf diesem Server fehlt llama-server von llama.cpp — siehe README.";
-    return `Im Verbund stehen zusammen etwa ${s.memory_gb} GB Speicher bereit.`;
+    // Seit 11.0.0 installiert sich llama.cpp beim Einschalten von selbst.
+    if (!s.server_binary && !s.auto_install) return "Für dieses System gibt es llama.cpp nicht fertig gebaut — siehe README.";
+    const llama = s.llama && s.llama.label ? ` ${s.llama.label} ist installiert.` : " llama.cpp installiert sich beim Einschalten von selbst.";
+    return `Im Verbund stehen zusammen etwa ${s.memory_gb} GB Speicher bereit.` + (s.server_binary && !(s.llama && s.llama.label) ? "" : llama);
   }
   switch (s.phase){
     case "wartet": return nutzerFehler(s.message || "Warte auf die anderen Server …");
@@ -8494,6 +9151,8 @@ async function starteOberflaeche(){
   refreshHeader();
   loadRecents();
   pruefeLimits();
+  pluginsLaden();   // Plugins im Chat (11.0.0 Luna): /code-review, /github ...
+  coworkerAbzeichenLaden();  // Coworker (11.0.0 Luna): Meldungen und Freigaben
   pruefeUpgrade();  // Auto-Upgrading (10.0 Luna): neues Modell? Einmal Bescheid sagen.
   pruefeSperre();   // Ai-guard (9.5.24): rotes „Info“, wenn das Konto gesperrt ist
   await wiederAufnehmen();

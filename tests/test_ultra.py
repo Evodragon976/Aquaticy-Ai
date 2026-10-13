@@ -17,7 +17,7 @@ from tests.test_cluster import _verbinden, _warte, verbund  # noqa: F401
 def test_version_label() -> None:
     import aquaticy
 
-    assert aquaticy.VERSION_LABEL == "10.2.1 Terra"
+    assert aquaticy.VERSION_LABEL == "11.0.0 Luna"
 
 
 def _fehler(art: type[BaseException], text: str) -> BaseException:

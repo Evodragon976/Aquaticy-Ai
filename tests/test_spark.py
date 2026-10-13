@@ -189,7 +189,8 @@ def test_tool_cost_settles_the_existing_reservation(
 
 def test_help_lists_browser_commands_and_terminal_commands() -> None:
     text = ChatSession().command("/help")["text"]
-    assert text == HELP_MARKDOWN
+    # Seit 11.0.0 Luna folgen die Plugins des Kontos (aquaticy/plugins.py).
+    assert text.startswith(HELP_MARKDOWN) and "Plugins" in text[len(HELP_MARKDOWN):]
     for command in ("location", "model", "max", "image", "export", "history", "notes",
                     "clear", "memory", "uploads", "forget", "help", "quit", "exit", "q"):
         assert f"/{command}" in text

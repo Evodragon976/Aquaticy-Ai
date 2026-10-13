@@ -1632,6 +1632,10 @@ class Toolbox:
         #: Welches Bildmodell create_image nimmt -- setzt die automatische
         #: Modellwahl je Nachricht. Leer = das passendste verfuegbare.
         self.image_model = ""
+        #: Eine Pruefung vor jedem Aufruf (11.0.0 Luna, aquaticy/coworker.py): gibt
+        #: sie ein Ergebnis zurueck, laeuft das Werkzeug nicht. Coworker setzen
+        #: hier ihre Regeln durch -- erlauben, fragen, sperren.
+        self.gate: Callable[[str, dict[str, Any]], dict[str, Any] | None] | None = None
 
     def close(self, *, close_fetcher: bool = True) -> None:
         """Gibt eigene Ressourcen frei.
@@ -2678,6 +2682,11 @@ class Toolbox:
         laeuft (aquaticy/metering.py, seit 9.5.14 Seashell). Ist nichts mehr
         uebrig, lehnt das Werkzeug ab -- das Modell antwortet dann ohne.
         """
+        pruefung = getattr(self, "gate", None)
+        if pruefung is not None:
+            vorab = pruefung(name, arguments)
+            if vorab is not None:
+                return vorab
         nein = self._untrusted_gate(name, arguments) or self._leak_gate(name, arguments)
         if nein:
             return nein

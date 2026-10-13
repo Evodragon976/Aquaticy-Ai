@@ -1289,13 +1289,37 @@ class Cluster:
             alt = info.get("split") if isinstance(info.get("split"), dict) else {}
             info["split"] = {"on": bool(on),
                              "model": str(model or alt.get("model") or "")[:200],
-                             "at": _now()}
+                             "at": _now(),
+                             # Die Fassung von llama.cpp bleibt (set_split_llama).
+                             "llama": str(alt.get("llama") or "")[:20]}
             info["version"] = int(info.get("version", 0)) + 1
             self._save()
         self.broadcast()
         if on:
             threading.Thread(target=self.gather_on_master, name="aquaticy-cluster-gather",
                              daemon=True).start()
+
+    def set_split_llama(self, tag: str) -> None:
+        """Master: die Fassung von llama.cpp, die alle Server laden (11.0.0 Luna).
+
+        llama.cpp verlangt auf allen Servern dieselbe Fassung. Sie steht in der
+        Einstellung und kommt so mit der Mitgliederliste zu jedem Server.
+        """
+        from aquaticy.llamacpp import TAG_RE
+
+        if not self.is_master:
+            raise ClusterError("Die Fassung von llama.cpp wählt der Master.")
+        if not TAG_RE.fullmatch(str(tag or "")):
+            raise ClusterError("Unbekannte Fassung von llama.cpp.")
+        with self._lock:
+            info = self.state["cluster"]
+            alt = info.get("split") if isinstance(info.get("split"), dict) else {}
+            if not alt.get("on") or alt.get("llama") == tag:
+                return
+            info["split"] = {**alt, "llama": str(tag)}
+            info["version"] = int(info.get("version", 0)) + 1
+            self._save()
+        self.broadcast()
 
     def gather_on_master(self) -> None:
         """Holt alle Konten zum Master -- dort laeuft das verteilte Modell.
@@ -2224,7 +2248,9 @@ def _split_status(roh: Any) -> dict[str, Any]:
     if not 0.0 <= speicher <= 100_000.0:  # auch NaN und Unendlich
         speicher = 0.0
     return {"ready": roh.get("ready") is True, "mem_gb": round(speicher, 1),
-            "direct": roh.get("direct") is True, "error": str(roh.get("error") or "")[:200]}
+            "direct": roh.get("direct") is True, "error": str(roh.get("error") or "")[:200],
+            # Kein Fehler: llama.cpp wird auf diesem Server gerade geladen (11.0.0).
+            "note": str(roh.get("note") or "")[:200]}
 
 
 def _host(ziel: dict[str, Any]) -> str:

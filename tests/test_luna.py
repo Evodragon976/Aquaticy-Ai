@@ -20,7 +20,7 @@ from aquaticy import web
 def test_version_label() -> None:
     import aquaticy
 
-    assert aquaticy.VERSION_LABEL == "10.2.1 Terra"
+    assert aquaticy.VERSION_LABEL == "11.0.0 Luna"
 
 
 # -- Home Assistant ---------------------------------------------------------------------

@@ -2548,6 +2548,7 @@ class Agent:
         sandbox: bool | None = None,
         visual_sources: bool | None = None,
         image_mode: bool = False,
+        plugin_prompt: str = "",
     ) -> AgentResult:
         """Beantwortet *question* -- sucht, liest und wertet aus.
 
@@ -2568,8 +2569,12 @@ class Agent:
             visual_sources: Öffentliche Webcams und Satellitenbilder zusätzlich prüfen.
             image_mode: Bilderstellung (9.5.34): die Frage laeuft im Standard-Modus,
                 und Aquaticy malt mit einem Bildmodell statt zu suchen.
+            plugin_prompt: Ein Plugin-Befehl (11.0.0 Luna, aquaticy/plugins.py): Das
+                Modell bekommt fuer genau diesen Turn diesen Text statt der Frage --
+                im Verlauf steht weiter, was der Nutzer getippt hat.
         """
         question = question.strip()
+        self._plugin_turn = str(plugin_prompt or "").strip()
         self._ausweich_model = ""
         learning = getattr(self, "learning", None)
         self.toolbox.learning_ticket = ""
@@ -2594,7 +2599,8 @@ class Agent:
                 [str(m.get("content") or "") for m in self.messages
                  if m.get("role") == "user" and isinstance(m.get("content"), str)]
                 + [question])
-        standard = standard_chat_reply(question, frage_offen=self._last_reply_asks())
+        standard = "" if self._plugin_turn else standard_chat_reply(
+            question, frage_offen=self._last_reply_asks())
         if standard:
             self.max_run = False
             self._stop.clear()
@@ -3488,6 +3494,9 @@ class Agent:
 
     def _with_context(self, question: str) -> str:
         """Haengt den aktiven Ortsfilter an die Nutzerfrage."""
+        if getattr(self, "_plugin_turn", ""):
+            # Ein Plugin-Befehl gilt fuer diesen einen Turn (11.0.0 Luna).
+            question = self._plugin_turn
         question = self._shared_context(question)
         if getattr(self, "_image_turn", False):
             return (

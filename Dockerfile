@@ -21,9 +21,10 @@ ENV PYTHONUNBUFFERED=1 \
     TERM=xterm-256color \
     HOME=/tmp
 
-# tini raeumt Zombie-Prozesse auf und leitet Strg+C sauber weiter.
+# tini raeumt Zombie-Prozesse auf und leitet Strg+C sauber weiter. libgomp1
+# und libcurl4 braucht llama.cpp fuer "Serverlast aufteilen" (11.0.0 Luna).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tini \
+    && apt-get install -y --no-install-recommends ca-certificates tini libgomp1 libcurl4 \
     && rm -rf /var/lib/apt/lists/*
 
 # /data und /work sind fuer jede UID beschreibbar. Das erlaubt es,
@@ -39,6 +40,12 @@ COPY pyproject.toml README.md constraints.txt ./
 COPY aquaticy ./aquaticy
 # Genau die getesteten Versionen (constraints.txt, seit 9.5.15).
 RUN pip install --no-cache-dir -c constraints.txt .
+
+# llama.cpp fuer "Serverlast aufteilen" gleich mitbringen (11.0.0 Luna): die
+# offizielle Ausgabe von GitHub, geprueft wie zur Laufzeit (Pruefsumme, sicheres
+# Entpacken). Klappt der Download beim Bauen nicht, holt Aquaticy es spaeter selbst.
+RUN python -m aquaticy.llamacpp install --dir /opt/aquaticy/llama.cpp \
+    || echo "llama.cpp: wird beim ersten Einschalten geladen"
 
 # ---------------------------------------------------------------------------
 # Ohne Browser -- Cookie-Stufen 1 und 2 reichen fuer die allermeisten Seiten.

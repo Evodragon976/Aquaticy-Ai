@@ -161,7 +161,9 @@ def test_only_a_complete_slash_command_glows_in_the_accent_colour() -> None:
         encoding="utf-8"
     )
     assert ".input-mirror .command-word{color:var(--accent-text)" in html
-    assert 'slashBefehle.has(match[2].toLowerCase())' in html
+    # Seit 11.0.0 Luna zaehlen auch die Plugins des Kontos (/code-review ...).
+    assert 'const wort = match ? match[2].toLowerCase() : "";' in html
+    assert "(slashBefehle.has(wort) || pluginNamen.has(wort))" in html
     assert 'input.classList.toggle("is-command", Boolean(erkannt))' in html
     assert (
         'inputMirror.append(wort, document.createTextNode(input.value.slice(match[0].length)))'
