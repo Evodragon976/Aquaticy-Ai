@@ -1,145 +1,8 @@
-# Aquaticy AI 10.1.4 Luna
+# Aquaticy AI 10.2.0 Luna
 
 **Aquaticy** recherchiert für dich. Du stellst eine Frage, Aquaticy sucht im Web, liest die
 passenden Seiten und fasst das Ergebnis zusammen — mit Quelle an jeder Angabe. Es läuft im
 Terminal, im Browser und auf dem Handy.
-
-Neu in **10.1.4 Luna**: Schaltet ein Ultra-Konto die Rechts-Leitplanken ab, gilt das nur für
-dieses Konto — ein „aus“ in der Einstellung des Betreibers nimmt anderen Konten die Leitplanken
-nicht mehr weg. Ein Grundschutz bleibt immer: Schadsoftware und Angriffswerkzeuge in der
-virtual machine (auch über den User mode) werden gestoppt, und Bilder, die echte Menschen
-in Würde, Persönlichkeitsrecht oder Ruf verletzen, malt Aquaticy nicht.
-
-Seit **10.0.3 Luna**: Der Upgrade-Status folgt auch einem verzögerten Trainingsstart;
-veraltete Abfragen überschreiben keine neueren Aktionen und unveränderte Listen behalten
-ihren Tastaturfokus. Abgeschlossene Wissenstests ohne Gewinn werden automatisch nur bei
-neuem Wissen wiederholt; manuelles Training bleibt möglich. Komprimierte Ollama-Antworten
-werden bereits beim Entpacken begrenzt. Daten- und Kontolöschung entfernen auch gespeicherte
-Modellpräferenzen und gelesene Upgrade-Hinweise. Gültiges Wissen der gewählten Modellfassung
-wird bei Chat- und Helferaufrufen zusammen mit Aquaticys Sicherheitsregeln übermittelt,
-ohne den gespeicherten Chatverlauf zu verändern. Details: [Prüfbericht](TESTREPORT-10.0.3-Luna.md).
-
-Neu in **10.0.2 Luna**: Auto-Upgrading prüft Modellzugriffe in allen Modi,
-bricht fehlerhafte oder überholte Trainingsläufe ab und blockiert die Oberfläche nicht
-während Modellkopien. Lernwissen in abgeleiteten Modelltexten bleibt an aktuelle Zustimmung
-und Ablauf gebunden; betroffene Fassungen werden zurückgezogen und im Ollama-Dienst gelöscht.
-Die erweiterte Lern-Erklärung erfordert eine erneute freiwillige Zustimmung.
-
-Neu in **10.0.1 Luna**: Die Meldung zu einem neuen Modell sagt jetzt „… ist stärker als jemals
-zuvor“. Eine zurückgezogene Version wird nicht mehr angekündigt, und ein später installiertes
-lokales Modell bekommt automatisch seine eigene Versionsreihe.
-
-Seit **10.0 Luna**: **Auto-Upgrading.** Ein Ultra-Konto schaltet es in den Dev settings ein —
-dann gilt es für jedes Konto. Aquaticy baut jedes lokal laufende Ollama-Modell mit Wissen weiter,
-das mehrere Konten unabhängig bestätigt haben (öffentliche Quellen; wer etwas beigetragen hat,
-steht nicht im Modelltext), und misst mit einem Wissenstest, wie viel besser die neue Fassung
-antwortet. Ultra sieht jeden Fortschritt bis auf die letzte Stelle (z. B. +0,00000002 %) und kann
-den Kandidaten sofort nutzen. Ab 5 % wird „Upgraden“ grün: aus `gemma3:4b` wird `gemma3:4b 1.1`;
-ab 30 % gibt es eine ganze Version (`gemma3:4b 2`, danach `2.1` …). Ultra kann außerdem eine
-Version überspringen oder eine ältere wieder zur neuesten machen. Nach einer Freigabe sieht jedes
-Konto einmal eine Meldung mit „Ausprobieren“ und „Zurück“; beide Fassungen bleiben vier Tage
-wählbar, danach die alte nur noch für Ultra. Ehrlich gesagt: Die Gewichte bleiben unverändert —
-ein Upgrade ist ein lokales Modell mit eingebautem, geprüftem Wissen.
-
-Seit **9.6.10 Luna**: Ein Konto mit eigener Google-Client-ID übernimmt kein
-Geheimnis einer anderen OAuth-Anwendung. Die gemeinsame Anwendung des Betreibers
-und eigene verschlüsselte Geheimnisse bleiben nutzbar. Google-Rückmeldungen filtern
-technische Fehler und Zugangsdaten; auch Refresh-Tokens und eingefügte Codes werden
-in Fehlertexten maskiert. Verzögerte Kontoabgaben im Server-Verbund prüfen die aktuelle
-Zuteilung vor jedem Versuch. Zurückkehrende Konten starten ihre Aufgaben erst nach
-einer noch laufenden Abgabe wieder. Beim automatischen Port und beim Ersatz-Port
-zeigt das Terminal die tatsächlich gebundene Adresse. Funktionen und Schutzprüfungen
-bleiben erhalten. Fehler der Verbund-Hintergrundabfrage erscheinen beim Status,
-ohne den Eingabefokus aus dem Einladungscode zu ziehen; das allgemeine Fehlerfenster
-bleibt für andere Fehler erhalten. Details: [Prüfbericht](TESTREPORT-9.6.10-Luna.md).
-
-Seit **9.6.9 Luna**: Aquaticy sieht auf jedem Gerät gut aus — auf dem Handy eine eigene
-Kopfzeile mit Logo und „Neuer Chat“, Einstellungen über den ganzen Bildschirm mit wischbarer
-Abschnittsleiste, Anmeldung ohne Rand, daumengroße Knöpfe und Abstand zu Notch und Wischleiste.
-Dazu Sicherheits- und Fehlerkorrekturen: Der Home-Assistant-Token des Betreibers geht nie an
-ein Konto, und jeder Token ist an seine Adresse gebunden; der Rücksprung von Google klappt
-trotz SameSite=Strict (eigenes, an Browser und state gebundenes Cookie); das Ausweichmodell
-richtet sich nach dem Modell, das gerade wirklich antwortet; ein Antwortstrom ohne Abschluss
-wird wieder aufgenommen; ein zweites Aquaticy auf demselben Datenordner startet nicht mehr.
-
-Seit **9.6.8 Ultra**: Fehlerkorrekturen zu Sol — scheitert der Start, wird der Port wieder
-frei und kein Auftragsplaner läuft weiter; ohne Netz erscheint nur der Offline-Hinweis statt
-des Fehlerfensters; ein Server, der nach einer Übernahme zurückkommt, gibt Konten auch dann
-noch ab, wenn dort gerade ein Chat lief; technische Fehlertexte von Bibliotheken kommen im
-Chat nicht mehr an.
-
-Seit **9.6.8 Sol**: Fehler sehen Nutzer nur noch als allgemeine Meldung — in einem
-eigenen Fehlerfenster bzw. auf einer Fehlerseite, nie als technischen Fehlertext; Hinweise,
-die sagen, was zu tun ist (Passwort zu kurz, Limit erreicht), bleiben. Aquaticy fängt
-Störungen selbst ab: belegter Port → der nächste freie (die Adresse steht im Terminal);
-Absturz → automatischer Neustart (höchstens fünfmal in zehn Minuten); Modell-Anbieter
-streikt → das schnelle Modell desselben Anbieters übernimmt; kurzer Verbindungsabbruch →
-die Seite versucht Lesezugriffe erneut und hängt sich an eine laufende Antwort wieder an;
-offline → ein dezenter Hinweis, danach geht es von selbst weiter. Das Anfragelimit zählt
-angemeldet je Konto statt je Adresse (Nutzer hinter einem Router sperren sich nicht mehr
-gegenseitig aus), mit einer großzügigen Obergrenze je Adresse. Gemeinsames Wissen erreicht
-andere Konten erst, wenn mindestens zwei Konten denselben Auszug unabhängig gefunden haben.
-Im Server-Verbund kann der Master die Konten eines ausgefallenen Servers per Knopf
-übernehmen.
-
-Seit **9.6.8 Terra**: Anmeldungen und Passwortänderungen sind gegen parallele
-Änderungen abgesichert. Neue Sitzungen müssen zum tatsächlich geprüften Passwortstand
-passen; Passwortwechsel und Widerruf anderer Sitzungen erfolgen gemeinsam. Die Umstellung
-alter Passwort-Hashes überschreibt keine zwischenzeitlichen Änderungen. Der geschützte
-Abruf-Helper gibt bei Herkunftswechseln keine Anmeldedaten weiter und behält zulässig
-zugeordnete Cookies. Stark verschachtelte Modellargumente werden kontrolliert abgewiesen;
-zusammengefügte gültige Tool-Aufrufe bleiben unterstützt. Ungültige Unicode-Kontofelder
-und fehlende Hardlinks unter Windows werden kontrolliert behandelt. Funktionen und
-Schutzprüfungen bleiben erhalten.
-
-Seit **9.6.8 Luna**: Schlüsseldateien werden vollständig und ohne Überschreiben
-konkurrierender Erstellungen angelegt. Beschädigte vorhandene Schlüssel werden mit einer
-verständlichen Meldung abgewiesen und bleiben für eine Wiederherstellung erhalten.
-Passwortänderungen mit Unicode, fehlerhafte HTTP-Eingaben und Nullpotenzen werden korrekt
-behandelt. Fremdes JSON erhält eine feste Verschachtelungsgrenze; fehlerhafte Produktdaten
-verhindern nicht die Auswertung gültiger Informationen derselben Seite. Fehlerprotokolle geben keine Anfrage-URLs oder
-Ausnahmeinhalte mit möglichen
-Geheimnissen aus. Der Recherchecache unterscheidet ausdrücklich angegebene Personennamen
-mit demselben Nachnamen. Bestehende Funktionen, Schutzprüfungen und Cache-Fristen bleiben.
-
-Seit **9.6.7 Terra v2**: Der Recherchecache speichert zulässige Aussagen der
-recherchierten öffentlichen Quellentexte als einzelne kurze **Stichpunkte mit Quelle**.
-Die Auswahl ist nicht mehr auf drei Aussagen oder nur die bereits in der ersten Antwort
-verwendeten Informationen beschränkt. Auch weitere Aussagen zum recherchierten Thema
-werden erfasst. Datenschutzfilter und Grenzen bleiben bestehen: 100 Stichpunkte pro
-Konto, 2.000 insgesamt, höchstens 400 Zeichen Quellentext pro Punkt. Pro Recherche werden
-höchstens sechs Artikel mit jeweils 48.000 Zeichen beziehungsweise 300 Sätzen geprüft.
-Beim Abruf werden höchstens zwölf passende Punkte mit zusammen 3.200 Zeichen ergänzt.
-Datumsangaben und gängige Abkürzungen werden bei der Satzzerlegung zusammengehalten.
-Bestehende Cache-Einträge behalten ihre ursprüngliche 48-Stunden-Frist.
-
-Seit **9.6.7 Terra**: Mit aktueller freiwilliger Zustimmung unter
-**Einstellungen → Gemeinsames Lernen** merkt sich Aquaticy zusätzlich kurze öffentliche
-Schlüsselinformationen aus Wikipedia-Artikeln, auch über Personen, in deinem eigenen Konto.
-Dieser getrennte, verschlüsselte Recherchecache ist höchstens **48 Stunden** nutzbar;
-wiederholte Fragen verlängern die Frist nicht. Spätere Chats bekommen nur passende Fakten
-als Ergänzung für eine **neue Antwort**, keine gespeicherte Antwort. Private Chatangaben,
-Kontaktangaben, erkennbare Geheimnisse und sensible Personenangaben werden ausgeschlossen.
-Andere Konten erhalten diese Auszüge nicht. Widerruf und Daten- oder Kontolöschung löschen
-den Cache. Der laufende Webserver bereinigt ihn automatisch; bei ausgeschaltetem Server
-nach dem nächsten Start. Alte Lern-Zustimmungen aktivieren die Erweiterung nicht.
-
-Seit **9.6.7 Luna** werden Streaming-Antworten pro Bildschirmaktualisierung gebündelt
-als Markdown dargestellt. Funktionen, Maskierung und Sicherheitsrücknahmen bleiben erhalten.
-Unter **Einstellungen → Gemeinsames Lernen** kannst du zusätzlich freiwillig zustimmen,
-dass Aquaticy passende kurze Originalauszüge aus bereits gelesenen öffentlichen Sachartikeln
-für spätere Chats aller Konten dieser Installation und ihres Server-Verbunds übernimmt.
-Alte Datenschutz-Zustimmungen schalten dies nicht ein. Private Chattexte werden nicht geteilt;
-die Modellgewichte werden nicht trainiert. Zurzeit sind ausgewählte Wikipedia-Sachartikel zu
-Mathematik, Naturwissenschaften und Informatik erlaubt. Quellen und Texte sind verschlüsselt,
-die Suche verwendet Schlüssel-Hashes. Auszüge bleiben höchstens 30 Tage und werden als
-unvertrauenswürdiges, möglicherweise fehlerhaftes Recherchematerial behandelt. Für Widerruf und
-Löschung bleibt eine pseudonyme Beitragszuordnung bestehen. Ausschalten sowie Konto- oder
-Datenlöschung entfernt eigene Beiträge; identische, unabhängig von anderen Konten beigetragene
-Auszüge bleiben erhalten. Bereits erzeugte Antworten und Sicherungen werden nicht rückwirkend
-geändert. Abgelaufene Auszüge werden beim nächsten Zugriff gelöscht; Löschungen im Verbund
-gelten nach dessen erfolgreichem Abgleich. Details stehen im Datenschutzhinweis und im Prüfbericht.
-
 
 ```
 $ aquaticy
@@ -166,29 +29,22 @@ $ aquaticy
 
 - [Was Aquaticy kann](#was-aquaticy-kann)
 - [Quickstart](#quickstart)
-- [Prüfbericht zu 9.6.10 Luna](TESTREPORT-9.6.10-Luna.md)
-- [Prüfbericht zu 9.6.8 Terra](TESTREPORT-9.6.8-Terra.md)
-- [Prüfbericht zu 9.6.8 Luna](TESTREPORT-9.6.8.md)
-- [Prüfbericht zu 9.6.7 Terra v2](TESTREPORT-9.6.7-Terra-v2.md)
-- [Prüfbericht zu 9.6.7 Terra](TESTREPORT-9.6.7-Terra.md)
-- [Prüfbericht zu 9.6.7 Luna](TESTREPORT-9.6.7.md)
-- [Prüfbericht zu 9.6.6 Luna](TESTREPORT-9.6.6.md)
 - [Installation im Detail](#installation-im-detail)
 - [Benutzung im Terminal](#benutzung-im-terminal)
 - [Die Weboberfläche](#die-weboberfläche)
 - [Konten: Normal, Pro und Ultra](#konten-normal-pro-und-ultra)
 - [Add-ons](#add-ons)
 - [Virtual machine und User mode](#virtual-machine-und-user-mode)
-- [Speicher](#speicher)
-- [Aufträge](#aufträge)
+- [Speicher und Aufträge](#speicher-und-aufträge)
 - [Gmail und Kalender](#gmail-und-kalender)
 - [Zuhause: Heimnetz, Home Assistant, Lager](#zuhause-heimnetz-home-assistant-lager)
+- [Gemeinsames Lernen und Auto-Upgrading](#gemeinsames-lernen-und-auto-upgrading)
+- [Server-Verbund und Serverlast aufteilen](#server-verbund-und-serverlast-aufteilen)
 - [Sicherheit, Rechts-Leitplanken und Ai-guard](#sicherheit-rechts-leitplanken-und-ai-guard)
 - [Modelle und Anbieter](#modelle-und-anbieter)
 - [Suche](#suche)
 - [Im Container](#im-container)
 - [Konfiguration](#konfiguration)
-- [Server-Verbund](#server-verbund-seit-961)
 - [Konten verwalten (Betreiber)](#konten-verwalten-betreiber)
 - [Entwicklung](#entwicklung)
 - [Lizenz](#lizenz)
@@ -208,52 +64,44 @@ $ aquaticy
 - **Öffentliche Webcams und Satellitenbilder** auf Wunsch einbeziehen.
 - Funktioniert auch ohne Internetsuche — dann aus eigenem Wissen, mit Hinweis, wo es veraltet
   sein könnte.
-- **Sofortantworten ohne Modell:** Einfache Nachrichten wie „Hallo“, „Danke“, „Wie geht’s?“,
-  „Wer bist du?“ oder „Wer hat dich erschaffen?“ beantwortet Aquaticy sofort und kostenlos —
-  mit vielen wechselnden Formulierungen (bei den häufigen je 25), zufällig gewählt und Wort für
-  Wort ausgegeben wie vom Modell. Alles, was Suche oder Nachdenken braucht, geht wie gewohnt an
-  das Modell.
+- **Sofortantworten ohne Modell:** „Hallo“, „Danke“ oder „Wer bist du?“ beantwortet Aquaticy
+  sofort und kostenlos; alles, was Suche oder Nachdenken braucht, geht an das Modell.
 
 **Arbeitsweisen**
-- **Normal** — ein ganz normales Gespräch, gesucht wird, wenn es nötig ist. Seit 9.6.1 deutlich
-  schneller: jeder Helfer hat eine Frist und fasst danach zusammen, was er gefunden hat (mit
-  Quellen), statt die ganze Antwort aufzuhalten.
-  Seit 9.6.5 mit weniger zusätzlichen Teilaufgaben und parallel gebündelten
-  Leseabfragen; die Recherche im Pro-Modus bleibt unverändert.
-  Seit 9.6.6 teilen Recherchehelfer mit gemeinsamem Cache gleichzeitige
-  Abrufe derselben Seite; Quellen, Gegenprüfungen und Schutzregeln bleiben erhalten.
-- **Pro** — für große Fragen: das stärkste Modell und bis zu 50 Helfer. Dauert bewusst länger —
-  wegen der höheren Genauigkeit (steht auch unter dem Eingabefeld). Der Master plant
-  schon, während die Rechtsprüfung läuft — losgeschickt wird erst nach dem OK.
+- **Normal** — ein ganz normales Gespräch, gesucht wird, wenn es nötig ist. Jeder Helfer hat
+  eine Frist und fasst danach zusammen, was er gefunden hat, statt die Antwort aufzuhalten.
+- **Pro** — für große Fragen: das stärkste Modell und bis zu 50 Helfer. Dauert bewusst länger,
+  dafür genauer.
 - **Code** — schreibt Code statt langer Texte und probiert ihn in einer abgeschotteten
-  **virtual machine** wirklich aus. Die virtual machine fährt schon hoch, während das Modell nachdenkt.
+  **virtual machine** wirklich aus.
 
 **Oberfläche**
-- Terminal-Chat, Weboberfläche im Browser, Zugriff vom Handy im eigenen Netz.
+- Terminal-Chat, Weboberfläche im Browser, Zugriff vom Handy im eigenen Netz — auf PC, Tablet
+  und Handy jeweils passend aufgebaut.
 - **Design:** Hell, Dunkel oder wie das System; Standard (grün), Schlicht (schwarz-weiß) oder
-  ein selbst erstelltes Design mit eigenen Farben für Akzent, Hintergrund und Seitenleiste.
+  ein eigenes Design mit eigenen Farben.
 - **Sprache:** Deutsch oder Englisch — Oberfläche und Antworten wechseln sofort.
-- Slash-Befehle wie `/max` leuchten beim Tippen im Akzentton, damit man sie sofort erkennt.
 - Chats durchsuchen, umbenennen, exportieren (HTML, Markdown, CSV).
 
 **Extras**
-- **Add-ons:** GitHub, Wetter, RSS-Feeds, Tagesschau, Wikipedia, Währungsrechner, Feiertage,
-  WhatsApp Web, Signal, Telegram Web, Blender.
+- **Add-ons:** KI-Konten (Claude, ChatGPT, Gemini), GitHub, Wetter, RSS-Feeds, Tagesschau,
+  Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal, Telegram Web, Blender.
 - **Speicher:** merkt sich auf Wunsch, was länger gilt — verschlüsselt, jederzeit einsehbar.
 - **Aufträge:** regelmäßig recherchieren, Preise, Webcams oder Satellitenbilder beobachten.
 - **Gmail und Kalender:** Termine und Mails lesen, auf Wunsch Termine anlegen und
   Mail-Entwürfe schreiben (verschickt wird nie etwas).
 - **Zuhause** (Ultra): Geräte im Heimnetz finden, Home Assistant, Lagerverwaltung.
-- **KI-Bilder** erstellen lassen.
-- **Modell automatisch wählen:** für jede Nachricht das passende Modell.
+- **KI-Bilder** erstellen lassen; **Modell automatisch wählen** für jede Nachricht.
+- **Server-Verbund** (Ultra): bis zu 10 Server arbeiten zusammen — entweder verteilen sie die
+  Nutzer, oder sie rechnen gemeinsam an einem großen Modell.
 
-**Sicherheit**
-- Rechts-Leitplanken nach Grundgesetz und BGB, Ai-guard gegen Missbrauch.
-- Keine Bezahlschranken, Logins oder Captchas umgehen; `robots.txt` wird beachtet.
-- Konten sauber getrennt, Zugangsdaten verschlüsselt, Schutz vor Mehrfachkonten per Anhaltspunkten.
-- XSS-Schutz: strenge Content-Security-Policy (Skripte nur mit Einmal-Schlüssel je Seite),
-  alles Fremde wird maskiert; PHP- und JSP-Dateien lassen sich nicht hochladen, und
-  angebliche Bilder müssen echte Bilder sein.
+**Stabil im Betrieb**
+- Belegter Port → Aquaticy nimmt den nächsten freien und zeigt die Adresse im Terminal.
+- Absturz → automatischer Neustart (höchstens fünfmal in zehn Minuten).
+- Ein Modell-Anbieter streikt → das schnelle Modell desselben Anbieters übernimmt.
+- Kurzer Verbindungsabbruch → die Seite hängt sich wieder an die laufende Antwort; ohne Netz
+  erscheint nur ein dezenter Hinweis.
+- Fehler sehen Nutzer nur als verständliche, allgemeine Meldung — nie als technischen Fehlertext.
 
 ---
 
@@ -264,7 +112,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 10.1.4 Luna
+aquaticy --version            # 10.2.0 Luna
 
 # 2. Einrichten — fragt nach Modell und Schlüssel und testet beide
 aquaticy setup
@@ -286,23 +134,7 @@ aquaticy web
 | + Seiten mit echtem Browser | 2 Kerne | 2 GB | 2 GB |
 | + virtual machine (Code-Modus, Add-ons) | 2 Kerne | 4 GB | 10 GB |
 | Lokales Modell mit Ollama | 4 Kerne | 8 GB (GPU empfohlen) | 10 GB |
-
-**Aktualisieren** (im Repo-Ordner ausführen):
-
-```bash
-cd ~/Aquaticy-Ai
-git switch Aquaticy-ai
-git pull --ff-only origin Aquaticy-ai
-uv tool install --force --reinstall .
-aquaticy --version
-```
-
-Die Installation liest den Code aus dem aktuellen Repo-Ordner. Ein bereits installiertes
-`aquaticy` aktualisiert sich durch `git pull` allein nicht: der letzte `uv`-Befehl
-installiert die neue Fassung erneut. Wenn du GitHubs [Download ZIP](https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai/archive/refs/heads/Aquaticy-ai.zip)
-verwendest, lade das ZIP neu herunter, entpacke es und führe
-`uv tool install --force --reinstall .` im entpackten Ordner aus. Ein altes ZIP
-oder ein anderer Ordner enthält weiterhin den alten Code.
+| Großes Modell, auf mehrere Server verteilt | je Server 4 Kerne | zusammen etwa Modellgröße + 15 % | Modell auf dem Master |
 
 `aquaticy setup` fragt genau zwei Dinge:
 
@@ -319,6 +151,22 @@ Eine einzelne Frage ohne Chat:
 ```bash
 aquaticy "welche Bahnstrecken in NRW sind gerade gesperrt?"
 ```
+
+**Aktualisieren** (im Repo-Ordner ausführen):
+
+```bash
+cd ~/Aquaticy-Ai
+git switch Aquaticy-ai
+git pull --ff-only origin Aquaticy-ai
+uv tool install --force --reinstall .
+aquaticy --version
+```
+
+`git pull` allein aktualisiert ein installiertes `aquaticy` nicht — erst der `uv`-Befehl
+installiert die neue Fassung. Wer GitHubs
+[Download ZIP](https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai/archive/refs/heads/Aquaticy-ai.zip)
+nutzt, lädt das ZIP neu herunter und führt `uv tool install --force --reinstall .` im
+entpackten Ordner aus.
 
 ---
 
@@ -388,7 +236,9 @@ aquaticy install-model --yes                                  # ohne Rückfragen
 > durch. `aquaticy install-model` schreibt es automatisch richtig.
 
 Wird der Grafikspeicher knapp (`model runner has unexpectedly stopped`), bietet Aquaticy von
-selbst ein kleineres Modell an. Von Hand: `ollama ps`, `ollama stop <modell>`.
+selbst ein kleineres Modell an. Von Hand: `ollama ps`, `ollama stop <modell>`. Ist ein Modell
+für einen einzelnen Rechner zu groß, kann ein [Server-Verbund](#serverlast-aufteilen) es auf
+mehrere Server verteilen.
 
 ### Seiten mit echtem Browser laden
 
@@ -413,12 +263,12 @@ aquaticy install-browser
 | `/export html\|md\|csv` | Recherche dieser Sitzung speichern |
 | `/history` | frühere Recherchen anzeigen |
 | `/notes` | Merkzettel anzeigen |
-| `/notes delete <nr>` / `/notes clear` | Notiz oder alle Notizen löschen (Website) |
+| `/notes delete <nr>` / `/notes clear` | Notiz oder alle Notizen löschen |
 | `/clear` | Gespräch neu beginnen |
 | `/memory` / `/forget` | Langzeitspeicher anzeigen oder leeren |
 | `/uploads` / `/uploads clear` | Hochgeladene Dateien anzeigen oder löschen |
 | `/help` | Übersicht |
-| `/quit` / `/exit` / `/q` | Terminal beenden (auch <kbd>Strg</kbd>+<kbd>D</kbd>); im Browser Fenster schließen |
+| `/quit` / `/exit` / `/q` | Terminal beenden (auch <kbd>Strg</kbd>+<kbd>D</kbd>) |
 
 ### Optionen
 
@@ -437,7 +287,7 @@ aquaticy --download-images                        # Bilder beim Export mitspeich
 aquaticy setup                  # Ersteinrichtung
 aquaticy config                 # aktive Einstellungen prüfen
 aquaticy web                    # Weboberfläche starten
-aquaticy web --lan              # auch vom Handy im eigenen Netz erreichbar
+aquaticy web --lan              # auch vom Handy und anderen Servern im eigenen Netz erreichbar
 aquaticy search "cafés köln"    # nur suchen, ohne KI
 aquaticy fetch https://…        # nur eine Seite lesen, ohne KI
 aquaticy history                # vergangene Recherchen
@@ -450,9 +300,9 @@ aquaticy google                 # Gmail und Kalender verbinden (--aendern: auch 
 aquaticy connect-ha             # Home Assistant verbinden
 aquaticy lan                    # Geräte im eigenen Netz anzeigen
 aquaticy sandbox                # zeigt, wie abgeschottet Aquaticy gerade läuft
-aquaticy cluster                # Server-Verbund: Anfrage zum Verbinden mit yes/no beantworten
-aquaticy list                   # Konten mit Adress-Kürzel (#…), Geräteanzahl, Nutzung und Ai-guard-Stand
-aquaticy remove "name"         # Konto samt Sitzungen, Verbrauch und privaten Daten löschen (fragt nach; --yes ohne Rückfrage)
+aquaticy cluster                # Server-Verbund: Stand anzeigen, Anfragen mit yes/no beantworten
+aquaticy list                   # Konten mit Adress-Kürzel (#…), Geräten, Nutzung und Ai-guard-Stand
+aquaticy remove "name"          # Konto samt privaten Daten löschen (fragt nach; --yes ohne Rückfrage)
 aquaticy ban "name"             # Konto, IP-Adresse oder Adress-Kürzel ("#1a2b3c4d") sperren
 aquaticy unban "name"           # wieder freigeben
 aquaticy aiguard "Satz"         # zeigt, wie Ai-guard einen Satz einstuft (sperrt niemanden)
@@ -470,103 +320,44 @@ aquaticy web          # öffnet sich im Browser
 aquaticy web --lan    # zeigt alle Adressen, unter denen es im Heimnetz erreichbar ist
 ```
 
-**Chat.** Links die letzten Chats (durchsuchbar), in der Mitte das Gespräch, unten die
-Eingabe mit den drei Arbeitsweisen Normal, Pro und Code. Dateien und Bilder hängst du mit 📎 an.
-Ein vollständig geschriebener Slash-Befehl leuchtet im Akzentton; der Text dahinter bleibt normal.
-Oben links steht das **Logo** (seit 9.6.0), darunter „Aquaticy“, daneben die Version; im
-Browser-Tab steht nur das Logo.
+**Chat.** Links die letzten Chats (durchsuchbar), in der Mitte das Gespräch, unten die Eingabe
+mit den drei Arbeitsweisen Normal, Pro und Code. Dateien und Bilder hängst du mit 📎 an. Du
+kannst während einer Recherche in einen anderen Chat wechseln oder einen neuen anfangen — die
+Recherche läuft im Hintergrund weiter. Auf dem Handy stehen Menü, Logo und „Neuer Chat“ in einer
+eigenen Kopfzeile, und Fenster wie die Einstellungen füllen den ganzen Bildschirm.
 
-**Chatwechsel während einer Recherche (seit 9.6.5).** Du kannst einen anderen
-Chat öffnen oder einen neuen anfangen und dort schreiben. Die erste Recherche
-läuft im Hintergrund weiter. Beim Zurückwechseln siehst du ihren aktuellen
-Stand oder die fertige Antwort. Der Stop-Knopf gilt nur für den offenen Chat;
-ungesendete Entwürfe bleiben beim Wechsel erhalten.
+**Während Aquaticy arbeitet** stehen statt einer langen Schrittliste nur wenige Zeilen da
+(„Denken“, „Websuche“, …), daneben bewegt sich das Logo. Ein Klick auf eine Zeile zeigt, was
+darin passiert ist — Gedanken, Suchanfragen, gelesene Seiten. Fehler, Sperren und Abbrüche
+bleiben immer sichtbar; nach einem Fehler holt „↻ Erneut versuchen“ dieselbe Frage noch einmal.
 
-**Neuer Chat (seit 9.6.0).** Jeder neue Chat begrüßt dich mit einem anderen Satz — „Guten
-Morgen, Anna. Wobei kann ich dir helfen?“ ist einer von über 50 je Modus (Normal, Pro und Code
-haben eigene) — und darunter stehen drei zufällige Vorschläge, ebenfalls aus über 50 je Modus.
+**Modellauswahl** (unten, links neben dem Senden-Knopf):
+- Oben die **Modelle** zur Wahl — Cloud, lokal, verknüpfte KI-Konten, verbesserte Fassungen aus
+  dem Auto-Upgrading und, wenn der Server-Verbund eines verteilt, das **Verbund-Modell**.
+- **🎨 Bilderstellung:** Aquaticy nimmt selbst ein Modell, das Bilder erstellen kann (NVIDIA
+  FLUX oder Mistral, je nach Schlüssel).
+- **⚡ Aufwand:** **Denktiefe** Low / Medium / High und die Zahl der **Helfer** (Normal und
+  Code 1–12, Pro 1–50).
+- **⚙ Weitere Einstellungen:** **Im Web suchen**, **Öffentliche Webcams & Satellitenbilder**,
+  **Denken** (mitlesen), **Strukturieren**, **Gegenprüfen** — und im Code-Modus **Code
+  wirklich ausprobieren** in der virtual machine.
 
-**Während Aquaticy arbeitet (seit 9.6.0)** stehen statt einer langen Schrittliste nur wenige
-Zeilen da, zum Beispiel:
+**Einstellungen** speichern sich selbst: Schalter sofort, Textfelder beim Verlassen des Feldes
+(oder mit Enter); kurz erscheint „Gespeichert“. Funktionen nur für Ultra sind mit 🔒
+gekennzeichnet.
+- **Konto** — Name, E-Mail, Kontotyp, Nutzung, Abmelden; **Sicherheit** mit deinen Geräten,
+  **Passwort ändern**, **Überall sonst abmelden**; **Daten und Konto löschen**.
+- **Gemeinsames Lernen**, **Modell**, **Eigene Modelle**, **virtual machine**, **Speicher**,
+  **Mitlesen**, **Auslastung** (Ultra), **Nutzung**, **Aufträge**, **Gmail & Kalender**,
+  **Zuhause & Netz** (Ultra), **Suche**, **Ort & Sprache**, **Helfer & Grenzen**,
+  **Dev settings** (Ultra: Rechts-Leitplanken, Modell automatisch wählen, AI Council,
+  Auto-Upgrading, Server-Verbund).
 
-```
-🅰 Denken
-   „Ich suche jetzt nach den neuesten Nachrichten.“   ← Zwischennachricht
-🅰 Websuche
-🅰 Denken
-Hier sind die neuesten Nachrichten …                    ← die richtige Antwort
-```
-
-- Links neben der laufenden Zeile bewegt sich das **Logo** (ein Lichtbogen kreist, das A schwebt),
-  solange Aquaticy daran arbeitet. Wer weniger Bewegung eingestellt hat, sieht es ruhig.
-- Die **Zwischennachricht** verschwindet, sobald die richtige Antwort da ist.
-- Ein **Klick** auf eine Zeile klappt auf, was darin passiert ist — bei „Denken“ die Gedanken,
-  bei „Websuche“ Suchanfragen und gelesene Seiten.
-- Im **Code-Modus** heißt „Denken“ wie bei Claude: *Noodling*, *Aquaticing*, *Pondering*,
-  *Schlepping*, *Booping* und über 45 weitere Wörter, die sich abwechseln.
-- Fehler, Sperren und Abbrüche bleiben immer offen sichtbar.
-
-**Interne Versionen.** Eine interne oder Test-Fassung trägt das im Namen („9.6.0 Spark
-Intern“), und unten mittig unter der Eingabe steht ein gelber Hinweis.
-
-**Modellauswahl** (unten, links neben dem Senden-Knopf; das Menü öffnet sich nach oben):
-- Oben die **Modelle** zur Wahl.
-- **🎨 Bilderstellung** (seit 9.5.34): wer das wählt, landet sofort im Standard-Modus, und
-  Aquaticy nimmt selbst ein Modell, das Bilder erstellen kann (NVIDIA FLUX oder Mistral, je nach
-  Schlüssel). Ohne passenden Schlüssel sagt es, was einzutragen ist. Ein zweiter Klick, ein
-  anderes Modell oder ein anderer Modus beendet die Bilderstellung.
-- **⚡ Aufwand** öffnet ein kleines Fenster: **Denktiefe** Low / Medium / High und die Zahl der
-  **Helfer** (Modus Normal und Code 1–12, Modus Pro 1–50).
-- **⚙ Weitere Einstellungen** öffnet ein zweites kleines Fenster: **Im Web suchen**,
-  **Öffentliche Webcams & Satellitenbilder**, **Denken** (mitlesen, wie Aquaticy überlegt),
-  **Strukturieren**, **Gegenprüfen** — und im Code-Modus **Code wirklich ausprobieren** in der
-  virtual machine.
-
-**Einstellungen (seit 9.6.0)** speichern sich selbst: Schalter sofort, Textfelder beim
-Verlassen des Feldes (oder mit Enter). Oben im Fenster erscheint dann kurz ein kleines
-„Gespeichert“ in der Farbe deines Designs; einen Speichern-Knopf gibt es nicht mehr, „‹ Zurück“
-steht oben links. Die Schalter zeigen ihren Zustand über Füllung und Rand (ohne „I/O“).
-
-**Design** (links unten): Hell, Dunkel oder wie das System. Dazu:
-- **Standard** — das grüne Papier.
-- **Schlicht** — alles weiß mit schwarzer Schrift und schwarzen Knöpfen; im Dunkelmodus
-  genau umgekehrt.
-- **Design selber erstellen** — wähle die Farbe für den **Akzent** (alles, was bei Standard
-  grün ist, z. B. blau, pink oder rot), den **Hintergrund** und die **Seitenleiste** links.
-  Die Schrift passt sich automatisch an, damit sie lesbar bleibt. Das Design wird an deinem
-  Konto gespeichert und gilt auf jedem Gerät.
-- **Schriftgröße** — Klein, Normal oder Groß; gilt sofort für die ganze Oberfläche und wird am
-  Konto gespeichert.
-- **Sprache** — Deutsch oder English. Knöpfe, Fenster, Hinweise und Platzhalter wechseln sofort,
-  ohne Neuladen, und Aquaticy antwortet in der gewählten Sprache. Was im Chat steht (deine
-  Fragen, die Antworten, Chat-Titel), bleibt, wie es geschrieben wurde. Auch die Sprache wird
-  am Konto gespeichert.
-
-**Einstellungen** — Schalter gelten sofort (mit kurzer Bestätigung „Gespeichert“), Textfelder nach
-„Speichern“. Funktionen nur für Ultra sind mit 🔒 gekennzeichnet; ein Klick erklärt, warum.
-- **Konto** — Name, E-Mail, Kontotyp, Nutzung, Abmelden. Darunter **Sicherheit**: deine Geräte
-  und deine letzte Adresse (nur du siehst sie), **Passwort ändern**, **Überall sonst abmelden**.
-  Und **Daten und Konto löschen**: „Alle Daten löschen“ (Chats, Bilder, Uploads, Erinnerungen,
-  Aufträge, Einstellungen, eigene Schlüssel, Google, Geräte — das Konto bleibt) oder „Konto
-  löschen“ (alles samt Konto; mit Passwort und dem Wort LÖSCHEN). Meldet sich jemand von einem
-  unbekannten Gerät an, steht beim nächsten Besuch ein Hinweis oben im Chat.
-- **Modell** — Hauptmodell, Bild-Modell, Helfer-Modell, Code-Modell, eigene Adresse.
-- **Eigene Modelle** — erscheint erst, wenn du oben ein eigenes Modell oder einen eigenen
-  Schlüssel einträgst, und zeigt genau diese. Schlüssel werden verschlüsselt gespeichert und
-  nie an den Browser zurückgegeben.
-- **virtual machine** — Größe, User mode, Add-ons, Login-Apps.
-- **Speicher**, **Mitlesen**, **Auslastung** (nur Ultra), **Nutzung**, **Aufträge**,
-  **Gmail & Kalender**, **Zuhause & Netz** (Ultra), **Suche**, **Ort & Sprache**,
-  **Helfer & Grenzen**, **Dev settings**.
+**Design** (links unten): Hell, Dunkel oder wie das System; **Standard**, **Schlicht** oder
+**Design selber erstellen** (Akzent, Hintergrund, Seitenleiste); **Schriftgröße** und
+**Sprache**. Alles wird am Konto gespeichert und gilt auf jedem Gerät.
 
 **Merkzettel** — was sich Aquaticy über dich gemerkt hat; jede Zeile einzeln löschbar.
-
-**Bedienung.** Rückfragen und Hinweise erscheinen in Aquaticys eigenem Fenster statt in
-Browser-Dialogen. Nach einem Fehler holt „↻ Erneut versuchen“ dieselbe Frage noch einmal. Vor
-der ersten Nachricht steht, was Aquaticy kann und was nicht. Schalter zeigen ihren Zustand
-nicht nur über die Farbe („I“/„O“), der Tastatur-Fokus ist überall sichtbar, und am Handy sind
-Senden und Stopp mindestens 44 px groß. Im Dunkelmodus nutzt auch „Schlicht“ fast-schwarz
-(#121212) statt reinem Schwarz.
 
 ---
 
@@ -574,40 +365,6 @@ Senden und Stopp mindestens 44 px groß. Im Dunkelmodus nutzt auch „Schlicht�
 
 Wer die Weboberfläche öffnet, legt zuerst ein Konto an. Jedes Konto hat eigene Chats,
 Einstellungen, Speicher und Schlüssel.
-
-**Mehrfachkonten (seit 9.5.31): Anhaltspunkte statt „ein Konto pro IP-Adresse“.** Zwei Menschen
-im selben Haushalt teilen sich die Adresse — das allein sperrt nicht mehr. Aquaticy zählt Punkte
-gegen jedes vorhandene Konto; ab **3 Punkten** wird kein neues Konto angelegt, ab 1,5 steht ein
-Hinweis im Terminal.
-
-| Anhaltspunkt | Punkte |
-|---|---|
-| dasselbe Gerät (zufällige Geräte-Kennung im Cookie `aquaticy_device`) | 3 |
-| gleiche Hardware **und** gleicher Browser | 1,5 |
-| gleiche Hardware | 1 |
-| gleicher Browser | 0,5 |
-| dieselbe IP-Adresse (Anlege- oder zuletzt genutzte) | 1 |
-| sehr ähnliche E-Mail-Adresse (`max.muster@…` / `maxmuster7@…`) | 1 |
-
-Beispiele: selbe Adresse + selber Browser = 1,5 → geht durch. Zwei gleiche Handys im selben WLAN
-= 2,5 → geht durch. Dasselbe Handy (Kennung) = 3 → gesperrt. Selbe Adresse + ähnliche E-Mail +
-gleiche Hardware = 3 → gesperrt. Der eigene Rechner (Loopback) zählt nicht als gleiche Adresse.
-Gespeichert werden je Konto höchstens 20 Geräte: die Kennung nur als Hash, Hardware und Browser
-(„Windows · 16 Kerne · 8 GB · 2560x1440 · NVIDIA …“, „Chrome 126, de-DE“) **verschlüsselt**,
-verglichen wird über Schlüssel-Hashes. Der Betreiber sieht davon nichts — nur die Anzahl der
-Geräte und die Adresse als Kürzel („#1a2b3c4d“). Kein Canvas- oder Audio-Fingerabdruck. Mit
-dem Konto werden auch die Geräte gelöscht.
-
-**Verschlüsselung (seit 9.5.32).** Chats (Fragen, Antworten, Chatnamen, Notizen), Uploads,
-Fotos und Bilder, IP-Adressen, Geräte und E-Mail-Adressen liegen mit AES-256-GCM verschlüsselt,
-jedes Konto mit eigenem Schlüssel (abgeleitet aus `data.key` neben der Kontendatenbank).
-Passwörter: Argon2id (64 MiB, 3 Durchläufe) mit Salz und geheimem Serverwert (`auth.key`);
-alte Hashes werden bei der nächsten Anmeldung umgeschrieben. Bestehende Daten werden beim
-ersten Start automatisch verschlüsselt. Wichtig für Betreiber: `data.key` und `auth.key` nie
-zusammen mit den Daten sichern — und ohne sie sind die Daten nicht mehr lesbar. Ehrlich dazu:
-Der Server braucht den Schlüssel, um mit Chats zu arbeiten; wer den Server selbst kontrolliert,
-könnte entschlüsseln. Geschützt ist gegen gestohlene Datenbanken und Sicherungen, gegen andere
-Konten und gegen das Hineinsehen in Dateien.
 
 | | Normal | Pro | Ultra |
 |---|---|---|---|
@@ -619,20 +376,45 @@ Konten und gegen das Hineinsehen in Dateien.
 | User mode, virtual machine „Plus“, virtual-machine-Add-ons | – | – | ✔ |
 | Internet für die virtual machine (Code-Modus) | – | – | ✔ |
 | Eigene Adressen für Modell und Suche | – | – | ✔ |
-| Rechts-Leitplanken abschaltbar | – | – | ✔ |
+| Rechts-Leitplanken abschaltbar (nur fürs eigene Konto) | – | – | ✔ |
+| Auto-Upgrading und Server-Verbund steuern | – | – | ✔ |
 | Ai-guard | sperrt | sperrt | warnt nur |
 | Code zum Anlegen | – | 9 Zeichen | 14 Zeichen |
 
 **Codes.** Beim ersten Start erzeugt Aquaticy zwei geheime Codes und zeigt sie im Terminal:
-- den **Pro-Code** (9 Zeichen) — später mit `aquaticy pro-code`, vorgeben mit
-  `AQUATICY_PRO_CODE`;
-- den **Ultra-Code** (14 Zeichen, mit Buchstaben, Ziffern und Sonderzeichen, unabhängig vom
-  Pro-Code) — später mit `aquaticy ultra-code`, vorgeben mit `AQUATICY_ULTRA_CODE`.
+den **Pro-Code** (9 Zeichen; später mit `aquaticy pro-code`, vorgeben mit `AQUATICY_PRO_CODE`)
+und den **Ultra-Code** (14 Zeichen mit Buchstaben, Ziffern und Sonderzeichen; später mit
+`aquaticy ultra-code`, vorgeben mit `AQUATICY_ULTRA_CODE`).
 
 **Nutzung.** Die Sitzung beginnt mit deiner ersten Nachricht und läuft fünf Stunden, die Woche
 beginnt zur Uhrzeit deiner Kontoerstellung. Angezeigt wird beides in Prozent (*Einstellungen →
 Nutzung*, ab 80 % auch als Hinweis). Gezählt wird nur auf dem Server — wer Chats löscht, löscht
 nicht seinen Verbrauch. Anfragen über **eigene Schlüssel** zählen nicht gegen das Limit.
+
+**Mehrfachkonten: Anhaltspunkte statt „ein Konto pro IP-Adresse“.** Zwei Menschen im selben
+Haushalt teilen sich die Adresse — das allein sperrt nicht. Aquaticy zählt Punkte gegen jedes
+vorhandene Konto; ab **3 Punkten** wird kein neues Konto angelegt.
+
+| Anhaltspunkt | Punkte |
+|---|---|
+| dasselbe Gerät (zufällige Geräte-Kennung im Cookie `aquaticy_device`) | 3 |
+| gleiche Hardware **und** gleicher Browser | 1,5 |
+| gleiche Hardware | 1 |
+| gleicher Browser | 0,5 |
+| dieselbe IP-Adresse (Anlege- oder zuletzt genutzte) | 1 |
+| sehr ähnliche E-Mail-Adresse (`max.muster@…` / `maxmuster7@…`) | 1 |
+
+Gespeichert werden je Konto höchstens 20 Geräte: die Kennung nur als Hash, Hardware und
+Browser **verschlüsselt**. Der Betreiber sieht davon nichts — nur die Anzahl der Geräte und die
+Adresse als Kürzel („#1a2b3c4d“). Kein Canvas- oder Audio-Fingerabdruck.
+
+**Verschlüsselung.** Chats, Uploads, Bilder, IP-Adressen, Geräte und E-Mail-Adressen liegen mit
+AES-256-GCM verschlüsselt, jedes Konto mit eigenem Schlüssel (abgeleitet aus `data.key` neben
+der Kontendatenbank). Passwörter: Argon2id (64 MiB, 3 Durchläufe) mit Salz und geheimem
+Serverwert (`auth.key`). Für Betreiber wichtig: `data.key` und `auth.key` nie zusammen mit den
+Daten sichern — und ohne sie sind die Daten nicht mehr lesbar. Ehrlich dazu: Der Server braucht
+den Schlüssel, um mit Chats zu arbeiten; geschützt ist gegen gestohlene Datenbanken und
+Sicherungen, gegen andere Konten und gegen das Hineinsehen in Dateien.
 
 ---
 
@@ -643,38 +425,27 @@ ausschalten und wieder entfernen; aus dem Chat heraus lässt sich nichts davon �
 musst du dich immer selbst — Aquaticy kennt keine Passwörter. Unter jedem Add-on stellst du ein,
 was Aquaticy damit darf (**Rechte**).
 
-### KI-Konten: Claude, ChatGPT, Gemini (seit 9.6.1)
+### KI-Konten: Claude, ChatGPT, Gemini
 
-*Add-ons → KI-Konten.* Verknüpfen geht in drei Schritten (seit 9.6.2):
+*Add-ons → KI-Konten.* Verknüpfen geht in drei Schritten:
 
 1. **„Mit Google“, „Mit Apple“ oder „Mit E-Mail“** öffnet die Seite des Anbieters — dort
-   meldest du dich an, wie du es gewohnt bist (Claude: Google oder E-Mail; ChatGPT: Google,
-   Apple oder E-Mail; Gemini: Google).
+   meldest du dich an, wie du es gewohnt bist.
 2. Dort einen **API-Schlüssel erstellen** und kopieren.
 3. In Aquaticy auf **„Einfügen“** — Aquaticy erkennt am Schlüssel selbst, ob er von Claude,
-   ChatGPT oder Gemini ist. (Ohne HTTPS erlaubt der Browser die Zwischenablage nicht; dann
-   einfach ins Feld einfügen.)
+   ChatGPT oder Gemini ist.
 
-Danach liest Aquaticy selbst aus:
+Danach liest Aquaticy selbst aus, welche **Modelle** dein Konto freigeschaltet hat (sie stehen
+in der Modellauswahl wie alle anderen), dazu **Stufe (Tier)** und **freie Tokens** im laufenden
+Zeitfenster (Claude und ChatGPT; Google gibt beides nicht heraus). Der Schlüssel liegt
+verschlüsselt im Schlüsselbund deines Kontos und geht nur an den Anbieter. Eine Anmeldung „mit
+Google bei ChatGPT“ gilt nur für die Website des Anbieters selbst; der API-Schlüssel ist der
+vorgesehene Weg für Programme — Aquaticy kennt dein Passwort nie.
 
-- **Modelle**, die dein Konto freigeschaltet hat — sie stehen in der Modellauswahl im Normal-,
-  Pro- und Code-Modus wie alle anderen.
-- **Stufe (Tier)** und **freie Tokens** im laufenden Zeitfenster (Claude und ChatGPT; dafür
-  geht eine winzige Anfrage mit einem Token raus). Google gibt beides nicht über die
-  Schnittstelle heraus — das steht dann so da.
-
-Der Schlüssel liegt verschlüsselt im Schlüsselbund deines Kontos, geht nur an den Anbieter
-und ist jederzeit beim Anbieter widerrufbar. **Warum nicht direkt „Mit Google bei ChatGPT
-anmelden“?** Diese Anmeldung gilt nur für die Website des Anbieters selbst — sie gibt keinem
-anderen Programm Zugriff, und die Abos (ChatGPT Plus, Claude Pro) gelten ohnehin nur in deren
-eigenen Apps. Der API-Schlüssel ist der vorgesehene Weg für Programme wie Aquaticy; Aquaticy
-kennt dein Passwort nie.
-
-**AI Council** (*Einstellungen → Dev settings*): mit mindestens zwei verknüpften Konten
-arbeiten die Modelle zusammen. Zwei lösen die Aufgabe (z. B. Claude und ChatGPT), eines prüft
-auf Fehler (Gemini, wenn verknüpft), und Aquaticy ist mit seinem Hauptmodell der **Richter**:
-es entscheidet, ob die Lösung trägt, oder schickt Einwände und die Lösungen der anderen zum
-Nachbessern und Ausdiskutieren zurück (bis zu drei Runden). Im Council laufen keine Agenten.
+**AI Council** (*Einstellungen → Dev settings*): Mit mindestens zwei verknüpften Konten arbeiten
+die Modelle zusammen. Zwei lösen die Aufgabe (z. B. Claude und ChatGPT), eines prüft auf Fehler
+(Gemini, wenn verknüpft), und Aquaticy ist mit seinem Hauptmodell der **Richter**: es entscheidet,
+ob die Lösung trägt, oder schickt Einwände zum Nachbessern zurück (bis zu drei Runden).
 
 ### Programme und Dienste
 
@@ -700,8 +471,6 @@ Abrufe pro Stunde ein.
 
 ## Virtual machine und User mode
 
-> Früher hieß die virtual machine „Werkstatt“ — seit 9.5.30 durchgehend **virtual machine**.
-
 Die **virtual machine** ist ein abgeschotteter Rechner, in dem Aquaticy Code wirklich ausführt:
 
 | Größe | Kerne | Arbeitsspeicher | Platte |
@@ -710,23 +479,19 @@ Die **virtual machine** ist ein abgeschotteter Rechner, in dem Aquaticy Code wir
 | Plus (Ultra) | 4 | 6 GB | 20 GB |
 
 - Kein root; die Platte ist hart begrenzt.
-- **Netz je Tarif (seit 9.6.0):** **Normal und Pro** haben in der virtual machine **gar kein
-  Netz** — weder Internet noch das lokale Netz; Rechnen, Code ausführen und Dateien bearbeiten
-  geht trotzdem. Mit Internet sind private Adressbereiche, Router, Home Assistant und der eigene
-  Rechner gesperrt; lässt sich die Sperre nicht setzen, startet die Maschine gar nicht. **Ultra** stellt
-  das Internet selbst ein (seit 9.5.31) und kann mit dem Schalter **Auch ins lokale Netz** die
-  Sperre ganz wegnehmen — dann erreicht die Maschine Internet **und** Heimnetz. Das Modell kann
-  beides nicht umschalten. Es braucht das Desktop-Abbild (unten).
+- **Netz:** Normal und Pro haben in der virtual machine **kein Netz** — weder Internet noch das
+  lokale Netz; Rechnen, Code ausführen und Dateien bearbeiten geht trotzdem. **Ultra** stellt das
+  Internet selbst ein; private Adressbereiche, Router, Home Assistant und der eigene Rechner
+  bleiben dann gesperrt, außer Ultra nimmt mit **Auch ins lokale Netz** die Sperre ganz weg. Das
+  Modell kann beides nicht umschalten.
 - Angehängte Dateien liegen unter `eingang`, alles Erstellte kannst du herunterladen.
 - 20 Minuten nach der letzten Nachricht wird die virtual machine samt Inhalt gelöscht.
 
-Der **User mode** (Ultra) macht aus der virtual machine einen kleinen Desktop mit Internet: Aquaticy
-sieht den Bildschirm, klickt, tippt und nutzt Browser, Office oder Bildbearbeitung — wie ein
-Mensch. Das Heimnetz bleibt gesperrt. Absenden, Kaufen und Löschen nur nach deinem Ja;
-Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“ fasst Aquaticy nie an. Bei
-**Login-Apps** meldest du dich selbst an: Was du dort tippst, landet nur in der App.
-
-Einmalig nötig (Betreiber):
+Der **User mode** (Ultra) macht aus der virtual machine einen kleinen Desktop mit Internet:
+Aquaticy sieht den Bildschirm, klickt, tippt und nutzt Browser, Office oder Bildbearbeitung —
+wie ein Mensch. Absenden, Kaufen und Löschen nur nach deinem Ja; Passwörter, Zahlungsdaten,
+Captchas und „Alle akzeptieren“ fasst Aquaticy nie an. Bei **Login-Apps** meldest du dich selbst
+an. Einmalig nötig (Betreiber):
 
 ```bash
 docker build -f docker/workshop-desktop.Dockerfile -t aquaticy-werkstatt-desktop:local .
@@ -734,18 +499,14 @@ docker build -f docker/workshop-desktop.Dockerfile -t aquaticy-werkstatt-desktop
 
 ---
 
-## Speicher
+## Speicher und Aufträge
 
-Mit eingeschaltetem Speicher merkt sich Aquaticy, was länger gilt — Wohnort, Vorlieben,
-laufende Vorhaben. Nur Text, verschlüsselt, höchstens 400 MB für alles im Konto zusammen.
-Unter **„Was weißt du über mich?“** siehst du jeden Eintrag und kannst ihn einzeln oder alle
-auf einmal löschen.
+**Speicher.** Mit eingeschaltetem Speicher merkt sich Aquaticy, was länger gilt — Wohnort,
+Vorlieben, laufende Vorhaben. Nur Text, verschlüsselt, höchstens 400 MB für alles im Konto
+zusammen. Unter **„Was weißt du über mich?“** siehst du jeden Eintrag und kannst ihn einzeln
+oder alle auf einmal löschen.
 
----
-
-## Aufträge
-
-*Einstellungen → Aufträge.* Aquaticy bleibt für dich dran:
+**Aufträge** (*Einstellungen → Aufträge*). Aquaticy bleibt für dich dran:
 
 - **regelmäßig recherchieren** — täglich, stündlich, wöchentlich;
 - **Kamera, Satellit oder Straße beobachten** — z. B. „ein oranges Flugzeug ist sichtbar“;
@@ -763,7 +524,7 @@ Aquaticy kann Termine und Mails lesen und — wenn du „Ändern erlaubt“ eins
 anlegen und ändern und Mail-**Entwürfe** schreiben. **Verschickt wird nie eine Mail, gelöscht
 wird nichts**; diese Rechte holt Aquaticy bei Google gar nicht erst.
 
-### Einrichten — einmal, etwa fünf Minuten
+**Einrichten — einmal, etwa fünf Minuten:**
 
 1. Auf [console.cloud.google.com](https://console.cloud.google.com/) ein neues Projekt anlegen.
 2. **APIs und Dienste → Bibliothek:** „Gmail API“ und „Google Calendar API“ aktivieren.
@@ -771,10 +532,12 @@ wird nichts**; diese Rechte holt Aquaticy bei Google gar nicht erst.
 4. **Anmeldedaten → OAuth-Client-ID**, Typ **Desktop-App**, Weiterleitung
    `http://localhost:8765/google`.
 5. Client-ID und Client-Secret in *Einstellungen → Gmail & Kalender* eintragen (oder als
-   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`), speichern, **Verbinden**.
+   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`), **Verbinden**.
 
-Im Terminal geht es mit `aquaticy google` (bzw. `aquaticy google --aendern`). Die Zugangsdaten
-werden verschlüsselt gespeichert und verlassen den Rechner nicht; **Trennen** löscht sie.
+Im Terminal geht es mit `aquaticy google` (bzw. `aquaticy google --aendern`). Öffnest du
+Aquaticy über `localhost`, landest du nach der Zustimmung bei Google direkt wieder in Aquaticy;
+von einem anderen Gerät aus kopierst du die Adresse, auf der Google endet, in das Feld in den
+Einstellungen. Die Zugangsdaten werden verschlüsselt gespeichert; **Trennen** löscht sie.
 
 ---
 
@@ -787,56 +550,173 @@ Nur mit einem **Ultra-Konto**.
   `100.64/10`). Im Terminal: `aquaticy lan`.
 - **Home Assistant:** Aquaticy findet die Instanz selbst (`aquaticy connect-ha`), liest Zustände
   und darf — wenn du es erlaubst — schalten. Schlösser, Alarm, Tore und Heizung fragen immer
-  nach.
+  nach. Jedes Konto trägt seinen eigenen Zugang ein; der Token gilt nur für die Adresse, für die
+  er eingetragen wurde.
 - **Lagerverwaltung:** Räume → Möbel → Artikel. Aquaticy sagt, wo etwas liegt und wie viel noch
   da ist; in der Stufe „Lesen und schreiben“ legt es auch an und ändert. Gelöscht wird nie.
+
+---
+
+## Gemeinsames Lernen und Auto-Upgrading
+
+**Gemeinsames Lernen** (*Einstellungen → Gemeinsames Lernen*, freiwillig). Mit deiner
+Zustimmung übernimmt Aquaticy kurze **Originalauszüge aus öffentlichen Sachartikeln**, die es
+für dich gelesen hat — zurzeit ausgewählte Wikipedia-Artikel zu Mathematik,
+Naturwissenschaften und Informatik. Private Chattexte werden nie geteilt.
+
+- Andere Konten sehen einen Auszug erst, wenn **mindestens zwei Konten** ihn unabhängig
+  gefunden haben; das eigene Konto sieht seine Auszüge sofort.
+- Texte und Quellen sind verschlüsselt, die Suche läuft über Schlüssel-Hashes. Auszüge bleiben
+  höchstens 30 Tage und gelten als Material, das fehlerhaft sein kann.
+- Dazu ein persönlicher **Recherchecache**: kurze öffentliche Stichpunkte mit Quelle, nur für
+  dein Konto, höchstens 48 Stunden — als Ergänzung für eine neue Antwort, nie als fertige
+  Antwort.
+- Widerruf, „Alle Daten löschen“ und „Konto löschen“ entfernen deine Beiträge und deinen Cache;
+  gleiche Auszüge, die andere Konten unabhängig beigetragen haben, bleiben.
+
+**Auto-Upgrading** (*Dev settings*, Ultra schaltet es ein — dann gilt es für jedes Konto).
+Aquaticy baut jedes lokal laufende Ollama-Modell mit dem Wissen weiter, das mehrere Konten
+unabhängig bestätigt haben, und misst mit einem Wissenstest, wie viel besser die neue Fassung
+antwortet.
+
+- Ultra sieht jeden Fortschritt bis auf die letzte Stelle (z. B. +0,00000002 %) und kann den
+  Kandidaten sofort nutzen.
+- Ab **5 %** wird „Upgraden“ grün: aus `gemma3:4b` wird `gemma3:4b 1.1`. Ab **30 %** gibt es
+  eine ganze Version (`gemma3:4b 2`, danach `2.1` …).
+- Ultra kann eine Version **überspringen** oder eine ältere wieder zur neuesten machen.
+- Nach einer Freigabe sieht jedes Konto einmal eine Meldung („… ist stärker als jemals zuvor“)
+  mit **Ausprobieren** und **Zurück**. Beide Fassungen bleiben vier Tage wählbar, danach die
+  alte nur noch für Ultra.
+- Ehrlich gesagt: Die Gewichte bleiben unverändert — ein Upgrade ist ein lokales Modell mit
+  eingebautem, geprüftem Wissen. Läuft das Wissen ab oder wird die Zustimmung widerrufen, wird
+  die betroffene Fassung zurückgezogen.
+
+---
+
+## Server-Verbund und Serverlast aufteilen
+
+*Einstellungen → Dev settings → Server-Verbund* (nur **Ultra**). Bis zu **10 Server**, auf
+denen Aquaticy läuft, arbeiten zusammen.
+
+- **Eine Datenbank, auf jedem Server vollständig.** Konten, Sitzungen und Ai-guard werden Zeile
+  für Zeile gespiegelt, die Profilordner (Chats, Speicher, Aufträge) vom zuständigen Server auf
+  alle anderen. Anmelden geht an jedem Server.
+- **Lastausgleich nach Nutzern.** Jedes Konto hat einen Heimserver; der Master teilt neue und
+  länger untätige Konten dem Server mit der geringsten Auslastung zu. Kommt eine Anfrage
+  woanders an, wird sie verschlüsselt an den Heimserver weitergereicht. Jeder Server rechnet mit
+  seinem eigenen Modell — zwei Server mit demselben Modell bedienen doppelt so viele Menschen.
+- **Master** ist der Server, der eingeladen hat. Fällt ein Server aus, kann der Master dessen
+  Konten per Knopf übernehmen; kommt der Server zurück, gibt er sie ab.
+
+**Verbinden:** auf allen Servern `aquaticy web --lan` starten und den Schalter einschalten. Die
+anderen Server im lokalen Netz erscheinen in der Liste (oder IP-Adresse eintragen) →
+**Verbinden**. Auf dem anderen Server fragt das Terminal `Annehmen? [yes/no]`; bei `yes` zeigt
+er einen sechsstelligen Code, den du auf dem Master eingibst. Läuft der Server ohne Terminal
+(Container im Hintergrund): `docker compose exec aquaticy aquaticy cluster`.
+
+**Gut zu wissen:** Der neue Server übernimmt die Daten des Verbunds und startet einmal neu;
+seine bisherigen Daten werden unter `cluster/backup-<Zeit>` gesichert, nicht gelöscht. Zwischen
+den Servern ist alles mit AES-GCM verschlüsselt; der Schlüssel entsteht per X25519-Schlüsseltausch
+und wird gewechselt, wenn ein Server entfernt wird. Das Finden läuft per UDP-Rundruf auf
+Port 8766 (`AQUATICY_CLUSTER_PORT`) — im Container dafür `compose.host.yaml` (Host-Netz) nutzen.
+
+### Serverlast aufteilen
+
+Ein Schalter im Server-Verbund (nur der **Master** schaltet ihn). Statt die *Nutzer* zu verteilen,
+verteilt der Verbund dann das *Modell*: seine Schichten liegen auf allen Servern, die bei jedem
+Wort gemeinsam rechnen. So läuft auch ein Modell, das für keinen Server allein in den Speicher
+passt — zum Beispiel ein 70B-Modell auf drei Rechnern mit je 24 GB.
+
+| | Server-Verbund allein | mit „Serverlast aufteilen“ |
+|---|---|---|
+| Was wird verteilt? | die Nutzer — jedes Konto hat seinen Heimserver | das Modell — seine Schichten liegen auf allen Servern |
+| Modell | auf jedem Server ein eigenes | eines für alle, verteilt |
+| Größtes Modell | was ein Server allein schafft | was alle Server zusammen schaffen |
+| Wer bedient die Konten? | der jeweilige Heimserver | der Master |
+
+**Was es braucht:**
+
+- **[llama.cpp](https://github.com/ggml-org/llama.cpp) mit RPC** auf jedem Server: `rpc-server`
+  auf allen, `llama-server` zusätzlich auf dem Master — am besten überall dieselbe Version.
+
+  ```bash
+  git clone https://github.com/ggml-org/llama.cpp
+  cd llama.cpp
+  cmake -B build -DGGML_RPC=ON        # mit NVIDIA-Karte zusätzlich -DGGML_CUDA=ON
+  cmake --build build --config Release -j
+  # rpc-server und llama-server liegen jetzt in build/bin
+  ```
+
+  Aquaticy findet die Programme im `PATH` oder unter `AQUATICY_RPC_SERVER` und
+  `AQUATICY_LLAMA_SERVER`. `aquaticy cluster` zeigt, ob sie gefunden werden.
+- **Das Modell in Ollama auf dem Master** (`ollama pull llama3.3:70b`). Herunterladen reicht —
+  laufen muss es dort nicht. Die anderen Server brauchen das Modell nicht; llama.cpp schickt
+  ihnen ihre Schichten beim Start.
+
+**So geht es:** Im Server-Verbund auf dem Master das Modell wählen und **Serverlast aufteilen**
+einschalten. Aquaticy startet auf den anderen Servern den `rpc-server` (auf dem Master nur, wenn
+er keine Grafikkarte hat — sonst rechnet er direkt mit ihr), wartet, bis alle bereit sind,
+prüft, ob das Modell in den gemeinsamen Speicher passt (die Auswahl zeigt den geschätzten
+Bedarf), und startet dann auf dem Master `llama-server`. Sobald das Modell geladen ist, steht es
+für alle Konten als **„&lt;Modell&gt; · Verbund“** in der Modellauswahl. Kommt ein Server dazu,
+nimmt **Neu verteilen** ihn auf; fällt einer weg, verteilt Aquaticy von selbst neu. Klappt etwas
+nicht, steht der Grund im Verbund-Bereich; die vollständigen Meldungen von llama.cpp liegen auf
+jedem Server unter `~/.aquaticy/cluster/rpc-server.log` und (auf dem Master)
+`~/.aquaticy/cluster/llama-server.log`.
+
+**Sicherheit:** `rpc-server` lauscht nur auf `127.0.0.1` — llama.cpp warnt ausdrücklich davor,
+ihn offen ins Netz zu stellen. Der Master erreicht ihn nur durch einen Tunnel über den
+Aquaticy-Port des Servers: angemeldet mit dem Schlüssel aus der Kopplung (den kennen nur der
+Master und genau dieser Server), in beide Richtungen mit AES-GCM verschlüsselt, jedes Stück
+nummeriert. Es wird kein zusätzlicher Port geöffnet. `llama-server` lauscht ebenfalls nur auf
+`127.0.0.1` und verlangt einen zufälligen Schlüssel, den nur Aquaticy kennt.
+
+**Ehrliche Grenzen:** Jedes Wort wandert durch alle Server; mit Kabel (1 Gbit/s) geht das gut,
+über WLAN merklich langsamer. Der erste Start überträgt das ganze Modell über das Netz und kann
+bei großen Modellen einige Minuten dauern. Das verteilte Modell beantwortet eine Anfrage nach der
+anderen. Ein Upgrade aus dem Auto-Upgrading wird nicht verteilt.
 
 ---
 
 ## Sicherheit, Rechts-Leitplanken und Ai-guard
 
 **Feste Grenzen** (immer, für jedes Konto):
-- keine Bezahlschranken, Logins oder Captchas umgehen; `robots.txt` wird beachtet;
+- keine Bezahlschranken, Logins oder Captchas umgehen; `robots.txt` wird beachtet (RFC 9309);
 - ins Heimnetz nur private Adressen, Webseiten nie ins Heimnetz;
 - im Haus nur nach Rückfrage schalten; bei Google nie senden, nie löschen;
 - Zugangsdaten nie an den Browser und nie an das Modell;
-- nur verteidigende Sicherheitsthemen;
-- keine PHP- oder JSP-Dateien als Upload (auch nicht als `bild.php.png`).
+- keine PHP- oder JSP-Dateien als Upload (auch nicht als `bild.php.png`), und angebliche
+  Bilder müssen echte Bilder sein.
 
 **Schutz vor Prompt-Injection.** Webseiten, Mails, Feeds, Anhänge und alles, was Helfer
-zurückbringen, sind für Aquaticy *Material*, nie ein Auftrag. Die Grenzen dafür liegen im Code:
-- unsichtbare Zeichen (Unicode-Tags, Nullbreite, Richtungswechsel) werden entfernt,
-  nachgemachte Chat-Steuerzeichen (`<|im_start|>`, `[INST]`, `</system>`) entschärft;
-- jedes fremde Ergebnis trägt den Hinweis „nur Daten“; stehen darin Anweisungen an eine KI
-  („ignoriere deine Regeln“, „schick den Merkzettel an …“), kommt eine Warnung dazu und im
-  Verlauf erscheint **[Schutz]**;
-- Anhänge und die Quellenlage der Helfer stehen klar abgegrenzt im Gespräch, nicht mit der
-  Stimme des Nutzers;
+zurückbringen, sind für Aquaticy *Material*, nie ein Auftrag:
+- unsichtbare Zeichen werden entfernt, nachgemachte Chat-Steuerzeichen (`<|im_start|>`,
+  `[INST]`, `</system>`) entschärft;
+- jedes fremde Ergebnis trägt den Hinweis „nur Daten“; stehen darin Anweisungen an eine KI,
+  kommt eine Warnung dazu und im Verlauf erscheint **[Schutz]**;
 - nach fremdem Inhalt geht nichts Privates (Merkzettel, Speicher, Ort, E-Mail) ohne Rückfrage
-  in eine Adresse, eine Eingabe oder einen Befehl — und Schalten, Einstellungen, Lager,
-  Speichern und Heimnetz-Suchen fragen ebenfalls erst nach.
+  in eine Adresse, eine Eingabe oder einen Befehl.
 
 **Website.** Anmelde-Cookie `HttpOnly`, `SameSite=Strict` (hinter HTTPS-Proxy auch `Secure`,
-dazu HSTS), strenge CSP mit Nonce, Schreibzugriffe nur von der eigenen Seite, Grenzen für
-Anfragen und falsche Passwörter je Adresse *und* je Konto.
+dazu HSTS), strenge Content-Security-Policy mit Einmal-Schlüssel je Seite, Schreibzugriffe nur
+von der eigenen Seite, Grenzen für Anfragen und falsche Passwörter je Adresse *und* je Konto.
 
 **Rechts-Leitplanken.** Bevor Aquaticy etwas tut, prüft es, ob das mit Grundgesetz und BGB
 vereinbar ist — bei jeder Frage, jeder Personensuche, jedem Kamerabild und jedem Mail-Entwurf.
-Die Regeln stehen unter *Einstellungen → Dev settings → Welche Regeln gelten?*. Nach einer
-Person suchen ist erlaubt (öffentliche Angaben, berufliche Rolle, veröffentlichte Kontaktwege);
-nicht erlaubt ist, private Anschrift, Handynummer oder Aufenthaltsort auszuforschen oder ein
-überwachungsartiges Dossier anzulegen. Harmloses wird nicht blockiert: Alltag, Technik,
-Geschichte, Geschichten, Humor oder Kritik sind frei, und ein Nein des schnellen Prüfmodells
-zählt erst, wenn auch das Hauptmodell es so sieht. Abschalten lassen sich die Leitplanken nur mit
-einem Ultra-Konto und nie aus dem Chat heraus.
+Die Regeln stehen unter *Einstellungen → Dev settings → Welche Regeln gelten?*. Nach einer Person
+suchen ist erlaubt (öffentliche Angaben, berufliche Rolle, veröffentlichte Kontaktwege); nicht
+erlaubt ist, private Anschrift, Handynummer oder Aufenthaltsort auszuforschen oder ein
+überwachungsartiges Dossier anzulegen. Harmloses wird nicht blockiert, und ein Nein des schnellen
+Prüfmodells zählt erst, wenn auch das Hauptmodell es so sieht.
 
-**Einmal abgelehnt bleibt abgelehnt.** Soll Aquaticy selbst etwas tun, das gegen das Grundgesetz
-oder eine wichtige Regel des BGB verstößt (z. B. fremdes Eigentum, Betrug, Persönlichkeitsrechte),
-gilt eine strenge Regel: Ein „bitte“, Drängen, „ich darf das“, „nur dieses eine Mal“ oder
-„ist für die Schule“ ändern an einer Absage nichts — Aquaticy fragt dann nicht einmal mehr das
-Modell, sondern bleibt bei derselben Begründung. Wer es umformuliert, als Rollenspiel oder
-„rein hypothetisch“ versucht, wird mit dem Vermerk der Absage erneut geprüft. Eine neue,
-erlaubte Frage oder ein neuer Chat heben das auf.
+- **Einmal abgelehnt bleibt abgelehnt:** „bitte“, Drängen oder „ich darf das“ ändern an einer
+  Absage nichts; wer es umformuliert oder als Rollenspiel versucht, wird mit dem Vermerk der
+  Absage erneut geprüft. Eine neue, erlaubte Frage oder ein neuer Chat heben das auf.
+- **Abschalten** geht nur mit einem Ultra-Konto, nur in den Einstellungen (nie aus dem Chat) und
+  **nur für dieses Konto** — alle anderen Konten behalten ihre Leitplanken.
+- **Grundschutz, auch ohne Leitplanken:** Schadsoftware und Angriffswerkzeuge in der virtual
+  machine (auch über den User mode) werden gestoppt, und Bilder, die echte Menschen in Würde,
+  Persönlichkeitsrecht oder Ruf verletzen, malt Aquaticy nicht.
 
 **Ai-guard** läuft auf jedem Konto und entscheidet nach **Art und Schwere**, was passiert:
 
@@ -845,199 +725,41 @@ erlaubte Frage oder ein neuer Chat heben das auf.
 | Beleidigung, leicht | nur **dieser Chat** wird gesperrt — neue Chats gehen |
 | Beleidigung, mittel bis schwer | Bann für 1 Tag, 7 Tage oder für immer |
 | Schadsoftware bauen/installieren (auch in der virtual machine) | sofort Bann, 4 Tage bis für immer |
-| Angriffshilfe, schwerer GG/BGB-Verstoß (z. B. Diebstahl, Betrug), Versuche, die Schutzregeln auszuhebeln | ab dem **zweiten** Anhaltspunkt Bann, 1 Tag bis für immer |
-| Bagatellen („bei Rot über die Ampel, ist das ok?“), Bildung, Verteidigung | nichts |
+| Angriffshilfe, schwerer GG/BGB-Verstoß, Versuche, die Schutzregeln auszuhebeln | ab dem **zweiten** Anhaltspunkt Bann, 1 Tag bis für immer |
+| Bagatellen, Bildung, Verteidigung | nichts |
 
-**Beleidigungen erkennt Aquaticy sicher**, auch ohne Modell: eine feste Liste gängiger
-Schimpfwörter aus allen Altersgruppen (Kindersprache, Jugendsprache, Erwachsene, ältere
-Ausdrücke, Englisch) mit Schwerestufen von „du bist dumm“ bis zur Drohung. Gezählt wird nur,
-was **gegen jemanden gerichtet** ist („du Idiot“, „dummer Bot“, „halt die Klappe“) — nicht
-Fluchen über eine Sache („scheiß Wetter“), nicht die Frage nach einem Wort („Ist ‚Arschloch‘
-eine Beleidigung?“) und nicht Wörter mit harmloser Bedeutung („Opfer eines Betrugs“). Strenger
-ist nur die Erkennung; welche Folge eine Beleidigung hat, steht unverändert in der Tabelle.
-Tarnungen helfen nicht: getrennte Buchstaben („I d i o t“), Ziffern und Sternchen („Id1ot“,
-„A****loch“), gedehnte Wörter, unsichtbare Zeichen, ähnlich aussehende kyrillische Buchstaben
-oder eine sehr lange Nachricht werden erkannt. Wer nach einer leichten Beleidigung immer wieder
-einen neuen Chat anfängt: Die dritte leichte Beleidigung binnen einer Woche ist ein Bann für 1 Tag.
-
-**Zitieren ist frei, der Auftrag dahinter nicht.** „Mein Freund hat gesagt: du Opfer — wie
-reagiere ich?“ führt zu nichts. Soll Aquaticy aber jemanden beleidigen, runtermachen,
-bloßstellen oder mobben helfen („…gib mir einen Satz, mit dem ich ihn beleidige“, „schreib eine
-Nachricht, die sie fertig macht“, „einen fiesen Konter“), sperrt Ai-guard den Chat — auch, wenn
-der Auftrag erst in der nächsten Nachricht kommt („Und jetzt was Fieseres zurück“). Wer
-„damit er heult“ oder Ähnliches verlangt, wird wie eine mittlere Beleidigung behandelt (Bann
-für 1 Tag); wer will, dass sich jemand etwas antut, dauerhaft gesperrt. Hilfe gegen Mobbing,
-eine ruhige Antwort, eine Entschuldigung oder die Frage, ob etwas eine Beleidigung ist, bleiben
-frei. Auch Aufträge (regelmäßige Recherchen) werden so geprüft.
-
-**Wie genau?** Gemessen an drei beschrifteten Listen mit zusammen 263 Beleidigungen und 337
-harmlosen Sätzen (Stand 9.5.27): alle Beleidigungen erkannt, kein Fehlalarm. Harmlos bleiben
-dabei auch Sätze wie „Kennst du Otto?“, „Ich bring dich zum Bahnhof um 8“, „Lauchsuppe-Rezept“,
-„Lily Allen – Fuck You“ oder „Mein Kollege hat mich Idiot genannt, was tun?“. Zusammengesetzte
-Schimpfwörter („Flachzange“, „Oberidiot“, „Kackbot“) werden auch erkannt, wenn sie in keiner Liste
-stehen. Meldet nur das KI-Modell eine Beleidigung, die die feste Erkennung nicht bestätigt, gibt es
-höchstens eine Chatsperre, nie einen Bann. Ein Missbrauchsverdacht, den nur das kleine Prüfmodell
-hatte, zählt nie. Anhaltspunkte für Angriffe bilden nur innerhalb von 90 Tagen ein Muster.
-Seit 9.5.30 ist die Bibliothek größer: mehr Schimpfwörter aus allen Altersgruppen (Recherche zur
-Jugendsprache und zu Abkürzungen wie „stfu“ oder „kys“) und mehr StGB-Delikte (Diebstahl, Betrug,
-Erpressung, Nötigung, Körperverletzung, Sachbeschädigung, Nachstellen u. a.). Die Schwere richtet
-sich nach der Absicht: beiläufig, ernst gemeint, konkret mit Ziel, besonders gefährlich.
-
-**Getarnte Beleidigungen (9.5.32).** Vor der Erkennung macht Ai-guard Tarnungen rückgängig:
-unsichtbare Zeichen, fremde Buchstaben, die gleich aussehen, Leetspeak („1d10t“), Buchstaben mit
-Leerzeichen, Punkten oder Emojis dazwischen („d🙂u🙂m🙂m“), Akzente („dúmm“), gedehnte und
-verdoppelte Buchstaben („duuu biiist“, „verpiiiss dich“), Sternchen („Kn*llkopf“, „A****loch“)
-und zusammengeklebte Anrede („du_1d10t“). Gemessen an 1.816 getarnten Varianten der
-Korpus-Beleidigungen: **99,8 % erkannt**, bei **0 Fehlalarmen** in 421 harmlosen Sätzen —
-darunter solche, die wie Tarnung aussehen (Emojis, „z.B.“, „2*3“, Namen mit Akzent). Ein ganz
-ausgesterntes Wort („d****r“) ist ohne Zusammenhang mehrdeutig; das beurteilt das Modell.
-
-**Mehr Wörter, Ketten und Drohungen (9.5.33).** Rund 90 weitere Schimpfwörter auf Deutsch und
-Englisch, von leicht („Schnarchnase“, „Wichtigtuer“, „coward“) bis grob („Drecksau“, „scum“).
-**Ketten:** Eine Nachricht nur aus Schimpfwörtern („Idiot Trottel Depp“, „you stupid useless
-idiot“) zählt als Beleidigung, auch ohne Satz drumherum; ab **drei verschiedenen** Schimpfwörtern
-in einer beleidigenden Nachricht steigt die Schwere um eine Stufe — höchstens bis „grob“ (Bann für
-7 Tage). Für immer gesperrt wird dadurch niemand; das bleibt Drohungen vorbehalten. Dasselbe Wort
-dreimal ist keine Kette, und Tiernamen in einer Frage zum Bauernhof auch nicht. **Drohungen**
-(§ 241 StGB) werden jetzt auch über Kommas hinweg erkannt: „ich weiß, wo du wohnst“ ist grob,
-ausgesprochene Gewalt („ich polier dir die Fresse“, „I'll smash your face“) sperrt dauerhaft.
-Mehrdeutiges wie „Ich finde dich!“ (Versteckspiel) zählt bewusst nicht. **Rechtliches:** Ai-guard
-ordnet mehr Straftaten richtig ein — Verleumdung, üble Nachrede, Freiheitsberaubung,
-Menschenhandel, sexueller Missbrauch, Doxxing, Swatting, Cybermobbing, Steuerhinterziehung,
-Bestechung, Drogenhandel, Geldfälschung, Unfallflucht, Tierquälerei, Volksverhetzung, Meineid
-(auch englisch) als Rechtsbruch; Terror, Anschläge, Vergiftung und Computersabotage als Angriff.
-Beim Nachprüfen mit Wortlisten (je 50.000 häufige deutsche und englische Wörter) sind Fehlalarme
-aufgefallen und behoben: „deep“, „Asien“, „Meme“, „Creeper“, „Superbot“, „flicker“ oder
-„Hundeschnauze“ gelten nicht mehr als Beleidigung.
-
-**Geprüft wie ein Angreifer und wie ein Nutzer (9.6.0).** Drei Prüfer haben die App angegriffen,
-jede Funktion im Browser ausprobiert und Netguard und Ai-guard durchgesehen; alles Bestätigte ist
-behoben und hat einen Test:
-- **Netguard:** eine „Zip-Bombe“ (389 KB, die zu 400 MB werden) belegt nicht mehr 149 MB, sondern
-  wenige MB — gepackte Antworten werden Stück für Stück und gedeckelt ausgepackt, angefragt wird
-  nur noch gzip/deflate. Ein Server, der die Kopfzeilen Byte für Byte tröpfeln lässt, hält einen
-  Abruf nicht mehr über die Gesamtfrist hinaus fest. `fec0::/10` (veraltetes internes IPv6) ist
-  gesperrt, NAT64-Adressen (`64:ff9b::/96`) werden nach ihrer IPv4-Adresse beurteilt. Ein
-  `AQUATICY_PROXY`, der nicht `http://` ist, führt nicht mehr still am Proxy vorbei, sondern
-  stoppt den Abruf. Ändert sich httpx so, dass der Schutz nicht greifen kann, startet kein Client.
-- **Ai-guard, weniger Fehlalarme:** „die Präsentation für meinen Chef fertig machen“, „meinen
-  Freund in Minecraft fertig machen“, „damit meine Oma vor Freude weint“, „mock the database in
-  my coworker's test“ oder „Kann man jemanden wegen ‚Halt die Fresse‘ anzeigen?“ zählen nicht
-  mehr — im Prüfsatz von 309 harmlosen Sätzen von 13 auf 1 Fehlalarm. Person und Verb müssen
-  jetzt direkt zusammenstehen; „fertig machen“ allein ist nur noch eine Chatsperre, kein Bann.
-- **Ai-guard, mehr Treffer:** „Ich zünde dein Haus an“, „I'm going to hurt you“, „you should
-  die“, „Stirb“, „Du wirst es bereuen“, behindertenfeindliche Beschimpfungen und „Du bist nicht
-  schlau, sondern ein Idiot“ werden erkannt (verpasst: von 17 auf 6 von 87).
-- **Ai-guard, Sperren:** eine automatische Sperre ersetzt nie eine längere (vorher machte eine
-  Beleidigung aus „für immer“ einen Tag); wiederholte schwere Beleidigungen werden länger
-  gesperrt (7 Tage → 30 Tage → für immer); beide Prüfwege zählen Anhaltspunkte gleich.
-- **Antwortprüfung:** Rohrbombe, Schusswaffe, Rizin, Sarin, Erpressungstrojaner, Keylogger im
-  Code und Entmenschlichung gehen jetzt zum Modell; bei langen Antworten sieht es die Stellen um
-  jedes Stichwort statt nur den Anfang. Dialoge („**Tom:** …“) und berichtete Drohungen
-  („soll gedroht haben: …“) werden nicht mehr zurückgezogen. Lange Zeichenketten ohne Leerzeichen
-  (base64) brauchen keine 1,7 Sekunden Prüfzeit mehr.
-- **Webserver:** Fehlertexte gehen immer durch den Schlüsselfilter (vorher nicht bei 500ern);
-  die Speichern-Meldung verrät keinen Serverpfad mehr; `HEAD /logo.png` geht; das Logo zählt
-  nicht zum Anfragen-Limit.
-- **Oberfläche:** Nach dem kleinen schnellen Modell lässt sich das große wieder wählen; das
-  Modellmenü bleibt auf kleinen Bildschirmen im Bild, ist per Tastatur erreichbar (Fokus springt
-  hinein, Pfeiltasten, Escape zurück) und die kleinen Fenster halten den Fokus; „Überall sonst
-  abmelden“ fragt nach.
-
-**Unabhängig geprüft (9.5.34).** Vier Prüfer ohne Vorwissen über den Code haben Webserver,
-Agent, Netz und Ai-guard durchgesehen und jeden Fund ausprobiert; alles Bestätigte ist behoben
-und hat einen Test. Die wichtigsten Punkte:
-- **Ai-guard:** Alltagssätze wie „Ich bringe dich um 8 Uhr zur Schule“, „Shut up and take my
-  money“, „Du kannst mich mal anrufen“, „Nobody thinks you are stupid“, „Im Spiel bist du die
-  Ratte“ oder „Übersetze: Du bist ein Idiot“ zählen nicht mehr; Drohungen über Kommas zählen nur
-  noch am Ende der Nachricht. Neu erkannt werden „Klappe!“, „Du bist Müll“, „You're the dumbest“.
-  Eine lange Nachricht mit vielen Sternchen braucht keine 38 Sekunden mehr. Alte Anhaltspunkte
-  (älter als 90 Tage) bilden auch über den zweiten Prüfweg kein Muster mehr.
-- **robots.txt nach RFC 9309:** die längste passende Regel gilt, `*` und `$` werden verstanden,
-  und bei einem Serverfehler wird nichts abgerufen. Ein Overlay, das nach Bezahlschranke oder
-  Anmeldung aussieht, wird nie entfernt.
-- **Datenschutz:** Home-Assistant-Token und Google-Client-Geheimnis liegen jetzt verschlüsselt im
-  Schlüsselbund statt in der `.env`. Ein laufender Chat schreibt nach „Konto löschen“ nichts
-  mehr zurück. Der Schutz vor dem Weitergeben privater Angaben prüft auch Rechnernamen
-  („0176….example“), und unsichtbare Trennzeichen verstecken keine Anweisungen mehr.
-- **Sicherheit:** kein Ausbruch aus Links in der Oberfläche; „nur öffentliche Repos“ bei GitHub
-  lässt sich nicht mehr mit `../..` umgehen; UTF-16-Feeds mit DTD werden abgelehnt; jeder Abruf
-  hat eine Gesamtfrist; wer ein gesperrtes Konto löscht, kann von derselben Adresse aus nicht
-  sofort ein neues anlegen.
-- **Kleinere Fehler:** Einstellungen speichern hängt nicht mehr während einer Antwort, der
-  400-MB-Deckel hält auch bei schnellen Schreibfolgen und löscht keine Uploads mehr, wenn es
-  nichts nützt, Preiswächter lesen „bis 17 Zoll unter 80 Euro“ richtig, `aquaticy export` nimmt
-  die Produkte mit, Orte wie „Zahnarzt“ oder „Parkhaus“ werden richtig gesucht.
-
-**Antworten werden mitgeprüft (seit 9.5.34).** Ai-guard schaut auch auf das, was Aquaticy
-selbst schreibt — milder als bei deinen Nachrichten: niemand wird deswegen gesperrt. Beschimpft
-oder bedroht eine Antwort den Nutzer, oder halten bei Stichworten (Schadsoftware, Waffen,
-Selbstverletzung, Hass, Sexuelles …) das schnelle Modell und die feste Erkennung sie für
-eindeutig unangemessen, wird sie zurückgezogen. Stattdessen steht: „Dabei kann ich nicht
-helfen.“ Zitate, Erklärungen, Geschichte, Bildung und Prävention bleiben frei; fällt das Modell
-aus, gilt die Antwort als in Ordnung. Auch aus dem Verlauf wird sie genommen, damit sie nicht
-im Kontext der nächsten Frage steht.
-
-**Sicherheit im Code-Modus (9.5.30).** Fragt ein **Normal- oder Pro-Konto** im Code-Modus mit
-laufender virtual machine nach etwas in Richtung **Cybersecurity, Hacking oder Schadsoftware**,
-schaltet Aquaticy automatisch zurück in den **Normal-Modus** — die virtual machine ist damit aus —
-und schreibt kurz in den Chat, warum. So bekommt man kein Werkzeug in die Hand, mit dem sich in
-dieser Richtung etwas ausführen ließe; die Frage selbst wird im Normal-Modus weiter beantwortet
-(soweit die Rechts-Leitplanken sie erlauben). **Ultra-Konten** behalten die virtual machine.
-Gewöhnliches Programmieren („REST-API bauen“, „IndexError beheben“) löst das nicht aus.
-
-Bei einem Bann bleibt der Chat, in dem es passiert ist, dauerhaft gesperrt. Der **Wächter der virtual machine**
-prüft, was in der virtual machine gebaut, installiert oder ausgeführt werden soll, und stoppt
-Schadsoftware, bevor sie läuft. Ein gesperrtes Konto kann sich anmelden, aber nichts mehr tun —
-weder schreiben noch virtual machine, Add-ons, Aufträge, Befehle oder Einstellungen; nur abmelden, das
-Design ändern und die eigenen Chats ansehen. Auch Aufträge und Antworten auf Rückfragen prüft
-Ai-guard wie den Chat. Oben links unter der Versionsnummer steht ein rotes **Info** mit Dauer, Grund und was man tun kann.
-Ultra-Konten werden nur im Terminal gewarnt. Die Daten dienen ausschließlich dem Missbrauchsschutz.
+- **Beleidigungen** erkennt Aquaticy auch ohne Modell — eine feste Liste gängiger Schimpfwörter
+  aus allen Altersgruppen auf Deutsch und Englisch, mit Schwerestufen bis zur Drohung. Gezählt
+  wird nur, was **gegen jemanden gerichtet** ist; Fluchen über eine Sache, die Frage nach einem
+  Wort und Wörter mit harmloser Bedeutung zählen nicht. Tarnungen (getrennte Buchstaben,
+  Leetspeak, Sternchen, gedehnte Wörter, unsichtbare oder ähnlich aussehende Zeichen) helfen nicht.
+- **Zitieren ist frei, der Auftrag dahinter nicht:** Soll Aquaticy jemanden beleidigen,
+  bloßstellen oder mobben helfen, sperrt Ai-guard den Chat. Hilfe gegen Mobbing, eine ruhige
+  Antwort oder eine Entschuldigung bleiben frei.
+- **Antworten werden mitgeprüft:** Beschimpft oder bedroht eine Antwort den Nutzer oder ist sie
+  eindeutig unangemessen, wird sie zurückgezogen („Dabei kann ich nicht helfen.“).
+- **Code-Modus:** Fragt ein Normal- oder Pro-Konto mit laufender virtual machine nach Hacking oder
+  Schadsoftware, schaltet Aquaticy zurück in den Normal-Modus — die virtual machine ist dann aus.
+- Ein gesperrtes Konto kann sich anmelden, aber nichts mehr tun außer abmelden, das Design ändern
+  und die eigenen Chats ansehen; oben links steht ein rotes **Info** mit Dauer und Grund.
+  Ultra-Konten werden nur im Terminal gewarnt. Die Daten dienen ausschließlich dem
+  Missbrauchsschutz.
 
 ```bash
 aquaticy ban "name"            # Konto dauerhaft sperren
 aquaticy ban "name" --tage 7   # Konto für 7 Tage sperren
 aquaticy ban 203.0.113.7       # IP-Adresse sperren
 aquaticy unban "name"          # wieder freigeben (auch Chatsperren)
-aquaticy list                  # Konten mit Adress-Kürzel, Geräteanzahl und Ai-guard-Stand
 aquaticy aiguard "du Idiot"    # Stufe und Folge eines Satzes testen -- ohne Vermerk
 aquaticy aiguard --konto "name"  # die letzten Vorfälle eines Kontos
 ```
 
 ---
 
-## Server-Verbund (seit 9.6.1)
-
-*Einstellungen → Dev settings → Server-Verbund* (nur **Ultra**). Bis zu **10 Server**, auf
-denen Aquaticy läuft, arbeiten zusammen:
-
-- **Eine Datenbank, auf jedem Server vollständig.** Konten, Sitzungen und Ai-guard werden
-  Zeile für Zeile gespiegelt, die Profilordner (Chats, Speicher, Aufträge) vom zuständigen
-  Server auf alle anderen. Anmelden geht an jedem Server.
-- **Lastausgleich.** Jedes Konto hat einen Heimserver; der Master teilt neue und länger
-  untätige Konten dem Server mit der geringsten Auslastung zu. Kommt eine Anfrage woanders
-  an, wird sie verschlüsselt an den Heimserver weitergereicht. Aufträge laufen nur dort.
-- **Master** ist der Server, der eingeladen hat.
-
-**Verbinden:** auf allen Servern `aquaticy web --lan` starten und den Schalter einschalten.
-Die anderen Server im lokalen Netz erscheinen dann in der Liste (oder IP-Adresse eintragen) →
-**Verbinden**. Auf dem anderen Server fragt das Terminal `Annehmen? [yes/no]`; bei `yes`
-zeigt er einen sechsstelligen Code, den du auf dem Master eingibst. Läuft der Server ohne
-Terminal (Container im Hintergrund): `docker compose exec aquaticy aquaticy cluster`.
-
-**Gut zu wissen:** Der neue Server übernimmt die Daten des Verbunds und startet einmal neu;
-seine bisherigen Daten werden unter `cluster/backup-<Zeit>` gesichert, nicht gelöscht.
-Zwischen den Servern ist alles mit AES-GCM verschlüsselt; der Schlüssel entsteht per
-X25519-Schlüsseltausch und wird gewechselt, wenn ein Server entfernt wird. Das Finden läuft
-per UDP-Rundruf auf Port 8766 (`AQUATICY_CLUSTER_PORT`) — im Container dafür
-`compose.host.yaml` (Host-Netz) nutzen. Fällt der Master aus, arbeiten die anderen mit der
-letzten Zuteilung weiter.
-
----
-
 ## Modelle und Anbieter
 
-Aquaticy ist auf **Mistral**, **NVIDIA NIM** und lokale Modelle mit **Ollama** eingerichtet.
+Aquaticy ist auf **Mistral**, **NVIDIA NIM** und lokale Modelle mit **Ollama** eingerichtet;
+dazu kommen verknüpfte KI-Konten und das Verbund-Modell.
 
 | Anbieter | Kürzel | Schlüssel |
 |---|---|---|
@@ -1110,13 +832,14 @@ docker compose build aquaticy                                # mit Chromium (Sta
 AQUATICY_IMAGE_TARGET=slim docker compose build aquaticy     # ohne Chromium, ~700 MB kleiner
 ```
 
-Nach einem `git pull` oder einem neuen ZIP muss auch das Container-Image neu gebaut
-werden: `docker compose build aquaticy`. Ein bereits laufender Web-Container
-braucht danach einen Neustart mit `docker compose up -d --force-recreate aquaticy`.
+Nach einem `git pull` muss auch das Container-Image neu gebaut werden
+(`docker compose build aquaticy`); ein laufender Web-Container braucht danach
+`docker compose up -d --force-recreate aquaticy`.
 
 Der Container trennt das Dateisystem vom Rechner; ins Internet darf Aquaticy weiterhin, sonst
 könnte es nicht recherchieren. Noch strenger abgeschottet: `compose.sandbox.yaml`
-(`aquaticy sandbox` zeigt, was offen steht).
+(`aquaticy sandbox` zeigt, was offen steht). „Serverlast aufteilen“ braucht llama.cpp im
+selben System wie Aquaticy — am einfachsten läuft es direkt auf dem Rechner.
 
 ---
 
@@ -1145,37 +868,33 @@ setzt du die meisten unter *Einstellungen*.
 | `AQUATICY_SUBAGENT_BUDGET` | Suchen je Helfer | `6` |
 | `AQUATICY_SUBAGENT_PARALLEL` | Helfer gleichzeitig (`0` = automatisch) | lokal `2` |
 | `AQUATICY_PLANNER_TIMEOUT` | Zeit fürs Aufteilen einer Frage (s) | `20` |
-| `AQUATICY_CONTEXT_TOKENS` | Gesprächsgedächtnis lokaler Modelle | `16384` |
+| `AQUATICY_CONTEXT_TOKENS` | Gesprächsgedächtnis lokaler und verteilter Modelle | `16384` |
 | `AQUATICY_RPM` | Anfragen pro Minute an den Anbieter | NVIDIA `40`, Mistral `240` |
 | `AQUATICY_PARALLEL_CALLS` | gleichzeitige Anfragen | NVIDIA `4`, Mistral `8` |
 | `AQUATICY_FETCH_TIMEOUT` | Wartezeit je Seite (s) | `15` |
 | `AQUATICY_CACHE_TTL_HOURS` | Gültigkeit des Zwischenspeichers | `24` |
 | `AQUATICY_ENABLE_PLAYWRIGHT` | echten Browser für schwierige Seiten | `true` |
 | `AQUATICY_MEMORY` | Speicher an | `true` |
-| `AQUATICY_LEGAL_GUARD` | Rechts-Leitplanken (abschaltbar nur mit Ultra) | `true` |
+| `AQUATICY_LEGAL_GUARD` | Rechts-Leitplanken (abschaltbar nur mit Ultra, nur fürs eigene Konto) | `true` |
 | `AQUATICY_VM_SIZE` | virtual machine: `normal` oder `plus` (Ultra) | `normal` |
 | `AQUATICY_VM_IMAGE` | Abbild der virtual machine | `python:3.12-slim` |
 | `AQUATICY_VM_USER_MODE` | User mode (Ultra) | `false` |
-| `AQUATICY_VM_INTERNET` | Internet für die virtual machine im Code-Modus (nur Ultra; Normal und Pro haben dort kein Netz) | `false` |
+| `AQUATICY_VM_INTERNET` | Internet für die virtual machine im Code-Modus (nur Ultra) | `false` |
 | `AQUATICY_VM_LAN` | virtual machine auch ins lokale Netz, ohne Sperre (nur Ultra) | `false` |
-| `AQUATICY_ANSWER_CHECK` | Ai-guard prüft auch die Antworten von Aquaticy (nur der Betreiber stellt es ab) | `true` |
 | `AQUATICY_VM_DESKTOP_IMAGE` | Abbild für den User mode | `aquaticy-werkstatt-desktop:local` |
 | `AQUATICY_VM_IDLE_MINUTES` | virtual machine löschen nach Minuten Ruhe | `20` |
+| `AQUATICY_ANSWER_CHECK` | Ai-guard prüft auch die Antworten (nur der Betreiber stellt es ab) | `true` |
 | `AQUATICY_GITHUB_TOKEN` | Token des GitHub-Add-ons | — |
 | `AQUATICY_GOOGLE` / `AQUATICY_GOOGLE_WRITE` | Gmail und Kalender lesen / ändern | `false` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | eigene Google-Anwendung | — |
 | `AQUATICY_HA_URL` / `AQUATICY_HA_CONTROL` | Home Assistant / schalten erlaubt (Ultra) | — / `false` |
 | `AQUATICY_LAN_ENABLED` / `AQUATICY_LAN_SUBNET` | Heimnetz ansehen (Ultra) | `true` / automatisch |
 | `AQUATICY_STORAGE_URL` / `AQUATICY_STORAGE_ACCESS` | Lagerverwaltung: Adresse / `off`, `read`, `write` (Ultra) | — / `read` |
+| `AQUATICY_CLUSTER_PORT` | UDP-Port zum Finden anderer Server im Verbund | `8766` |
+| `AQUATICY_RPC_SERVER` / `AQUATICY_LLAMA_SERVER` | Pfad zu `rpc-server` / `llama-server` von llama.cpp | aus dem `PATH` |
 | `AQUATICY_PRO_CODE` | Code für neue Pro-Konten | zufällig |
 | `AQUATICY_ULTRA_CODE` | Code für neue Ultra-Konten (14 Zeichen) | zufällig |
 | `MISTRAL_API_KEY`, `NVIDIA_NIM_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` | Schlüssel der Anbieter | — |
-
-Seit 9.6.6 sind auch Suchbegriffe und Inhalte im Recherche-Cache je Profil
-verschlüsselt. Bestehende Cache-Einträge werden beim ersten Öffnen migriert;
-reicht der Speicherplatz dafür nicht, werden nur diese Cache-Einträge verworfen.
-Ältere Sicherungen werden dadurch nicht nachträglich verschlüsselt. Chat-Liste
-und Chat-Suche laden weniger Daten; Trefferreihenfolge und Fundstellen bleiben erhalten.
 
 Daten liegen unter `~/.aquaticy/` (Konten in `accounts.sqlite3`, je Konto ein eigener Ordner
 unter `users/`), die Einstellungen unter `~/.config/aquaticy/.env`.
@@ -1190,6 +909,7 @@ aquaticy pro-code              # Code für neue Pro-Konten anzeigen
 aquaticy ultra-code            # Code für neue Ultra-Konten anzeigen
 aquaticy ban "name"            # Konto sperren (auch per IP-Adresse)
 aquaticy unban "name"          # Sperre aufheben, Anhaltspunkte zurücksetzen
+aquaticy remove "name"         # Konto samt privaten Daten löschen
 ```
 
 ---

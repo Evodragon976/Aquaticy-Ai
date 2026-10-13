@@ -903,6 +903,17 @@ def cluster_command() -> None:
         console.print("Der Server-Verbund ist aus (Einstellungen → Dev settings, nur Ultra).")
     elif verbund:
         console.print(f"Im Verbund mit {len(verbund.get('members', []))} Servern.")
+        aufteilen = verbund.get("split") if isinstance(verbund.get("split"), dict) else {}
+        if aufteilen.get("on"):
+            # Serverlast aufteilen (10.2.0 Luna): braucht llama.cpp auf jedem Server.
+            from aquaticy import sharding
+
+            console.print(f"Serverlast aufteilen: an ({aufteilen.get('model') or '?'}).")
+            for name, env, namen in (("rpc-server", sharding.RPC_ENV, sharding.RPC_NAMES),
+                                     ("llama-server", sharding.SERVER_ENV,
+                                      sharding.SERVER_NAMES)):
+                da = sharding.find_binary(env, namen)
+                console.print(f"[dim]  {name}: {da or 'fehlt auf diesem Server'}[/dim]")
     else:
         console.print("Der Server-Verbund ist an, aber noch nicht verbunden.")
     try:

@@ -44,6 +44,7 @@ from aquaticy.cache import Cache
 from aquaticy.config import (
     DEFAULT_ENV_PATH,
     SEARCH_BACKEND_KEYS,
+    SPLIT_MODEL_ID,
     Settings,
     api_key_name_for,
     base_fits,
@@ -563,6 +564,8 @@ AIGUARD: Any = None
 CLUSTER: Any = None
 #: Der laufende HTTP-Server (fuer den Neustart nach dem Beitritt zu einem Verbund).
 SERVER: Any = None
+#: Serverlast aufteilen (10.2.0 Luna, aquaticy/sharding.py) -- None ohne Verbund.
+SHARDING: Any = None
 #: Auto-Upgrading (10.0 Luna): Datenordner des Servers und Hintergrund-Faden.
 #: None ausserhalb von `aquaticy web` (Tests, Kommandozeile) -- dann ist es aus.
 UPGRADE_DIR: Path | None = None
@@ -675,6 +678,8 @@ def header_for(settings: Settings) -> dict[str, Any]:
         ha_connected=bool(settings.ha_url and settings.ha_token),
         problems=settings.missing_requirements(),
     )
+    if kopf.get("model") == SPLIT_MODEL_ID and SHARDING is not None:
+        kopf["model_label"] = SHARDING.label()
     if UPGRADE_DIR is not None:
         # Auto-Upgrading: "gemma3:4b 1.1" statt "aquaticy-gemma3-4b:1.1".
         from aquaticy import upgrading
@@ -3615,6 +3620,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.command != "POST":
             self._json({"error": "unbekannter Pfad"}, 404)
             return
+        if route == "/cluster/tunnel":
+            self._cluster_tunnel(verbund, direkt)
+            return
         grenze = MAX_BODY_BYTES * 2 if route == "/cluster/proxy" else 4 * cluster.CHUNK
         try:
             daten = self._read_body(grenze)
@@ -3653,6 +3661,30 @@ class Handler(BaseHTTPRequestHandler):
             if not self.responded:
                 self._json({"error": str(exc) if isinstance(exc, cluster.ClusterError)
                             else "Ungültige Anfrage."}, 403)
+
+    def _cluster_tunnel(self, verbund: Any, direkt: str) -> None:
+        """Serverlast aufteilen: der Master will an den rpc-server dieses Servers.
+
+        Die Verbindung wird selbst zum Tunnel (aquaticy/sharding.py) und bleibt
+        offen, solange llama-server auf dem Master sie braucht.
+        """
+        from aquaticy import sharding
+
+        try:
+            daten = self._read_body(64 * 1024)
+        except (BadRequest, TooLarge, TimeoutError) as exc:
+            self._reject_body(exc)
+            return
+        try:
+            port = SHARDING.rpc_port() if SHARDING is not None else 0
+            sharding.serve_tunnel(self, verbund, port, daten, direkt)
+        except (cluster.ClusterError, ValueError, RecursionError, binascii.Error,
+                OSError) as exc:
+            if not self.responded:
+                with contextlib.suppress(OSError):
+                    self._json({"error": str(exc) if isinstance(exc, cluster.ClusterError)
+                                else "Kein Tunnel."}, 403)
+            self.close_connection = True
 
     def _cluster_proxy(self, verbund: Any, daten: bytes, direkt: str) -> None:
         """Heimserver: bedient eine weitergereichte Anfrage wie eine eigene.
@@ -4490,6 +4522,12 @@ class Handler(BaseHTTPRequestHandler):
                 verknuepft = picker_models(SESSION.settings())
             gesehen = {m.get("id") for m in alle}
             alle = alle + [m for m in verknuepft if m["id"] not in gesehen]
+            if SHARDING is not None and SHARDING.ready():
+                # Serverlast aufteilen (10.2.0 Luna): das verteilte Modell zuerst.
+                alle = [{"id": SPLIT_MODEL_ID, "label": SHARDING.label(), "kind": "Verbund",
+                         "note": f"Verteilt auf {SHARDING.servers()} Server",
+                         "source": "operator", "source_label": ""}] + [
+                    m for m in alle if m.get("id") != SPLIT_MODEL_ID]
             if UPGRADE_DIR is not None:
                 # Auto-Upgrading: statt der rohen Ollama-Namen die Fassungen,
                 # die dieses Konto sehen darf (10.0 Luna).
@@ -5851,7 +5889,12 @@ def _cluster_load() -> dict[str, Any]:
             buch = sitzung.runs
             with buch._lock:
                 laeufe += sum(1 for lauf in buch._runs.values() if not lauf.done)
-    return {"runs": laeufe, "sessions": len(sitzungen)}
+    last: dict[str, Any] = {"runs": laeufe, "sessions": len(sitzungen)}
+    if SHARDING is not None:
+        # Serverlast aufteilen: ist der rpc-server dieses Servers bereit?
+        with contextlib.suppress(Exception):
+            last["split"] = SHARDING.worker_status()
+    return last
 
 
 def _cluster_release(user_id: str) -> bool:
@@ -5889,7 +5932,16 @@ def cluster_view(session: Any) -> tuple[dict[str, Any], int]:
         return {"error": "Der Server-Verbund gehört zu Ultra.", "locked": True}, 403
     if CLUSTER is None:
         return {"error": "Der Verbund ist hier nicht verfügbar.", "enabled": False}, 200
-    return CLUSTER.view(), 200
+    return _cluster_view_full(), 200
+
+
+def _cluster_view_full() -> dict[str, Any]:
+    """Der Verbund samt "Serverlast aufteilen" (10.2.0 Luna)."""
+    antwort = CLUSTER.view()
+    if SHARDING is not None:
+        with contextlib.suppress(Exception):
+            antwort["split"] = SHARDING.view()
+    return antwort
 
 
 def upgrades_view(session: Any) -> dict[str, Any]:
@@ -5984,13 +6036,39 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
             CLUSTER.failover(str(payload.get("node", "")))
         elif aktion == "leave":
             CLUSTER.leave()
+        elif aktion == "split":
+            # Serverlast aufteilen (10.2.0 Luna): nur der Master, nur Modelle,
+            # die er wirklich in Ollama hat.
+            if not CLUSTER.is_master:
+                return {"error": "Die Serverlast teilt nur der Master auf."}, 403
+            an = payload.get("on") is True
+            modell = str(payload.get("model") or "").strip()
+            if an:
+                from aquaticy.sharding import ollama_models
+
+                if modell not in {m["name"] for m in ollama_models(OLLAMA_URL())}:
+                    return {"error": "Dieses Modell gibt es in Ollama auf dem Master nicht."}, 400
+            CLUSTER.set_split(an, modell)
+            if SHARDING is not None:
+                # Gleich einen Takt -- scheitert er, holt der naechste es nach.
+                with contextlib.suppress(Exception):
+                    SHARDING.tick()
+        elif aktion == "split-restart":
+            if not CLUSTER.is_master:
+                return {"error": "Neu verteilen kann nur der Master."}, 403
+            if not CLUSTER.split_on:
+                return {"error": "Schalte „Serverlast aufteilen“ zuerst ein."}, 400
+            if SHARDING is not None:
+                SHARDING.request_restart()
+                with contextlib.suppress(Exception):
+                    SHARDING.tick()
         else:
             return {"error": "Unbekannte Aktion."}, 400
     except cluster.ClusterError as exc:
         return {"error": str(exc)}, 400
     except (OSError, ValueError) as exc:
         return {"error": f"Der andere Server ist nicht erreichbar ({type(exc).__name__})."}, 502
-    return CLUSTER.view(), 200
+    return _cluster_view_full(), 200
 
 
 #: Wie viele Ersatz-Ports nach dem eingestellten probiert werden (9.6.8 Sol).
@@ -6187,7 +6265,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         for address, note in addresses_for(host, server.server_address[1], token):
             print(f"  {address} ({note})")
     port = server.server_address[1]
-    global SERVER, CLUSTER, UPGRADE_DIR, UPGRADER
+    global SERVER, CLUSTER, UPGRADE_DIR, UPGRADER, SHARDING
     research_stop: threading.Event | None = None
     research_worker: threading.Thread | None = None
     # Alles nach dem Binden steht im try: scheitert der Start (etwa eine gesperrte
@@ -6223,6 +6301,13 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
                                                           restart=_cluster_restart, ask=frage))
             frage.cluster = CLUSTER
             CLUSTER.start()
+            # Serverlast aufteilen (10.2.0 Luna): haelt rpc-server und llama-server
+            # passend zur Einstellung im Verbund -- ohne Verbund tut sie nichts.
+            from aquaticy import sharding
+
+            SHARDING = sharding.Manager(
+                CLUSTER, OLLAMA_URL, lambda: int(get_settings().context_tokens or 0))
+            SHARDING.start()
             if CLUSTER.joined:
                 rolle = "Master" if CLUSTER.is_master else "Mitglied"
                 print(f"  Verbund:    {rolle}, {len(CLUSTER.members())} Server")
@@ -6243,6 +6328,9 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         if research_stop is not None and research_worker is not None:
             research_stop.set()
             research_worker.join(timeout=6)
+        if SHARDING is not None:
+            SHARDING.stop()
+            SHARDING = None
         if CLUSTER is not None:
             CLUSTER.stop()
         if UPGRADER is not None:

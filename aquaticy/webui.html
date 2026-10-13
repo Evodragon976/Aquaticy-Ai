@@ -1331,6 +1331,10 @@ input:focus-visible,select:focus-visible,.side-search input:focus-visible,
 .cluster-list .punkt{width:8px;height:8px;border-radius:50%;background:var(--err);flex:0 0 auto}
 .cluster-list .punkt.an{background:var(--accent)}
 .cluster-add{display:grid;grid-template-columns:minmax(0,1fr) 90px auto;gap:8px;margin-top:10px}
+/* Serverlast aufteilen (10.2.0 Luna) */
+.split-box{margin:14px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+.split-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 4px}
+.split-row select{flex:1 1 240px;min-width:0}
 .cluster-invite{margin-top:10px;padding:10px 12px;border:1px solid var(--line-2);border-radius:12px}
 .cluster-invite .code-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .cluster-invite input{width:9em;letter-spacing:.15em}
@@ -2575,6 +2579,23 @@ button{touch-action:manipulation}
           <div class="note" id="cluster-status" role="status"></div>
           <div id="cluster-panel" hidden>
             <ul class="device-list cluster-list" id="cluster-members"></ul>
+            <!-- Serverlast aufteilen (10.2.0 Luna): ein Modell auf allen Servern. -->
+            <div class="split-box" id="split-box" hidden>
+              <div class="check">
+                <input type="checkbox" role="switch" class="schalter" id="split-on">
+                <label for="split-on" style="margin:0">Serverlast aufteilen
+                  <span class="why">Sonst bedient jeder Server seine eigenen Nutzer mit seinem
+                    eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine
+                    Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen
+                    Server allein in den Speicher passen. Alle Konten werden dann vom Master
+                    bedient. Braucht llama.cpp auf jedem Server.</span></label>
+              </div>
+              <div class="split-row">
+                <select id="split-model" aria-label="Modell, das verteilt laufen soll"></select>
+                <button type="button" class="btn" id="split-restart">Neu verteilen</button>
+              </div>
+              <div class="note" id="split-status" role="status"></div>
+            </div>
             <div class="cluster-title">Server im lokalen Netz</div>
             <ul class="device-list cluster-list" id="cluster-found"></ul>
             <div class="cluster-add">
@@ -2635,7 +2656,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "10.1.4 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "10.2.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -4883,6 +4904,9 @@ const EN = {
 "Mehrere KI-Modelle arbeiten zusammen: zwei verknüpfte Modelle (z. B. Claude und ChatGPT) lösen die Aufgabe, eines (Gemini, wenn verknüpft) prüft auf Fehler, und Aquaticy ist der Richter — es entscheidet, ob die Lösung trägt, oder schickt sie zum Nachbessern und Ausdiskutieren zurück. Ohne Agenten, nur mit dem Hauptmodell als Richter. Dauert länger und kostet auf allen Konten Tokens.": "Several AI models work together: two linked models (e.g. Claude and ChatGPT) solve the task, one (Gemini, if linked) checks for mistakes, and Aquaticy is the judge — it decides whether the solution holds or sends it back to be improved and debated. No agents, only the main model as judge. Takes longer and uses tokens on all accounts.",
 "Dafür braucht es mindestens zwei verknüpfte KI-Konten (Add-ons → KI-Konten).": "This needs at least two linked AI accounts (Add-ons → AI accounts).",
 "Server-Verbund": "Server cluster",
+"Serverlast aufteilen": "Split server load",
+"Sonst bedient jeder Server seine eigenen Nutzer mit seinem eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen Server allein in den Speicher passen. Alle Konten werden dann vom Master bedient. Braucht llama.cpp auf jedem Server.": "Otherwise every server serves its own users with its own model. Here all servers compute one model together: its layers are spread across them. That way even models run that fit into no single server's memory. All accounts are then served by the master. Needs llama.cpp on every server.",
+"Neu verteilen": "Redistribute",
 "Ungültiger Port. Erlaubt sind ganze Zahlen von 1 bis 65535.": "Invalid port. Enter a whole number from 1 to 65535.",
 "Der Verbundstatus ließ sich nicht laden.": "The cluster status could not be loaded.",
 "Bis zu 10 Server mit Aquaticy arbeiten zusammen: eine gemeinsame Datenbank, die auf jedem Server vollständig liegt, und die Arbeit wird gleichmäßig verteilt. Der Server, der einlädt, wird Master.": "Up to 10 servers running Aquaticy work together: one shared database that is complete on every server, and the work is spread evenly. The server that sends the invitation becomes the master.",
@@ -7045,7 +7069,8 @@ function verbundZeigen(d){
   for (const m of d.members || []){
     const rolle = (m.master ? "Master" : "Mitglied") + (m.self ? " · dieser Server" : "");
     const last = m.alive ? ` · ${m.accounts} Konten · ${m.runs} laufende Antworten`
-      + (typeof m.cpu === "number" ? ` · CPU ${Math.round(m.cpu * 100)} %` : "") : " · nicht erreichbar";
+      + (typeof m.cpu === "number" ? ` · CPU ${Math.round(m.cpu * 100)} %` : "")
+      + (d.split_on ? splitAnteil(m, d) : "") : " · nicht erreichbar";
     let knopf = "", tun = null;
     if (d.master && !m.self && !m.alive && m.accounts > 0){
       // 9.6.8 Sol: ein ausgefallener Server haelt seine Konten nicht mehr fest.
@@ -7127,7 +7152,93 @@ function verbundZeigen(d){
     }
   }
   for (const box of vorhanden.values()) box.remove();
+  splitZeigen(d);
 }
+
+/* ---------- Serverlast aufteilen (10.2.0 Luna) ---------- */
+// Was ein Server zum verteilten Modell beitraegt -- in seiner Zeile der Liste.
+function splitAnteil(m, d){
+  const s = m.split || {};
+  if (s.direct) return ` · rechnet direkt über seine Grafikkarte mit${s.mem_gb ? ` (etwa ${s.mem_gb} GB)` : ""}`;
+  if (s.ready) return ` · rechnet mit${s.mem_gb ? ` (etwa ${s.mem_gb} GB)` : ""}`;
+  return s.error ? ` · ${nutzerFehler(s.error)}` : " · noch nicht bereit";
+}
+function splitText(d, s){
+  if (!d.master){
+    if (!s.on) return "Das schaltet der Master.";
+    return s.self && s.self.ready ? "Dieser Server rechnet am verteilten Modell mit."
+      : nutzerFehler(s.message || "rpc-server startet …");
+  }
+  if (!s.on){
+    if (!s.server_binary) return "Auf diesem Server fehlt llama-server von llama.cpp — siehe README.";
+    return `Im Verbund stehen zusammen etwa ${s.memory_gb} GB Speicher bereit.`;
+  }
+  switch (s.phase){
+    case "wartet": return nutzerFehler(s.message || "Warte auf die anderen Server …");
+    case "lädt": return "Verteilt das Modell auf die Server — bei großen Modellen kann das einige Minuten dauern …";
+    case "bereit": return `Bereit: ${s.model} läuft verteilt auf ${s.servers} Servern und steht in der Modellauswahl.`;
+    case "fehler": return "Das hat nicht geklappt: " + nutzerFehler(s.message);
+    default: return "";
+  }
+}
+function splitZeigen(d){
+  const box = $("#split-box");
+  const s = d.split;
+  box.hidden = !d.joined || !s || (d.members || []).length < 2;
+  if (box.hidden) return;
+  const schalter = $("#split-on");
+  schalter.checked = !!s.on;
+  schalter.disabled = !d.master;
+  const auswahl = $("#split-model");
+  const modelle = (s.models && s.models.length) ? s.models
+    : (s.model ? [{ name: s.model, size_gb: 0, needed_gb: 0 }] : []);
+  // Die Liste nur neu bauen, wenn sie sich aendert -- sonst springt die Auswahl
+  // alle drei Sekunden zurueck, waehrend jemand gerade auswaehlt.
+  const liste = JSON.stringify(modelle.map(m => [m.name, m.size_gb]));
+  if (auswahl.dataset.liste !== liste){
+    auswahl.dataset.liste = liste;
+    auswahl.replaceChildren();
+    for (const m of modelle){
+      const option = document.createElement("option");
+      option.value = m.name;
+      option.textContent = m.size_gb
+        ? `${m.name} · ${m.size_gb} GB (braucht etwa ${Math.round(m.needed_gb)} GB)` : m.name;
+      auswahl.appendChild(option);
+    }
+  }
+  if (document.activeElement !== auswahl && s.model) auswahl.value = s.model;
+  auswahl.disabled = !d.master || !modelle.length;
+  $("#split-restart").hidden = !d.master || !s.on;
+  const status = $("#split-status");
+  status.className = "note" + (s.phase === "fehler" && s.on ? " bad" : "");
+  status.textContent = splitText(d, s);
+}
+$("#split-on").addEventListener("change", async (e) => {
+  const schalter = e.currentTarget;
+  const an = schalter.checked;
+  const modell = $("#split-model").value;
+  if (an && !modell){
+    schalter.checked = false;
+    hinweis("Wähle zuerst ein Modell aus, das in Ollama auf diesem Server liegt.");
+    return;
+  }
+  if (an && !(await frage("Serverlast aufteilen?",
+      "Alle Server rechnen dann gemeinsam an einem Modell, und alle Konten werden vom Master bedient. Antworten, die gerade auf einem anderen Server laufen, laufen dort noch zu Ende.",
+      "Einschalten"))){
+    schalter.checked = false;
+    return;
+  }
+  await verbundTun({ action: "split", on: an, model: modell });
+});
+$("#split-model").addEventListener("change", async (e) => {
+  if ($("#split-on").checked) await verbundTun({ action: "split", on: true, model: e.currentTarget.value });
+});
+$("#split-restart").addEventListener("click", async (e) => {
+  const knopf = e.currentTarget;
+  knopf.disabled = true;
+  await verbundTun({ action: "split-restart" });
+  knopf.disabled = false;
+});
 $("#cluster-on").addEventListener("change", async (e) => {
   await verbundTun({ action: "enable", on: e.currentTarget.checked });
   verbundLaden();

@@ -14,6 +14,10 @@
   Auslastung. Kommt eine Anfrage an einem anderen Server an, reicht der sie
   verschluesselt an den Heimserver weiter. So schreibt immer genau ein Server
   in einen Profilordner -- es gibt keine widerspruechlichen Staende.
+* **Serverlast aufteilen** (aquaticy/sharding.py): Statt der Nutzer verteilt
+  der Verbund dann das *Modell* -- seine Schichten liegen auf allen Servern,
+  die gemeinsam rechnen. Bedient werden alle Konten vom Master, dort laeuft das
+  verteilte Modell.
 * **Master** ist der Server, der eingeladen hat. Er nimmt Server auf, teilt
   Konten zu und verteilt die Mitgliederliste.
 
@@ -1144,6 +1148,18 @@ class Cluster:
             zuletzt = self._activity.get(user, 0.0)
             self._activity[user] = jetzt
             jetzt_heim = self.homes.get(user, "")
+            if self.split_on:
+                # Serverlast aufteilen: das Modell laeuft verteilt, bedient wird
+                # beim Master. Laeuft auf dem alten Heimserver noch etwas, bleibt
+                # das Konto dort, bis es frei ist (_move gibt dann *alt* zurueck).
+                if jetzt_heim == self.node_id:
+                    return jetzt_heim
+                if jetzt_heim and self.alive(jetzt_heim):
+                    return self._move(user, jetzt_heim, self.node_id)
+                if jetzt_heim:
+                    return jetzt_heim
+                self._set_home(user, self.node_id)
+                return self.node_id
             if jetzt_heim and self.alive(jetzt_heim):
                 if jetzt - zuletzt < IDLE_SECONDS:
                     return jetzt_heim
@@ -1231,7 +1247,8 @@ class Cluster:
         with self._lock:
             self._seen_batch.add(user)
         heim = self.homes.get(user, "")
-        if heim and self.alive(heim) and jetzt - zuletzt < IDLE_SECONDS / 2:
+        if (heim and self.alive(heim) and jetzt - zuletzt < IDLE_SECONDS / 2
+                and (not self.split_on or heim == self.master_node())):
             return heim
         if self.is_master:
             return self.assign(user)
@@ -1250,6 +1267,90 @@ class Cluster:
 
     def forget_home(self, user: str) -> None:
         self._local_seen.pop(user, None)
+
+    # -- Serverlast aufteilen (10.2.0 Luna, aquaticy/sharding.py) ----------
+    def split(self) -> dict[str, Any]:
+        """Die Einstellung "Serverlast aufteilen" -- steht in der Mitgliederliste."""
+        roh = (self.info or {}).get("split")
+        return dict(roh) if isinstance(roh, dict) else {}
+
+    @property
+    def split_on(self) -> bool:
+        return self.joined and bool(self.split().get("on"))
+
+    def set_split(self, on: bool, model: str = "") -> None:
+        """Master: schaltet das Aufteilen eines Modells an oder aus."""
+        if not self.is_master:
+            raise ClusterError("Die Serverlast teilt nur der Master auf.")
+        if on and len(self.members()) < 2:
+            raise ClusterError("Dafür braucht der Verbund mindestens zwei Server.")
+        with self._lock:
+            info = self.state["cluster"]
+            alt = info.get("split") if isinstance(info.get("split"), dict) else {}
+            info["split"] = {"on": bool(on),
+                             "model": str(model or alt.get("model") or "")[:200],
+                             "at": _now()}
+            info["version"] = int(info.get("version", 0)) + 1
+            self._save()
+        self.broadcast()
+        if on:
+            threading.Thread(target=self.gather_on_master, name="aquaticy-cluster-gather",
+                             daemon=True).start()
+
+    def gather_on_master(self) -> None:
+        """Holt alle Konten zum Master -- dort laeuft das verteilte Modell.
+
+        Ein Konto, auf dessen Server gerade eine Antwort laeuft, bleibt, wo es
+        ist; es zieht mit der naechsten Anfrage um (siehe assign).
+        """
+        for user, node in list(self.homes.items()):
+            if self._stop.is_set() or not self.split_on:
+                return
+            if node == self.node_id or not self.alive(node):
+                continue
+            with self._runtime_lock(user), contextlib.suppress(
+                    ClusterError, OSError, ValueError, sqlite3.Error):
+                if self.homes.get(user) == node:
+                    self._move(user, node, self.node_id)
+
+    def tunnel_request(self, node: str) -> tuple[bytes, bytes, bytes]:
+        """Master: die angemeldete Bitte um einen Tunnel zu *node*.
+
+        Angemeldet wird mit dem Schluessel aus der Kopplung mit genau diesem
+        Server -- den kennt kein anderes Mitglied. Returns: (Koerper der
+        Anfrage, Zufall des Masters, Schluessel).
+        """
+        if not self.is_master:
+            raise ClusterError("Tunnel öffnet nur der Master.")
+        link = self.state.get("links", {}).get(node)
+        if not link:
+            raise ClusterError("Zu diesem Server fehlt der Schlüssel aus der Kopplung — "
+                               "bitte neu verbinden.")
+        schluessel = _unb64(link)
+        zufall = os.urandom(16)
+        body, _ = self._wrap(schluessel, "tunnel", {"c": _b64(zufall)})
+        return body, zufall, schluessel
+
+    def open_tunnel(self, raw: bytes, source_ip: str) -> tuple[bytes, bytes]:
+        """Mitglied: prueft eine Bitte um einen Tunnel. Returns (Schluessel, Zufall).
+
+        Nur im Aufteil-Modus, nur aus dem eigenen Netz, nur vom Master und nur
+        mit dem Schluessel aus der Kopplung. Zeitstempel und Nonce schuetzen
+        gegen Wiederholen.
+        """
+        if not self.split_on or self.is_master or not lan_ip_ok(source_ip):
+            raise ClusterError("Kein Tunnel.")
+        link = self.state.get("link")
+        if not link:
+            raise ClusterError("Kein Schlüssel aus der Kopplung.")
+        schluessel = _unb64(link)
+        master = self.master_node()
+        _, op, args, _, _ = self._unwrap(
+            raw, lambda absender: [schluessel] if absender == master else [])
+        zufall = _unb64(args.get("c"))
+        if op != "tunnel" or len(zufall) != 16:
+            raise ClusterError("Ungültige Anfrage.")
+        return schluessel, zufall
 
     # -- Mitgliederliste ---------------------------------------------------
     def public_info(self) -> dict[str, Any]:
@@ -2097,19 +2198,33 @@ class Cluster:
                 "master": m["node"] == self.master_node(), "alive": self.alive(m["node"]),
                 "runs": int(last.get("runs", 0) or 0),
                 "accounts": sum(1 for n in list(self.homes.values()) if n == m["node"]),
-                "cpu": last.get("cpu")})
+                "cpu": last.get("cpu"), "split": _split_status(last.get("split"))})
         with self._lock:
             for invitation in self.invites_out.values():
                 invitation.expire()
             einladungen = [e.public() for e in self.invites_out.values()
                            if _now() - e.created < INVITE_SECONDS * 2]
         return {"enabled": self.enabled, "joined": self.joined,
-                "dead_after": DEAD_AFTER,
+                "dead_after": DEAD_AFTER, "split_on": self.split_on,
                 "joining": bool(self.info and self.info.get("joining")),
                 "master": self.is_master, "node": self.node_id, "name": self.node["name"],
                 "lan": self.lan_ready(), "max": MAX_NODES, "members": mitglieder,
                 "found": self.found() if self.enabled else [], "invites": einladungen,
                 "notice": self.notice}
+
+
+def _split_status(roh: Any) -> dict[str, Any]:
+    """Was ein Server ueber seinen Anteil am verteilten Modell meldet -- geprueft."""
+    if not isinstance(roh, dict):
+        return {}
+    try:
+        speicher = float(roh.get("mem_gb") or 0)
+    except (TypeError, ValueError, OverflowError):
+        speicher = 0.0
+    if not 0.0 <= speicher <= 100_000.0:  # auch NaN und Unendlich
+        speicher = 0.0
+    return {"ready": roh.get("ready") is True, "mem_gb": round(speicher, 1),
+            "direct": roh.get("direct") is True, "error": str(roh.get("error") or "")[:200]}
 
 
 def _host(ziel: dict[str, Any]) -> str:

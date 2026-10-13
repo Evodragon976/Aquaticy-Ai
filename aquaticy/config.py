@@ -154,6 +154,10 @@ def selected_vision_model(settings: Settings) -> str:
 #: Umgebung. Lokale Server (LM Studio, Ollama) brauchen ohnehin keinen.
 NO_KEY = "kein-schluessel"
 
+#: Das Modell, das der Server-Verbund verteilt rechnet (aquaticy/sharding.py).
+#: Fuer LiteLLM ein OpenAI-kompatibler Server: llama-server auf dem Master.
+SPLIT_MODEL_ID = "hosted_vllm/aquaticy-verbund"
+
 #: Fuer Anbieter, die in PROVIDER_KEYS nicht stehen. LiteLLM kennt weit mehr
 #: Provider, als hier sinnvoll aufzuzaehlen sind -- damit laesst sich jeder
 #: davon nutzen, ohne dass aquaticy angepasst werden muss.
@@ -627,6 +631,9 @@ class Settings:
         sonst liefe es mit dem eigenen Schluessel beim Betreiber und zaehlte
         nicht, oder der Aufruf ginge an den falschen Rechner.
         """
+        if model == SPLIT_MODEL_ID:
+            # Laeuft auf den Servern des Betreibers -- zaehlt immer ins Kontingent.
+            return "operator"
         name = self.key_name_for(model)
         if not (name and name in self.own_key_names and self.api_keys.get(name)):
             return "operator"
@@ -713,6 +720,17 @@ class Settings:
         """
         if self.model_access is not None:
             self.model_access(model)
+        if model == SPLIT_MODEL_ID:
+            # Serverlast aufteilen (10.2.0 Luna): llama-server auf dem Master,
+            # nur ueber 127.0.0.1 und mit seinem eigenen, zufaelligen Schluessel.
+            # Nie ein Schluessel eines Anbieters -- auch keiner des Kontos.
+            from aquaticy.sharding import endpoint
+
+            adresse, schluessel = endpoint()
+            if not adresse:
+                raise ValueError("Das auf den Server-Verbund verteilte Modell läuft gerade "
+                                 "nicht. Wähle bitte ein anderes Modell.")
+            return {"api_base": adresse, "api_key": schluessel or NO_KEY}
         kwargs: dict[str, object] = {}
         gleich = provider_of(model) == provider_of(self.api_base_for or self.model)
         # Die eingetragene Adresse -- und ob das KONTO sie eingetragen hat
