@@ -15,7 +15,8 @@ Stand: 2026-10-13. Grundlage: **10.2.1 Terra**, Commit `0f8bb8e`, Branch `Aquati
 
 | Prüfung | Ergebnis |
 |---|---|
-| Vollständige Testsuite (`pytest`) | 4635 bestanden, 27 übersprungen; 3 ältere Tests prüften wörtlich geänderte Texte und wurden angepasst, danach bestanden |
+| Vollständige Testsuite (`pytest`), Lauf nach allen Korrekturen | 4641 bestanden, 27 übersprungen, keine Fehlschläge |
+| Erster vollständiger Lauf | 3 Fehlschläge: 2 Tests prüften absichtlich geänderte Texte und wurden angepasst; 1 Test fand einen echten Fehler (Beispiel-Aufgaben, siehe unten), behoben im Code |
 | Neue Tests: Coworker / Plugins / llama.cpp | 29 / 18 / 30, alle bestanden |
 | Stilprüfung (`ruff check aquaticy tests`) | keine Beanstandung |
 | Sicherheitsscan (`bandit`) der neuen Module | nur die erwarteten Hinweise zu `subprocess` (feste Argumente) |
