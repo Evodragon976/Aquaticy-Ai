@@ -416,11 +416,15 @@ class Learning:
                 "JOIN learning_facts f ON f.id=t.fact WHERE t.term IN ("
                 + ",".join("?" for _ in hashes)
                 + ") AND f.expires>? AND ("
-                "(SELECT COUNT(*) FROM learning_contributions c WHERE c.fact=f.id)>=? "
+                "(SELECT COUNT(*) FROM learning_contributions c "
+                "JOIN learning_consent s ON s.owner=c.owner "
+                "WHERE c.fact=f.id AND s.enabled=1 AND s.version=?)>=? "
                 "OR EXISTS (SELECT 1 FROM learning_contributions c "
-                "WHERE c.fact=f.id AND c.owner=?)) "
+                "JOIN learning_consent s ON s.owner=c.owner "
+                "WHERE c.fact=f.id AND c.owner=? AND s.enabled=1 AND s.version=?)) "
                 "GROUP BY f.id ORDER BY COUNT(*) DESC,f.created DESC,f.id LIMIT 3",
-                (*hashes, time.time(), MIN_CONFIRMATIONS, self.owner),
+                (*hashes, time.time(), LEGAL_VERSION, MIN_CONFIRMATIONS, self.owner,
+                 LEGAL_VERSION),
             ).fetchall()
         result = []
         for key, sealed, source in rows:

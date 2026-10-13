@@ -1,4 +1,4 @@
-# Aquaticy AI 10.2.0 Luna
+# Aquaticy AI 10.2.1 Terra
 
 **Aquaticy** recherchiert für dich. Du stellst eine Frage, Aquaticy sucht im Web, liest die
 passenden Seiten und fasst das Ergebnis zusammen — mit Quelle an jeder Angabe. Es läuft im
@@ -112,7 +112,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 10.2.0 Luna
+aquaticy --version            # 10.2.1 Terra
 
 # 2. Einrichten — fragt nach Modell und Schlüssel und testet beide
 aquaticy setup
@@ -927,6 +927,9 @@ uv run ruff check .    # Stilprüfung
 python tools/rundgang.py            # bedient die Weboberfläche wie ein Mensch
 python tools/rundgang.py --bilder   # dabei Bildschirmfotos ablegen
 ```
+
+Die Ergebnisse und Grenzen der aktuellen Prüfung stehen im
+[Prüfbericht zu 10.2.1 Terra](TESTREPORT-10.2.1-Terra.md).
 
 ---
 

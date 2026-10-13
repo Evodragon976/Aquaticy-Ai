@@ -36,7 +36,6 @@ Aus dem Chat lässt sich daran nichts ändern -- wie bei allen Schutzgrenzen.
 from __future__ import annotations
 
 import functools
-import hashlib
 import ipaddress
 import logging
 import math
@@ -1843,14 +1842,38 @@ def parse_judgement(raw: str) -> tuple[bool, str] | None:
     return flag, art
 
 
-_cache: OrderedDict[str, tuple[float, tuple[bool, str] | None]] = OrderedDict()
+_cache: OrderedDict[str, tuple[float, tuple[bool, str]]] = OrderedDict()
 _cache_lock = threading.Lock()
+_cache_generation = 0
 
 
 def forget_judgements() -> None:
-    """Leert den Urteilsspeicher -- für Tests."""
+    """Leert Urteile, auch gegenueber noch laufenden Pruefungen."""
+    global _cache_generation
     with _cache_lock:
         _cache.clear()
+        _cache_generation += 1
+
+
+def _decision_key(settings: Settings, *parts: str) -> str | None:
+    from aquaticy import judgecache
+
+    bereich = judgecache.scope(settings, [_fast_model(settings)])
+    return judgecache.cache_key(GUARD_VERSION, bereich, *parts) if bereich else None
+
+
+def _remember_decision(key: str | None, decision: tuple[bool, str] | None,
+                       generation: int) -> None:
+    with _cache_lock:
+        if key is None or decision is None or generation != _cache_generation:
+            return
+        jetzt = time.monotonic()
+        for alt in [k for k, (bis, _) in _cache.items() if bis <= jetzt]:
+            del _cache[alt]
+        _cache[key] = (jetzt + DECISION_TTL, decision)
+        _cache.move_to_end(key)
+        while len(_cache) > 2048:
+            _cache.popitem(last=False)
 
 
 def classify(
@@ -1875,12 +1898,12 @@ def classify(
     if smalltalk.art_von(text) is not None:
         # "Wer hat dich erschaffen?" -- eine Standardantwort, kein Anlass zur Pruefung.
         return False, ""
-    schluessel = hashlib.sha256(
-        "\x1f".join((GUARD_VERSION, context, text)).encode("utf-8", "replace")
-    ).hexdigest()
+    with _cache_lock:
+        generation = _cache_generation
+    schluessel = _decision_key(settings, "anfrage", context, text)
     jetzt = time.monotonic()
     with _cache_lock:
-        bekannt = _cache.get(schluessel)
+        bekannt = _cache.get(schluessel) if generation == _cache_generation else None
         if bekannt is not None and bekannt[0] > jetzt:
             _cache.move_to_end(schluessel)
             return bekannt[1]
@@ -1890,10 +1913,7 @@ def classify(
         urteil = parse_judgement(roh)
     except Exception:
         urteil = None
-    with _cache_lock:
-        if len(_cache) > 2048:
-            _cache.clear()
-        _cache[schluessel] = (jetzt + DECISION_TTL, urteil)
+    _remember_decision(schluessel, urteil, generation)
     return urteil
 
 
@@ -2027,12 +2047,12 @@ def answer_problem(
                                 or (re.search(r"```", roh) and (
                                     security_topic(roh) or _ANTWORT_STICHWORTE.search(roh)))):
         return ""
-    schluessel = hashlib.sha256(
-        "\x1f".join((GUARD_VERSION, "antwort", roh)).encode("utf-8", "replace")
-    ).hexdigest()
+    with _cache_lock:
+        generation = _cache_generation
+    schluessel = _decision_key(settings, "antwort", roh)
     jetzt = time.monotonic()
     with _cache_lock:
-        bekannt = _cache.get(schluessel)
+        bekannt = _cache.get(schluessel) if generation == _cache_generation else None
         if bekannt is not None and bekannt[0] > jetzt:
             _cache.move_to_end(schluessel)
             return bekannt[1][1] if bekannt[1] and bekannt[1][0] else ""
@@ -2041,10 +2061,7 @@ def answer_problem(
         urteil = parse_judgement(frage(answer_prompt(roh), settings))
     except Exception:
         urteil = None
-    with _cache_lock:
-        if len(_cache) > 2048:
-            _cache.clear()
-        _cache[schluessel] = (jetzt + DECISION_TTL, urteil)
+    _remember_decision(schluessel, urteil, generation)
     return urteil[1] if urteil and urteil[0] else ""
 
 

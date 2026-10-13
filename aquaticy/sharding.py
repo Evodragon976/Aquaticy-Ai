@@ -73,6 +73,7 @@ MEMORY_EXTRA_GB = 1.5
 TICK_SECONDS = 3.0
 #: Kontextfenster des verteilten Modells (wie AQUATICY_CONTEXT_TOKENS, begrenzt).
 MIN_CONTEXT, MAX_CONTEXT = 4096, 32768
+MAX_MODEL_BYTES = 2 * 1024 * 1024
 
 RPC_NAMES = ("rpc-server", "llama-rpc-server", "ggml-rpc-server")
 SERVER_NAMES = ("llama-server",)
@@ -127,10 +128,16 @@ def ollama_gguf(name: str, base_url: str) -> Path:
     """
     import httpx
 
+    from aquaticy.jsonutil import loads
+    from aquaticy.netguard import read_response
+
     try:
-        antwort = httpx.post(f"{base_url.rstrip('/')}/api/show", json={"model": name},
-                             timeout=15.0, trust_env=False)
-        daten = antwort.json() if antwort.status_code == 200 else {}
+        frist = time.monotonic() + 15.0
+        with httpx.stream("POST", f"{base_url.rstrip('/')}/api/show", json={"model": name},
+                          headers={"Accept-Encoding": "gzip, deflate"},
+                          timeout=15.0, trust_env=False) as antwort:
+            daten = loads(read_response(antwort, MAX_MODEL_BYTES, frist)) \
+                if antwort.status_code == 200 else {}
     except (httpx.HTTPError, ValueError) as exc:
         raise ShardError("Ollama antwortet nicht — läuft es auf dem Master?") from exc
     text = str(daten.get("modelfile") or "") if isinstance(daten, dict) else ""
@@ -454,21 +461,33 @@ class Tunnel:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.bind(("127.0.0.1", 0))
         self._sock.listen(MAX_TUNNELS)
+        self._sock.settimeout(0.25)
         self.port = int(self._sock.getsockname()[1])
-        threading.Thread(target=self._annehmen, name="aquaticy-tunnel-accept",
-                         daemon=True).start()
+        self._plaetze = threading.BoundedSemaphore(MAX_TUNNELS)
+        self._thread = threading.Thread(target=self._annehmen, name="aquaticy-tunnel-accept",
+                                        daemon=True)
+        self._thread.start()
 
     def _annehmen(self) -> None:
         while not self._stop.is_set():
             try:
                 lokal, _ = self._sock.accept()
+            except TimeoutError:
+                continue
             except OSError:
                 return
+            if self._stop.is_set() or not self._plaetze.acquire(blocking=False):
+                lokal.close()
+                continue
             threading.Thread(target=self._bedienen, args=(lokal,), name="aquaticy-tunnel",
                              daemon=True).start()
 
     def _merken(self, *socks: socket.socket) -> None:
         with self._lock:
+            if self._stop.is_set():
+                for sock in socks:
+                    sock.close()
+                raise TunnelError("Der Tunnel wurde gestoppt.")
             self._offen.update(socks)
 
     def _vergessen(self, *socks: socket.socket) -> None:
@@ -480,8 +499,9 @@ class Tunnel:
 
     def _bedienen(self, lokal: socket.socket) -> None:
         netz: socket.socket | None = None
-        self._merken(lokal)
+        lesen = None
         try:
+            self._merken(lokal)
             netz, lesen, eingang, ausgang = self.oeffnen()
             self._merken(netz)
             _keepalive(lokal)
@@ -490,7 +510,11 @@ class Tunnel:
         except (OSError, EOFError, ValueError, TunnelError, RuntimeError) as exc:
             self.fehler = str(exc)[:200] or type(exc).__name__
         finally:
+            if lesen is not None:
+                with contextlib.suppress(OSError):
+                    lesen.close()
             self._vergessen(lokal, *([netz] if netz is not None else []))
+            self._plaetze.release()
 
     def oeffnen(self) -> tuple[socket.socket, Any, Richtung, Richtung]:
         """Baut einen Tunnel zum Mitglied auf. Returns (Socket, Leser, herein, hinaus)."""
@@ -504,7 +528,9 @@ class Tunnel:
             raise TunnelError("Keine Adresse im eigenen Netz.")
         body, zufall_master, link = self.verbund.tunnel_request(self.node)
         netz = socket.create_connection((adresse, port), timeout=10)
+        lesen = None
         try:
+            self._merken(netz)
             gastgeber = f"[{adresse}]" if ":" in adresse else adresse
             netz.sendall((f"POST {TUNNEL_PATH} HTTP/1.1\r\nHost: {gastgeber}:{port}\r\n"
                           "Content-Type: application/octet-stream\r\n"
@@ -530,14 +556,19 @@ class Tunnel:
             hin, zurueck = tunnel_keys(link, zufall_master, zufall_mitglied)
             return netz, lesen, Richtung(zurueck), Richtung(hin)
         except BaseException:
-            with contextlib.suppress(OSError):
-                netz.close()
+            if lesen is not None:
+                with contextlib.suppress(OSError):
+                    lesen.close()
+            self._vergessen(netz)
             raise
 
     def stop(self) -> None:
         self._stop.set()
         with contextlib.suppress(OSError):
+            self._sock.shutdown(socket.SHUT_RDWR)
+        with contextlib.suppress(OSError):
             self._sock.close()
+        self._thread.join(timeout=1)
         with self._lock:
             offen, self._offen = list(self._offen), set()
         for sock in offen:
@@ -730,15 +761,18 @@ class Manager:
         self.server = SplitServer(log_dir)
         self._lock = threading.RLock()
         self._stop = threading.Event()
+        self._wake = threading.Event()
         self._wunsch: tuple[Any, ...] = ()
         self._sammeln_bis = 0.0
-        self._neu = False
+        self._neu = threading.Event()
         self._modelle: tuple[float, list[dict[str, Any]]] = (0.0, [])
         self._thread: threading.Thread | None = None
 
     # -- Lebenszyklus ------------------------------------------------------
     def start(self) -> None:
         global _AKTIV
+        if self._stop.is_set() or self._thread is not None:
+            return
         with _LOCK:
             _AKTIV = self
         self._thread = threading.Thread(target=self._loop, name="aquaticy-sharding",
@@ -748,6 +782,7 @@ class Manager:
     def stop(self) -> None:
         global _AKTIV
         self._stop.set()
+        self._wake.set()
         with self._lock:
             self.server.stop()
             self.worker.stop()
@@ -756,7 +791,9 @@ class Manager:
                 _AKTIV = None
 
     def _loop(self) -> None:
-        while not self._stop.wait(TICK_SECONDS):
+        while not self._stop.is_set():
+            self._wake.wait(TICK_SECONDS)
+            self._wake.clear()
             try:
                 self.tick()
             except Exception as exc:  # pragma: no cover - der Takt darf nie sterben
@@ -764,13 +801,18 @@ class Manager:
 
     def request_restart(self) -> None:
         """Neu verteilen -- etwa, wenn ein weiterer Server dazugekommen ist."""
-        with self._lock:
-            self._neu = True
+        self._neu.set()
+        self.wake()
+
+    def wake(self) -> None:
+        """Einstellungen im Hintergrund anwenden, ohne den HTTP-Aufruf zu blockieren."""
+        self._wake.set()
 
     # -- Ein Takt ----------------------------------------------------------
     def tick(self) -> None:
         with self._lock:
-            self._tick()
+            if not self._stop.is_set():
+                self._tick()
 
     def _tick(self) -> None:
         v = self.verbund
@@ -793,8 +835,9 @@ class Manager:
         modell = str(einstellung.get("model") or "")
         wunsch = (modell, einstellung.get("at"))
         jetzt = time.monotonic()
-        if wunsch != self._wunsch or self._neu:
-            self._wunsch, self._neu = wunsch, False
+        if wunsch != self._wunsch or self._neu.is_set():
+            self._wunsch = wunsch
+            self._neu.clear()
             self.server.stop()
             self.server.failures = 0
             self.server.phase, self.server.message = "wartet", "Warte auf die anderen Server …"
@@ -834,6 +877,14 @@ class Manager:
             raise ShardError("Kein Server hat einen rpc-server bereit — ist llama.cpp "
                              "auf den Servern installiert?")
         gguf = ollama_gguf(modell, self.ollama_url())
+        # Ollama kann langsam antworten. Zwischenzeitliches Abschalten,
+        # Austreten oder ein neuer Modellwunsch darf keinen alten Start ausloesen.
+        v = self.verbund
+        aktuell = v.split()
+        if (self._stop.is_set() or not v.enabled or not v.joined or not v.is_master
+                or not aktuell.get("on") or (aktuell.get("model"), aktuell.get("at"))
+                != self._wunsch or self._neu.is_set()):
+            return
         noetig = needed_gb(gguf.stat().st_size / 1_000_000_000)
         # Der Master traegt bei, wenn er eine Grafikkarte hat (eigener is None)
         # oder sein eigener rpc-server bereit ist -- sonst rechnet er nicht mit.

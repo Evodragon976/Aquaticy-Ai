@@ -6050,9 +6050,7 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                     return {"error": "Dieses Modell gibt es in Ollama auf dem Master nicht."}, 400
             CLUSTER.set_split(an, modell)
             if SHARDING is not None:
-                # Gleich einen Takt -- scheitert er, holt der naechste es nach.
-                with contextlib.suppress(Exception):
-                    SHARDING.tick()
+                SHARDING.wake()
         elif aktion == "split-restart":
             if not CLUSTER.is_master:
                 return {"error": "Neu verteilen kann nur der Master."}, 403
@@ -6060,8 +6058,6 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                 return {"error": "Schalte „Serverlast aufteilen“ zuerst ein."}, 400
             if SHARDING is not None:
                 SHARDING.request_restart()
-                with contextlib.suppress(Exception):
-                    SHARDING.tick()
         else:
             return {"error": "Unbekannte Aktion."}, 400
     except cluster.ClusterError as exc:

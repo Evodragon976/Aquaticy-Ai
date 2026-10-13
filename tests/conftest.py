@@ -56,7 +56,9 @@ def _rechtspruefer_ohne_netz(monkeypatch):
     monkeypatch.setattr(
         guardrails,
         "_ask_model",
-        lambda prompt, model, settings: '{"zulaessig": true, "regel": "", "grund": ""}',
+        lambda prompt, model, settings: ('{"zulaessig": true, "regel": "", "grund": "", '
+                                         '"missbrauch": false, "missbrauch_art": "", '
+                                         '"missbrauch_schwere": 0}'),
     )
 
 

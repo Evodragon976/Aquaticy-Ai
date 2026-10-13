@@ -544,13 +544,14 @@ def _lesen(response: httpx.Response, limit: Limit, frist: float | None = None) -
 
 
 def read_response(response: httpx.Response, max_bytes: int,
-                  deadline: float | None = None) -> bytes:
+                  deadline: float | None = None, *, truncate: bool = False) -> bytes:
     """Read an open response with bounded decompression and a total deadline.
 
     This only limits response data. Callers targeting public URLs must also
     use the guarded transport and redirect checks in :func:`get`.
     """
-    return _lesen(response, max_bytes, deadline)
+    limit: Limit = (lambda _: (max_bytes, True)) if truncate else max_bytes
+    return _lesen(response, limit, deadline)
 
 
 #: Kopfzeilen, die nach dem Auspacken nicht mehr stimmen.

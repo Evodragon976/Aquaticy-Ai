@@ -1240,12 +1240,14 @@ class AuthStore:
         profile = self.profile_dir(account.id)
         if profile.is_symlink():
             raise ValueError("Das Kontoprofil ist ein symbolischer Link; nichts gelöscht.")
-        from aquaticy import upgrading
+        from aquaticy import aiguard, guardrails, upgrading
         from aquaticy.learning import Learning
 
         # Stored outside the personal profile. Do this before destructive DB
         # changes; a failed JSON write must not silently leave account metadata.
         upgrading.forget_account(self.data_dir, account.id)
+        guardrails.forget_verdicts()
+        aiguard.forget_judgements()
         learning = Learning(profile)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -1267,10 +1269,12 @@ class AuthStore:
         profile = self.profile_dir(account.id)
         if profile.is_symlink():
             raise ValueError("Das Kontoprofil ist ein symbolischer Link; Löschung abgebrochen.")
-        from aquaticy import upgrading
+        from aquaticy import aiguard, guardrails, upgrading
         from aquaticy.learning import Learning
 
         upgrading.forget_account(self.data_dir, account.id)
+        guardrails.forget_verdicts()
+        aiguard.forget_judgements()
         learning = Learning(profile)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")

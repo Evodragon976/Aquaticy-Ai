@@ -258,15 +258,14 @@ def web_title(address: str, port: int, timeout: float = 1.5) -> str:
         # das Byte fuer Byte tropft, haelt die Suche sonst stundenlang auf.
         frist = time.monotonic() + max(5.0, 3 * float(timeout))
         with httpx.stream("GET", url, timeout=timeout, verify=False,
+                          headers={"Accept-Encoding": "gzip, deflate"},
                           follow_redirects=False, trust_env=False) as response:
             if response.status_code >= 500:
                 return ""
-            daten = b""
-            for stueck in response.iter_bytes():
-                daten += stueck
-                if len(daten) >= MAX_TITLE_BYTES or time.monotonic() > frist:
-                    break
-            text = daten[:MAX_TITLE_BYTES].decode(response.encoding or "utf-8", "replace")
+            from aquaticy.netguard import read_response
+
+            daten = read_response(response, MAX_TITLE_BYTES, frist, truncate=True)
+            text = daten.decode(response.encoding or "utf-8", "replace")
     except Exception:
         return ""
     from selectolax.parser import HTMLParser

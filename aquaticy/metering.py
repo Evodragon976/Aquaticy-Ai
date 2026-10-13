@@ -406,6 +406,17 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
     if access is not None:
         access(modell)
     kwargs["messages"] = prepare_messages(settings, modell, kwargs.get("messages"))
+    # Lokale Sicherheitspruefer brauchen Platz fuer ALLE Regeln und das Material,
+    # einschliesslich vorbereiteter Lernhinweise. 2048 Token reichten dafuer nicht.
+    # UTF-8-Bytes sind eine konservative Obergrenze fuer die Texttokenzahl.
+    context = kwargs.get("num_ctx")
+    if not enforce and isinstance(context, int) and context > 0:
+        required = 256 + int(kwargs.get("max_tokens") or 256)
+        for message in kwargs.get("messages") or []:
+            content = message.get("content", "")
+            if isinstance(content, str):
+                required += len(content.encode("utf-8", "replace")) + 128
+        kwargs["num_ctx"] = max(context, ((required + 1023) // 1024) * 1024)
     if kwargs.get("stream"):
         # Gestreamte Aufrufe reservieren und verrechnen selbst (Agent._reserve,
         # _note_usage). Bis 9.5.16 stand hier ein Zweig dafuer, der das

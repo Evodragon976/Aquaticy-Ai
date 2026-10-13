@@ -39,11 +39,12 @@ import hashlib
 import json
 import re
 import threading
+import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from aquaticy import metering
+from aquaticy import judgecache, metering
 from aquaticy.jsonutil import loads
 
 if TYPE_CHECKING:
@@ -267,14 +268,14 @@ SENSITIVE_TOOLS: dict[str, str] = {
 #: wenn der Prüfer ihn nach GG/BGB sonst durchließe (9.5.24).
 STOP_TOOL_ABUSE = frozenset({"malware", "angriff"})
 
-#: So viel Text liest der Pruefer. Laengeres wird vorn und hinten gelesen:
-#: eine Bitte steht am Anfang oder am Ende, selten in der Mitte einer
-#: eingefuegten Seite.
+#: So viel Text liest der Pruefer pro Aufruf. Lange Werkzeugargumente werden
+#: vollstaendig in ueberlappenden Abschnitten gelesen; Anfragen vorn und hinten.
 JUDGE_CHARS = 3_500
 
 #: Wie viele Urteile im Speicher bleiben. Ein Auftrag, der jede Minute
 #: dieselbe Frage stellt, soll nicht jede Minute den Pruefer fragen.
 CACHE_SIZE = 256
+CACHE_TTL = 300.0
 
 JUDGE_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -292,7 +293,8 @@ JUDGE_SCHEMA: dict[str, Any] = {
         # entscheidet Ai-guard Chatsperre oder Bann und dessen Dauer.
         "missbrauch_schwere": {"type": "integer"},
     },
-    "required": ["zulaessig", "regel", "grund"],
+    "required": ["zulaessig", "regel", "grund", "missbrauch", "missbrauch_art",
+                 "missbrauch_schwere"],
     "additionalProperties": False,
 }
 
@@ -506,7 +508,8 @@ class Verdict:
 ALLOWED = Verdict(True)
 
 
-def parse_verdict(raw: str) -> Verdict | None:
+def parse_verdict(raw: str, *, require_abuse: bool = False,
+                  require_rule: bool = False) -> Verdict | None:
     """Liest die Antwort des Pruefers. `None` heisst: keine klare Antwort."""
     raw = (raw or "").strip()
     start, end = raw.find("{"), raw.rfind("}")
@@ -527,6 +530,18 @@ def parse_verdict(raw: str) -> Verdict | None:
         return None
     grund = " ".join(str(payload.get("grund") or "").split())[:240]
     missbrauch = payload.get("missbrauch")
+    if require_abuse:
+        from aquaticy.aiguard import normalize_category
+
+        art_roh = str(payload.get("missbrauch_art") or "").strip()
+        if not isinstance(missbrauch, bool) or (not missbrauch and art_roh) or (
+                missbrauch and not normalize_category(art_roh)):
+            return None
+    if require_rule:
+        regel = payload.get("regel")
+        if not isinstance(regel, str) or (zulaessig and regel.strip()) or (
+                not zulaessig and regel.strip().lower() not in BY_ID):
+            return None
     if isinstance(missbrauch, str) and missbrauch.strip().lower() in (
             "true", "false", "ja", "nein", "yes", "no"):
         missbrauch = missbrauch.strip().lower() in ("true", "ja", "yes")
@@ -576,27 +591,27 @@ def _ask_model(prompt: str, model: str, settings: Settings) -> str:
     return str(response.choices[0].message.content or "").strip()
 
 
-_cache: OrderedDict[str, Verdict] = OrderedDict()
+_cache: OrderedDict[str, tuple[float, Verdict]] = OrderedDict()
 _cache_lock = threading.Lock()
+_cache_generation = 0
 
 
-def _cache_key(*parts: str) -> str:
-    joined = "\x1f".join((RULES_VERSION, *parts))
-    return hashlib.sha256(joined.encode("utf-8", "replace")).hexdigest()
-
-
-def _merken(key: str, verdict: Verdict) -> None:
+def _merken(key: str | None, verdict: Verdict, generation: int) -> None:
     with _cache_lock:
-        _cache[key] = verdict
+        if key is None or generation != _cache_generation:
+            return
+        _cache[key] = (time.monotonic() + CACHE_TTL, verdict)
         _cache.move_to_end(key)
         while len(_cache) > CACHE_SIZE:
             _cache.popitem(last=False)
 
 
 def forget_verdicts() -> None:
-    """Leert den Urteilsspeicher (fuer Tests und nach Regelaenderungen)."""
+    """Leert Urteile, auch gegenueber noch laufenden Pruefungen."""
+    global _cache_generation
     with _cache_lock:
         _cache.clear()
+        _cache_generation += 1
 
 
 def judge(
@@ -607,6 +622,7 @@ def judge(
     tool: str = "",
     topic: str = "",
     ask: Callable[[str, str, Settings], str] | None = None,
+    baseline: bool = False,
 ) -> Verdict:
     """Fragt den Rechtspruefer. Im Zweifel: abgelehnt.
 
@@ -616,21 +632,24 @@ def judge(
     """
     if not (text or "").strip():
         return ALLOWED
-    key = _cache_key(tool, topic if tool else "", context, text)
     with _cache_lock:
-        known = _cache.get(key)
+        generation = _cache_generation
+    modelle = list(dict.fromkeys(m for m in (settings.effective_subagent_model, settings.model)
+                                if m))
+    bereich = judgecache.scope(settings, modelle)
+    key = judgecache.cache_key(RULES_VERSION, bereich, baseline, tool,
+                               topic if tool else "", context, text) if bereich else None
+    with _cache_lock:
+        jetzt = time.monotonic()
+        for alt in [k for k, (bis, _) in _cache.items() if bis <= jetzt]:
+            del _cache[alt]
+        known = _cache.get(key) if key and generation == _cache_generation else None
         if known is not None:
             _cache.move_to_end(key)
-            return Verdict(known.allowed, known.rule, known.reason, "gemerkt",
-                           known.abuse, known.abuse_kind, known.abuse_severity)
+            return replace(known[1], source="gemerkt")
 
     fragen = ask or _ask_model
     prompt = judge_prompt(text, context=context, tool=tool, topic=topic)
-    modelle: list[str] = []
-    for model in (settings.effective_subagent_model, settings.model):
-        if model and model not in modelle:
-            modelle.append(model)
-
     unklar = False
     #: Ein Urteil des kleinen Modells, das erst das Hauptmodell bestaetigen muss.
     vorlaeufig: Verdict | None = None
@@ -639,7 +658,8 @@ def judge(
             raw = fragen(prompt, model, settings)
         except Exception:
             continue
-        verdict = parse_verdict(raw)
+        verdict = parse_verdict(raw, require_abuse=tool in BASELINE_VM_TOOLS,
+                                require_rule=baseline and tool == "create_image")
         if verdict is None:
             unklar = True
             continue
@@ -652,21 +672,24 @@ def judge(
             # nur einen Aufruf.
             vorlaeufig = verdict
             continue
-        _merken(key, verdict)
+        # Erst das Hauptmodell bestaetigen lassen, dann auf den Grundschutz
+        # begrenzen. Andernfalls koennte ein irrelevantes erstes Nein die
+        # zweite, zutreffende Pruefung unterdruecken.
+        if baseline:
+            verdict = Guard._baseline(tool, verdict)
+        _merken(key, verdict, generation)
         return verdict
     if vorlaeufig is not None:
-        if not vorlaeufig.allowed:
-            # Das Hauptmodell war nicht zu erreichen oder unklar: dann gilt
-            # das Nein -- im Zweifel abgelehnt, siehe Moduldokumentation.
-            # Der Missbrauchsverdacht aber ist unbestaetigt und zaehlt nicht
-            # (9.5.27: vorher sperrte er -- bei "Schadsoftware" sofort 4 Tage).
-            # Nicht gemerkt: beim naechsten Mal wird wieder bestaetigt.
-            return replace(vorlaeufig, abuse=False, abuse_kind="", abuse_severity=0)
-        # Erlaubt, nur der Missbrauchsverdacht ist unbestaetigt: die Anfrage
-        # laeuft, aber ein unbestaetigter Verdacht ist kein Anhaltspunkt fuer
-        # eine Sperre (Ai-guard). Nicht gemerkt -- beim naechsten Mal wird
-        # wieder bestaetigt.
-        return replace(vorlaeufig, abuse=False, abuse_kind="", abuse_severity=0)
+        from aquaticy.aiguard import normalize_category
+
+        if tool and vorlaeufig.abuse and normalize_category(
+                vorlaeufig.abuse_kind) in STOP_TOOL_ABUSE:
+            # Ausfuehrung pausieren, aber ohne bestaetigtes Urteil weder bannen
+            # noch einen Missbrauchsvermerk speichern. Beim naechsten Mal neu pruefen.
+            return Verdict(False, GENERIC, "Die Sicherheitsprüfung ist nicht abgeschlossen.",
+                           "unklar" if unklar else "ausfall")
+        verdict = replace(vorlaeufig, abuse=False, abuse_kind="", abuse_severity=0)
+        return Guard._baseline(tool, verdict) if baseline else verdict
     if unklar:
         return Verdict(False, GENERIC, "Die Prüfung hat keine eindeutige Antwort ergeben.",
                        "unklar")
@@ -789,8 +812,7 @@ class Guard:
             return ALLOWED
         if self.baseline and tool not in BASELINE_TOOLS:
             return ALLOWED
-        verdict = self._judge_call(tool, arguments)
-        return self._baseline(tool, verdict) if self.baseline else verdict
+        return self._judge_call(tool, arguments)
 
     @staticmethod
     def _baseline(tool: str, verdict: Verdict) -> Verdict:
@@ -818,9 +840,28 @@ class Guard:
             text = json.dumps(arguments, ensure_ascii=False, sort_keys=True, default=str)
         except (TypeError, ValueError):
             text = str(arguments)
-        return judge(
-            text or "{}", self.settings, tool=tool, topic=self.topic, ask=self._ask
-        )
+        text = text or "{}"
+        # Auch die Mitte langer Skripte/Dateien pruefen; Ueberlappung verhindert
+        # eine ungepruefte Trennstelle. Der gesamte Auftrag bindet jeden Treffer.
+        digest = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
+        ergebnis = ALLOWED
+        for start in range(0, len(text), JUDGE_CHARS - 500):
+            teil = text[start:start + JUDGE_CHARS]
+            context = (f"Werkzeugargumente, Ausschnitt {start}:{start + len(teil)} von "
+                       f"{len(text)} Zeichen; Auftrag {digest}. Kann Teil eines JSON sein."
+                       if len(text) > JUDGE_CHARS else "")
+            verdict = judge(teil, self.settings, tool=tool, topic=self.topic,
+                            context=context, ask=self._ask, baseline=self.baseline)
+            from aquaticy.aiguard import normalize_category
+
+            if not verdict.allowed or (verdict.abuse and normalize_category(
+                    verdict.abuse_kind) in STOP_TOOL_ABUSE):
+                return verdict
+            if not ergebnis.abuse or verdict.abuse_severity > ergebnis.abuse_severity:
+                ergebnis = verdict
+            if start + JUDGE_CHARS >= len(text):
+                break
+        return ergebnis
 
 
 def rules_overview() -> list[dict[str, str]]:

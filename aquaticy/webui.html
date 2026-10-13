@@ -2656,7 +2656,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "10.2.0 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "10.2.1 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6187,7 +6187,7 @@ $("#ban-ok").addEventListener("click", () => closeOverlay(banBox));
 banBox.addEventListener("click", (e) => { if (e.target === banBox) closeOverlay(banBox); });
 
 // Einschalten geht immer ohne Rueckfrage. Ausschalten: beim normalen Konto
-// ein freundliches Nein, bei Pro eine bewusste Entscheidung -- ein
+// ein freundliches Nein, bei Ultra eine bewusste Entscheidung -- ein
 // verrutschter Finger soll sie nicht treffen.
 $("#legalguard").addEventListener("click", async (e) => {
   const schalter = e.currentTarget;
@@ -7178,7 +7178,7 @@ function splitText(d, s){
     case "lädt": return "Verteilt das Modell auf die Server — bei großen Modellen kann das einige Minuten dauern …";
     case "bereit": return `Bereit: ${s.model} läuft verteilt auf ${s.servers} Servern und steht in der Modellauswahl.`;
     case "fehler": return "Das hat nicht geklappt: " + nutzerFehler(s.message);
-    default: return "";
+    default: return "Warte auf die anderen Server …";
   }
 }
 function splitZeigen(d){

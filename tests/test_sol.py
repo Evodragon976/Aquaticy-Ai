@@ -21,7 +21,7 @@ def _ui() -> str:
 def test_version_label() -> None:
     import aquaticy
 
-    assert aquaticy.VERSION_LABEL == "10.2.0 Luna"
+    assert aquaticy.VERSION_LABEL == "10.2.1 Terra"
 
 
 @pytest.mark.parametrize("text", [

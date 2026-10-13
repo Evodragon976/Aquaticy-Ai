@@ -17,7 +17,6 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -384,6 +383,8 @@ def test_too_little_memory_is_refused(paar, programme, monkeypatch) -> None:
 
 
 def test_ollama_model_file_is_found_from_the_modelfile(tmp_path: Path, monkeypatch) -> None:
+    from tests.test_v1003 import compressed_response
+
     gross = tmp_path / "sha256-gross"
     gross.write_bytes(b"GGUF" + bytes(4096))
     bild = tmp_path / "sha256-bild"
@@ -391,23 +392,12 @@ def test_ollama_model_file_is_found_from_the_modelfile(tmp_path: Path, monkeypat
     kein = tmp_path / "sha256-kein"
     kein.write_bytes(b"nope")
 
-    class Antwort:
-        status_code = 200
-
-        @staticmethod
-        def json() -> dict[str, Any]:
-            return {"modelfile": f"# FROM gemma3:27b\nFROM {gross}\nFROM {bild}\nFROM {kein}\n"
-                                 "FROM relativ/pfad\nTEMPLATE x"}
-
-    monkeypatch.setattr("httpx.post", lambda *a, **k: Antwort())
+    payload = json.dumps({"modelfile": f"# FROM gemma3:27b\nFROM {gross}\nFROM {bild}\n"
+                                      f"FROM {kein}\nFROM relativ/pfad\nTEMPLATE x"}).encode()
+    monkeypatch.setattr("httpx.stream", lambda *a, **k: compressed_response(payload, "identity"))
     assert sharding.ollama_gguf("gemma3:27b", "http://127.0.0.1:11434") == gross
 
-    class Leer(Antwort):
-        @staticmethod
-        def json() -> dict[str, Any]:
-            return {"modelfile": f"FROM {kein}"}
-
-    monkeypatch.setattr("httpx.post", lambda *a, **k: Leer())
+    payload = json.dumps({"modelfile": f"FROM {kein}"}).encode()
     with pytest.raises(sharding.ShardError):
         sharding.ollama_gguf("x", "http://127.0.0.1:11434")
 
