@@ -43,11 +43,12 @@ Stand: 2026-10-13. Grundlage: **11.0.0 Luna**, Commit `460f76a`, Branch `Aquatic
 
 | Prüfung | Ergebnis |
 |---|---|
-| Vollständige Testsuite (`pytest`) | erster Lauf: 4718 bestanden, 27 übersprungen, 14 Fehlschläge – 13 davon prüften absichtlich geänderte Texte, einer fand eine echte Lücke (`aquaticy website` fehlte in der Terminal-Hilfe, behoben); Ergebnis des Laufs nach den Korrekturen folgt |
+| Vollständige Testsuite (`pytest`) | erster Lauf: 4718 bestanden, 27 übersprungen, 14 Fehlschläge – 13 davon prüften absichtlich geänderte Texte, einer fand eine echte Lücke (`aquaticy website` fehlte in der Terminal-Hilfe, behoben); danach: **4734 bestanden, 27 übersprungen, keine Fehlschläge** |
 | Neue Tests: Websites und Karte / Nachrichten / Website mit Domain | 21 / 30 / 42, alle bestanden |
 | Stilprüfung (`ruff check aquaticy tests`) | keine Beanstandung |
 | Typprüfung (`mypy`) der neuen Module | keine Fehler |
 | Sicherheitsscan (`bandit`) der neuen Module | nur erwartete Hinweise (`subprocess` mit festen Argumenten, ein Variablenname) |
+| Rundgang durch die Oberfläche (`tests/test_rundgang.py`) | ohne Beanstandung |
 | Overlay-Entfernung im echten Chromium | Inhalt bleibt, Overlay verschwindet |
 | `aquaticy web` mit Domain, echter Start | Domain, Heimnetz und dieser Rechner werden angezeigt; Tunnel-Eingang antwortet per HTTPS; Cluster dort 404; Dateien nur für den Besitzer lesbar |
 | JavaScript der Oberfläche (`node --check`) | ohne Fehler |
