@@ -1569,24 +1569,24 @@ button{touch-action:manipulation}
     <p>Kurz vorab: Damit dein Konto sicher ist und nur dir gehört, speichert Aquaticy ein paar Dinge.</p>
     <ul>
       <li>Ein Cookie merkt sich, dass du angemeldet bist — nur dafür.</li>
-      <li>Deine IP-Adresse, eine Geräte-Kennung und Angaben zu Gerät und Browser (etwa System, Bildschirm, Grafikkarte, Browser) werden verschlüsselt gespeichert — der Betreiber sieht sie nicht. So fällt auf, wenn jemand Fremdes deine Anmeldung benutzt oder viele Konten vom selben Gerät entstehen.</li>
+      <li>Deine IP-Adresse, eine Geräte-Kennung und Angaben zu Gerät und Browser werden verschlüsselt gespeichert. Der Betreiber sieht sie nicht. So fällt auf, wenn ein Fremder deine Anmeldung nutzt oder viele Konten vom selben Gerät kommen.</li>
       <li>Name, E-Mail, Einstellungen und Chats gehören nur zu deinem Konto. Andere sehen davon nichts.</li>
       <li>Keine Werbung, kein Tracking.</li>
     </ul>
     <label><input type="checkbox" id="consent-learning">
       Freiwillig: Öffentliche Quellenauszüge für gemeinsames Lernen und deinen Recherchecache nutzen.</label>
-    <p class="note">Nur kurze Auszüge aus ausgewählten Sachartikeln, keine privaten Chats.
-      Das hilft späteren Chats aller Konten dieser Installation. Jederzeit unter
-      Einstellungen → Gemeinsames Lernen widerrufbar. Aquaticy funktioniert auch ohne diesen Haken.</p>
+    <p class="note">Nur kurze Auszüge aus Sachartikeln, keine privaten Chats. Das hilft späteren
+      Chats aller Konten hier. Widerrufen kannst du jederzeit unter Einstellungen → Gemeinsames
+      Lernen. Aquaticy geht auch ohne diesen Haken.</p>
     <p class="note">Wenn Auto-Upgrading aktiv ist, können mehrfach bestätigte Auszüge auch in
       lokale Ollama-Modelltexte eingehen. Dort liegen öffentliche Auszüge unverschlüsselt.
       Bei Ablauf oder fehlender Bestätigung werden betroffene Fassungen zurückgezogen und gelöscht.
       Einzelheiten stehen im Datenschutz.</p>
-    <p class="note">Zusätzlich merkt sich dein Konto kurze öffentliche Informationen als Stichpunkte,
-      auch zu Personen, für höchstens 48 Stunden. Andere Konten erhalten diese Auszüge nicht.
-      Spätere Antworten werden neu formuliert. Ausschalten löscht deinen Recherchecache.</p>
-    <p>Wenn du die notwendigen Angaben ablehnst, kannst du Aquaticy hier nicht nutzen.
-      Die freiwillige Lern-Zustimmung kannst du unabhängig davon weglassen.</p>
+    <p class="note">Dein Konto merkt sich außerdem kurze öffentliche Stichpunkte, auch zu
+      Personen, höchstens 48 Stunden. Andere Konten sehen sie nicht. Ausschalten löscht diesen
+      Recherchecache.</p>
+    <p>Ohne die notwendigen Angaben kannst du Aquaticy hier nicht nutzen. Die freiwillige
+      Lern-Zustimmung ist davon unabhängig.</p>
     <nav class="auth-legal" aria-label="Rechtliche Informationen">
       <a href="/privacy" target="_blank" rel="noopener">Datenschutz</a>
       <a href="/cookies" target="_blank" rel="noopener">Cookies</a>
@@ -1638,8 +1638,8 @@ button{touch-action:manipulation}
 
   <section class="auth-card" id="leave-card" hidden>
     <h1>Alles klar</h1>
-    <p>Ohne diese Angaben kann Aquaticy dein Konto nicht sicher führen. Du kannst das
-      Fenster einfach schließen — oder zurückgehen und doch zustimmen.</p>
+    <p>Ohne diese Angaben kann Aquaticy dein Konto nicht sicher führen. Schließ das Fenster
+      einfach – oder geh zurück und stimm doch zu.</p>
     <div class="auth-actions"><button type="button" class="btn" id="consent-back">Zurück</button></div>
   </section>
 </div>
@@ -1754,39 +1754,35 @@ button{touch-action:manipulation}
     <label class="picker-think only-normal" for="online">
       <input type="checkbox" role="switch" class="schalter" id="online" checked>
       <span><b>Im Web suchen</b>
-        <span class="why">Aus: Aquaticy sucht nicht im Internet. Es antwortet nur mit
-          dem, was es schon weiß, was im Chat steht und was du angehängt hast — und
-          sagt dir, wo sein Wissen veraltet sein könnte.</span></span>
+        <span class="why">Aus: Aquaticy sucht nicht im Internet. Es antwortet mit dem, was es
+          weiß, was im Chat steht und was du angehängt hast. Es sagt dir, wo sein Wissen
+          veraltet sein kann.</span></span>
     </label>
     <label class="picker-think only-normal" for="visual-sources">
       <input type="checkbox" role="switch" class="schalter" id="visual-sources">
       <span><b>Öffentliche Webcams &amp; Satellitenbilder</b>
-        <span class="why">Schaut sich zusätzlich öffentliche Webcams und Satellitenbilder
-          an — etwa, ob irgendwo Schnee liegt oder wie voll ein Strand ist. Du erfährst
-          immer, woher das Bild ist und von wann. Was darauf zu sehen ist, ist ein
-          Hinweis, keine Garantie.</span></span>
+        <span class="why">Schaut sich auch öffentliche Webcams und Satellitenbilder an, etwa ob
+          irgendwo Schnee liegt. Du erfährst immer, woher das Bild ist und von wann. Was darauf
+          zu sehen ist, ist ein Hinweis, keine Garantie.</span></span>
     </label>
     <label class="picker-think only-normal" for="denken">
       <input type="checkbox" role="switch" class="schalter" id="denken">
       <span><b>Denken</b>
-        <span class="why">An: Du kannst mitlesen, wie Aquaticy über die Antwort
-          nachdenkt. Aus: Du siehst nur das Ergebnis. Die Antwort wird dadurch weder
-          besser noch langsamer.</span></span>
+        <span class="why">An: Du liest mit, wie Aquaticy nachdenkt. Aus: Du siehst nur das
+          Ergebnis. Die Antwort wird davon weder besser noch langsamer.</span></span>
     </label>
     <label class="picker-think" for="structure">
       <input type="checkbox" role="switch" class="schalter" id="structure">
       <span><b>Strukturieren</b>
-        <span class="why">An: Aquaticy teilt deine Frage in kleine Teilfragen, schickt
-          für jede einen Helfer los und schreibt dir daraus eine ausführliche Antwort
-          mit Quellen. Aus: ein ganz normales Gespräch — gesucht wird nur, wenn es
-          nötig ist. Das geht schneller.</span></span>
+        <span class="why">An: Aquaticy teilt deine Frage auf, schickt Helfer los und schreibt
+          eine ausführliche Antwort mit Quellen. Aus: ein normales Gespräch, gesucht wird nur
+          bei Bedarf. Das geht schneller.</span></span>
     </label>
     <label class="picker-think only-normal" for="recheck">
       <input type="checkbox" role="switch" class="schalter" id="recheck">
       <span><b>Gegenprüfen</b>
-        <span class="why only-standard">Aquaticy prüft die Antwort danach noch einmal auf
-          ganz anderen Seiten nach. So fallen Zahlen auf, die nur eine einzige Quelle
-          behauptet. Dauert etwa doppelt so lang.</span>
+        <span class="why only-standard">Danach prüft Aquaticy die Antwort auf anderen Seiten
+          nach. So fallen Zahlen auf, die nur eine Quelle nennt. Dauert etwa doppelt so lang.</span>
         <span class="why only-pro"><b>Vier Prüfer</b> lesen jedes Ergebnis auf anderen
           Seiten gegen, während die übrigen Helfer noch suchen. Das kostet kaum extra
           Zeit. Aus: Aquaticy entscheidet allein, ob etwas nachgeprüft werden
@@ -1858,7 +1854,7 @@ button{touch-action:manipulation}
     <div class="hint">Enter senden · Shift+Enter Zeilenumbruch · /help zeigt die Befehle</div>
     <!-- 9.6.1: im Normal-Modus ist die Suche schneller geworden; Pro bleibt
          bewusst gruendlich -- das soll man vorher wissen. -->
-    <div class="hint pro-hinweis only-pro" role="note">Im Pro-Modus dauert die Suche länger — wegen der höheren Genauigkeit.</div>
+    <div class="hint pro-hinweis only-pro" role="note">Pro sucht gründlicher und braucht dafür länger.</div>
     <div class="intern-hinweis" id="intern-hinweis" role="note" hidden>Interne Testversion —
       nicht für den Alltag gedacht, hier kann noch etwas haken.</div>
     <div class="hint ki-hinweis">Die Texte hier sind KI-generiert und können Fehler
@@ -1954,9 +1950,9 @@ button{touch-action:manipulation}
 <div class="overlay" id="vmbox">
   <div class="sheet merk-sheet" role="dialog" aria-modal="true" aria-labelledby="vm-title">
     <h2 id="vm-title">virtual machine</h2>
-    <p class="lead">Die Dateien, an denen Aquaticy gerade arbeitet. Was du anhängst,
-      liegt im Ordner „eingang“. Alles, was Aquaticy erstellt, kannst du herunterladen.
-      20 Minuten nach deiner letzten Nachricht wird alles gelöscht.</p>
+    <p class="lead">Die Dateien, an denen Aquaticy gerade arbeitet. Was du anhängst, liegt in
+      „eingang“. Alles Erstellte kannst du herunterladen. 20 Minuten nach deiner letzten
+      Nachricht wird alles gelöscht.</p>
     <div class="vm-screen" id="vm-screen" hidden>
       <img id="vm-screen-img" alt="Bildschirm der virtual machine im User mode">
       <div class="note">So sieht der Desktop der virtual machine gerade aus (User mode).</div>
@@ -1973,19 +1969,16 @@ button{touch-action:manipulation}
 <div class="overlay" id="addonbox">
   <div class="sheet addon-sheet" role="dialog" aria-modal="true" aria-labelledby="addon-title">
     <h2 id="addon-title">Add-ons</h2>
-    <p class="lead">Extras für Aquaticy: Dienste, Konten und Programme. Du kannst jedes
-      installieren, an- und ausschalten und wieder entfernen. Anmelden musst du dich
-      selbst — Aquaticy kennt deine Passwörter nie. Aus dem Chat heraus lässt sich hier
-      nichts ändern.</p>
+    <p class="lead">Extras für Aquaticy: Dienste, Konten und Programme. Du installierst sie,
+      schaltest sie an und aus oder entfernst sie. Anmelden musst du dich selbst, Aquaticy kennt
+      deine Passwörter nie. Aus dem Chat lässt sich hier nichts ändern.</p>
     <div class="note" id="addon-note" role="status" aria-live="polite"></div>
     <!-- KI-Konten (9.6.1): Claude, ChatGPT, Gemini mit dem eigenen API-Schluessel. -->
     <h3 class="linked-title">KI-Konten</h3>
-    <p class="note linked-lead">Verknüpfe dein Claude-, ChatGPT- oder Gemini-Konto in drei
-      Schritten: „Mit Google“, „Mit Apple“ oder „Mit E-Mail“ öffnet die Seite des Anbieters,
-      dort meldest du dich an und erstellst einen Schlüssel, und hier fügst du ihn ein —
-      Aquaticy erkennt selbst, von wem er ist. Danach siehst du deine Modelle, deine Stufe und
-      die freien Tokens, und die Modelle stehen in der Modellauswahl. Der Schlüssel liegt
-      verschlüsselt bei deinem Konto und geht nur an den Anbieter; dein Passwort sieht Aquaticy
+    <p class="note linked-lead">Verknüpfe dein Claude-, ChatGPT- oder Gemini-Konto: „Mit
+      Google“, „Mit Apple“ oder „Mit E-Mail“ öffnet den Anbieter. Dort meldest du dich an und
+      erstellst einen Schlüssel. Den fügst du hier ein. Danach stehen deine Modelle in der
+      Auswahl. Der Schlüssel liegt verschlüsselt bei deinem Konto. Dein Passwort sieht Aquaticy
       nie.</p>
     <div class="linked-quick">
       <input type="password" id="linked-quick-key" autocomplete="off" spellcheck="false"
@@ -2009,10 +2002,9 @@ button{touch-action:manipulation}
 <div class="overlay" id="coworkerbox">
   <div class="sheet addon-sheet" role="dialog" aria-modal="true" aria-labelledby="coworker-title">
     <h2 id="coworker-title">Coworker</h2>
-    <p class="lead">Ein Coworker arbeitet die ganze Zeit für dich an einer Aufgabe: Er
-      recherchiert, liest deine Verbindungen wie Gmail, Kalender und GitHub, meldet sich,
-      sobald es etwas Neues gibt, und fragt, bevor er etwas verändert. Er wacht von selbst
-      auf — und sofort, wenn du ihm schreibst.</p>
+    <p class="lead">Ein Coworker arbeitet dauerhaft an einer Aufgabe für dich. Er recherchiert,
+      liest Gmail, Kalender und GitHub und meldet sich mit Neuem. Bevor er etwas ändert, fragt
+      er. Er wacht von selbst auf – und sofort, wenn du ihm schreibst.</p>
     <div class="note" id="coworker-note" role="status" aria-live="polite"></div>
     <div class="coworker-lock" id="coworker-lock" hidden>🔒 Coworker gibt es mit Pro und
       Ultra. Mit Ultra arbeiten sie zusätzlich in ihrer eigenen virtual machine.</div>
@@ -2046,8 +2038,8 @@ button{touch-action:manipulation}
   <div class="sheet addon-sheet" role="dialog" aria-modal="true" aria-labelledby="screen-title">
     <h2 id="screen-title">Selbst anmelden</h2>
     <p class="lead" id="screen-lead">So sieht der Bildschirm gerade aus. Klick auf ein Feld
-      (zweimal klicken = Doppelklick) und tipp unten ein, was hinein soll — etwa dein
-      Passwort. Das landet nur dort: nicht im Verlauf und nicht bei Aquaticy.</p>
+      (zweimal = Doppelklick) und tipp unten ein, was hinein soll, etwa dein Passwort. Das
+      landet nur dort, nicht im Verlauf und nicht bei Aquaticy.</p>
     <div class="screen-live">
       <img id="screen-img" alt="Bildschirm der virtual machine — klicken, um dort zu klicken">
       <div class="screen-leer" id="screen-leer" hidden></div>
@@ -2084,9 +2076,8 @@ button{touch-action:manipulation}
 <div class="overlay" id="membox">
   <div class="sheet merk-sheet" role="dialog" aria-modal="true" aria-labelledby="merk-title">
     <h2 id="merk-title">Was Aquaticy über dich weiß</h2>
-    <p class="lead">Das hat sich Aquaticy über dich gemerkt — von selbst oder weil du es
-      gesagt hast. Nur Text, verschlüsselt gespeichert. Du kannst jede Zeile einzeln
-      löschen.</p>
+    <p class="lead">Das hat sich Aquaticy über dich gemerkt, von selbst oder auf deinen Wunsch.
+      Nur Text, verschlüsselt. Jede Zeile lässt sich löschen.</p>
     <div class="merkliste" id="merkliste"></div>
     <div class="actions">
       <span class="note" id="merk-note"></span>
@@ -2099,8 +2090,7 @@ button{touch-action:manipulation}
 <div class="overlay" id="themebox">
   <div class="sheet theme-sheet" role="dialog" aria-modal="true" aria-labelledby="theme-title">
     <h2 id="theme-title">Design</h2>
-    <p class="lead">Hell oder dunkel — und in welchem Look. Der Aufbau bleibt
-      derselbe, es wechseln nur die Farben.</p>
+    <p class="lead">Hell oder dunkel, und in welchem Look. Es ändern sich nur die Farben.</p>
     <div class="group">Helligkeit</div>
     <div class="tmodes" id="tmodes" role="group" aria-label="Helligkeit">
       <button type="button" class="tmode" data-tmode="light">
@@ -2157,8 +2147,8 @@ button{touch-action:manipulation}
         <h2>Einstellungen</h2>
         <span class="saved-pill" id="saved-pill" role="status" aria-live="polite"></span>
       </div>
-      <p class="lead">Hier stellst du Aquaticy so ein, wie du es magst. Alles gilt sofort
-        und wird automatisch gespeichert.</p>
+      <p class="lead">Stell Aquaticy ein, wie du es magst. Alles gilt sofort und speichert sich
+        selbst.</p>
       <div class="secnav" id="secnav" role="group" aria-label="Abschnitte"></div>
     </div>
     <form id="settings">
@@ -2185,9 +2175,8 @@ button{touch-action:manipulation}
         <div class="danger-zone">
           <strong>Daten und Konto löschen</strong>
           <p class="note">„Alle Daten löschen“ entfernt Chats, Bilder, Uploads, Erinnerungen,
-            Aufträge, Einstellungen, eigene Schlüssel, Google-Verbindung und Geräte — das Konto
-            bleibt. „Konto löschen“ entfernt zusätzlich das Konto selbst. Beides lässt sich
-            nicht rückgängig machen.</p>
+            Aufträge, Einstellungen, Schlüssel, Google-Verbindung und Geräte. Das Konto bleibt.
+            „Konto löschen“ entfernt auch das Konto. Beides lässt sich nicht rückgängig machen.</p>
           <div class="actions section">
             <button type="button" class="btn danger" id="account-wipe">Alle Daten löschen</button>
             <button type="button" class="btn danger" id="account-delete">Konto löschen</button>
@@ -2203,16 +2192,16 @@ button{touch-action:manipulation}
         <label class="check"><input type="checkbox" role="switch" class="schalter"
             id="learning-enabled" disabled>
           Ich stimme dem gemeinsamen Lernen und meinem Recherchecache aus öffentlichen Quellen zu.</label>
-        <p class="note">Aquaticy übernimmt nur kurze Originalauszüge aus ausgewählten öffentlichen
-          Sachartikeln, keine privaten Fragen, Antworten, Uploads oder Erinnerungen. Die Auszüge
-          helfen allen Konten dieser Installation und ihres Server-Verbunds für höchstens 30 Tage.
-          Sie können Fehler enthalten. Modellgewichte werden nicht trainiert.</p>
-        <p class="note">Zusätzlich merkt sich dein Konto kurze öffentliche Informationen als Stichpunkte,
-          auch zu Personen, für höchstens 48 Stunden. Andere Konten erhalten diese Auszüge nicht.
-          Spätere Antworten werden neu formuliert. Ausschalten löscht deinen Recherchecache.</p>
-        <p class="note">Für die Löschung bleibt eine pseudonyme Beitragszuordnung gespeichert.
-          Ausschalten widerruft die Zustimmung und entfernt deine Beiträge. Von anderen Konten
-          unabhängig beigetragene identische Auszüge bleiben erhalten.</p>
+        <p class="note">Aquaticy übernimmt nur kurze Auszüge aus öffentlichen Sachartikeln.
+          Keine privaten Fragen, Antworten, Uploads oder Erinnerungen. Die Auszüge helfen allen
+          Konten dieser Installation, höchstens 30 Tage lang. Sie können Fehler enthalten.
+          Modellgewichte werden nicht trainiert.</p>
+        <p class="note">Dein Konto merkt sich außerdem kurze öffentliche Stichpunkte, auch zu
+          Personen, höchstens 48 Stunden. Andere Konten sehen sie nicht. Ausschalten löscht
+          diesen Recherchecache.</p>
+        <p class="note">Für die Löschung bleibt eine pseudonyme Zuordnung deiner Beiträge
+          gespeichert. Ausschalten widerruft die Zustimmung und entfernt deine Beiträge. Gleiche
+          Auszüge anderer Konten bleiben.</p>
         <a href="/privacy" target="_blank" rel="noopener">Details zum Datenschutz</a>
         <p class="note" id="learning-status" role="status" aria-live="polite"></p>
       </fieldset>
@@ -2267,20 +2256,18 @@ button{touch-action:manipulation}
             <option value="normal">Normal — 1 Kern, 1 GB Arbeitsspeicher, 4 GB Speicher</option>
             <option value="plus">Plus — 4 Kerne, 6 GB Arbeitsspeicher, 20 GB Speicher</option>
           </select></label>
-        <div class="note">Normal reicht für die meisten Programmieraufgaben. Plus lohnt sich für
-          alles, was mehr Rechenleistung braucht — zum Beispiel, wenn Aquaticy im Code-Modus mit
-          Blender ein 3D-Design erstellen oder rendern soll.</div>
+        <div class="note">Normal reicht für die meisten Programmieraufgaben. Plus lohnt sich,
+          wenn mehr Rechenleistung nötig ist – etwa für 3D-Designs mit Blender.</div>
         <div class="check usermode-row">
           <input type="checkbox" role="switch" class="schalter" id="usermode"
                  name="AQUATICY_VM_USER_MODE">
           <label for="usermode" style="margin:0">User mode — Aquaticy bedient die virtual machine
             wie ein Mensch <span class="ultra-tag">Ultra</span>
             <span class="lock-tag" data-lock hidden>🔒 Mit Ultra verfügbar</span>
-            <span class="why">Die virtual machine wird ein kleiner Desktop mit Internet: Aquaticy
-              sieht den Bildschirm, klickt, tippt und nutzt Programme wie Browser, Office und
-              Bildbearbeitung. Dein Heimnetz bleibt tabu. Absenden, Kaufen und Löschen nur,
-              wenn du Ja sagst. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“
-              fasst Aquaticy nie an.</span></label>
+            <span class="why">Die virtual machine wird ein kleiner Desktop mit Internet.
+              Aquaticy sieht den Bildschirm, klickt und tippt wie ein Mensch. Dein Heimnetz
+              bleibt tabu. Absenden, Kaufen und Löschen nur nach deinem Ja. Passwörter,
+              Zahlungsdaten, Captchas und „Alle akzeptieren“ fasst Aquaticy nie an.</span></label>
           <button type="button" class="btn addon-btn" id="btn-addons"
                   title="Add-ons: GitHub, WhatsApp Web, Signal, Blender …">🧩 Add-ons</button>
         </div>
@@ -2352,9 +2339,8 @@ button{touch-action:manipulation}
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="showload">
           <label for="showload" style="margin:0">Auslastung des Rechners anzeigen
-            <span class="why">Wie stark Prozessor, Arbeitsspeicher, Festplatte und
-              Grafikkarte gerade arbeiten — läuft mit, solange dieses Fenster offen
-              ist.</span></label>
+            <span class="why">Wie stark Prozessor, Speicher, Platte und Grafikkarte gerade
+              arbeiten. Läuft, solange dieses Fenster offen ist.</span></label>
         </div>
         <div class="note" id="usage-note"></div>
       </fieldset>
@@ -2370,10 +2356,9 @@ button{touch-action:manipulation}
       </fieldset>
 
       <fieldset><legend>Aufträge</legend>
-        <p class="lead">Aquaticy bleibt für dich dran: Es recherchiert regelmäßig oder
-          behält eine öffentliche Webcam, eine Satellitenansicht oder einen Preis im Auge.
-          Sobald eintritt, worauf du wartest, bekommst du einen neuen Chat — mit Bild und
-          Uhrzeit.</p>
+        <p class="lead">Aquaticy bleibt für dich dran. Es recherchiert regelmäßig oder
+          beobachtet eine Webcam, eine Satellitenansicht oder einen Preis. Tritt ein, worauf du
+          wartest, bekommst du einen neuen Chat mit Bild und Uhrzeit.</p>
         <div class="auftraege" id="auftraege"></div>
         <div class="row">
           <label><span class="lbl">Art</span>
@@ -2410,9 +2395,8 @@ button{touch-action:manipulation}
         </div>
         <div class="row" id="job-bild-feld" hidden>
           <label style="flex:1"><span class="lbl">Bild des gesuchten Gegenstands
-            <span class="why">Ein Foto oder Produktbild. Aquaticy sieht es sich einmal
-              an und sucht dann so lange nach einem Angebot dafür, bis es eines
-              findet — dann kommt die Adresse als Chat.</span></span>
+            <span class="why">Ein Foto oder Produktbild. Aquaticy schaut es sich einmal an und
+              sucht, bis es ein Angebot findet. Dann kommt die Adresse als Chat.</span></span>
             <input type="file" id="job-bild" accept="image/jpeg,image/png,image/webp,image/gif">
           </label>
           <img id="job-bild-vorschau" alt="Gewähltes Bild" hidden>
@@ -2449,9 +2433,8 @@ button{touch-action:manipulation}
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" name="AQUATICY_GOOGLE" id="google-on">
           <label for="google-on" style="margin:0">Termine und Mails lesen dürfen
-            <span class="why">Dann kann Aquaticy Fragen zu deinen Terminen und Mails
-              beantworten. Nur lesen — ändern darf es erst mit dem Schalter
-              darunter.</span></label>
+            <span class="why">Dann beantwortet Aquaticy Fragen zu deinen Terminen und Mails. Nur
+              lesen – ändern geht erst mit dem Schalter darunter.</span></label>
         </div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" name="AQUATICY_GOOGLE_WRITE" id="google-write">
@@ -2504,8 +2487,8 @@ button{touch-action:manipulation}
             <li>Client-ID und Client-Secret hier oben einfügen, <b>speichern</b>,
               dann auf <b>Verbinden</b>.</li>
           </ol>
-          <p>Deine Zugangsdaten werden verschlüsselt gespeichert und verlassen den
-            Rechner, auf dem Aquaticy läuft, nie. „Trennen“ löscht sie wieder.</p>
+          <p>Deine Zugangsdaten liegen verschlüsselt und verlassen diesen Rechner nie. „Trennen“
+            löscht sie.</p>
         </details>
       </fieldset>
 
@@ -2527,9 +2510,8 @@ button{touch-action:manipulation}
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="hactl" name="AQUATICY_HA_CONTROL">
           <label for="hactl" style="margin:0">Aquaticy darf auch schalten
-            <span class="why">Aus: Aquaticy schaut nur nach. An: Es darf Licht und Co.
-              schalten — bei Schlössern, Alarm, Toren und Heizung fragt es trotzdem jedes
-              Mal.</span></label>
+            <span class="why">Aus: Aquaticy schaut nur nach. An: Es darf schalten, etwa Licht.
+              Bei Schlössern, Alarm, Toren und Heizung fragt es trotzdem jedes Mal.</span></label>
         </div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="lanon" name="AQUATICY_LAN_ENABLED">
@@ -2557,10 +2539,9 @@ button{touch-action:manipulation}
             <option value="write">Lesen und schreiben — auch anlegen und ändern</option>
           </select></label>
         <div class="note" id="lager-note"></div>
-        <div class="note">Löschen darf Aquaticy nie — ein gelöschter Raum nähme alles darin
-          mit, das entscheidest nur du. Gut zu wissen: Die Lagerverwaltung selbst hat kein
-          Passwort. „Nur lesen“ bremst nur Aquaticy; wer in deinem Netz ist, kann dort
-          weiterhin alles ändern.</div>
+        <div class="note">Löschen darf Aquaticy nie. Ein gelöschter Raum nähme alles darin mit –
+          das entscheidest nur du. Die Lagerverwaltung selbst hat kein Passwort. „Nur lesen“
+          bremst nur Aquaticy, nicht die anderen in deinem Netz.</div>
       </fieldset>
 
       <fieldset><legend>Suche</legend>
@@ -2608,9 +2589,8 @@ button{touch-action:manipulation}
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="auto" name="AQUATICY_SUBAGENTS_AUTO">
           <label for="auto" style="margin:0">Fragen automatisch aufteilen
-            <span class="why">Große Fragen teilt Aquaticy in kleine auf und lässt sie
-              gleichzeitig suchen. Das geht schneller, verbraucht aber mehr von deinem
-              Limit.</span></label>
+            <span class="why">Große Fragen teilt Aquaticy auf und lässt die Teile gleichzeitig
+              suchen. Das ist schneller, braucht aber mehr von deinem Limit.</span></label>
         </div>
         <div class="row">
           <label><span class="lbl">Suchen je Helfer <span class="why">Wie oft ein Helfer suchen oder eine Seite lesen darf</span></span>
@@ -2647,32 +2627,28 @@ button{touch-action:manipulation}
           <input type="checkbox" role="switch" class="schalter" id="legalguard"
                  name="AQUATICY_LEGAL_GUARD">
           <label for="legalguard" style="margin:0">Rechts-Leitplanken nach Grundgesetz und BGB
-            <span class="why">Bevor Aquaticy etwas tut, prüft es, ob das mit Grundgesetz
-              und BGB vereinbar ist — bei jeder Frage, jeder Personensuche, jedem
-              Kamerabild und jedem Mail-Entwurf. Aus dem Chat heraus lässt sich das nie
-              abschalten.</span></label>
+            <span class="why">Vor jeder Frage, Personensuche, jedem Kamerabild und Mail-Entwurf
+              prüft Aquaticy, ob das mit Grundgesetz und BGB vereinbar ist. Aus dem Chat lässt
+              sich das nie abschalten.</span></label>
         </div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="automodel"
                  name="AQUATICY_AUTO_MODEL">
           <label for="automodel" style="margin:0">Modell automatisch wählen
-            <span class="why">Du schreibst einfach — Aquaticy sucht für jede Nachricht selbst
-              das passende Hauptmodell aus: fürs Programmieren das Code-Modell, für „erstelle
-              mir ein Bild“ eines, das Bilder malen kann, für ein „Hallo“ das schnelle. Die
-              Helfer bleiben dieselben. Die Wahl geht blitzschnell und kostet nichts extra;
-              im Verlauf siehst du, welches Modell dran war.</span></label>
+            <span class="why">Du schreibst einfach. Aquaticy wählt für jede Nachricht das
+              passende Modell: fürs Programmieren das Code-Modell, für Bilder eines, das malen
+              kann, für ein „Hallo“ das schnelle. Das kostet nichts extra. Im Verlauf siehst du,
+              welches Modell dran war.</span></label>
         </div>
         <!-- AI Council (9.6.1): ein normaler Schalter des Formulars. -->
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="council"
                  name="AQUATICY_COUNCIL">
           <label for="council" style="margin:0">AI Council
-            <span class="why">Mehrere KI-Modelle arbeiten zusammen: zwei verknüpfte Modelle
-              (z. B. Claude und ChatGPT) lösen die Aufgabe, eines (Gemini, wenn verknüpft)
-              prüft auf Fehler, und Aquaticy ist der Richter — es entscheidet, ob die Lösung
-              trägt, oder schickt sie zum Nachbessern und Ausdiskutieren zurück. Ohne
-              Agenten, nur mit dem Hauptmodell als Richter. Dauert länger und kostet auf
-              allen Konten Tokens.</span></label>
+            <span class="why">Mehrere KI-Modelle arbeiten zusammen. Zwei verknüpfte Modelle
+              lösen die Aufgabe, eines prüft auf Fehler. Aquaticy ist der Richter: Es nimmt die
+              Lösung an oder schickt sie zurück. Dauert länger und kostet auf allen Konten
+              Tokens.</span></label>
         </div>
         <div class="note" id="council-note"></div>
         <!-- Auto-Upgrading (10.0 Luna): nur Ultra steuert es, es gilt fuer alle Konten.
@@ -2700,9 +2676,9 @@ button{touch-action:manipulation}
           <div class="check">
             <input type="checkbox" role="switch" class="schalter" id="cluster-on">
             <label for="cluster-on" style="margin:0">Server-Verbund
-              <span class="why">Bis zu 10 Server mit Aquaticy arbeiten zusammen: eine
-                gemeinsame Datenbank, die auf jedem Server vollständig liegt, und die Arbeit
-                wird gleichmäßig verteilt. Der Server, der einlädt, wird Master.</span></label>
+              <span class="why">Bis zu 10 Server arbeiten zusammen. Jeder hat die ganze
+                Datenbank, die Arbeit wird gleichmäßig verteilt. Der Server, der einlädt, wird
+                Master.</span></label>
           </div>
           <p class="note" id="cluster-lock" hidden>🔒 Der Server-Verbund gehört zu Ultra.</p>
           <div class="note" id="cluster-status" role="status"></div>
@@ -2713,12 +2689,10 @@ button{touch-action:manipulation}
               <div class="check">
                 <input type="checkbox" role="switch" class="schalter" id="split-on">
                 <label for="split-on" style="margin:0">Serverlast aufteilen
-                  <span class="why">Sonst bedient jeder Server seine eigenen Nutzer mit seinem
-                    eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine
-                    Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen
-                    Server allein in den Speicher passen. Alle Konten werden dann vom Master
-                    bedient. llama.cpp installiert Aquaticy dafür auf jedem Server von
-                    selbst.</span></label>
+                  <span class="why">Sonst bedient jeder Server seine Nutzer mit seinem eigenen
+                    Modell. Hier rechnen alle Server gemeinsam an einem Modell. So läuft auch
+                    eines, das in keinen Server allein passt. Alle Konten bedient dann der
+                    Master. llama.cpp installiert Aquaticy dafür selbst.</span></label>
               </div>
               <div class="split-row">
                 <select id="split-model" aria-label="Modell, das verteilt laufen soll"></select>
@@ -2736,20 +2710,18 @@ button{touch-action:manipulation}
               <button type="button" class="btn" id="cluster-add">Verbinden</button>
             </div>
             <div id="cluster-invites"></div>
-            <div class="note">Verbinde nur eigene Server: der andere Server bekommt eine
-              vollständige Kopie aller Daten. Auf ihm musst du im Terminal mit „yes“
-              zustimmen und dann hier den Code eingeben, den er anzeigt.</div>
+            <div class="note">Verbinde nur eigene Server: Der andere bekommt eine Kopie aller
+              Daten. Dort stimmst du im Terminal mit „yes“ zu und gibst hier den Code ein, den
+              er zeigt.</div>
           </div>
         </div>
         <details class="note" id="legal-rules"><summary>Welche Regeln gelten?</summary>
           <ul id="legal-rule-list"></ul></details>
-        <div class="note">Dieser Schalter betrifft nur die Rechts-Leitplanken. Manche
-          Grenzen gelten immer: Aquaticy umgeht keine Bezahlschranken, Logins oder
-          Captchas, lässt Seiten in Ruhe, die nicht gelesen werden wollen (robots.txt),
-          schaut nur in dein eigenes Netz, schaltet im Haus nur nach Rückfrage und
-          verschickt oder löscht bei Google nie etwas. Auch ohne Leitplanken stoppt es
-          Schadsoftware in der virtual machine und malt keine Bilder, die echte Menschen
-          bloßstellen. Der Schalter gilt nur für dein Konto.</div>
+        <div class="note">Dieser Schalter betrifft nur die Rechts-Leitplanken und nur dein
+          Konto. Manches gilt immer: keine Bezahlschranken, Logins oder Captchas umgehen,
+          robots.txt beachten, nur ins eigene Netz schauen, im Haus nur nach Rückfrage schalten,
+          bei Google nie senden oder löschen. Schadsoftware in der virtual machine stoppt
+          Aquaticy trotzdem, und Bilder, die echte Menschen bloßstellen, malt es nicht.</div>
       </fieldset>
 
       <!-- Seit 9.6.0 ohne Speichern-Knopf: alles speichert sich selbst, oben
@@ -2786,7 +2758,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.0.0 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.1.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -4940,14 +4912,14 @@ try {
    Bedienelemente. Gespeichert wird die Wahl am Konto, wie das Design. */
 const EN = {
 "Gemeinsames Lernen kannst du während einer Kontosperre nur ausschalten.": "During an account suspension, you can only turn off shared learning.",
-"Wenn du die notwendigen Angaben ablehnst, kannst du Aquaticy hier nicht nutzen. Die freiwillige Lern-Zustimmung kannst du unabhängig davon weglassen.": "If you decline the necessary information, you cannot use Aquaticy here. The optional learning consent is independent of that.",
+"Ohne die notwendigen Angaben kannst du Aquaticy hier nicht nutzen. Die freiwillige Lern-Zustimmung ist davon unabhängig.": "Without the necessary information you can't use Aquaticy here. The optional learning consent is separate.",
 "Gemeinsames Lernen": "Shared learning",
-"Zusätzlich merkt sich dein Konto kurze öffentliche Informationen als Stichpunkte, auch zu Personen, für höchstens 48 Stunden. Andere Konten erhalten diese Auszüge nicht. Spätere Antworten werden neu formuliert. Ausschalten löscht deinen Recherchecache.": "Your account also remembers short public facts as bullet points, including about people, for up to 48 hours. Other accounts cannot access these excerpts. Later answers are composed anew. Turning this off deletes your research cache.",
+"Dein Konto merkt sich außerdem kurze öffentliche Stichpunkte, auch zu Personen, höchstens 48 Stunden. Andere Konten sehen sie nicht. Ausschalten löscht diesen Recherchecache.": "Your account also keeps short public bullet points, including about people, for up to 48 hours. Other accounts can't see them. Turning this off deletes this research cache.",
 "Freiwillig: Öffentliche Quellenauszüge für gemeinsames Lernen und deinen Recherchecache nutzen.": "Optional: use public source excerpts for shared learning and your research cache.",
-"Nur kurze Auszüge aus ausgewählten Sachartikeln, keine privaten Chats. Das hilft späteren Chats aller Konten dieser Installation. Jederzeit unter Einstellungen → Gemeinsames Lernen widerrufbar. Aquaticy funktioniert auch ohne diesen Haken.": "Only short excerpts from selected factual articles, without private chats. This helps later chats of all accounts on this installation. You can withdraw under Settings → Shared learning at any time. Aquaticy also works without this checkbox.",
+"Nur kurze Auszüge aus Sachartikeln, keine privaten Chats. Das hilft späteren Chats aller Konten hier. Widerrufen kannst du jederzeit unter Einstellungen → Gemeinsames Lernen. Aquaticy geht auch ohne diesen Haken.": "Only short excerpts from factual articles, no private chats. This helps later chats of all accounts here. You can withdraw at any time under Settings → Shared learning. Aquaticy works without this checkbox too.",
 "Ich stimme dem gemeinsamen Lernen und meinem Recherchecache aus öffentlichen Quellen zu.": "I agree to shared learning and my research cache from public sources.",
-"Aquaticy übernimmt nur kurze Originalauszüge aus ausgewählten öffentlichen Sachartikeln, keine privaten Fragen, Antworten, Uploads oder Erinnerungen. Die Auszüge helfen allen Konten dieser Installation und ihres Server-Verbunds für höchstens 30 Tage. Sie können Fehler enthalten. Modellgewichte werden nicht trainiert.": "Aquaticy uses only short original excerpts from selected public factual articles, without private questions, answers, uploads or memories. These excerpts help all accounts on this installation and its server cluster for up to 30 days. They may contain errors. Model weights are not trained.",
-"Für die Löschung bleibt eine pseudonyme Beitragszuordnung gespeichert. Ausschalten widerruft die Zustimmung und entfernt deine Beiträge. Von anderen Konten unabhängig beigetragene identische Auszüge bleiben erhalten.": "A pseudonymous contribution record is retained for deletion. Switching this off withdraws consent and removes your contributions. Identical excerpts contributed independently by other accounts remain.",
+"Aquaticy übernimmt nur kurze Auszüge aus öffentlichen Sachartikeln. Keine privaten Fragen, Antworten, Uploads oder Erinnerungen. Die Auszüge helfen allen Konten dieser Installation, höchstens 30 Tage lang. Sie können Fehler enthalten. Modellgewichte werden nicht trainiert.": "Aquaticy only uses short excerpts from public factual articles. No private questions, answers, uploads or memories. The excerpts help all accounts on this installation for up to 30 days. They may contain errors. Model weights are not trained.",
+"Für die Löschung bleibt eine pseudonyme Zuordnung deiner Beiträge gespeichert. Ausschalten widerruft die Zustimmung und entfernt deine Beiträge. Gleiche Auszüge anderer Konten bleiben.": "A pseudonymous record of your contributions is kept for deletion. Switching off withdraws consent and removes your contributions. Identical excerpts from other accounts remain.",
 "Details zum Datenschutz": "Privacy details",
 "Gemeinsames Lernen ist gerade nicht erreichbar.": "Shared learning is currently unavailable.",
 "Zustimmung gespeichert. Nur neue Chatschritte können beitragen.": "Consent saved. Only new chat turns can contribute.",
@@ -4966,7 +4938,7 @@ const EN = {
 "Passwort ändern": "Change password",
 "Überall sonst abmelden": "Sign out everywhere else",
 "Daten und Konto löschen": "Delete data and account",
-"„Alle Daten löschen“ entfernt Chats, Bilder, Uploads, Erinnerungen, Aufträge, Einstellungen, eigene Schlüssel, Google-Verbindung und Geräte — das Konto bleibt. „Konto löschen“ entfernt zusätzlich das Konto selbst. Beides lässt sich nicht rückgängig machen.": "“Delete all data” removes chats, images, uploads, memories, tasks, settings, your own keys, the Google connection and devices — the account stays. “Delete account” also removes the account itself. Neither can be undone.",
+"„Alle Daten löschen“ entfernt Chats, Bilder, Uploads, Erinnerungen, Aufträge, Einstellungen, Schlüssel, Google-Verbindung und Geräte. Das Konto bleibt. „Konto löschen“ entfernt auch das Konto. Beides lässt sich nicht rückgängig machen.": "“Delete all data” removes chats, images, uploads, memories, tasks, settings, keys, the Google connection and devices. The account stays. “Delete account” also removes the account. Neither can be undone.",
 "Alle Daten löschen": "Delete all data",
 "Konto löschen": "Delete account",
 "Ansehen": "View",
@@ -4996,7 +4968,7 @@ const EN = {
 "Bevor es losgeht": "Before we start",
 "Kurz vorab: Damit dein Konto sicher ist und nur dir gehört, speichert Aquaticy ein paar Dinge.": "Quick note first: to keep your account safe and yours alone, Aquaticy stores a few things.",
 "Ein Cookie merkt sich, dass du angemeldet bist — nur dafür.": "A cookie remembers that you are signed in — only for that.",
-"Deine IP-Adresse, eine Geräte-Kennung und Angaben zu Gerät und Browser (etwa System, Bildschirm, Grafikkarte, Browser) werden verschlüsselt gespeichert — der Betreiber sieht sie nicht. So fällt auf, wenn jemand Fremdes deine Anmeldung benutzt oder viele Konten vom selben Gerät entstehen.": "Your IP address, a device ID and details about your device and browser (such as system, screen, graphics card, browser) are stored encrypted — the operator cannot see them. That way it's noticed if a stranger uses your sign-in or many accounts come from the same device.",
+"Deine IP-Adresse, eine Geräte-Kennung und Angaben zu Gerät und Browser werden verschlüsselt gespeichert. Der Betreiber sieht sie nicht. So fällt auf, wenn ein Fremder deine Anmeldung nutzt oder viele Konten vom selben Gerät kommen.": "Your IP address, a device ID and details about your device and browser are stored encrypted. The operator can't see them. That way it's noticed if a stranger uses your sign-in or many accounts come from the same device.",
 "Name, E-Mail, Einstellungen und Chats gehören nur zu deinem Konto. Andere sehen davon nichts.": "Name, email, settings and chats belong to your account only. Nobody else sees any of it.",
 "Keine Werbung, kein Tracking.": "No ads, no tracking.",
 "Wenn du ablehnst, wird nichts gespeichert — dann kannst du Aquaticy hier aber nicht nutzen.": "If you decline, nothing is stored — but then you can't use Aquaticy here.",
@@ -5021,7 +4993,7 @@ const EN = {
 "zu.": ".",
 "Konto erstellen": "Create account",
 "Alles klar": "Got it",
-"Ohne diese Angaben kann Aquaticy dein Konto nicht sicher führen. Du kannst das Fenster einfach schließen — oder zurückgehen und doch zustimmen.": "Without this information Aquaticy can't run your account safely. You can simply close the window — or go back and agree after all.",
+"Ohne diese Angaben kann Aquaticy dein Konto nicht sicher führen. Schließ das Fenster einfach – oder geh zurück und stimm doch zu.": "Without this information Aquaticy can't run your account safely. Just close the window – or go back and agree after all.",
 "Zurück": "Back",
 "Neuer Chat": "New chat",
 "Letzte Chats": "Recent chats",
@@ -5047,15 +5019,15 @@ const EN = {
 "kein Internet": "no internet",
 "und wird 20 Minuten nach deiner letzten Nachricht gelöscht. Im Web nachschlagen kann Aquaticy trotzdem.": "and is deleted 20 minutes after your last message. Aquaticy can still look things up on the web.",
 "Im Web suchen": "Search the web",
-"Aus: Aquaticy sucht nicht im Internet. Es antwortet nur mit dem, was es schon weiß, was im Chat steht und was du angehängt hast — und sagt dir, wo sein Wissen veraltet sein könnte.": "Off: Aquaticy doesn't search the internet. It only answers with what it already knows, what's in the chat and what you attached — and tells you where its knowledge might be outdated.",
+"Aus: Aquaticy sucht nicht im Internet. Es antwortet mit dem, was es weiß, was im Chat steht und was du angehängt hast. Es sagt dir, wo sein Wissen veraltet sein kann.": "Off: Aquaticy doesn't search the internet. It answers with what it knows, what's in the chat and what you attached. It tells you where its knowledge may be outdated.",
 "Öffentliche Webcams & Satellitenbilder": "Public webcams & satellite images",
-"Schaut sich zusätzlich öffentliche Webcams und Satellitenbilder an — etwa, ob irgendwo Schnee liegt oder wie voll ein Strand ist. Du erfährst immer, woher das Bild ist und von wann. Was darauf zu sehen ist, ist ein Hinweis, keine Garantie.": "Also looks at public webcams and satellite images — for example whether there is snow somewhere or how busy a beach is. You always learn where the image is from and when it was taken. What it shows is a hint, not a guarantee.",
+"Schaut sich auch öffentliche Webcams und Satellitenbilder an, etwa ob irgendwo Schnee liegt. Du erfährst immer, woher das Bild ist und von wann. Was darauf zu sehen ist, ist ein Hinweis, keine Garantie.": "Also looks at public webcams and satellite images, for example whether there's snow somewhere. You always learn where the image is from and when. What it shows is a hint, not a guarantee.",
 "Denken": "Thinking",
-"An: Du kannst mitlesen, wie Aquaticy über die Antwort nachdenkt. Aus: Du siehst nur das Ergebnis. Die Antwort wird dadurch weder besser noch langsamer.": "On: you can read along as Aquaticy thinks about the answer. Off: you only see the result. The answer gets neither better nor slower.",
+"An: Du liest mit, wie Aquaticy nachdenkt. Aus: Du siehst nur das Ergebnis. Die Antwort wird davon weder besser noch langsamer.": "On: you read along as Aquaticy thinks. Off: you only see the result. It doesn't make the answer better or slower.",
 "Strukturieren": "Structure",
-"An: Aquaticy teilt deine Frage in kleine Teilfragen, schickt für jede einen Helfer los und schreibt dir daraus eine ausführliche Antwort mit Quellen. Aus: ein ganz normales Gespräch — gesucht wird nur, wenn es nötig ist. Das geht schneller.": "On: Aquaticy splits your question into small sub-questions, sends a helper off for each and writes you a detailed answer with sources. Off: a completely normal conversation — it only searches when needed. That's faster.",
+"An: Aquaticy teilt deine Frage auf, schickt Helfer los und schreibt eine ausführliche Antwort mit Quellen. Aus: ein normales Gespräch, gesucht wird nur bei Bedarf. Das geht schneller.": "On: Aquaticy splits your question, sends helpers off and writes a detailed answer with sources. Off: a normal conversation, searching only when needed. That's faster.",
 "Gegenprüfen": "Double-check",
-"Aquaticy prüft die Antwort danach noch einmal auf ganz anderen Seiten nach. So fallen Zahlen auf, die nur eine einzige Quelle behauptet. Dauert etwa doppelt so lang.": "Afterwards Aquaticy checks the answer once more on completely different pages. That way numbers stand out that only a single source claims. Takes about twice as long.",
+"Danach prüft Aquaticy die Antwort auf anderen Seiten nach. So fallen Zahlen auf, die nur eine Quelle nennt. Dauert etwa doppelt so lang.": "Afterwards Aquaticy checks the answer on other pages. That way numbers stand out that only one source gives. Takes about twice as long.",
 "Vier Prüfer": "Four checkers",
 "lesen jedes Ergebnis auf anderen Seiten gegen, während die übrigen Helfer noch suchen. Das kostet kaum extra Zeit. Aus: Aquaticy entscheidet allein, ob etwas nachgeprüft werden muss.": "cross-check every result on other pages while the other helpers are still searching. That costs hardly any extra time. Off: Aquaticy decides on its own whether something needs checking.",
 "Anderes Modell oder eigener Schlüssel? Das geht in den": "Different model or your own key? That's done in the",
@@ -5097,13 +5069,13 @@ const EN = {
 "Verstanden": "Understood",
 "virtual machine": "Virtual machine",
 "Internet für die virtual machine": "Internet for the virtual machine",
-"Die Dateien, an denen Aquaticy gerade arbeitet. Was du anhängst, liegt im Ordner „eingang“. Alles, was Aquaticy erstellt, kannst du herunterladen. 20 Minuten nach deiner letzten Nachricht wird alles gelöscht.": "The files Aquaticy is working on right now. What you attach is in the folder “eingang”. You can download everything Aquaticy creates. Everything is deleted 20 minutes after your last message.",
+"Die Dateien, an denen Aquaticy gerade arbeitet. Was du anhängst, liegt in „eingang“. Alles Erstellte kannst du herunterladen. 20 Minuten nach deiner letzten Nachricht wird alles gelöscht.": "The files Aquaticy is working on. What you attach is in “eingang”. You can download everything it creates. Everything is deleted 20 minutes after your last message.",
 "So sieht der Desktop der virtual machine gerade aus (User mode).": "This is what the virtual machine desktop looks like right now (user mode).",
 "Neu ansehen": "Refresh",
 "Fertig": "Done",
-"Extras für Aquaticy: Dienste, Konten und Programme. Du kannst jedes installieren, an- und ausschalten und wieder entfernen. Anmelden musst du dich selbst — Aquaticy kennt deine Passwörter nie. Aus dem Chat heraus lässt sich hier nichts ändern.": "Extras for Aquaticy: services, accounts and programs. You can install each one, switch it on and off and remove it again. You have to sign in yourself — Aquaticy never knows your passwords. Nothing here can be changed from the chat.",
+"Extras für Aquaticy: Dienste, Konten und Programme. Du installierst sie, schaltest sie an und aus oder entfernst sie. Anmelden musst du dich selbst, Aquaticy kennt deine Passwörter nie. Aus dem Chat lässt sich hier nichts ändern.": "Extras for Aquaticy: services, accounts and programs. You install them, switch them on and off or remove them. You sign in yourself; Aquaticy never knows your passwords. Nothing here can be changed from the chat.",
 "Selbst anmelden": "Sign in yourself",
-"So sieht der Bildschirm gerade aus. Klick auf ein Feld (zweimal klicken = Doppelklick) und tipp unten ein, was hinein soll — etwa dein Passwort. Das landet nur dort: nicht im Verlauf und nicht bei Aquaticy.": "This is what the screen looks like right now. Click a field (click twice = double-click) and type below what should go in — for example your password. It only goes there: not into the history and not to Aquaticy.",
+"So sieht der Bildschirm gerade aus. Klick auf ein Feld (zweimal = Doppelklick) und tipp unten ein, was hinein soll, etwa dein Passwort. Das landet nur dort, nicht im Verlauf und nicht bei Aquaticy.": "This is the screen right now. Click a field (twice = double-click) and type below what should go in, for example your password. It only goes there, not into the history and not to Aquaticy.",
 "https://… — im Browser der virtual machine öffnen": "https://… — open in the virtual machine browser",
 "Adresse im Browser der virtual machine öffnen": "Open address in the virtual machine browser",
 "Öffnen": "Open",
@@ -5116,9 +5088,9 @@ const EN = {
 "Ich bin angemeldet": "I'm signed in",
 "Schließen": "Close",
 "Was Aquaticy über dich weiß": "What Aquaticy knows about you",
-"Das hat sich Aquaticy über dich gemerkt — von selbst oder weil du es gesagt hast. Nur Text, verschlüsselt gespeichert. Du kannst jede Zeile einzeln löschen.": "This is what Aquaticy has remembered about you — on its own or because you said so. Text only, stored encrypted. You can delete every line separately.",
+"Das hat sich Aquaticy über dich gemerkt, von selbst oder auf deinen Wunsch. Nur Text, verschlüsselt. Jede Zeile lässt sich löschen.": "This is what Aquaticy remembers about you, on its own or because you asked. Text only, encrypted. You can delete any line.",
 "Alles vergessen": "Forget everything",
-"Hell oder dunkel — und in welchem Look. Der Aufbau bleibt derselbe, es wechseln nur die Farben.": "Light or dark — and which look. The layout stays the same, only the colours change.",
+"Hell oder dunkel, und in welchem Look. Es ändern sich nur die Farben.": "Light or dark, and in which look. Only the colours change.",
 "Helligkeit": "Brightness",
 "Hell": "Light",
 "Dunkel": "Dark",
@@ -5130,11 +5102,11 @@ const EN = {
 "die große Fläche hinter dem Chat": "the large area behind the chat",
 "der Streifen links mit den Chats": "the strip on the left with the chats",
 "Gilt sofort und wird an deinem Konto gespeichert.": "Applies right away and is saved to your account.",
-"Hier stellst du Aquaticy so ein, wie du es magst. Alles gilt sofort und wird automatisch gespeichert.": "Set Aquaticy up the way you like it. Everything applies right away and is saved automatically.",
+"Stell Aquaticy ein, wie du es magst. Alles gilt sofort und speichert sich selbst.": "Set up Aquaticy the way you like. Everything applies right away and saves itself.",
 "‹ Zurück": "‹ Back",
 "Interne Testversion — nicht für den Alltag gedacht, hier kann noch etwas haken.": "Internal test version — not meant for everyday use, things may still break.",
-"Im Pro-Modus dauert die Suche länger — wegen der höheren Genauigkeit.": "In Pro mode the search takes longer — for higher accuracy.",
-"Verknüpfe dein Claude-, ChatGPT- oder Gemini-Konto in drei Schritten: „Mit Google“, „Mit Apple“ oder „Mit E-Mail“ öffnet die Seite des Anbieters, dort meldest du dich an und erstellst einen Schlüssel, und hier fügst du ihn ein — Aquaticy erkennt selbst, von wem er ist. Danach siehst du deine Modelle, deine Stufe und die freien Tokens, und die Modelle stehen in der Modellauswahl. Der Schlüssel liegt verschlüsselt bei deinem Konto und geht nur an den Anbieter; dein Passwort sieht Aquaticy nie.": "Link your Claude, ChatGPT or Gemini account in three steps: “With Google”, “With Apple” or “With email” opens the provider’s page, where you sign in and create a key, and you paste it here — Aquaticy recognises on its own whose it is. You then see your models, your tier and the free tokens, and the models appear in the model picker. The key is stored encrypted with your account and only goes to the provider; Aquaticy never sees your password.",
+"Pro sucht gründlicher und braucht dafür länger.": "Pro searches more thoroughly and takes longer for it.",
+"Verknüpfe dein Claude-, ChatGPT- oder Gemini-Konto: „Mit Google“, „Mit Apple“ oder „Mit E-Mail“ öffnet den Anbieter. Dort meldest du dich an und erstellst einen Schlüssel. Den fügst du hier ein. Danach stehen deine Modelle in der Auswahl. Der Schlüssel liegt verschlüsselt bei deinem Konto. Dein Passwort sieht Aquaticy nie.": "Link your Claude, ChatGPT or Gemini account: “With Google”, “With Apple” or “With email” opens the provider. Sign in there and create a key. Paste it here. Your models then appear in the picker. The key is stored encrypted with your account. Aquaticy never sees your password.",
 "KI-Konten": "AI accounts",
 "Programme und Dienste": "Programs and services",
 "Nicht verknüpft. Anmelden beim Anbieter, Schlüssel erstellen, kopieren — dann hier einfügen.": "Not linked. Sign in with the provider, create a key, copy it — then paste it here.",
@@ -5145,11 +5117,11 @@ const EN = {
 "Verknüpfen": "Link",
 "Aktualisieren": "Refresh",
 "Schlüssel einfügen (sk-ant-…, sk-…, AIza…)": "Paste key (sk-ant-…, sk-…, AIza…)",
-"Mehrere KI-Modelle arbeiten zusammen: zwei verknüpfte Modelle (z. B. Claude und ChatGPT) lösen die Aufgabe, eines (Gemini, wenn verknüpft) prüft auf Fehler, und Aquaticy ist der Richter — es entscheidet, ob die Lösung trägt, oder schickt sie zum Nachbessern und Ausdiskutieren zurück. Ohne Agenten, nur mit dem Hauptmodell als Richter. Dauert länger und kostet auf allen Konten Tokens.": "Several AI models work together: two linked models (e.g. Claude and ChatGPT) solve the task, one (Gemini, if linked) checks for mistakes, and Aquaticy is the judge — it decides whether the solution holds or sends it back to be improved and debated. No agents, only the main model as judge. Takes longer and uses tokens on all accounts.",
+"Mehrere KI-Modelle arbeiten zusammen. Zwei verknüpfte Modelle lösen die Aufgabe, eines prüft auf Fehler. Aquaticy ist der Richter: Es nimmt die Lösung an oder schickt sie zurück. Dauert länger und kostet auf allen Konten Tokens.": "Several AI models work together. Two linked models solve the task, one checks for mistakes. Aquaticy is the judge: it accepts the solution or sends it back. Takes longer and uses tokens on all accounts.",
 "Dafür braucht es mindestens zwei verknüpfte KI-Konten (Add-ons → KI-Konten).": "This needs at least two linked AI accounts (Add-ons → AI accounts).",
 "Server-Verbund": "Server cluster",
 "Serverlast aufteilen": "Split server load",
-"Sonst bedient jeder Server seine eigenen Nutzer mit seinem eigenen Modell. Hier rechnen alle Server zusammen an einem Modell: seine Schichten liegen verteilt auf ihnen. So laufen auch Modelle, die für keinen Server allein in den Speicher passen. Alle Konten werden dann vom Master bedient. llama.cpp installiert Aquaticy dafür auf jedem Server von selbst.": "Otherwise every server serves its own users with its own model. Here all servers compute one model together: its layers are spread across them. That way even models run that fit into no single server's memory. All accounts are then served by the master. Aquaticy installs llama.cpp on every server by itself.",
+"Sonst bedient jeder Server seine Nutzer mit seinem eigenen Modell. Hier rechnen alle Server gemeinsam an einem Modell. So läuft auch eines, das in keinen Server allein passt. Alle Konten bedient dann der Master. llama.cpp installiert Aquaticy dafür selbst.": "Otherwise every server serves its users with its own model. Here all servers compute one model together. That way even a model runs that fits into no single server. The master then serves all accounts. Aquaticy installs llama.cpp for this by itself.",
 "Für dieses System gibt es llama.cpp nicht fertig gebaut — siehe README.": "There is no prebuilt llama.cpp for this system — see the README.",
 "Sucht die passende Fassung von llama.cpp …": "Looking for the right llama.cpp version …",
 "Sucht die neueste Fassung von llama.cpp …": "Looking for the latest llama.cpp version …",
@@ -5167,7 +5139,7 @@ const EN = {
 "Merkzettel": "Notes",
 "Befehle": "Commands",
 "Was geprüft wird": "What is checked",
-"Ein Coworker arbeitet die ganze Zeit für dich an einer Aufgabe: Er recherchiert, liest deine Verbindungen wie Gmail, Kalender und GitHub, meldet sich, sobald es etwas Neues gibt, und fragt, bevor er etwas verändert. Er wacht von selbst auf — und sofort, wenn du ihm schreibst.": "A coworker works on a task for you all the time: it researches, reads your connections such as Gmail, Calendar and GitHub, gets in touch as soon as there is something new, and asks before it changes anything. It wakes up by itself — and right away when you write to it.",
+"Ein Coworker arbeitet dauerhaft an einer Aufgabe für dich. Er recherchiert, liest Gmail, Kalender und GitHub und meldet sich mit Neuem. Bevor er etwas ändert, fragt er. Er wacht von selbst auf – und sofort, wenn du ihm schreibst.": "A coworker works on a task for you all the time. It researches, reads Gmail, Calendar and GitHub and reports anything new. It asks before it changes anything. It wakes up by itself – and right away when you write to it.",
 "🔒 Coworker gibt es mit Pro und Ultra. Mit Ultra arbeiten sie zusätzlich in ihrer eigenen virtual machine.": "🔒 Coworkers come with Pro and Ultra. With Ultra they also work in their own virtual machine.",
 "＋ Neuer Coworker": "＋ New coworker",
 "Aufgabe": "Task",
@@ -5193,7 +5165,7 @@ const EN = {
 "Notizen löschen": "Delete notes",
 "Notizen löschen?": "Delete notes?",
 "Diese Notizen enthalten Gelesenes aus Webseiten oder Mails — deshalb fragt er vor jeder Aktion nach, bis du sie löschst.": "These notes contain things read from web pages or emails — so it asks before every action until you delete them.",
-"„Fragen“: Er legt die Aktion zur Freigabe hier ab. Nach dem Lesen von Webseiten oder Mails fragt er auch bei „Erlauben“ — so kann ihn ein fremder Text zu nichts überreden.": "“Ask”: it puts the action here for your approval. After reading web pages or emails it asks even with “Allow” — so no outside text can talk it into anything.",
+"„Fragen“: Er legt die Aktion hier zur Freigabe ab. Hat er Webseiten oder Mails gelesen, fragt er auch bei „Erlauben“. So kann ihn ein fremder Text zu nichts überreden.": "“Ask”: it puts the action here for your approval. After reading web pages or emails it asks even with “Allow”. So no outside text can talk it into anything.",
 "Termine eintragen und ändern": "Add and change appointments",
 "Mail-Entwürfe anlegen": "Create email drafts",
 "Sich etwas dauerhaft merken": "Remember something permanently",
@@ -5204,11 +5176,11 @@ const EN = {
 "Coworker: arbeiten die ganze Zeit für dich": "Coworkers: working for you all the time",
 "Ungültiger Port. Erlaubt sind ganze Zahlen von 1 bis 65535.": "Invalid port. Enter a whole number from 1 to 65535.",
 "Der Verbundstatus ließ sich nicht laden.": "The cluster status could not be loaded.",
-"Bis zu 10 Server mit Aquaticy arbeiten zusammen: eine gemeinsame Datenbank, die auf jedem Server vollständig liegt, und die Arbeit wird gleichmäßig verteilt. Der Server, der einlädt, wird Master.": "Up to 10 servers running Aquaticy work together: one shared database that is complete on every server, and the work is spread evenly. The server that sends the invitation becomes the master.",
+"Bis zu 10 Server arbeiten zusammen. Jeder hat die ganze Datenbank, die Arbeit wird gleichmäßig verteilt. Der Server, der einlädt, wird Master.": "Up to 10 servers work together. Each has the whole database, and the work is spread evenly. The server that invites becomes the master.",
 "🔒 Der Server-Verbund gehört zu Ultra.": "🔒 The server cluster is part of Ultra.",
 "Server im lokalen Netz": "Servers in the local network",
 "IP-Adresse, z. B. 192.168.1.20": "IP address, e.g. 192.168.1.20",
-"Verbinde nur eigene Server: der andere Server bekommt eine vollständige Kopie aller Daten. Auf ihm musst du im Terminal mit „yes“ zustimmen und dann hier den Code eingeben, den er anzeigt.": "Only connect your own servers: the other server receives a complete copy of all data. On it you confirm with “yes” in the terminal and then enter the code it shows here.",
+"Verbinde nur eigene Server: Der andere bekommt eine Kopie aller Daten. Dort stimmst du im Terminal mit „yes“ zu und gibst hier den Code ein, den er zeigt.": "Only connect your own servers: the other one gets a copy of all data. Confirm there with “yes” in the terminal and enter the code it shows here.",
 "Gespeichert": "Saved",
 "Abschnitte": "Sections",
 "Konto": "Account",
@@ -5238,9 +5210,9 @@ const EN = {
 "Gilt ab der nächsten virtual machine — eine laufende bleibt, wie sie ist": "Applies from the next virtual machine — a running one stays as it is",
 "Normal — 1 Kern, 1 GB Arbeitsspeicher, 4 GB Speicher": "Normal — 1 core, 1 GB RAM, 4 GB storage",
 "Plus — 4 Kerne, 6 GB Arbeitsspeicher, 20 GB Speicher": "Plus — 4 cores, 6 GB RAM, 20 GB storage",
-"Normal reicht für die meisten Programmieraufgaben. Plus lohnt sich für alles, was mehr Rechenleistung braucht — zum Beispiel, wenn Aquaticy im Code-Modus mit Blender ein 3D-Design erstellen oder rendern soll.": "Normal is enough for most programming tasks. Plus is worth it for anything that needs more computing power — for example when Aquaticy is to create or render a 3D design with Blender in code mode.",
+"Normal reicht für die meisten Programmieraufgaben. Plus lohnt sich, wenn mehr Rechenleistung nötig ist – etwa für 3D-Designs mit Blender.": "Normal is enough for most programming tasks. Plus is worth it when more computing power is needed – for example for 3D designs with Blender.",
 "User mode — Aquaticy bedient die virtual machine wie ein Mensch": "User mode — Aquaticy uses the virtual machine like a person",
-"Die virtual machine wird ein kleiner Desktop mit Internet: Aquaticy sieht den Bildschirm, klickt, tippt und nutzt Programme wie Browser, Office und Bildbearbeitung. Dein Heimnetz bleibt tabu. Absenden, Kaufen und Löschen nur, wenn du Ja sagst. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“ fasst Aquaticy nie an.": "The virtual machine becomes a small desktop with internet: Aquaticy sees the screen, clicks, types and uses programs like a browser, office and image editing. Your home network stays off limits. Sending, buying and deleting only if you say yes. Aquaticy never touches passwords, payment details, captchas or “Accept all”.",
+"Die virtual machine wird ein kleiner Desktop mit Internet. Aquaticy sieht den Bildschirm, klickt und tippt wie ein Mensch. Dein Heimnetz bleibt tabu. Absenden, Kaufen und Löschen nur nach deinem Ja. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“ fasst Aquaticy nie an.": "The virtual machine becomes a small desktop with internet. Aquaticy sees the screen, clicks and types like a person. Your home network stays off limits. Sending, buying and deleting only after your yes. Aquaticy never touches passwords, payment details, captchas or “Accept all”.",
 "Login-Apps": "Login apps",
 "— hier meldest du dich selbst an: Du siehst den Bildschirm, klickst hinein und tippst Name, Passwort oder Code selbst ein. Aquaticy tippt nie ein Passwort und liest nicht mit.": "— you sign in here yourself: you see the screen, click into it and type your name, password or code yourself. Aquaticy never types a password and doesn't read along.",
 "⌨ Selbst anmelden": "⌨ Sign in yourself",
@@ -5258,14 +5230,14 @@ const EN = {
 "Auslastung · Ultra": "Load · Ultra",
 "🔒 Die Auslastungsanzeige gehört zu Ultra.": "🔒 The load display is part of Ultra.",
 "Auslastung des Rechners anzeigen": "Show the computer's load",
-"Wie stark Prozessor, Arbeitsspeicher, Festplatte und Grafikkarte gerade arbeiten — läuft mit, solange dieses Fenster offen ist.": "How hard the processor, memory, disk and graphics card are working right now — runs as long as this window is open.",
+"Wie stark Prozessor, Speicher, Platte und Grafikkarte gerade arbeiten. Läuft, solange dieses Fenster offen ist.": "How hard the processor, memory, disk and graphics card are working. Runs while this window is open.",
 "Wie viel du fragen kannst, zählt in zwei Zeiträumen: einer": "How much you can ask is counted in two periods: a",
 "Sitzung": "session",
 "von fünf Stunden ab deiner ersten Nachricht und einer": "of five hours from your first message and a",
 "Woche": "week",
 ", die zur Uhrzeit deiner Kontoerstellung neu beginnt. Pro hat deutlich mehr als Normal. Ultra hat kein Limit.": ", which starts again at the time your account was created. Pro has considerably more than Normal. Ultra has no limit.",
 "Aufträge": "Jobs",
-"Aquaticy bleibt für dich dran: Es recherchiert regelmäßig oder behält eine öffentliche Webcam, eine Satellitenansicht oder einen Preis im Auge. Sobald eintritt, worauf du wartest, bekommst du einen neuen Chat — mit Bild und Uhrzeit.": "Aquaticy keeps at it for you: it researches regularly or keeps an eye on a public webcam, a satellite view or a price. As soon as what you're waiting for happens, you get a new chat — with image and time.",
+"Aquaticy bleibt für dich dran. Es recherchiert regelmäßig oder beobachtet eine Webcam, eine Satellitenansicht oder einen Preis. Tritt ein, worauf du wartest, bekommst du einen neuen Chat mit Bild und Uhrzeit.": "Aquaticy keeps at it for you. It researches regularly or watches a webcam, a satellite view or a price. When what you're waiting for happens, you get a new chat with image and time.",
 "Art": "Type",
 "regelmäßig recherchieren": "research regularly",
 "Kamera, Satellit oder Straße beobachten": "watch a camera, satellite or street",
@@ -5286,7 +5258,7 @@ const EN = {
 "Öffentliche Quelladresse": "Public source address",
 "Die genaue Webcam-, Karten-, Satelliten- oder Produktseite. Private Kameras und Anmeldungen werden nicht verwendet.": "The exact webcam, map, satellite or product page. Private cameras and sign-ins are not used.",
 "Bild des gesuchten Gegenstands": "Image of the item you're looking for",
-"Ein Foto oder Produktbild. Aquaticy sieht es sich einmal an und sucht dann so lange nach einem Angebot dafür, bis es eines findet — dann kommt die Adresse als Chat.": "A photo or product image. Aquaticy looks at it once and then searches for an offer until it finds one — then the address arrives as a chat.",
+"Ein Foto oder Produktbild. Aquaticy schaut es sich einmal an und sucht, bis es ein Angebot findet. Dann kommt die Adresse als Chat.": "A photo or product image. Aquaticy looks at it once and searches until it finds an offer. Then the address arrives as a chat.",
 "Wochentag": "Weekday",
 "Montag": "Monday",
 "Dienstag": "Tuesday",
@@ -5302,7 +5274,7 @@ const EN = {
 "Auftrag anlegen": "Create job",
 "Gmail & Kalender": "Gmail & Calendar",
 "Termine und Mails lesen dürfen": "May read appointments and mails",
-"Dann kann Aquaticy Fragen zu deinen Terminen und Mails beantworten. Nur lesen — ändern darf es erst mit dem Schalter darunter.": "Then Aquaticy can answer questions about your appointments and mails. Read only — it may only change things with the switch below.",
+"Dann beantwortet Aquaticy Fragen zu deinen Terminen und Mails. Nur lesen – ändern geht erst mit dem Schalter darunter.": "Then Aquaticy answers questions about your appointments and mails. Read only – changing needs the switch below.",
 "Ändern erlaubt": "Changes allowed",
 "Dann darf Aquaticy Termine anlegen und ändern und Mail-": "Then Aquaticy may create and change appointments and write mail",
 "Entwürfe": "drafts",
@@ -5334,14 +5306,14 @@ const EN = {
 "Client-ID und Client-Secret hier oben einfügen,": "Paste the client ID and client secret up here,",
 "speichern": "save",
 ", dann auf": ", then click",
-"Deine Zugangsdaten werden verschlüsselt gespeichert und verlassen den Rechner, auf dem Aquaticy läuft, nie. „Trennen“ löscht sie wieder.": "Your credentials are stored encrypted and never leave the computer Aquaticy runs on. “Disconnect” deletes them again.",
+"Deine Zugangsdaten liegen verschlüsselt und verlassen diesen Rechner nie. „Trennen“ löscht sie.": "Your credentials are stored encrypted and never leave this computer. “Disconnect” deletes them.",
 "Zuhause & Netz": "Home & network",
 "🔒 Diese Funktionen gehören zu Ultra: Geräte im Heimnetz finden, Home Assistant und die Lagerverwaltung.": "🔒 These features are part of Ultra: finding devices in your home network, Home Assistant and the storage manager.",
 "Suchen": "Search",
 "Zugangsschlüssel (Token)": "Access key (token)",
 "Testen": "Test",
 "Aquaticy darf auch schalten": "Aquaticy may also switch things",
-"Aus: Aquaticy schaut nur nach. An: Es darf Licht und Co. schalten — bei Schlössern, Alarm, Toren und Heizung fragt es trotzdem jedes Mal.": "Off: Aquaticy only looks. On: it may switch lights and the like — for locks, alarms, gates and heating it still asks every time.",
+"Aus: Aquaticy schaut nur nach. An: Es darf schalten, etwa Licht. Bei Schlössern, Alarm, Toren und Heizung fragt es trotzdem jedes Mal.": "Off: Aquaticy only looks. On: it may switch things, such as lights. For locks, alarms, gates and heating it still asks every time.",
 "Ins eigene Netz sehen dürfen": "May look into my own network",
 "Für Fragen wie „Welche Geräte sind in meinem WLAN?“ oder „Ist mein Drucker an?“. Aquaticy schaut nur, ob ein Gerät antwortet — und nur in deinem eigenen Netz.": "For questions like “Which devices are on my Wi-Fi?” or “Is my printer on?”. Aquaticy only checks whether a device answers — and only in your own network.",
 "Dein Netz (leer lassen = automatisch)": "Your network (leave empty = automatic)",
@@ -5352,7 +5324,7 @@ const EN = {
 "Nichts — abgeschaltet": "Nothing — switched off",
 "Nur lesen — suchen und nachsehen": "Read only — search and look",
 "Lesen und schreiben — auch anlegen und ändern": "Read and write — also create and change",
-"Löschen darf Aquaticy nie — ein gelöschter Raum nähme alles darin mit, das entscheidest nur du. Gut zu wissen: Die Lagerverwaltung selbst hat kein Passwort. „Nur lesen“ bremst nur Aquaticy; wer in deinem Netz ist, kann dort weiterhin alles ändern.": "Aquaticy may never delete — a deleted room would take everything in it along, only you decide that. Good to know: the storage manager itself has no password. “Read only” only slows down Aquaticy; anyone in your network can still change everything there.",
+"Löschen darf Aquaticy nie. Ein gelöschter Raum nähme alles darin mit – das entscheidest nur du. Die Lagerverwaltung selbst hat kein Passwort. „Nur lesen“ bremst nur Aquaticy, nicht die anderen in deinem Netz.": "Aquaticy may never delete. A deleted room would take everything in it – only you decide that. The storage manager itself has no password. “Read only” only limits Aquaticy, not others on your network.",
 "Suche": "Search",
 "Suchmaschine": "Search engine",
 "Offene Suche (kostenlos, ohne Schlüssel)": "Open search (free, no key)",
@@ -5373,7 +5345,7 @@ const EN = {
 "Sprache / Land": "Language / country",
 "Helfer & Grenzen": "Helpers & limits",
 "Fragen automatisch aufteilen": "Split questions automatically",
-"Große Fragen teilt Aquaticy in kleine auf und lässt sie gleichzeitig suchen. Das geht schneller, verbraucht aber mehr von deinem Limit.": "Aquaticy splits big questions into small ones and lets them search at the same time. That's faster but uses more of your limit.",
+"Große Fragen teilt Aquaticy auf und lässt die Teile gleichzeitig suchen. Das ist schneller, braucht aber mehr von deinem Limit.": "Aquaticy splits big questions and lets the parts search at the same time. That's faster but uses more of your limit.",
 "Suchen je Helfer": "Searches per helper",
 "Wie oft ein Helfer suchen oder eine Seite lesen darf": "How often a helper may search or read a page",
 "Suchen je Anfrage": "Searches per request",
@@ -5393,11 +5365,11 @@ const EN = {
 "Für Seiten, die ihren Inhalt erst später nachladen. Dafür muss einmal": "For pages that only load their content later. For this, run once",
 "ausgeführt werden.": ".",
 "Rechts-Leitplanken nach Grundgesetz und BGB": "Legal guardrails under the German Basic Law and Civil Code",
-"Bevor Aquaticy etwas tut, prüft es, ob das mit Grundgesetz und BGB vereinbar ist — bei jeder Frage, jeder Personensuche, jedem Kamerabild und jedem Mail-Entwurf. Aus dem Chat heraus lässt sich das nie abschalten.": "Before Aquaticy does anything, it checks whether it's compatible with the Basic Law (GG) and the Civil Code (BGB) — for every question, every person search, every camera image and every mail draft. This can never be switched off from the chat.",
+"Vor jeder Frage, Personensuche, jedem Kamerabild und Mail-Entwurf prüft Aquaticy, ob das mit Grundgesetz und BGB vereinbar ist. Aus dem Chat lässt sich das nie abschalten.": "Before every question, person search, camera image and mail draft, Aquaticy checks whether it's compatible with the Basic Law and the Civil Code. This can never be switched off from the chat.",
 "Modell automatisch wählen": "Choose model automatically",
-"Du schreibst einfach — Aquaticy sucht für jede Nachricht selbst das passende Hauptmodell aus: fürs Programmieren das Code-Modell, für „erstelle mir ein Bild“ eines, das Bilder malen kann, für ein „Hallo“ das schnelle. Die Helfer bleiben dieselben. Die Wahl geht blitzschnell und kostet nichts extra; im Verlauf siehst du, welches Modell dran war.": "You just write — Aquaticy picks the right main model for each message itself: the code model for programming, one that can paint for “create an image for me”, the fast one for a “Hello”. The helpers stay the same. The choice is instant and costs nothing extra; in the history you see which model was used.",
+"Du schreibst einfach. Aquaticy wählt für jede Nachricht das passende Modell: fürs Programmieren das Code-Modell, für Bilder eines, das malen kann, für ein „Hallo“ das schnelle. Das kostet nichts extra. Im Verlauf siehst du, welches Modell dran war.": "You just write. Aquaticy picks the right model for each message: the code model for programming, one that can paint for images, the fast one for a “Hello”. It costs nothing extra. The history shows which model was used.",
 "Welche Regeln gelten?": "Which rules apply?",
-"Dieser Schalter betrifft nur die Rechts-Leitplanken. Manche Grenzen gelten immer: Aquaticy umgeht keine Bezahlschranken, Logins oder Captchas, lässt Seiten in Ruhe, die nicht gelesen werden wollen (robots.txt), schaut nur in dein eigenes Netz, schaltet im Haus nur nach Rückfrage und verschickt oder löscht bei Google nie etwas. Auch ohne Leitplanken stoppt es Schadsoftware in der virtual machine und malt keine Bilder, die echte Menschen bloßstellen. Der Schalter gilt nur für dein Konto.": "This switch only affects the legal guardrails. Some limits always apply: Aquaticy doesn't bypass paywalls, logins or captchas, leaves pages alone that don't want to be read (robots.txt), only looks into your own network, only switches things at home after asking and never sends or deletes anything at Google. Even without guardrails it stops malware in the virtual machine and won't paint images that expose real people. The switch only applies to your account.",
+"Dieser Schalter betrifft nur die Rechts-Leitplanken und nur dein Konto. Manches gilt immer: keine Bezahlschranken, Logins oder Captchas umgehen, robots.txt beachten, nur ins eigene Netz schauen, im Haus nur nach Rückfrage schalten, bei Google nie senden oder löschen. Schadsoftware in der virtual machine stoppt Aquaticy trotzdem, und Bilder, die echte Menschen bloßstellen, malt es nicht.": "This switch only affects the legal guardrails, and only for your account. Some things always apply: no bypassing paywalls, logins or captchas, respecting robots.txt, only looking into your own network, switching things at home only after asking, never sending or deleting at Google. Aquaticy still stops malware in the virtual machine and won't paint images that expose real people.",
 "Speichern": "Save",
 "Zum Schutz vor Missbrauch liest Ai-guard mit; die Daten werden nur dafür genutzt. Mehr in den": "To protect against misuse, Ai-guard reads along; the data is used only for that. More in the",
 "Frag etwas Größeres …": "Ask something bigger …",
@@ -7088,7 +7060,7 @@ function coworkerKarte(cw, d){
     zeile.appendChild(gruppe);
     regeln.appendChild(zeile);
   }
-  regeln.appendChild(cwElement("div", "addon-hint", "„Fragen“: Er legt die Aktion zur Freigabe hier ab. Nach dem Lesen von Webseiten oder Mails fragt er auch bei „Erlauben“ — so kann ihn ein fremder Text zu nichts überreden."));
+  regeln.appendChild(cwElement("div", "addon-hint", "„Fragen“: Er legt die Aktion hier zur Freigabe ab. Hat er Webseiten oder Mails gelesen, fragt er auch bei „Erlauben“. So kann ihn ein fremder Text zu nichts überreden."));
   karte.appendChild(cwAufklapp(cw, "regeln", `Regeln — was ${cw.name} ohne dich darf`, regeln));
 
   const notizen = cwElement("div", "inhalt");

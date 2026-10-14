@@ -566,6 +566,13 @@ CLUSTER: Any = None
 SERVER: Any = None
 #: Serverlast aufteilen (10.2.0 Luna, aquaticy/sharding.py) -- None ohne Verbund.
 SHARDING: Any = None
+#: Die eigene Website (11.1.0): Domain, Zertifikat, Tunnel -- oder None.
+WEBSITE: Any = None
+#: Der Eingang fuer den Cloudflare-Tunnel (nur 127.0.0.1) -- oder None.
+PUBLIC_SERVER: Any = None
+#: Mit eigener Domain nimmt der normale Eingang nur Heimnetz, Tailscale und den
+#: Rechner selbst an (11.1) -- von aussen geht es ueber die Domain.
+LAN_ONLY = False
 #: Auto-Upgrading (10.0 Luna): Datenordner des Servers und Hintergrund-Faden.
 #: None ausserhalb von `aquaticy web` (Tests, Kommandozeile) -- dann ist es aus.
 UPGRADE_DIR: Path | None = None
@@ -1804,15 +1811,15 @@ class ChatSession:
         if suffix in IMAGE_TYPES:
             if not looks_like_image(data):
                 # Eine Datei, die sich nur als Bild ausgibt (z. B. Skript mit .png).
-                return f"[Bild {name}: keine gültige Bilddatei -- nicht angenommen]"
+                return f"[Bild {name}: keine gültige Bilddatei – nicht angenommen]"
             try:
                 path = self._store(name, data)
             except OSError as exc:
-                return f"[Bild {name}: nicht abgelegt -- {exc}]"
+                return f"[Bild {name}: nicht abgelegt – {exc}]"
             try:
                 description = agent.describe_image(path)
             except Exception as exc:
-                return f"[Bild {name}: konnte nicht angesehen werden -- {exc}]"
+                return f"[Bild {name}: konnte nicht angesehen werden – {exc}]"
             return f"[Bild {name}] Darauf ist zu sehen:\n{description}"
 
         if suffix == ".pdf":
@@ -1821,7 +1828,7 @@ class ChatSession:
             text, title = extract_pdf_text(data)
             if not text:
                 return (
-                    f"[PDF {name}: kein Text enthalten -- vermutlich ein Scan. "
+                    f"[PDF {name}: kein Text enthalten – vermutlich ein Scan. "
                     "Gescannte Seiten kann Aquaticy AI nicht lesen.]"
                 )
             head = f"[PDF {name}" + (f", Titel: {title}" if title else "") + "]"
@@ -1870,7 +1877,7 @@ class ChatSession:
             if not target.is_relative_to(uploads):
                 raise PermissionError(
                     "Im Browser geht /image nur mit deinen eigenen hochgeladenen "
-                    "Bildern -- häng das Bild einfach an die Nachricht an."
+                    "Bildern – häng das Bild einfach an die Nachricht an."
                 )
         else:
             target = target.expanduser()
@@ -1916,8 +1923,8 @@ class ChatSession:
                 return {
                     "text": (
                         "**/max** stellt im **Pro-Modus** die volle Mannschaft auf: "
-                        "alle Agenten, die beiden starken dazu und -- wenn "
-                        "*Gegenprüfen* an ist -- die vier Prüfer.\n\n"
+                        "alle Agenten, die beiden starken dazu und – wenn "
+                        "*Gegenprüfen* an ist – die vier Prüfer.\n\n"
                         "Schreib die Frage dahinter:\n\n"
                         "`/max Welche Fahrradläden in Bremen reparieren Lastenräder?`\n\n"
                         "Ohne den Befehl entscheidet der Master selbst, wie viele "
@@ -1966,7 +1973,7 @@ class ChatSession:
                 if not entries:
                     return {"text": "Noch keine Recherchen im Verlauf."}
                 lines = "\n".join(f"- {entry.question}" for entry in entries)
-                return {"text": f"### Frueher gefragt\n{lines}"}
+                return {"text": f"### Früher gefragt\n{lines}"}
 
             if command == "export":
                 return self._export(argument or "html")
@@ -2004,7 +2011,7 @@ class ChatSession:
         if wort in ("delete", "del", "löschen", "loeschen", "weg"):
             nummer = rest.strip().lstrip("#")
             if not nummer.isdigit():
-                return ("Welche Notiz? Zum Beispiel `/notes delete 3` -- die Nummer steht "
+                return ("Welche Notiz? Zum Beispiel `/notes delete 3` – die Nummer steht "
                         "bei `/notes`.")
             return (f"Notiz {nummer} gelöscht." if cache.delete_note(int(nummer))
                     else f"Eine Notiz mit der Nummer {nummer} gibt es nicht.")
@@ -2034,7 +2041,7 @@ class ChatSession:
         if not settings.memory_enabled:
             return (
                 "Der Speicher ist ausgeschaltet. Unter **Einstellungen → Speicher** "
-                "laesst er sich wieder einschalten."
+                "lässt er sich wieder einschalten."
             )
         store = self.memory()
         usage = store.usage()
@@ -2054,11 +2061,11 @@ class ChatSession:
     def _forget(self) -> str:
         """Den Speicher leeren."""
         if not self.settings().memory_enabled:
-            return "Der Speicher ist ausgeschaltet -- da ist nichts zu loeschen."
+            return "Der Speicher ist ausgeschaltet – da ist nichts zu löschen."
         count = self.memory().clear()
         if not count:
             return "Der Speicher war schon leer."
-        return f"{count} Notizen geloescht. Hochgeladene Dateien bleiben -- `/uploads clear`."
+        return f"{count} Notizen gelöscht. Hochgeladene Dateien bleiben – `/uploads clear`."
 
     def _uploads(self, argument: str) -> str:
         """Hochgeladenes zeigen oder loeschen."""
@@ -2070,7 +2077,7 @@ class ChatSession:
             if not count:
                 return "Es liegt nichts Hochgeladenes herum."
             word = "Datei" if count == 1 else "Dateien"
-            return f"{count} {word} geloescht, {human_size(freed)} wieder frei."
+            return f"{count} {word} gelöscht, {human_size(freed)} wieder frei."
 
         folder = self.settings().data_dir / "uploads"
         files = sorted(folder.iterdir()) if folder.is_dir() else []
@@ -2086,7 +2093,7 @@ class ChatSession:
         return (
             f"### Hochgeladen\n{len(files)} {'Datei' if len(files) == 1 else 'Dateien'}, "
             f"zusammen {total}.\n\n{lines}"
-            "\n\nAlles loeschen: `/uploads clear`"
+            "\n\nAlles löschen: `/uploads clear`"
         )
 
     def _cache(self) -> Cache:
@@ -3900,7 +3907,8 @@ class Handler(BaseHTTPRequestHandler):
         except (BadRequest, TooLarge, TimeoutError) as exc:
             self._reject_body(exc)
             return True
-        direkt = str(self.client_address[0] if self.client_address else "")
+        # Die Adresse des Menschen, nicht die des Proxys oder Tunnels (11.1).
+        direkt = self._client_ip()
         try:
             if verbund.forward(self, account.id, body, self._https(), direkt):
                 return True
@@ -4257,10 +4265,10 @@ class Handler(BaseHTTPRequestHandler):
     def _body_length(self, limit: int) -> int:
         lengths = self.headers.get_all("Content-Length", [])
         if self.headers.get_all("Transfer-Encoding") or len(lengths) > 1:
-            raise BadRequest("Mehrdeutige Laenge der Anfrage.")
+            raise BadRequest("Mehrdeutige Länge der Anfrage.")
         roh = (lengths[0] if lengths else "0").strip()
         if not re.fullmatch(r"[0-9]{1,12}", roh):
-            raise BadRequest("Ungueltige Laenge der Anfrage.")
+            raise BadRequest("Ungültige Länge der Anfrage.")
         length = int(roh)
         if length > limit:
             raise TooLarge("Anfrage zu gross.")
@@ -4292,23 +4300,58 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- Routen -----------------------------------------------------------
     # Namen von BaseHTTPRequestHandler vorgegeben.
+    def _nur_heimnetz(self) -> bool:
+        """Mit eigener Domain (11.1) gilt dieser Eingang nur fuer Heimnetz, Tailscale
+        und den Rechner selbst. Von aussen geht es ueber die Domain -- verschluesselt.
+
+        Ohne diese Grenze waere Aquaticy auf einem Server mit oeffentlicher Adresse
+        (etwa einem gemieteten) unverschluesselt aus dem Internet erreichbar.
+
+        Returns: True, wenn die Anfrage abgewiesen wurde.
+        """
+        seite = WEBSITE
+        if (not LAN_ONLY or seite is None or getattr(self, "public_entry", False)
+                or getattr(self, "_cluster_user", "")):
+            return False
+        direkt = str(self.client_address[0] if self.client_address else "")
+        if cluster.lan_ip_ok(direkt):
+            return False
+        adresse = f"https://{seite.config.domain}/"
+        text = f"Von außen ist Aquaticy unter {adresse} erreichbar.".encode()
+        self.send_response(403)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(text)))
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(text)
+        self.close_connection = True
+        return True
+
     def do_GET(self) -> None:
+        if self._nur_heimnetz():
+            return
         if self._route().startswith("/cluster/") and not getattr(self, "_cluster_user", ""):
             self._cluster_route()
             return
         self._guarded(self._get)
 
     def do_POST(self) -> None:
+        if self._nur_heimnetz():
+            return
         if self._route().startswith("/cluster/") and not getattr(self, "_cluster_user", ""):
             self._cluster_route()
             return
         self._guarded(self._post)
 
     def do_DELETE(self) -> None:
+        if self._nur_heimnetz():
+            return
         self._guarded(self._delete)
 
     def do_HEAD(self) -> None:
         """HEAD nur fuer das Logo (9.6.0) -- alles andere bleibt 405."""
+        if self._nur_heimnetz():
+            return
         if self._route() in STATIC_FILES:
             self._guarded(lambda: self._send_static(self._route()))
             return
@@ -4334,7 +4377,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 nummer = int(gemeint)
             except ValueError:
-                self._json({"ok": False, "error": "Keine gueltige Kennung."}, 400)
+                self._json({"ok": False, "error": "Keine gültige Kennung."}, 400)
                 return
             self._json({"ok": delete_job(JobStore(settings.db_path), nummer, settings)})
         elif route == "/api/memory":
@@ -4352,7 +4395,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 nummer = int(eintrag)
             except ValueError:
-                self._json({"error": "Keine gueltige Kennung."}, 400)
+                self._json({"error": "Keine gültige Kennung."}, 400)
                 return
             self._json({"forgotten": bool(store.forget(nummer))})
         else:
@@ -4454,7 +4497,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             nummer = int(payload.get("id", 0))
         except (TypeError, ValueError, OverflowError):
-            return {"ok": False, "error": "Keine gueltige Kennung."}
+            return {"ok": False, "error": "Keine gültige Kennung."}
 
         if action in ("pause", "resume"):
             if not store.set_enabled(nummer, action == "resume"):
@@ -4503,7 +4546,7 @@ class Handler(BaseHTTPRequestHandler):
         wanted = (parse_qs(urlsplit(self.path).query).get("path") or [""])[0]
         box = werkstatt.shared(SESSION.settings())
         if not box.alive:
-            self._json({"error": "Die virtual machine laeuft gerade nicht."}, 404)
+            self._json({"error": "Die virtual machine läuft gerade nicht."}, 404)
             return
         try:
             data = box.get_bytes(wanted)
@@ -4545,7 +4588,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 return
-            self._json({"error": "Es laeuft gerade keine virtual machine im User mode."}, 404)
+            self._json({"error": "Es läuft gerade keine virtual machine im User mode."}, 404)
             return
         try:
             data = box.screenshot(start=False)
@@ -5286,7 +5329,7 @@ class Handler(BaseHTTPRequestHandler):
                           "SameSite=Lax")
         settings = SESSION.settings()
         if not settings.google_client_id or not settings.google_client_secret:
-            self._google_page(False, "Client-ID und Secret fehlen -- erst speichern.")
+            self._google_page(False, "Client-ID und Secret fehlen – erst speichern.")
             return
         client = google_client(settings)
         try:
@@ -5495,8 +5538,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 return {
                     "ok": False,
                     "error": (
-                        "Erst Client-ID und Secret speichern, dann verbinden -- "
-                        "ohne beides kann Google den Code nicht einloesen."
+                        "Erst Client-ID und Secret speichern, dann verbinden – "
+                        "ohne beides kann Google den Code nicht einlösen."
                     ),
                 }
             client = google_client(settings)
@@ -5888,7 +5931,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             return
         if not message:
             # Nur Dateien, kein Text: das ist eine vollstaendige Bitte.
-            message = "Sieh dir das Angehaengte an und sag mir, worum es geht."
+            message = "Sieh dir das Angehängte an und sag mir, worum es geht."
 
         # Ai-guard (9.5.16 Lion): schon gesperrt? Dann gar nicht erst starten.
         # Die zuletzt gesehene Adresse wird dabei festgehalten (für `aquaticy
@@ -6159,10 +6202,10 @@ def token_problem(token: str) -> str:
         umlauts = "".join(sorted({c for c in token if not c.isascii()}))
         return (
             f"Das Zugangswort darf keine Sonderzeichen enthalten ({umlauts}). "
-            "Nimm ein Wort ohne Umlaute -- also 'gruen' statt 'grün'."
+            "Nimm ein Wort ohne Umlaute – also 'gruen' statt 'grün'."
         )
     if any(character in token for character in "?&#/%"):
-        return "Das Zugangswort darf kein ?, &, #, / oder % enthalten -- das zerlegt die Adresse."
+        return "Das Zugangswort darf kein ?, &, #, / oder % enthalten – das zerlegt die Adresse."
     return ""
 
 
@@ -6458,6 +6501,115 @@ def bind_server(host: str, port: int) -> ThreadingHTTPServer:
     raise letzter or OSError("Kein freier Port gefunden.")
 
 
+class PublicHandler(Handler):
+    """Der Eingang fuer den Cloudflare-Tunnel (11.1.0): hier kommt alles aus dem Internet.
+
+    Er hoert nur auf 127.0.0.1 -- cloudflared erreicht ihn, das Netz nicht.
+    Drei Dinge sind anders als am normalen Eingang:
+
+    * Die Adresse des Besuchers kommt von Cloudflare (``CF-Connecting-IP``).
+      Sonst saehen alle aus wie 127.0.0.1: eine Anfragegrenze fuer alle, und
+      die Regeln fuer neue Konten galten nicht (Loopback ist dort ausgenommen).
+    * Der Server-Verbund ist hier nicht erreichbar. Er vertraut dem eigenen
+      Netz, und dazu gehoert 127.0.0.1.
+    * Die Verbindung gilt als verschluesselt: der Besucher spricht HTTPS mit
+      Cloudflare. Cookies gehen deshalb nur mit "Secure" raus.
+    """
+
+    public_entry = True
+
+    def _client_ip(self) -> str:
+        import ipaddress
+
+        roh = (self.headers.get("CF-Connecting-IP") or "").strip() if self.headers else ""
+        with contextlib.suppress(ValueError):
+            if roh:
+                return str(ipaddress.ip_address(roh.split("%", 1)[0]))
+        return str(self.client_address[0] if self.client_address else "unknown")
+
+    def _https(self) -> bool:
+        return True
+
+    def _origin_ok(self) -> bool:
+        """Wie sonst -- und die eigene Domain zaehlt auch dann, wenn der Tunnel
+        den Host umschreibt. Fremde Seiten kommen weiter nicht durch."""
+        if super()._origin_ok():
+            return True
+        herkunft = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if herkunft in {"cross-site", "same-site"} or WEBSITE is None:
+            return False
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        return origin == f"https://{WEBSITE.config.domain}"
+
+    def _cluster_route(self) -> None:
+        self.responded = False
+        self._json({"error": "unbekannter Pfad"}, 404)
+
+
+class _TLSServer(ThreadingHTTPServer):
+    """HTTPS fuer den Tunnel-Eingang.
+
+    Der TLS-Handschlag laeuft im Faden der Verbindung, nicht in der Schleife,
+    die Verbindungen annimmt -- ein haengender Client hielte sonst alle auf.
+    """
+
+    def __init__(self, address: tuple[str, int], handler: Any, context: Any) -> None:
+        self.context = context
+        super().__init__(address, handler)
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        import ssl
+
+        try:
+            request.settimeout(15)
+            request = self.context.wrap_socket(request, server_side=True)
+            request.settimeout(None)
+        except (ssl.SSLError, OSError):
+            with contextlib.suppress(OSError):
+                request.close()
+            return
+        super().process_request_thread(request, client_address)
+
+
+def bind_public(context: Any, port: int) -> ThreadingHTTPServer:
+    """Der Tunnel-Eingang: nur 127.0.0.1, nur HTTPS, auf *port* oder dem naechsten freien."""
+    letzter: OSError | None = None
+    for kandidat in port_candidates(port):
+        try:
+            return _TLSServer(("127.0.0.1", kandidat), PublicHandler, context)
+        except OSError as exc:
+            if exc.errno not in _PORT_BELEGT:
+                raise
+            letzter = exc
+    raise letzter or OSError("Kein freier Port gefunden.")
+
+
+def _start_website(data_dir: Path) -> tuple[Any, Any]:
+    """Startet Tunnel-Eingang und Website, wenn eine Domain eingerichtet ist.
+
+    Returns: (Website, Eingang) -- oder (None, None). Nichts davon darf den
+    Start kosten: ohne Website laeuft Aquaticy eben im Heimnetz.
+    """
+    from aquaticy import website
+
+    try:
+        seite = website.from_settings(data_dir)
+    except website.WebsiteError as exc:
+        print(f"  [Website] {exc}", flush=True)
+        return None, None
+    if seite is None:
+        return None, None
+    try:
+        eingang = bind_public(seite.tls(), seite.config.public_port)
+    except Exception as exc:
+        print(f"  [Website] Eingang nicht gestartet: {type(exc).__name__}: {exc}", flush=True)
+        return None, None
+    threading.Thread(target=eingang.serve_forever, name="aquaticy-public", daemon=True).start()
+    seite.start(eingang.server_address[1])
+    print(f"  Website:    https://{seite.config.domain}/ (über Cloudflare)", flush=True)
+    return seite, eingang
+
+
 class AlreadyRunning(RuntimeError):
     """Ein anderes Aquaticy arbeitet schon mit diesem Datenordner (9.6.9 Luna)."""
 
@@ -6481,7 +6633,7 @@ class DataDirLock:
         except OSError as exc:
             self._file.close()
             raise AlreadyRunning(
-                "Aquaticy läuft mit diesem Datenordner schon -- ein zweites Mal "
+                "Aquaticy läuft mit diesem Datenordner schon – ein zweites Mal "
                 "starten würde Aufträge doppelt ausführen.") from exc
 
     def _lock(self) -> None:
@@ -6594,7 +6746,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         _stop_schedulers()
         raise
     if server.server_address[1] != port:
-        print(f"  Aquaticy laeuft auf Port {server.server_address[1]}.")
+        print(f"  Aquaticy läuft auf Port {server.server_address[1]}.")
         for address, note in addresses_for(host, server.server_address[1], token):
             print(f"  {address} ({note})")
     port = server.server_address[1]
@@ -6647,6 +6799,9 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         except Exception as exc:  # pragma: no cover - der Verbund darf nie den Start kosten
             print(f"  [Verbund] nicht gestartet: {type(exc).__name__}: {exc}")
             CLUSTER = None
+        global WEBSITE, PUBLIC_SERVER, LAN_ONLY
+        WEBSITE, PUBLIC_SERVER = _start_website(data_dir)
+        LAN_ONLY = WEBSITE is not None
         threading.Thread(target=_warm_up, daemon=True).start()
         if open_browser:
             # Auf dem eigenen Rechner ist 127.0.0.1 die zuverlaessigste Adresse --
@@ -6658,6 +6813,15 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         pass
     finally:
         server.server_close()
+        if PUBLIC_SERVER is not None:
+            with contextlib.suppress(Exception):
+                PUBLIC_SERVER.shutdown()
+                PUBLIC_SERVER.server_close()
+            PUBLIC_SERVER = None
+        if WEBSITE is not None:
+            WEBSITE.stop()
+            WEBSITE = None
+        LAN_ONLY = False
         if research_stop is not None and research_worker is not None:
             research_stop.set()
             research_worker.join(timeout=6)

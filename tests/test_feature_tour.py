@@ -158,7 +158,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
                             ("/notes", "Merkzettel"), ("/history", "Rechne"),
                             ("/uploads", "bild.png"), ("/export pdf", "Unbekanntes Format"),
                             ("/quit", "Fenster"), ("/gibtsnicht", "/help"),
-                            ("/uploads clear", "geloescht"), ("/clear", "verworfen")):
+                            ("/uploads clear", "gelöscht"), ("/clear", "verworfen")):
         status, antwort = tour("POST", "/api/command", {"line": zeile})
         assert status == 200 and erwartet in antwort["text"], (zeile, antwort)
     status, antwort = tour("POST", "/api/command", {"line": "/export csv"})

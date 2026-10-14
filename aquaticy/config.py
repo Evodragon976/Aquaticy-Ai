@@ -260,7 +260,7 @@ def model_problem(model: str) -> str:
     if resolve_model(model):
         return ""
     message = (
-        f"Modell '{model}' laesst sich keinem Anbieter zuordnen. "
+        f"Modell '{model}' lässt sich keinem Anbieter zuordnen. "
         "Die Modell-ID braucht ein Anbieter-Praefix."
     )
     suggestion = suggest_model(model)
@@ -816,12 +816,12 @@ class Settings:
             problems.append(model_issue)
         key_name = self.api_key_name
         if key_name and not self.api_key:
-            problems.append(f"{key_name} fehlt (fuer Modell {self.model})")
+            problems.append(f"{key_name} fehlt (für Modell {self.model})")
         backend_key = SEARCH_BACKEND_KEYS.get(self.search_backend, "")
         if backend_key and not self.search_api_key:
-            problems.append(f"{backend_key} fehlt (fuer Suchmaschine {self.search_backend})")
+            problems.append(f"{backend_key} fehlt (für Suchmaschine {self.search_backend})")
         if self.search_backend == "searxng" and not self.searxng_url:
-            problems.append("AQUATICY_SEARXNG_URL fehlt (fuer Suchmaschine searxng)")
+            problems.append("AQUATICY_SEARXNG_URL fehlt (für Suchmaschine searxng)")
         return problems
 
 

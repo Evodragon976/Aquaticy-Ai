@@ -486,6 +486,6 @@ def test_a_member_shows_the_download_as_a_note_not_an_error() -> None:
 
 def test_the_ui_says_that_llama_cpp_installs_itself() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "llama.cpp installiert Aquaticy dafür auf jedem Server von" in html
+    assert "llama.cpp installiert Aquaticy dafür selbst" in html
     assert "if (s.note) return ` · ${s.note}`;" in html
     assert "Braucht llama.cpp auf jedem Server." not in html

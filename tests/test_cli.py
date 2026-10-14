@@ -39,7 +39,7 @@ def test_version() -> None:
 def test_config_reports_complete_setup() -> None:
     result = runner.invoke(cli.app, ["config"])
     assert result.exit_code == 0
-    assert "Konfiguration vollstaendig" in result.output
+    assert "Konfiguration vollständig" in result.output
 
 
 def test_config_reports_missing_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -119,7 +119,7 @@ def test_cache_command_shows_and_clears(monkeypatch: pytest.MonkeyPatch) -> None
     )
     runner.invoke(cli.app, ["search", "frage"])
     assert "search=1" in runner.invoke(cli.app, ["cache"]).output
-    assert "geloescht" in runner.invoke(cli.app, ["cache", "--clear"]).output
+    assert "gelöscht" in runner.invoke(cli.app, ["cache", "--clear"]).output
 
 
 def test_history_is_empty_at_first() -> None:
@@ -157,7 +157,7 @@ def test_chat_aborts_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     reset_settings_cache()
     result = runner.invoke(cli.app, ["chat", "Frage"])
     assert result.exit_code == 1
-    assert "Konfiguration unvollstaendig" in result.output
+    assert "Konfiguration unvollständig" in result.output
 
 
 def test_slash_help_and_quit(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -462,7 +462,7 @@ def test_unknown_subcommand_is_not_sent_to_the_llm(
     output = capsys.readouterr().out
     assert "Unbekannter Befehl" in output
     assert "install-model" in output  # Vorschlag
-    assert "Anfuehrungszeichen" in output
+    assert "Anführungszeichen" in output
 
 
 def test_outdated_installation_gets_a_hint(
@@ -813,7 +813,7 @@ def test_yes_takes_the_recommendation_without_asking(
         cli.app, ["install-model", "--yes", "--env-file", str(target)], input=""
     )
     assert result.exit_code == 0, result.output
-    assert "Ohne Rueckfrage gewaehlt" in result.output
+    assert "Ohne Rückfrage gewählt" in result.output
     assert state["pulled"] == ["gemma4:12b"]
 
 
@@ -1033,8 +1033,11 @@ def test_every_subcommand_is_recognised_as_one() -> None:
         command.name or command.callback.__name__.replace("_", "-")
         for command in cli.app.registered_commands
     }
+    # Gruppen wie `aquaticy website` (11.1) zaehlen mit.
+    registered |= {group.name for group in cli.app.registered_groups if group.name}
     assert registered == cli.COMMANDS
     assert "google" in cli.COMMANDS
+    assert "website" in cli.COMMANDS
 
 
 def test_a_subcommand_is_not_treated_as_a_question(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -135,6 +135,8 @@ wenn der Nutzer nach einer bestimmten Seite gefragt hat: "abgewiesen (403)" ist 
 eine Entscheidung dieser Seite und keine kaputte Adresse.
 - Nennst du eine Zahl oder ein Detail aus einem Such-Snippet statt aus einer gelesenen \
 Seite, schreib das dazu.
+- Fragt jemand nach Nachrichten, nennst du die Meldungen selbst: was passiert ist, \
+Quelle und Uhrzeit. Eine Liste von Nachrichtenseiten ist keine Antwort.
 
 Ortsfilter:
 - Nennt der Nutzer eine Stadt, Region oder ein Land, baust du das in die Suchanfragen ein \
@@ -1447,6 +1449,45 @@ class Agent:
         # vorgelegt wird.
         return self._hand_over(results, spent, budget)
 
+    def _prefetch_news(self, question: str) -> int:
+        """Fragt jemand nach Nachrichten, holt Aquaticy die Meldungen vorab (11.1).
+
+        Sonst entscheidet das Modell selbst, ob es nachsieht -- und viele
+        antworten auf "Was sind die neusten Nachrichten?" aus dem Gedaechtnis
+        mit einer Liste von Nachrichtenseiten. Der Abruf steht danach als
+        gewoehnlicher Werkzeugaufruf im Verlauf, wie einer des Modells.
+
+        Returns:
+            Wie viele Werkzeugaufrufe das gekostet hat (0 oder 1).
+        """
+        from aquaticy.news import news_request
+
+        if getattr(self, "_plugin_turn", "") or getattr(self, "_image_turn", False):
+            return 0
+        if clean_mode(self.mode) == "code":
+            return 0
+        anfrage = news_request(question)
+        if anfrage is None:
+            return 0
+        if not any(s.get("function", {}).get("name") == "search_news" for s in self.tools):
+            return 0
+        import secrets
+
+        call = {
+            # Neun Zeichen aus Buchstaben und Ziffern: so verlangt es Mistral,
+            # die anderen Anbieter nehmen es auch.
+            "id": "news" + secrets.token_hex(3)[:5],
+            "type": "function",
+            "function": {
+                "name": "search_news",
+                "arguments": json.dumps({"query": anfrage.topic or "Nachrichten heute"},
+                                        ensure_ascii=False),
+            },
+        }
+        self.messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
+        self.messages.append(self._tool_result(call))
+        return 1
+
     def _master_research(self, question: str, budget: int) -> int:
         """Der Pro-Modus: der Master beauftragt, bewertet und schickt nach.
 
@@ -2734,6 +2775,8 @@ class Agent:
                 used += self._auto_research(question, budget)
         elif self.online and self._auto_subagents_wanted() and self._needs_research(question):
             used += self._auto_research(question, budget)
+        if self.online and not self.stopped:
+            used += self._prefetch_news(question)
 
         while True:
             if self.stopped:

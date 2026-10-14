@@ -176,7 +176,7 @@ def _unb64(text: Any) -> bytes:
     try:
         return base64.b64decode(str(text or ""), validate=True)
     except (ValueError, TypeError) as exc:
-        raise ClusterError("Ungueltige Daten.") from exc
+        raise ClusterError("Ungültige Daten.") from exc
 
 
 class FrameWriter(io.RawIOBase):
@@ -242,7 +242,7 @@ def read_frames(chunks: Iterable[bytes], key: bytes, salt: bytes,
         while len(puffer) >= 4:
             laenge = int.from_bytes(puffer[:4], "big")
             if laenge > 64 * CHUNK:
-                raise ClusterError("Stueck zu gross.")
+                raise ClusterError("Stück zu gross.")
             if len(puffer) < 4 + laenge:
                 break
             ct = bytes(puffer[4:4 + laenge])
@@ -257,7 +257,7 @@ def read_frames(chunks: Iterable[bytes], key: bytes, salt: bytes,
             try:
                 aead.decrypt(nonce, ct, marke + b"|end")
             except InvalidTag as exc:
-                raise ClusterError("Stueck ist nicht vom Verbund.") from exc
+                raise ClusterError("Stück ist nicht vom Verbund.") from exc
             if puffer or any(quelle):
                 raise ClusterError("Daten nach dem Ende der Antwort.")
             return
@@ -653,10 +653,10 @@ def safe_rel(base: Path, rel: str) -> Path:
     teile = Path(rel).parts
     if (not rel or rel.startswith(("/", "\\")) or "\\" in rel or ".." in teile
             or any(t in ("", ".") for t in rel.split("/"))):
-        raise ClusterError("Ungueltiger Pfad.")
+        raise ClusterError("Ungültiger Pfad.")
     ziel = (base / rel).resolve()
     if base.resolve() not in ziel.parents:
-        raise ClusterError("Ungueltiger Pfad.")
+        raise ClusterError("Ungültiger Pfad.")
     return ziel
 
 
@@ -984,7 +984,7 @@ class Cluster:
             absender = str(aussen["from"])
             box = _unb64(aussen["box"])
         except (ValueError, RecursionError, KeyError, TypeError) as exc:
-            raise ClusterError("Ungueltige Nachricht.") from exc
+            raise ClusterError("Ungültige Nachricht.") from exc
         schluessel = key_for(absender)
         if not schluessel:
             raise ClusterError("Unbekannter Server.")
@@ -994,7 +994,7 @@ class Cluster:
                 try:
                     innen = loads(unseal(key, box, "rpc"))
                 except (ValueError, RecursionError) as exc:
-                    raise ClusterError("Ungueltige Nachricht.") from exc
+                    raise ClusterError("Ungültige Nachricht.") from exc
                 break
         if not isinstance(innen, dict):
             raise ClusterError("Nachricht ist nicht vom Verbund.")
@@ -1072,7 +1072,7 @@ class Cluster:
         if op == "assign" and self.is_master:
             user = str(args.get("user", ""))
             if not _USER_RE.match(user):
-                raise ClusterError("Ungueltiges Konto.")
+                raise ClusterError("Ungültiges Konto.")
             return {"node": self.assign(user)}
         if op == "dblog":
             return self.db.changes(int(args.get("since", 0)))
@@ -1544,10 +1544,10 @@ class Cluster:
     def _take_rekey(self, args: dict[str, Any]) -> None:
         link = self.state.get("link")
         if not link or not self.info:
-            raise ClusterError("Kein Verbindungsschluessel.")
+            raise ClusterError("Kein Verbindungsschlüssel.")
         neu = unseal(_unb64(link), _unb64(args.get("box")), "rekey")
         if len(neu) != 32:
-            raise ClusterError("Ungueltiger Schluessel.")
+            raise ClusterError("Ungültiger Schlüssel.")
         with self._lock:
             info = self.state["cluster"]
             info.pop("previous", None)
@@ -1686,7 +1686,7 @@ class Cluster:
     def _user_dir(self, user: Any) -> Path:
         user = str(user or "")
         if not _USER_RE.match(user):
-            raise ClusterError("Ungueltiges Konto.")
+            raise ClusterError("Ungültiges Konto.")
         return self.data_dir / "users" / user
 
     def sync_user(self, user: str, node: str, force: bool = False) -> None:
@@ -2104,7 +2104,7 @@ class Cluster:
         with self._lock:
             self.state["cluster"] = None
             self._save()
-        print("  [Verbund] Beitritt gescheitert -- dieser Server arbeitet weiter allein.")
+        print("  [Verbund] Beitritt gescheitert – dieser Server arbeitet weiter allein.")
 
     def _write_pending(self) -> None:
         """Offene Anfragen fuer `aquaticy cluster` (wenn kein Terminal offen ist)."""
@@ -2207,7 +2207,7 @@ class Cluster:
             raise ClusterError("Kein Verbund.")
         _, op, args, nonce, key = self._unwrap(raw, self._member_keys)
         if op != "proxy" or not _USER_RE.match(str(args.get("u", ""))):
-            raise ClusterError("Ungueltige Weiterleitung.")
+            raise ClusterError("Ungültige Weiterleitung.")
         return args, nonce, key
 
     # -- Oberflaeche -------------------------------------------------------
@@ -2317,14 +2317,14 @@ class TerminalPrompt:
         print("  ersetzt.")
         tty = bool(sys.stdin and sys.stdin.isatty())
         if not tty:
-            print("  Kein Terminal zum Antworten -- antworte mit:  aquaticy cluster")
+            print("  Kein Terminal zum Antworten – antworte mit:  aquaticy cluster")
             print("=" * 64)
             return
         while True:
             try:
                 antwort = input("  Annehmen? [yes/no]: ").strip().lower()
             except (EOFError, OSError):
-                print("  Kein Terminal zum Antworten -- antworte mit:  aquaticy cluster")
+                print("  Kein Terminal zum Antworten – antworte mit:  aquaticy cluster")
                 return
             if antwort in ("yes", "y", "ja", "j", "no", "n", "nein"):
                 break

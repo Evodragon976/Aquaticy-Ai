@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
 import httpx
@@ -35,6 +36,8 @@ SELECTORS_PATH = Path(__file__).with_name("selectors.yaml")
 
 #: Ab wie vielen Zeichen gilt ein Text als echter Inhalt?
 MIN_CONTENT_CHARS = 200
+#: Eine Sperrseite (Captcha, Browser-Check) hat hoechstens so viel Text.
+BOT_WALL_MAX_TEXT = 1500
 #: Wie viel Text bekommt der Agent maximal pro Seite?
 MAX_TEXT_CHARS = 20_000
 #: Wie viel HTML laden wir maximal herunter?
@@ -61,6 +64,7 @@ class SiteRules:
     consent_phrases: list[str] = field(default_factory=list)
     consent_wall_markers: list[str] = field(default_factory=list)
     blocked_markers: list[str] = field(default_factory=list)
+    blocked_html_markers: list[str] = field(default_factory=list)
     paywall_markers: list[str] = field(default_factory=list)
     known_blocking_domains: list[str] = field(default_factory=list)
     # Stufe 3 (Playwright)
@@ -83,6 +87,7 @@ def load_rules(path: str | None = None) -> SiteRules:
         consent_phrases=[phrase.lower() for phrase in data.get("consent_phrases") or []],
         consent_wall_markers=[m.lower() for m in data.get("consent_wall_markers") or []],
         blocked_markers=[m.lower() for m in data.get("blocked_markers") or []],
+        blocked_html_markers=[m.lower() for m in data.get("blocked_html_markers") or []],
         paywall_markers=[m.lower() for m in data.get("paywall_markers") or []],
         known_blocking_domains=[d.lower() for d in data.get("known_blocking_domains") or []],
         cmp_reject_selectors=list(data.get("cmp_reject_selectors") or []),
@@ -94,18 +99,56 @@ def load_rules(path: str | None = None) -> SiteRules:
 # ---------------------------------------------------------------------------
 # Stufe 1: saeubern und extrahieren
 # ---------------------------------------------------------------------------
+#: Tags, die nie Inhalt sind -- sie fliegen immer raus.
+_NIE_INHALT = frozenset({"script", "style", "noscript", "template", "svg", "iframe"})
+
+#: Knoten, die die ganze Seite tragen. Ein Cookie-Plugin, das ``<body>`` die
+#: Klasse "cookies-not-set" gibt, darf nicht den ganzen Text kosten.
+_TRAEGER = frozenset({"html", "body", "main", "article"})
+
+#: Mehr als dieser Anteil des Seitentexts ist kein Banner mehr, sondern Inhalt.
+_GROSSER_ANTEIL = 0.5
+
+
 def strip_noise(html: str, rules: SiteRules | None = None) -> str:
-    """Entfernt Consent-Banner, Overlays und Navigationsballast aus *html*."""
+    """Entfernt Consent-Banner, Overlays und Navigationsballast aus *html*.
+
+    Die Selektoren suchen nach Teilwoertern ("cookie", "cmp", "modal"). Das
+    trifft manchmal mehr als einen Banner: Adobe-Seiten nennen jeden Baustein
+    "cmp-...", und manche Plugins setzen eine Cookie-Klasse auf ``<body>``.
+    Deshalb bleiben Seitentraeger und alles, was den Grossteil des Texts
+    enthaelt, stehen.
+    """
     rules = rules or load_rules()
     tree = HTMLParser(html)
+    wurzel = tree.body or tree.root
+    gesamt = len(wurzel.text(separator=" ", strip=True)) if wurzel is not None else 0
     for selector in rules.strip_selectors:
         try:
             nodes = tree.css(selector)
         except Exception:  # ungueltiger Selektor in der YAML -- ueberspringen
             continue
+        inhalt = [n for n in nodes if n.tag not in _NIE_INHALT]
+        if inhalt and gesamt > 0:
+            weg = sum(len(n.text(separator=" ", strip=True)) for n in inhalt)
+            if weg > 2000 and weg > gesamt * _GROSSER_ANTEIL:
+                # Dieser Selektor trifft den Inhalt, nicht einen Banner.
+                continue
         for node in nodes:
+            if node.tag not in _NIE_INHALT and _traegt_inhalt(node, gesamt):
+                continue
             node.decompose()
     return tree.html or ""
+
+
+def _traegt_inhalt(node: Any, gesamt: int) -> bool:
+    """Haelt dieser Knoten den Inhalt der Seite statt eines Banners?"""
+    if node.tag in _TRAEGER:
+        return True
+    if node.css_first("main, article") is not None:
+        return True
+    eigener = len(node.text(separator=" ", strip=True))
+    return gesamt > 0 and eigener > 2000 and eigener > gesamt * _GROSSER_ANTEIL
 
 
 def _is_consent_paragraph(paragraph: str, phrases: list[str]) -> bool:
@@ -224,9 +267,14 @@ def classify_failure(
 
     if status_code in (401, 402, 403, 407, 429):
         return f"blocked_http_{status_code}"
-    if _contains_any(html_lower[:200_000], rules.blocked_markers):
-        # Eine Bot-Pruefung im Seitentext. Sie wird nicht geloest -- aber sie
-        # ist etwas anderes als ein 403, und das soll man auch lesen koennen.
+    if len(text.strip()) < BOT_WALL_MAX_TEXT and (
+        _contains_any(text_lower, rules.blocked_markers)
+        or _contains_any(page_title(html).lower(), rules.blocked_markers)
+        or _contains_any(html_lower[:200_000], rules.blocked_html_markers)
+    ):
+        # Eine Sperrseite hat kaum eigenen Text. Bis 11.0 reichte das Wort
+        # "captcha" irgendwo im HTML -- und jede Seite mit reCAPTCHA im
+        # Kontaktformular galt als gesperrt.
         return "blocked_bot_wall"
 
     enough_text = len(text.strip()) >= MIN_CONTENT_CHARS
@@ -362,9 +410,15 @@ class RobotsPolicy:
         einem Fehler (5xx) oder gar nicht, gilt nach RFC 9309 alles als
         gesperrt -- fuer ein paar Minuten, dann wird neu gefragt.
         """
+        return not self.check(url)
+
+    def check(self, url: str) -> str:
+        """"" wenn *url* abgerufen werden darf -- sonst ``robots_disallowed``
+        (die Seite will es nicht) oder ``robots_unavailable`` (die robots.txt
+        war gerade nicht zu bekommen; das geht meist bald vorbei)."""
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            return False
+            return "robots_disallowed"
         origin = f"{parsed.scheme}://{parsed.netloc}"
         # Geladen wird AUSSERHALB der gemeinsamen Sperre (seit 9.5.16): ein
         # langsames robots.txt (bis zehn Sekunden) hielt sonst alle Agenten
@@ -383,9 +437,9 @@ class RobotsPolicy:
                         self._origin_locks.pop(origin, None)
         with self._lock:
             regeln = self._parsers.get(origin, (None, 0.0))[0]
-        if regeln is None:
-            return True
-        return regeln.allows(url)
+        if regeln is None or regeln.allows(url):
+            return ""
+        return "robots_unavailable" if regeln is self._GESPERRT else "robots_disallowed"
 
     def _frisch(self, origin: str) -> bool:
         eintrag = self._parsers.get(origin)
@@ -619,14 +673,19 @@ class Fetcher:
             result.skipped_reason = "blocked_by_list"
             return result
 
-        if not netguard.url_allowed(url):
+        problem, aussetzer = netguard.url_check(url)
+        if problem:
             # Nie ins eigene oder ein privates Netz (SSRF) -- siehe netguard.
-            result.skipped_reason = "not_public"
+            # Ein Name, der sich gerade nicht aufloesen laesst, ist dagegen
+            # meist nur ein DNS-Aussetzer (11.1: vorher hiess das "not_public").
+            result.skipped_reason = "dns_error" if aussetzer else "not_public"
             return result
 
-        if self.respect_robots and not self.robots.allows(url):
-            result.skipped_reason = "robots_disallowed"
-            return result
+        if self.respect_robots:
+            robots = self.robots.check(url)
+            if robots:
+                result.skipped_reason = robots
+                return result
 
         self.throttle.wait(domain)
 
@@ -639,6 +698,9 @@ class Fetcher:
             if sperre:
                 result.skipped_reason = sperre
                 return result
+        except netguard.Unresolvable:
+            result.skipped_reason = "dns_error"
+            return result
         except netguard.BlockedTarget:
             result.skipped_reason = "not_public"
             return result
@@ -694,12 +756,13 @@ class Fetcher:
         for _schritt in range(MAX_REDIRECTS + 1):
             if antwort is not None:
                 ziel = domain_of(aktuell)
-                if not netguard.url_allowed(aktuell):
-                    raise netguard.BlockedTarget("Weiterleitung nicht oeffentlich.")
+                netguard.check_url(aktuell)
                 if self._blocked_domain(ziel):
                     return antwort, "blocked_by_list"
-                if self.respect_robots and not self.robots.allows(aktuell):
-                    return antwort, "robots_disallowed"
+                if self.respect_robots:
+                    robots = self.robots.check(aktuell)
+                    if robots:
+                        return antwort, robots
                 self.throttle.wait(ziel)
             antwort = netguard.get(self._client, aktuell, max_bytes=_page_limit,
                                    follow_redirects=False)

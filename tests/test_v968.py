@@ -243,7 +243,7 @@ def test_deep_discovery_packet_does_not_kill_discovery_and_next_beacon_works(tmp
 def test_deep_rpc_envelope_is_rejected_before_key_lookup(tmp_path):
     node = cluster.Cluster(tmp_path)
     depth = MAX_DEPTH + 1
-    with pytest.raises(cluster.ClusterError, match="Ungueltige Nachricht"):
+    with pytest.raises(cluster.ClusterError, match="Ungültige Nachricht"):
         node._unwrap(b"[" * depth + b"0" + b"]" * depth,
                      lambda _: pytest.fail("must not look up unauthenticated sender"))
 

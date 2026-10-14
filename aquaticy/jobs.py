@@ -627,7 +627,7 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             try:
                 on_abuse(job, payload)
             except Exception:
-                LOG.exception("Auftraege: Ai-guard-Meldung zu %s fehlgeschlagen", job.id)
+                LOG.exception("Aufträge: Ai-guard-Meldung zu %s fehlgeschlagen", job.id)
 
     agent = Agent(settings, cache=None if monitoring else cache)
     if on_abuse is not None:
@@ -648,20 +648,20 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             wo = (
                 f"\nSuche zuerst auf dieser Seite: {job.source_url}"
                 if job.source_url
-                else "\nSuche im offenen Web, bevorzugt bei bekannten Haendlern und "
+                else "\nSuche im offenen Web, bevorzugt bei bekannten Händlern und "
                      "Marktplaetzen."
             )
             frage = (
                 "Dies ist eine automatische Suche nach einem Gegenstand, den der Nutzer "
                 "fotografiert hat. Auf dem Bild ist zu sehen:\n" + gesehen
                 + "\n\nFinde heraus, um welches Modell es sich handelt, und suche ein "
-                  "aktuelles Angebot dafuer." + wo
+                  "aktuelles Angebot dafür." + wo
                 + "\nZusaetzliche Bedingung des Nutzers: " + job.question
                 + "\nDie erste Zeile muss exakt BEDINGUNG ERFÜLLT oder BEDINGUNG NICHT "
                   "ERFÜLLT lauten. Erfüllt ist sie nur, wenn du eine konkrete Angebots- "
                   "oder Produktseite wirklich geöffnet und gelesen hast. Nenne danach "
                   "Produktname, Händler, Preis und die vollständige Adresse der Seite. "
-                  "Die Adresse der Angebotsseite steht als Letztes in deiner Antwort -- "
+                  "Die Adresse der Angebotsseite steht als Letztes in deiner Antwort – "
                   "daran wird geprüft, ob du sie wirklich gelesen hast. "
                   "Rate nicht und erfinde keine Adresse."
             )
@@ -782,7 +782,7 @@ class Scheduler:
                 self.tick()
             except Exception:
                 # Nicht still (9.5.15): ein Takt, der scheitert, steht im Protokoll.
-                LOG.exception("Auftraege: Takt fehlgeschlagen")
+                LOG.exception("Aufträge: Takt fehlgeschlagen")
 
     def tick(self) -> int:
         """Ein Durchgang. Returns: wie viele Auftraege gelaufen sind."""
@@ -791,7 +791,7 @@ class Scheduler:
                 if self._paused():
                     return 0
             except Exception:
-                LOG.exception("Auftraege: Sperrpruefung fehlgeschlagen")
+                LOG.exception("Aufträge: Sperrprüfung fehlgeschlagen")
                 return 0
         settings = self._settings_getter()
         store = JobStore(settings.db_path)
@@ -823,5 +823,5 @@ class Scheduler:
                 try:
                     self._on_run(job, state, chat)
                 except Exception:
-                    LOG.exception("Auftraege: Rueckmeldung zu %s fehlgeschlagen", job.id)
+                    LOG.exception("Aufträge: Rückmeldung zu %s fehlgeschlagen", job.id)
         return gelaufen

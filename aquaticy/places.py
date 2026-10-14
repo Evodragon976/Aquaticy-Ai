@@ -305,7 +305,14 @@ def find_places(
             with _client(user_agent, frist) as client:
                 antwort = client.post(server, data={"data": abfrage})
                 antwort.raise_for_status()
-                daten = antwort.json()
+                geladen = antwort.json()
+            fehler = _overpass_fehler(geladen)
+            if fehler:
+                # Ueberlastet, Zeit um oder Speicher voll: der Server meldet das
+                # mit Status 200 und einer leeren Liste. Bis 11.0 galt das als
+                # "hier gibt es nichts" -- und blieb einen Tag gemerkt.
+                raise PlacesError(fehler)
+            daten = geladen
             break
         except Exception as exc:
             letzter = exc
@@ -363,6 +370,16 @@ def find_places(
         if len(orte) >= limit:
             break
     return orte, gefunden
+
+
+def _overpass_fehler(daten: Any) -> str:
+    """Der Fehler, den Overpass in einer Antwort mit Status 200 meldet -- oder ""."""
+    if not isinstance(daten, dict):
+        return ""
+    hinweis = str(daten.get("remark") or "")
+    if "error" in hinweis.lower():
+        return f"Die Karte ist gerade überlastet ({hinweis[:120]})."
+    return ""
 
 
 def _address(tags: dict[str, str]) -> str:

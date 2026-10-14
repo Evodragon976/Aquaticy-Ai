@@ -76,12 +76,23 @@ REMOVE_OVERLAYS_JS = """
       || !!node.querySelector(
         'input[type="password"], iframe[src*="piano"], iframe[src*="login"]');
   };
+  // Was den Inhalt traegt, bleibt (11.1): "backdrop-blur" auf einer Karte
+  // oder "modal-host" um die ganze Seite sind keine Overlays.
+  const gesamt = ((document.body && document.body.innerText) || '').length;
+  const traegtInhalt = (node) => {
+    const tag = (node.tagName || '').toLowerCase();
+    if (['html', 'body', 'main', 'article'].includes(tag)) return true;
+    if (node.querySelector && node.querySelector('main, article')) return true;
+    const eigener = (node.innerText || node.textContent || '').length;
+    return gesamt > 0 && eigener > 2000 && eigener > gesamt * 0.5;
+  };
   let removed = 0;
   let gesperrt = false;
   for (const selector of selectors) {
     let nodes;
     try { nodes = document.querySelectorAll(selector); } catch (e) { continue; }
     for (const node of nodes) {
+      if (traegtInhalt(node)) continue;
       if (istSchranke(node)) { gesperrt = true; continue; }
       node.remove(); removed += 1;
     }

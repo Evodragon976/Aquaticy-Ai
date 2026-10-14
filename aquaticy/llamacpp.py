@@ -254,7 +254,7 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
         teile = urlsplit(adresse)
         if (teile.scheme != "https" or (teile.hostname or "").lower() not in DOWNLOAD_HOSTS
                 or teile.port not in (None, 443) or teile.username or teile.password):
-            raise LlamaError("llama.cpp lädt Aquaticy nur von den Download-Servern von GitHub.")
+            raise LlamaError("Aquaticy lädt nur von den Download-Servern von GitHub.")
         with http.stream("GET", adresse, headers={"Accept": "application/octet-stream",
                                                    "Accept-Encoding": "identity"}) as antwort:
             if antwort.status_code in (301, 302, 303, 307, 308):
@@ -734,7 +734,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="python -m aquaticy.llamacpp")
     unter = parser.add_subparsers(dest="befehl", required=True)
-    install = unter.add_parser("install", help="llama.cpp laden und pruefen")
+    install = unter.add_parser("install", help="llama.cpp laden und prüfen")
     install.add_argument("--dir", default="", help="Zielordner")
     install.add_argument("--tag", default="", help="Fassung (Standard: die neueste)")
     install.add_argument("--gpu", action="store_true", help="die Grafik-Ausgabe bevorzugen")

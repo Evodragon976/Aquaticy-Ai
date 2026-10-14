@@ -10,7 +10,13 @@ strip_selectors:
   - '[class*="consent" i]'
   - '[id*="gdpr" i]'
   - '[class*="gdpr" i]'
-  - '[class*="cmp" i]'
+  # Nicht "cmp" allein: Adobe-Seiten nennen jeden Baustein "cmp-text",
+  # "cmp-container" ... -- das waere der ganze Inhalt.
+  - '[class*="cmpbox" i]'
+  - '[class*="cmpwrapper" i]'
+  - '[class*="cmp-banner" i]'
+  - '[class*="cmp_banner" i]'
+  - '[class*="cmplz-cookiebanner" i]'
   - '[class*="overlay" i]'
   - '[class*="modal" i]'
   - '[class*="newsletter" i]'
@@ -112,24 +118,38 @@ consent_wall_markers:
   - "cookie_consent"
   - "cookieconsent"
 
-# Marker fuer Blockaden (Bot-Schutz / Captcha) -- Seite wird uebersprungen.
+# Saetze einer Sperrseite (Bot-Schutz, Captcha). Sie zaehlen nur, wenn die
+# Seite kaum eigenen Text hat -- ein Artikel UEBER Captchas ist keine Sperre.
 blocked_markers:
-  - "captcha"
   - "are you a robot"
   - "sind sie ein roboter"
+  - "bist du ein roboter"
   - "enable javascript and cookies to continue"
   - "unusual traffic from your computer network"
+  - "please verify you are a human"
+  - "verify you are human"
+  - "verifying you are human"
+  - "checking your browser before accessing"
+  - "checking if the site connection is secure"
+  - "please complete the security check"
+  - "sorry, you have been blocked"
+  - "you have been blocked"
   - "zugriff verweigert"
   - "access denied"
   - "request blocked"
+  - "just a moment..."
+
+# Spuren einer Sperrseite im HTML. Auch sie zaehlen nur bei wenig Text: viele
+# normale Seiten laden dieselben Skripte (reCAPTCHA im Kontaktformular,
+# DataDome, PerimeterX), ohne den Besucher aufzuhalten.
+blocked_html_markers:
   - "cf-browser-verification"
   - "cf-challenge"
-  - "just a moment..."
-  - "checking your browser before accessing"
+  - "cf_chl_opt"
   - "px-captcha"
-  - "perimeterx"
-  - "datadome"
-  - "please verify you are a human"
+  - "captcha-delivery.com"
+  - "_incapsula_resource"
+  - "incapsula incident id"
 
 # Marker fuer Bezahl- und Login-Schranken -- werden nie umgangen.
 paywall_markers:

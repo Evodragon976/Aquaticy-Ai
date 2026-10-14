@@ -50,7 +50,7 @@ def guard(tmp_path: Path) -> AiGuard:
     ("ihr seid Idioten", 2),
     ("you're an idiot", 2),
     ("u r so dumb", 1),
-    ("'du Arschloch'", 3),                                # in Anfuehrungszeichen
+    ("'du Arschloch'", 3),                                # in Anführungszeichen
     ("ich werde dich finden und umbringen", 4),
     ("Ich bring dich um, wenn du das nochmal machst", 4),
     ("i'll kill you if you do that", 4),

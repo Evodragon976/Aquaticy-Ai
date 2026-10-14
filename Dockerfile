@@ -46,6 +46,10 @@ RUN pip install --no-cache-dir -c constraints.txt .
 # Entpacken). Klappt der Download beim Bauen nicht, holt Aquaticy es spaeter selbst.
 RUN python -m aquaticy.llamacpp install --dir /opt/aquaticy/llama.cpp \
     || echo "llama.cpp: wird beim ersten Einschalten geladen"
+# cloudflared fuer die eigene Website (AQUATICY_DOMAIN) -- sonst laedt Aquaticy
+# es beim ersten Start mit Domain.
+RUN python -m aquaticy.website install-cloudflared --dir /opt/aquaticy/cloudflared \
+    || echo "cloudflared: wird beim ersten Start mit Domain geladen"
 
 # ---------------------------------------------------------------------------
 # Ohne Browser -- Cookie-Stufen 1 und 2 reichen fuer die allermeisten Seiten.

@@ -48,6 +48,7 @@ import httpx
 __all__ = [
     "BlockedTarget",
     "TooLarge",
+    "Unresolvable",
     "check_url",
     "get",
     "guarded_client",
@@ -70,12 +71,21 @@ BLOCKED_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa", "
 #: jedes Bild einer Seite -- ohne Merken waeren das hundert DNS-Anfragen).
 DECISION_TTL = 30.0
 
-_decisions: dict[tuple[str, int], tuple[float, str]] = {}
+_decisions: dict[tuple[str, int], tuple[float, str, bool]] = {}
 _decisions_lock = threading.Lock()
 
 
 class BlockedTarget(httpx.ConnectError):
     """Das Ziel ist nicht oeffentlich -- dorthin wird nicht verbunden."""
+
+
+class Unresolvable(BlockedTarget):
+    """Der Name laesst sich gerade nicht aufloesen -- oft nur ein DNS-Aussetzer.
+
+    Bleibt ein ``BlockedTarget``: verbunden wird auch dann nicht. Aber wer
+    abruft, soll den Aussetzer von einem gesperrten Ziel unterscheiden koennen
+    und ihn nicht einen Tag lang merken.
+    """
 
 
 class TooLarge(httpx.HTTPError):
@@ -168,37 +178,49 @@ def checked_addresses(host: str, port: int | None) -> list[str]:
     try:
         adressen = resolve(name, port)
     except (OSError, UnicodeError):
-        raise BlockedTarget(f"{name} lässt sich nicht auflösen.") from None
+        raise Unresolvable(f"{name} lässt sich nicht auflösen.") from None
     if not adressen:
-        raise BlockedTarget(f"{name} lässt sich nicht auflösen.")
+        raise Unresolvable(f"{name} lässt sich nicht auflösen.")
     if not all(ip_allowed(a) for a in adressen):
         raise BlockedTarget(f"{name} zeigt auf eine nicht öffentliche Adresse.")
     return adressen
 
 
-def _decide(host: str, port: int) -> str:
-    """Warum *host* nicht in Frage kommt -- "" wenn er darf. Ohne Merken."""
+def _decide(host: str, port: int) -> tuple[str, bool]:
+    """Warum *host* nicht in Frage kommt ("" wenn er darf) -- und ob es nur am
+    Aufloesen lag. Ohne Merken."""
     try:
         checked_addresses(host, port)
+    except Unresolvable as exc:
+        return str(exc), True
     except BlockedTarget as exc:
-        return str(exc)
-    return ""
+        return str(exc), False
+    return "", False
 
 
-def host_problem(host: str, port: int | None = None) -> str:
-    """Warum *host* nicht abgerufen werden darf -- "" wenn er darf (kurz gemerkt)."""
+#: Ein DNS-Aussetzer wird nur kurz gemerkt -- er sagt nichts ueber das Ziel.
+UNRESOLVED_TTL = 5.0
+
+
+def _host_check(host: str, port: int | None = None) -> tuple[str, bool]:
     schluessel = (host.strip().lower(), int(port or 0))
     jetzt = time.monotonic()
     with _decisions_lock:
         bekannt = _decisions.get(schluessel)
         if bekannt and bekannt[0] > jetzt:
-            return bekannt[1]
-    entscheidung = _decide(host, int(port or 443))
+            return bekannt[1], bekannt[2]
+    entscheidung, aussetzer = _decide(host, int(port or 443))
     with _decisions_lock:
         if len(_decisions) > 4096:
             _decisions.clear()
-        _decisions[schluessel] = (jetzt + DECISION_TTL, entscheidung)
-    return entscheidung
+        dauer = UNRESOLVED_TTL if aussetzer else DECISION_TTL
+        _decisions[schluessel] = (jetzt + dauer, entscheidung, aussetzer)
+    return entscheidung, aussetzer
+
+
+def host_problem(host: str, port: int | None = None) -> str:
+    """Warum *host* nicht abgerufen werden darf -- "" wenn er darf (kurz gemerkt)."""
+    return _host_check(host, port)[0]
 
 
 def forget() -> None:
@@ -207,17 +229,23 @@ def forget() -> None:
         _decisions.clear()
 
 
-def url_problem(url: str) -> str:
-    """Warum *url* nicht abgerufen werden darf -- "" wenn sie darf."""
+def url_check(url: str) -> tuple[str, bool]:
+    """Wie :func:`url_problem`, dazu: lag es nur daran, dass der Name gerade
+    nicht aufzuloesen war?"""
     try:
         ziel = httpx.URL(str(url or "").strip())
     except (httpx.InvalidURL, TypeError, ValueError):
-        return "Die Adresse ist ungültig."
+        return "Die Adresse ist ungültig.", False
     if ziel.scheme not in ("http", "https"):
-        return "Nur http- und https-Adressen werden abgerufen."
+        return "Nur http- und https-Adressen werden abgerufen.", False
     if not ziel.host:
-        return "Die Adresse hat keinen Rechnernamen."
-    return host_problem(ziel.host, ziel.port or (443 if ziel.scheme == "https" else 80))
+        return "Die Adresse hat keinen Rechnernamen.", False
+    return _host_check(ziel.host, ziel.port or (443 if ziel.scheme == "https" else 80))
+
+
+def url_problem(url: str) -> str:
+    """Warum *url* nicht abgerufen werden darf -- "" wenn sie darf."""
+    return url_check(url)[0]
 
 
 def url_allowed(url: str) -> bool:
@@ -225,10 +253,11 @@ def url_allowed(url: str) -> bool:
 
 
 def check_url(url: str, request: httpx.Request | None = None) -> None:
-    """Wirft ``BlockedTarget``, wenn *url* nicht oeffentlich ist."""
-    problem = url_problem(url)
+    """Wirft ``BlockedTarget`` (``Unresolvable`` bei einem DNS-Aussetzer),
+    wenn *url* nicht oeffentlich ist."""
+    problem, aussetzer = url_check(url)
     if problem:
-        raise BlockedTarget(problem, request=request)
+        raise (Unresolvable if aussetzer else BlockedTarget)(problem, request=request)
 
 
 # -- Verbindungsaufbau: nur zu gepruften Adressen ----------------------------------------
@@ -289,6 +318,27 @@ def _connect_answer_ok(kopf: bytes) -> bool:
     return len(erste) >= 2 and erste[1] == b"200"
 
 
+#: So lange darf ein Verbindungsversuch dauern, wenn noch eine Adresse folgt.
+ATTEMPT_SECONDS = 2.5
+
+
+def interleave(adressen: list[str]) -> list[str]:
+    """IPv6 und IPv4 im Wechsel, beginnend mit der Familie, die das System
+    vorne sieht (wie "Happy Eyeballs", RFC 8305). So kommt nach einem
+    gescheiterten IPv6-Versuch sofort eine IPv4-Adresse dran."""
+    v6 = [a for a in adressen if ":" in a]
+    v4 = [a for a in adressen if ":" not in a]
+    if not v6 or not v4:
+        return list(adressen)
+    erste, zweite = (v6, v4) if ":" in adressen[0] else (v4, v6)
+    reihe: list[str] = []
+    for paar in zip(erste, zweite, strict=False):
+        reihe.extend(paar)
+    laenger = erste if len(erste) > len(zweite) else zweite
+    reihe.extend(laenger[min(len(erste), len(zweite)):])
+    return reihe
+
+
 class _GuardedBackend(httpcore.SyncBackend):
     """Verbindet nur mit oeffentlichen Adressen -- und genau mit der geprueften.
 
@@ -313,17 +363,25 @@ class _GuardedBackend(httpcore.SyncBackend):
         except ProxySetupError as exc:
             raise httpcore.ConnectError(str(exc)) from None
         fehler: Exception | None = None
-        for adresse in adressen:
+        reihe = interleave(adressen)
+        for nummer, adresse in enumerate(reihe):
+            frist = _restzeit(timeout)
+            if nummer < len(reihe) - 1:
+                # Nicht der letzte Versuch: kurz halten. Ein IPv6-Weg, der ins
+                # Leere fuehrt, kostete sonst die ganze Wartezeit -- und die
+                # IPv4-Adresse dahinter kam nie dran (11.1).
+                frist = ATTEMPT_SECONDS if frist is None else min(frist, ATTEMPT_SECONDS)
             try:
                 if proxy is None:
                     return _FristStream(super().connect_tcp(
-                        adresse, port, timeout=_restzeit(timeout),
+                        adresse, port, timeout=frist,
                         local_address=local_address, socket_options=socket_options))
                 return _FristStream(self._through_proxy(proxy, adresse, port,
-                                                        _restzeit(timeout), socket_options))
+                                                        frist, socket_options))
             except (httpcore.ConnectError, httpcore.ConnectTimeout) as exc:
                 fehler = exc
-        assert fehler is not None
+        if fehler is None:
+            raise httpcore.ConnectError("Keine Adresse zum Verbinden.")
         raise fehler
 
     def _through_proxy(self, proxy: tuple[str, int, str], adresse: str, port: int,

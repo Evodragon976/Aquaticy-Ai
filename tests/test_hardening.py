@@ -46,7 +46,7 @@ def test_odd_values_come_back_exactly_and_are_never_expanded(
     write_env_file({"AQUATICY_LOCATION": seltsam}, ziel)
     assert read_env_file(ziel) == {"AQUATICY_LOCATION": seltsam}
     assert "server-geheim" not in str(read_env_file(ziel))
-    # Ein offenes Anfuehrungszeichen verschluckt keine folgenden Zeilen.
+    # Ein offenes Anführungszeichen verschluckt keine folgenden Zeilen.
     write_env_file({"AQUATICY_LOCATION": '"', "AQUATICY_HA_CONTROL": "false"}, ziel)
     assert read_env_file(ziel)["AQUATICY_HA_CONTROL"] == "false"
     with pytest.raises(ValueError):

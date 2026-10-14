@@ -190,7 +190,8 @@ NEWS_SCHEMA: dict[str, Any] = {
         "description": (
             "Sucht in aktuellen Nachrichten -- fuer Ereignisse, Ankuendigungen und alles, "
             "wo das Datum zaehlt. Jeder Treffer traegt Datum und Quelle im Snippet. "
-            "Fuer zeitlose Fakten nimm weiter web_search."
+            "Ohne eigenes Thema (query 'Nachrichten heute') kommen die aktuellen "
+            "Schlagzeilen grosser Nachrichtenseiten. Fuer zeitlose Fakten nimm web_search."
         ),
         "parameters": {
             "type": "object",
@@ -1558,6 +1559,30 @@ class ToolStats:
         self.images_created = 0
 
 
+#: Gruende, die meist gleich wieder vorbei sind. Sie werden nie gemerkt: ein
+#: Aussetzer von jetzt sagt nichts ueber die Seite in fuenf Minuten.
+TRANSIENT_SKIPS = frozenset({
+    "timeout", "network_error", "dns_error", "robots_unavailable", "blocked_http_429",
+})
+
+#: Wie lange ein Fehlschlag gemerkt wird. Bis 11.0 waren es 24 Stunden -- eine
+#: Seite, die einmal hakte, blieb einen Tag lang "kaputt".
+FAILED_PAGE_SECONDS = 3600
+
+
+def page_cache_seconds(page: PageResult) -> int | None:
+    """Wie lange ein Abruf gemerkt wird: ``None`` = so lange wie der Cache,
+    ``0`` = gar nicht."""
+    grund = page.skipped_reason or ""
+    if page.ok or not grund:
+        return None
+    if grund in TRANSIENT_SKIPS:
+        return 0
+    if grund == "http_error" and (page.status_code or 0) >= 500:
+        return 0
+    return FAILED_PAGE_SECONDS
+
+
 class Toolbox:
     """Fuehrt die Tool-Calls des Agenten aus."""
 
@@ -1826,12 +1851,10 @@ class Toolbox:
             else:
                 page = self._fetcher.fetch(url, want_products=True)
                 self._maybe_llm_specs(page)
-                # Voruebergehende Fehler nicht cachen: ein Timeout von jetzt sagt
-                # nichts darueber, ob die Seite in einer Stunde erreichbar ist.
-                # Stabile Ergebnisse (Inhalt, blocked, paywall) duerfen 24 h liegen.
-                transient = page.skipped_reason in ("timeout", "network_error")
-                if self.cache and not transient:
-                    self.cache.set(key, page.model_dump(), kind="page", label=page.title or url)
+                dauer = page_cache_seconds(page)
+                if self.cache and dauer != 0:
+                    self.cache.set(key, page.model_dump(), kind="page", label=page.title or url,
+                                   ttl=dauer)
         if page.ok:
             if getattr(self, "learning_ticket", "") and len(self.stats.learning_pages) < 6:
                 from aquaticy.learning import public_source
@@ -3160,7 +3183,18 @@ class Toolbox:
 
     # -- Werkzeug 3: News -------------------------------------------------
     def search_news(self, query: str, count: int = 0) -> dict[str, Any]:
-        """News-Suche; faellt bei Ausfall auf die normale Websuche zurueck."""
+        """News-Suche; faellt bei Ausfall auf die normale Websuche zurueck.
+
+        Ohne eigenes Thema ("Nachrichten heute") kommen die Schlagzeilen aus
+        den Feeds grosser Nachrichtenseiten (11.1). Eine Suche nach dem Wort
+        "Nachrichten" fand vorher nur deren Startseiten.
+        """
+        from aquaticy.news import is_generic
+
+        if is_generic(query):
+            schlagzeilen = self._headlines(count)
+            if schlagzeilen is not None:
+                return schlagzeilen
         # Auch hier gilt der Ortsfilter: "Baustellen" ohne Ort ist eine
         # andere Frage als "Baustellen Bremen".
         query = with_place((query or "").strip(), self.settings.location)
@@ -3206,6 +3240,37 @@ class Toolbox:
             self.seen_results.setdefault(result.url, result)
         self._emit("search_done", query=query, hits=len(results))
         return {"query": query, "results": [result.as_tool_dict() for result in results]}
+
+    def _headlines(self, count: int = 0) -> dict[str, Any] | None:
+        """Die aktuellen Schlagzeilen -- oder None, wenn kein Feed antwortet."""
+        from aquaticy.news import HEADLINE_COUNT, headlines
+
+        menge = max(5, min(int(count or HEADLINE_COUNT), 20))
+        land, sprache = self.settings.country, self.settings.lang
+        self.stats.news_searches.append("Schlagzeilen")
+        self._emit("search", query="Schlagzeilen", count=menge)
+        key = cache_key("headlines", land, sprache, menge)
+        cached = self.cache.get(key) if self.cache else None
+        if cached is not None:
+            results = [SearchResult(**item) for item in cached]
+        else:
+            results = headlines(land, sprache, menge)
+            if results and self.cache:
+                # Schlagzeilen veralten in Minuten, nicht in Stunden.
+                self.cache.set(key, [r.model_dump() for r in results], kind="news",
+                               label="Schlagzeilen", ttl=600)
+        if not results:
+            return None
+        for result in results:
+            self.seen_results.setdefault(result.url, result)
+        self._emit("search_done", query="Schlagzeilen", hits=len(results))
+        return {
+            "query": "Schlagzeilen",
+            "results": [result.as_tool_dict() for result in results],
+            "note": ("Die aktuellen Schlagzeilen, neueste zuerst. Nenn die wichtigsten "
+                     "Meldungen selbst: was passiert ist, Quelle und Uhrzeit. Keine Liste "
+                     "von Nachrichtenseiten."),
+        }
 
     # -- Werkzeug 4: Profile ----------------------------------------------
     def find_profiles(self, name: str, platforms: list[str] | None = None) -> dict[str, Any]:
@@ -3394,8 +3459,10 @@ class Toolbox:
                 "gehoeren gegengeprueft, sie veralten in der Karte am schnellsten."
             )
         if self.cache:
-            # Die Karte aendert sich langsam -- ein Tag ist reichlich.
-            self.cache.set(key, payload, kind="places", label=f"{what} in {where}")
+            # Die Karte aendert sich langsam -- ein Tag ist reichlich. Ein leeres
+            # Ergebnis bleibt nur eine Stunde: vielleicht passt der Umkreis nicht.
+            self.cache.set(key, payload, kind="places", label=f"{what} in {where}",
+                           ttl=None if orte else FAILED_PAGE_SECONDS)
         self._emit("places_done", what=what, hits=len(orte))
         return payload
 

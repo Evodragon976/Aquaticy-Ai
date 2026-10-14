@@ -210,7 +210,7 @@ def test_ephemeral_server_prints_its_actual_address(settings, monkeypatch, capsy
 def test_cli_does_not_advertise_port_zero(monkeypatch):
     monkeypatch.setattr(web, "serve", lambda **kwargs: None)
     result = CliRunner().invoke(cli.app, ["web", "--port", "0", "--no-open"])
-    assert result.exit_code == 0 and "Automatischer Port" in result.output
+    assert result.exit_code == 0 and "nach dem Start" in result.output
     assert "http://127.0.0.1:0/" not in result.output
 
 

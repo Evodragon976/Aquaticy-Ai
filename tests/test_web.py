@@ -1758,7 +1758,7 @@ def test_uploads_command_lists_and_clears(client, session: web.ChatSession) -> N
     assert "123-" not in listing, "der Zeitstempel interessiert niemanden"
 
     _, body = client("POST", "/api/command", {"line": "/uploads clear"})
-    assert "geloescht" in json.loads(body)["text"]
+    assert "gelöscht" in json.loads(body)["text"]
     assert not list(uploads.iterdir())
 
 
@@ -2485,7 +2485,7 @@ def test_the_settings_say_that_read_only_is_no_lock() -> None:
     """Der Server selbst kennt keine Anmeldung -- das darf nicht verschwiegen werden."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "bremst nur Aquaticy" in html
-    assert "weiterhin alles ändern" in html
+    assert "nicht die anderen in deinem Netz" in html
 
 
 def test_the_storage_probe_reports_what_it_found(
@@ -2844,7 +2844,7 @@ def test_the_picker_offers_the_structure_switch_and_the_effort() -> None:
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="structure"' in picker
     assert "Strukturieren" in picker
-    assert "in kleine Teilfragen" in picker
+    assert "teilt deine Frage auf" in picker
     for stufe in ("low", "medium", "high"):
         assert f'data-effort="{stufe}"' in picker, stufe
     assert "Denktiefe" in picker
@@ -3059,7 +3059,7 @@ def test_the_recheck_switch_sits_under_the_structure_switch() -> None:
     picker = picker[: picker.index('<main id="main">')]
     assert picker.index('id="structure"') < picker.index('id="recheck"')
     assert "Gegenprüfen" in picker
-    assert "ganz anderen Seiten" in picker
+    assert "die Antwort auf anderen Seiten" in picker
 
 
 def test_the_recheck_reaches_the_agent(

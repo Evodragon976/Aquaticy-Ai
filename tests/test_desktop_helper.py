@@ -151,7 +151,7 @@ def test_the_browser_says_who_is_driving(
     kennung = 'Mozilla/5.0 (X11; Linux x86_64) aquaticy-usermode/9 (KI-gesteuert; +https://x.y)'
     helfer.profil_anlegen(kennung)
     ini = (tmp_path / ".config/falkon/profiles/default/settings.ini").read_text()
-    assert f'UserAgent="{kennung}"' in ini, "in Anfuehrungszeichen -- sonst endet sie am ;"
+    assert f'UserAgent="{kennung}"' in ini, "in Anführungszeichen -- sonst endet sie am ;"
     office = (tmp_path / ".config/libreoffice/4/user/registrymodifications.xcu").read_text()
     assert "ShowTipOfTheDay" in office
     for ordner in ("Downloads", "Dokumente"):

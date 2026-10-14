@@ -137,6 +137,11 @@ SKIP_NOTES: dict[str, str] = {
         "Inhalt liegt hinter einer Bezahl- oder Loginschranke -- nicht oeffentlich zugaenglich."
     ),
     "robots_disallowed": "robots.txt der Domain verbietet das Abrufen dieser URL.",
+    "robots_unavailable": (
+        "Die robots.txt der Seite war gerade nicht zu bekommen. Ohne sie wird nichts "
+        "abgerufen -- versuch es spaeter oder nimm eine andere Quelle."
+    ),
+    "dns_error": "Der Name der Seite liess sich gerade nicht aufloesen (DNS).",
     "timeout": "Zeitueberschreitung beim Abruf.",
     "http_error": "Server hat mit einem Fehlerstatus geantwortet.",
     "empty": "Kein lesbarer Textinhalt gefunden.",

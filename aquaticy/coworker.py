@@ -613,7 +613,7 @@ COWORKER_SCHEMAS: tuple[dict[str, Any], ...] = (
             "description": (
                 "Eine Meldung an den Nutzer: ein Ergebnis, eine wichtige Änderung oder eine "
                 "Frage. Erscheint in seiner Coworker-Übersicht und als Chat. Nur, wenn es "
-                "wirklich etwas Neues gibt -- keine Meldung 'nichts Neues'. Höchstens drei "
+                "wirklich etwas Neues gibt – keine Meldung 'nichts Neues'. Höchstens drei "
                 "je Arbeitsschritt."
             ),
             "parameters": {
@@ -634,7 +634,7 @@ COWORKER_SCHEMAS: tuple[dict[str, Any], ...] = (
         "function": {
             "name": "coworker_notes",
             "description": (
-                "Ersetzt deine Notizen -- dein Gedächtnis für den nächsten Arbeitsschritt: "
+                "Ersetzt deine Notizen – dein Gedächtnis für den nächsten Arbeitsschritt: "
                 "was du weißt, was erledigt ist, was als Nächstes kommt. Kurz und vollständig."
             ),
             "parameters": {
@@ -649,7 +649,7 @@ COWORKER_SCHEMAS: tuple[dict[str, Any], ...] = (
         "function": {
             "name": "coworker_sleep",
             "description": (
-                "Wann du wieder aufwachst, in Minuten -- früh, wenn du mitten in der Arbeit "
+                "Wann du wieder aufwachst, in Minuten – früh, wenn du mitten in der Arbeit "
                 "bist oder es eilt, später, wenn du auf etwas wartest. Eine Nachricht des "
                 "Nutzers weckt dich ohnehin sofort."
             ),
@@ -772,7 +772,7 @@ class Session:
             self.requested.append(nummer)
         return {"wartet_auf_freigabe": True, "anfrage": nummer,
                 "hinweis": "Der Nutzer entscheidet in seiner Coworker-Übersicht. Du erfährst "
-                           "das Ergebnis beim nächsten Arbeitsschritt -- frag nicht noch einmal."}
+                           "das Ergebnis beim nächsten Arbeitsschritt – frag nicht noch einmal."}
 
     def _report(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if len(self.reports) >= MAX_REPORTS_PER_RUN:
@@ -859,7 +859,7 @@ def build_prompt(cw: Coworker, *, messages: list[dict[str, Any]],
         f"Du bist {cw.name}. Arbeitsschritt {cw.runs + 1}. Jetzt ist {tage[jetzt.weekday()]}, "
         f"der {jetzt.strftime('%d.%m.%Y, %H:%M')} Uhr.",
         "## Deine Aufgabe\n" + cw.goal,
-        "## Deine Notizen\n" + (cw.notes or "(noch leer -- dies ist dein erster Schritt)"),
+        "## Deine Notizen\n" + (cw.notes or "(noch leer – dies ist dein erster Schritt)"),
     ]
     neu = []
     for nachricht in messages:
@@ -879,7 +879,7 @@ def build_prompt(cw: Coworker, *, messages: list[dict[str, Any]],
     if vm:
         kann.append("- In deiner eigenen virtual machine arbeiten (vm_run, vm_write, vm_read, "
                     "vm_files): Code ausführen, Daten auswerten. Nach 20 Minuten Ruhe wird "
-                    "sie gelöscht -- Wichtiges gehört in deine Notizen.")
+                    "sie gelöscht – Wichtiges gehört in deine Notizen.")
     teile.append("## Was du kannst\n" + "\n".join(kann))
     if messages:
         teile.append("Antworte auf die Nachrichten des Nutzers mit coworker_report.")
@@ -1234,7 +1234,7 @@ class Scheduler:
                 if self._paused():
                     return 0
             except Exception:
-                LOG.exception("Coworker: Sperrpruefung fehlgeschlagen")
+                LOG.exception("Coworker: Sperrprüfung fehlgeschlagen")
                 return 0
         plan = str(self._plan() or "")
         if plan not in MAX_COWORKERS:

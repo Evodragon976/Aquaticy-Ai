@@ -785,9 +785,9 @@ class AuthStore:
                     # Ohne E-Mail-Adresse (seit 9.5.32) -- das Terminal-Protokoll
                     # ist kein Ort fuer persoenliche Daten.
                     print(f"[Konten] Registrierung {username}: "
-                          f"{pruefung.points:g} Punkte -- {', '.join(pruefung.reasons)}"
+                          f"{pruefung.points:g} Punkte – {', '.join(pruefung.reasons)}"
                           f" (ähnelt {pruefung.closest})"
-                          + (" -- abgelehnt" if pruefung.blocked else ""), flush=True)
+                          + (" – abgelehnt" if pruefung.blocked else ""), flush=True)
                 if pruefung.blocked:
                     raise ValueError(
                         "Mit diesem Gerät bzw. diesen Angaben gibt es hier schon ein Konto — "
