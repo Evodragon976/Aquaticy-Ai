@@ -33,6 +33,7 @@ from aquaticy.config import NO_KEY, Settings
 from aquaticy.keyvault import KeyVault, VaultError, load_secret, masked, scrub, summary
 from aquaticy.quota import SESSION_TOKENS, Quota, QuotaExceeded
 from tests import fake_llm
+from tests.test_version import NAME
 
 GEHEIM = b"s" * 32
 EIGEN_MISTRAL = "eigen-mistral-geheim-1111"
@@ -657,7 +658,7 @@ def test_the_version_carries_its_name(tmp_path: Path, monkeypatch: pytest.Monkey
     teile = (aquaticy.__version__, aquaticy.__codename__, aquaticy.__stage__)
     erwartet = " ".join(t for t in teile if t)
     assert erwartet == aquaticy.VERSION_LABEL
-    assert aquaticy.__codename__ == "Luna"
+    assert aquaticy.__codename__ == NAME
     runner = CliRunner()
     assert aquaticy.VERSION_LABEL in runner.invoke(cli.app, ["version"]).output
     # "aquaticy list" zeigt, wie viele eigene Schluessel ein Konto hat --

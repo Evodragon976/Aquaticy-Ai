@@ -116,7 +116,7 @@ class NotPrivate(ValueError):
     """Die Adresse liegt ausserhalb der privaten Netze."""
 
 
-def is_private_net(network: ipaddress.IPv4Network) -> bool:
+def is_private_net(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
     """Liegt *network* vollstaendig in einem privaten Bereich?
 
     Tailscale (100.64/10) zaehlt mit: fuer den Nutzer ist das sein eigenes

@@ -2844,7 +2844,7 @@ def test_the_picker_offers_the_structure_switch_and_the_effort() -> None:
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="structure"' in picker
     assert "Strukturieren" in picker
-    assert "teilt deine Frage auf" in picker
+    assert "teilt die Frage auf" in picker
     for stufe in ("low", "medium", "high"):
         assert f'data-effort="{stufe}"' in picker, stufe
     assert "Denktiefe" in picker
@@ -2970,7 +2970,7 @@ def test_the_picker_offers_the_web_switch() -> None:
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="online"' in picker
     assert "Im Web suchen" in picker
-    assert "was du angehängt hast" in picker
+    assert "deinen Anhängen" in picker
     assert "ohne Web" in _kopf({"online": False})["status"], "die Kopfzeile sagt es"
     assert "ohne Web" not in _kopf({"online": False, "mode": "code"})["status"], (
         "im Code-Modus wird immer nachgeschlagen")
@@ -3059,7 +3059,7 @@ def test_the_recheck_switch_sits_under_the_structure_switch() -> None:
     picker = picker[: picker.index('<main id="main">')]
     assert picker.index('id="structure"') < picker.index('id="recheck"')
     assert "Gegenprüfen" in picker
-    assert "die Antwort auf anderen Seiten" in picker
+    assert "die Antwort danach auf anderen Seiten" in picker
 
 
 def test_the_recheck_reaches_the_agent(

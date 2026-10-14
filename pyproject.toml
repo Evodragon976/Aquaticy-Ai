@@ -1,6 +1,6 @@
 [project]
 name = "aquaticy"
-version = "11.1.0"
+version = "11.2.1"
 description = "Ein KI-Agent fuer Kommandozeile und Browser, der eigenstaendig das Web durchsucht, Seiten liest und die Ergebnisse ausgewertet zurueckgibt."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,6 +41,9 @@ dev = [
     "pytest-asyncio>=0.23,<2",
     "respx>=0.21,<0.24",
     "ruff>=0.5,<0.20",
+    # Fuer tools/pruefung.py (11.2.1): Typen und Sicherheitsscan.
+    "mypy>=1.10,<2",
+    "bandit>=1.7,<2",
 ]
 
 [project.scripts]
@@ -63,6 +66,17 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 ignore = ["B008", "RUF001", "RUF002", "RUF003"]
+
+[tool.mypy]
+# `python tools/pruefung.py` laesst mypy ueber das ganze Paket laufen (11.2.1).
+files = ["aquaticy"]
+python_version = "3.11"
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# Ohne mitgelieferte Typen: PyYAML (Stubs extra) und term-image (optional).
+module = ["yaml", "term_image", "term_image.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

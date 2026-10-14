@@ -25,6 +25,7 @@ import re
 import secrets
 import socket
 import sqlite3
+import sys
 import threading
 import time
 import unicodedata
@@ -35,7 +36,7 @@ from html import escape
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from aquaticy import INTERNAL, VERSION_LABEL, __version__, cluster, webview
@@ -936,12 +937,13 @@ def delete_job(store: Any, nummer: int, settings: Settings) -> bool:
     ``DELETE /api/jobs`` liess es fuer immer auf dem Server liegen.
     """
     job = store.get(nummer)
+    bild = str(getattr(job, "image_id", "") or "") if job is not None else ""
     geloescht = bool(store.delete(nummer))
-    if geloescht and job is not None and getattr(job, "image_id", ""):
+    if geloescht and bild:
         from aquaticy.media import delete_snapshot
 
         with contextlib.suppress(OSError, ValueError):
-            delete_snapshot(settings.data_dir, job.image_id)
+            delete_snapshot(settings.data_dir, bild)
     return geloescht
 
 
@@ -1093,7 +1095,8 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         with contextlib.suppress(Exception):
             if not tresor.secret(GITHUB_TOKEN_KEY):
                 tresor.set_secret(GITHUB_TOKEN_KEY, altes)
-            remove_env_keys(settings.env_path, {GITHUB_TOKEN_KEY})
+            if settings.env_path is not None:
+                remove_env_keys(settings.env_path, {GITHUB_TOKEN_KEY})
     try:
         settings.github_token = tresor.secret(GITHUB_TOKEN_KEY)
     except Exception:
@@ -1106,7 +1109,8 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
             if alt:
                 if not tresor.secret(name):
                     tresor.set_secret(name, alt)
-                remove_env_keys(settings.env_path, {name})
+                if settings.env_path is not None:
+                    remove_env_keys(settings.env_path, {name})
             gespeichert = tresor.secret(name)
             if gespeichert:
                 setattr(settings, attr, gespeichert)
@@ -3254,6 +3258,11 @@ def _coworker_insult(konto: Any, text: str, wo: str) -> str:
             "Auftrag erkannt, jemanden herabzusetzen.")
 
 
+def _json_int(wert: Any) -> int:
+    """Eine Zahl aus einer JSON-Anfrage. Unsinn wirft TypeError, ValueError oder OverflowError."""
+    return int(wert)
+
+
 def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any], int]:
     """Anlegen, schreiben, freigeben, pausieren -- alles aus der Coworker-Uebersicht.
 
@@ -3286,7 +3295,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
             if nein:
                 return {"ok": False, "error": nein}, 400
             chat = new_session_id()
-            kollege = store.add(name, aufgabe, avatar=str(payload.get("avatar") or ""),
+            kollege: Any = store.add(name, aufgabe, avatar=str(payload.get("avatar") or ""),
                                 plan=session.plan, chat=chat)
             # Der Chat des Coworkers: hier erscheinen seine Meldungen.
             with contextlib.suppress(Exception):
@@ -3301,7 +3310,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
             hinweis = f"{kollege.name} fängt gleich an."
         else:
             try:
-                nummer = int(payload.get("id"))
+                nummer = _json_int(payload.get("id"))
             except (TypeError, ValueError, OverflowError):
                 return {"ok": False, "error": "Keine gültige Kennung."}, 400
             kollege = store.get(nummer)
@@ -3319,7 +3328,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                            f"{kollege.name} ist pausiert und liest es, sobald es weitergeht.")
             elif action in ("approve", "reject"):
                 try:
-                    anfrage = int(payload.get("action_id"))
+                    anfrage = _json_int(payload.get("action_id"))
                 except (TypeError, ValueError, OverflowError):
                     return {"ok": False, "error": "Keine gültige Anfrage."}, 400
                 entschieden = store.decide(kollege.id, anfrage, action == "approve")
@@ -3363,14 +3372,14 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 store.set_rules(kollege.id, payload.get("rules"))
                 hinweis = "Regeln gespeichert."
             elif action == "edit":
-                name = payload.get("name")
-                aufgabe = payload.get("goal")
-                nein = _coworker_insult(konto, f"{name or ''}\n{aufgabe or ''}",
+                neuer_name = payload.get("name")
+                neue_aufgabe = payload.get("goal")
+                nein = _coworker_insult(konto, f"{neuer_name or ''}\n{neue_aufgabe or ''}",
                                         f"coworker:{kollege.id}")
                 if nein:
                     return {"ok": False, "error": nein}, 400
-                store.update(kollege.id, name=None if name is None else str(name),
-                             goal=None if aufgabe is None else str(aufgabe),
+                store.update(kollege.id, name=None if neuer_name is None else str(neuer_name),
+                             goal=None if neue_aufgabe is None else str(neue_aufgabe),
                              avatar=None if payload.get("avatar") is None
                              else str(payload.get("avatar")))
                 hinweis = "Gespeichert."
@@ -3470,7 +3479,7 @@ def workshop_input(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         return {"ok": False, "error": "Es läuft gerade keine virtual machine im User mode."}, 404
     try:
         if art == "click":
-            x, y = int(payload.get("x")), int(payload.get("y"))
+            x, y = _json_int(payload.get("x")), _json_int(payload.get("y"))
             if not (0 <= x < WIDTH and 0 <= y < HEIGHT):
                 return {"ok": False, "error": "Die Stelle liegt nicht auf dem Bildschirm."}, 400
             args = ["click", str(x), str(y)]
@@ -4045,7 +4054,8 @@ class Handler(BaseHTTPRequestHandler):
         self.client_address = (str(anfrage.get("ip", "")), 0)
         self._cluster_user = str(anfrage["u"])
         self._cluster_https = bool(anfrage.get("https"))
-        self.wfile = strom
+        # Ein RawIOBase reicht: Der Handler schreibt nur hinein.
+        self.wfile = cast(Any, strom)
         try:
             if ausfuehren is None:
                 self.send_response(405)
@@ -4236,7 +4246,7 @@ class Handler(BaseHTTPRequestHandler):
         Ohne gesetztes TOKEN ist alles erlaubt; so bleibt der rein lokale
         Betrieb genauso einfach wie vorher.
         """
-        if not TOKEN or getattr(self, "_cluster_user", ""):
+        if not TOKEN or bool(getattr(self, "_cluster_user", "")):
             return True
         return any(
             candidate and same_secret(candidate, TOKEN)
@@ -4469,7 +4479,7 @@ class Handler(BaseHTTPRequestHandler):
                     image_id, fehler = self._job_image(payload, settings)
                     if fehler:
                         return {"ok": False, "error": fehler}
-                job = store.add(
+                job: Any = store.add(
                     str(payload.get("question", "")),
                     rhythm=str(payload.get("rhythm", "daily")),
                     hour=int(payload.get("hour", 8) or 0),
@@ -4637,8 +4647,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route in LEGAL_ROUTES:
             self._send(200, legal_page(route), "text/html; charset=utf-8")
         elif route == "/api/cluster":
-            antwort, status = cluster_view(SESSION.current())
-            self._json(antwort, status)
+            verbund, status = cluster_view(SESSION.current())
+            self._json(verbund, status)
         elif route == "/api/linked":
             self._json(linked_view(SESSION.current()))
         elif route == "/api/upgrades":
@@ -4666,11 +4676,11 @@ class Handler(BaseHTTPRequestHandler):
             if media_id:
                 from aquaticy.media import load_snapshot
 
-                snapshot = load_snapshot(SESSION.settings().data_dir, media_id)
-                if snapshot is None:
+                gespeichert = load_snapshot(SESSION.settings().data_dir, media_id)
+                if gespeichert is None:
                     self._json({"error": "Dieses Bild ist nicht mehr vorhanden."}, 404)
                     return
-                data, mime = snapshot
+                data, mime = gespeichert
                 self._send(200, data, mime)
                 return
             target = (query.get("url") or [""])[0].strip()
@@ -4819,8 +4829,8 @@ class Handler(BaseHTTPRequestHandler):
             if not entries:
                 self._json({"error": "Diesen Chat gibt es nicht."}, 404)
                 return
-            chats = {chat["session_id"]: chat for chat in cache.recent_chats(limit=200)}
-            title = str(chats.get(wanted, {}).get("title") or entries[0].question).strip()
+            je_chat = {chat["session_id"]: chat for chat in cache.recent_chats(limit=200)}
+            title = str(je_chat.get(wanted, {}).get("title") or entries[0].question).strip()
             self._json({"title": title, "markdown": chat_markdown(title, entries),
                         "filename": webview.export_filename(title)})
         elif route == "/api/werkstatt":
@@ -5067,7 +5077,7 @@ class Handler(BaseHTTPRequestHandler):
                                    403)
                         return
                 try:
-                    account = AUTH.register(
+                    account: Account | None = AUTH.register(
                         str(payload.get("email", "")),
                         str(payload.get("password", "")),
                         str(payload.get("plan", "normal")),
@@ -5104,6 +5114,9 @@ class Handler(BaseHTTPRequestHandler):
                 if AIGUARD.is_banned(ip=self._client_ip()) is not None:
                     self._json({"ok": False, "error": BANNED_MESSAGE, "code": "banned"}, 403)
                     return
+            if account is None:  # pragma: no cover - beide Wege oben kehren dann zurueck
+                self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
+                return
             try:
                 token = AUTH.create_session(account, self._device(), self._client_ip())
             except ValueError:
@@ -5713,6 +5726,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         So braucht nur der erste Aufruf die lange Adresse; danach kennt der
         Browser das Wort von selbst.
         """
+        _warm_up_once()
         self._csp_nonce = secrets.token_urlsafe(18)
         body = with_state(ui_template(), nonce=self._csp_nonce).encode("utf-8")
         # Gepackt (9.6.1): aus rund 370 kB werden etwa 80 kB -- spuerbar auf
@@ -6157,7 +6171,7 @@ def lan_address() -> str:
         return address
     with contextlib.suppress(OSError):
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            candidate = info[4][0]
+            candidate = str(info[4][0])
             if not candidate.startswith("127.") and not is_tailscale(candidate):
                 return candidate
     return "" if is_tailscale(address) else address
@@ -6242,17 +6256,27 @@ def urls_for(host: str, port: int, token: str = "") -> list[str]:
     return [url for url, _ in addresses_for(host, port, token)]
 
 
-def _warm_up() -> None:
-    """Laedt im Hintergrund, was der erste Seitenaufruf sonst abwarten muesste.
+#: Ob LiteLLM schon vorgeladen wird (11.2.1).
+_WARMED = threading.Event()
 
-    `model_problem` zieht beim ersten Mal LiteLLM nach -- drei Sekunden, in
-    denen die Kopfzeile leer bliebe und der Nutzer sich fragt, ob etwas kaputt
-    ist. Also erledigen wir das, waehrend er noch den Browser oeffnet.
+
+def _warm_up() -> None:
+    """Laedt LiteLLM im Hintergrund vor, damit die erste Antwort nicht wartet.
+
+    Seit 11.2.1 erst, wenn jemand die Oberflaeche oeffnet, nicht schon beim
+    Start: Ein Server, den niemand benutzt, spart so rund 190 MB.
     """
     with contextlib.suppress(Exception):
-        from aquaticy.config import model_problem
+        import litellm  # noqa: F401
 
-        model_problem(SESSION.settings().model)
+
+def _warm_up_once() -> None:
+    """Startet :func:`_warm_up` beim ersten Seitenaufruf, danach nie wieder."""
+    with _CACHE_LOCK:
+        if _WARMED.is_set():
+            return
+        _WARMED.set()
+    threading.Thread(target=_warm_up, daemon=True, name="aquaticy-warmup").start()
 
 
 def _cluster_load() -> dict[str, Any]:
@@ -6637,29 +6661,29 @@ class DataDirLock:
                 "starten würde Aufträge doppelt ausführen.") from exc
 
     def _lock(self) -> None:
-        try:
-            import fcntl
-        except ImportError:  # Windows
+        if sys.platform == "win32":
             import msvcrt
 
             self._file.seek(0)
             msvcrt.locking(self._file.fileno(), msvcrt.LK_NBLCK, 1)
             return
+        import fcntl
+
         fcntl.flock(self._file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def release(self) -> None:
         if self._file.closed:
             return
         with contextlib.suppress(OSError):
-            try:
-                import fcntl
-
-                fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
-            except ImportError:  # Windows
+            if sys.platform == "win32":
                 import msvcrt
 
                 self._file.seek(0)
                 msvcrt.locking(self._file.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(self._file.fileno(), fcntl.LOCK_UN)
         self._file.close()
 
 
@@ -6802,7 +6826,6 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         global WEBSITE, PUBLIC_SERVER, LAN_ONLY
         WEBSITE, PUBLIC_SERVER = _start_website(data_dir)
         LAN_ONLY = WEBSITE is not None
-        threading.Thread(target=_warm_up, daemon=True).start()
         if open_browser:
             # Auf dem eigenen Rechner ist 127.0.0.1 die zuverlaessigste Adresse --
             # die steht immer an letzter Stelle.

@@ -644,7 +644,7 @@ def judge(
         for alt in [k for k, (bis, _) in _cache.items() if bis <= jetzt]:
             del _cache[alt]
         known = _cache.get(key) if key and generation == _cache_generation else None
-        if known is not None:
+        if key and known is not None:
             _cache.move_to_end(key)
             return replace(known[1], source="gemerkt")
 

@@ -15,12 +15,13 @@ import pytest
 from typer.testing import CliRunner
 
 from aquaticy import web
+from tests.test_version import LABEL
 
 
 def test_version_label() -> None:
     import aquaticy
 
-    assert aquaticy.VERSION_LABEL == "11.1.0 Luna"
+    assert aquaticy.VERSION_LABEL == LABEL
 
 
 # -- Home Assistant ---------------------------------------------------------------------

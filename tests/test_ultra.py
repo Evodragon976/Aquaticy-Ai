@@ -12,12 +12,13 @@ import pytest
 
 from aquaticy import cluster, web
 from tests.test_cluster import _verbinden, _warte, verbund  # noqa: F401
+from tests.test_version import LABEL
 
 
 def test_version_label() -> None:
     import aquaticy
 
-    assert aquaticy.VERSION_LABEL == "11.1.0 Luna"
+    assert aquaticy.VERSION_LABEL == LABEL
 
 
 def _fehler(art: type[BaseException], text: str) -> BaseException:

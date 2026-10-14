@@ -991,6 +991,9 @@ TRACE_CHARS = 1200
 #: und sie waere vorbei, bevor sie eine zweite Quelle gefunden hat.
 RECHECK_MIN_CALLS = 4
 
+#: So viele Werkzeugaufrufe laufen hoechstens gleichzeitig (11.2.1).
+PARALLEL_LIMIT = 8
+
 #: Werkzeuge, die in derselben Runde nebeneinander laufen duerfen. Sie lesen
 #: nur: kein Schreiben, kein Schalten, kein Warten auf einen Menschen. Alles
 #: andere laeuft nacheinander, in der Reihenfolge, die das Modell gewaehlt hat.
@@ -1054,7 +1057,9 @@ def run_calls(
         return results
     if not parallel_ready(tool_calls):
         return [runner(call) for call in tool_calls]
-    with ThreadPoolExecutor(max_workers=len(tool_calls)) as pool:
+    # Hoechstens PARALLEL_LIMIT Threads, auch wenn das Modell mehr Aufrufe
+    # auf einmal schickt (11.2.1). Die Reihenfolge der Ergebnisse bleibt.
+    with ThreadPoolExecutor(max_workers=min(len(tool_calls), PARALLEL_LIMIT)) as pool:
         return list(pool.map(runner, tool_calls))
 
 
@@ -1223,7 +1228,7 @@ class Agent:
             self.toolbox.subagent_runner = self._run_subagents
         self.last_result: AgentResult | None = None
         #: Teilfragen aus der Vorpruefung, damit nicht zweimal geplant wird.
-        self._planned_tasks: list[str] | None = None
+        self._planned_tasks: list[Any] | None = None
 
     @property
     def tools(self) -> list[dict[str, Any]]:
@@ -1405,7 +1410,7 @@ class Agent:
         # `parallel_for`: zwoelf Anfragen auf einmal an eine lokale GPU waeren
         # kontraproduktiv, also arbeitet sie der Pool dort in Wellen ab.
         limit = max(1, self.agent_limit)
-        tasks = getattr(self, "_planned_tasks", None)
+        tasks: list[Any] | None = getattr(self, "_planned_tasks", None)
         if tasks:
             # Die Vorpruefung hat die Teilfragen schon mitgeliefert -- ein
             # zweiter Planungsaufruf waere reine Wartezeit.
@@ -1528,7 +1533,7 @@ class Agent:
             # Der Master kam nicht durch (Zeitlimit, Ausfall). Dann plant der
             # kleine Planer wie im Standardmodus -- eine Recherche ohne
             # Master ist immer noch besser als keine.
-            tasks = self._planned_tasks or []
+            tasks: list[Any] = self._planned_tasks or []
             self._planned_tasks = None
             if not tasks:
                 try:
@@ -1751,7 +1756,7 @@ class Agent:
             lines.append(f"- {title} ({url})\n  {snippet}"[:400])
         return "\n".join(lines)
 
-    def _run_subagents(self, tasks: list[str]) -> list[dict[str, Any]]:
+    def _run_subagents(self, tasks: list[Any]) -> list[dict[str, Any]]:
         """Fuehrt Teilfragen parallel aus und zaehlt ihr Budget mit."""
         from aquaticy.subagents import run_subagents
 
@@ -3487,7 +3492,7 @@ class Agent:
         result.visuals = list(stats.visuals)
         self.last_result = result
         learning = getattr(self, "learning", None)
-        if (learning is not None and getattr(self.toolbox, "learning_ticket", "")
+        if (learning is not None and bool(getattr(self.toolbox, "learning_ticket", ""))
                 and (stats.learning_pages or stats.research_pages)
                 and not result.error and not self.stopped
                 and result.answer and result.answer == original_answer):

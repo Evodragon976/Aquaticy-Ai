@@ -1093,6 +1093,8 @@ class Tunnel:
                                     "Details: website/cloudflared.log")
             except (WebsiteError, OSError) as exc:
                 self._set("fehler", str(exc))
+            except Exception as exc:  # der Tunnel versucht es weiter, statt still zu sterben
+                self._set("fehler", f"Unerwarteter Fehler ({type(exc).__name__}).")
             pause = TUNNEL_BACKOFF[min(versuch, len(TUNNEL_BACKOFF) - 1)]
             versuch += 1
             if self._sleep(pause):

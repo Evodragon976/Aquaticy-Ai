@@ -1,4 +1,4 @@
-# Aquaticy AI 11.1.0 Luna
+# Aquaticy AI 11.2.1 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -115,7 +115,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.1.0 Luna
+aquaticy --version            # 11.2.1 Sol
 
 # 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -937,6 +937,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_FETCH_TIMEOUT` | Wartezeit je Seite (s) | `15` |
 | `AQUATICY_CACHE_TTL_HOURS` | Gültigkeit des Zwischenspeichers | `24` |
 | `AQUATICY_ENABLE_PLAYWRIGHT` | echter Browser für schwierige Seiten | `true` |
+| `AQUATICY_BROWSER_PARALLEL` | höchstens so viele Browser gleichzeitig | `3` |
 | `AQUATICY_PROXY` | Proxy für Abrufe (`http://host:port` oder `env`) | direkt |
 | `AQUATICY_MEMORY` | Speicher an | `true` |
 | `AQUATICY_LEGAL_GUARD` | Rechts-Leitplanken (abschaltbar nur mit Ultra) | `true` |
@@ -992,15 +993,18 @@ git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaum
 cd Aquaticy-Ai
 uv venv && uv pip install -c constraints.txt -e ".[browser,dev]"
 
-uv run pytest          # alle Tests; Netz und Modelle sind gestellt
-uv run ruff check .    # Stilprüfung
+uv run python tools/pruefung.py            # alles: ruff, mypy, bandit, JavaScript, Tests
+uv run python tools/pruefung.py --schnell  # ohne Testsuite
+uv run pytest                              # nur die Tests; Netz und Modelle sind gestellt
 
 python tools/rundgang.py            # bedient die Weboberfläche wie ein Mensch
 python tools/rundgang.py --bilder   # mit Bildschirmfotos
 ```
 
+Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
+
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.1.0-Luna.md).
+[Prüfbericht](TESTREPORT-11.2.1-Sol.md).
 
 ---
 

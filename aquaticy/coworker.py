@@ -799,11 +799,11 @@ def coworker_agent_class() -> type:
             self.toolbox.gate = lambda name, args: session.gate(self.toolbox, name, args)
 
         @property
-        def workshop_on(self) -> bool:  # type: ignore[override]
+        def workshop_on(self) -> bool:
             return self._coworker.vm
 
         @property
-        def tools(self) -> list[dict[str, Any]]:  # type: ignore[override]
+        def tools(self) -> list[dict[str, Any]]:
             weg = FORBIDDEN | self._coworker.blocked_tools()
             liste = [schema for schema in super().tools
                      if schema["function"]["name"] not in weg

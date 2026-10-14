@@ -201,7 +201,7 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
     # Unter Windows kennt Popen `start_new_session` nicht; dort loesen
     # Creation-Flags den Prozess von der Konsole und unterdruecken das
     # aufpoppende Fenster.
-    extra: dict[str, object] = {}
+    extra: dict[str, Any] = {}
     if platform.system() == "Windows":
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
             subprocess, "CREATE_NO_WINDOW", 0
@@ -469,7 +469,9 @@ def _windows_memory_gb() -> float | None:
 
         status = MemoryStatusEx()
         status.dwLength = ctypes.sizeof(MemoryStatusEx)
-        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        # windll gibt es nur unter Windows; der Aufrufer prueft das vorher.
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined,unused-ignore]
+        if not kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
             return None
         return round(status.ullTotalPhys / 1_073_741_824, 1)
     except (AttributeError, OSError, ValueError):

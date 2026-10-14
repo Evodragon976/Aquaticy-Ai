@@ -10,6 +10,7 @@ import sys
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -1083,7 +1084,8 @@ def cluster_command() -> None:
         console.print("Der Server-Verbund ist aus (Einstellungen → Dev settings, nur Ultra).")
     elif verbund:
         console.print(f"Im Verbund mit {len(verbund.get('members', []))} Servern.")
-        aufteilen = verbund.get("split") if isinstance(verbund.get("split"), dict) else {}
+        roh = verbund.get("split")
+        aufteilen: dict[str, Any] = roh if isinstance(roh, dict) else {}
         if aufteilen.get("on"):
             # Serverlast aufteilen (10.2.0 Luna). llama.cpp laedt Aquaticy seit
             # 11.0.0 selbst -- in der Fassung, die der Master gewaehlt hat.
@@ -2122,9 +2124,10 @@ def chat_command(
     try:
         prefix = ""
         if image is not None:
-            prefix = _describe_image(agent, image)
-            if prefix is None:
+            beschreibung = _describe_image(agent, image)
+            if beschreibung is None:
                 raise typer.Exit(code=1)
+            prefix = beschreibung
 
         # -- Einmaliger Durchlauf ----------------------------------------
         if question:

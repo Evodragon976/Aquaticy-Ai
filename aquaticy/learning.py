@@ -283,7 +283,8 @@ class Learning:
             conn.execute("BEGIN IMMEDIATE")
             self._prune(conn, now)
 
-    def set_consent(self, enabled: bool, version: str) -> dict:
+    def set_consent(self, enabled: object, version: str) -> dict:
+        # Nur ein echtes True oder False zaehlt -- "ja" oder 1 nicht.
         if type(enabled) is not bool or (enabled and version != LEGAL_VERSION):
             raise ValueError("Bitte bestätige die aktuelle Erklärung zum gemeinsamen Lernen.")
         with self.connect() as conn:

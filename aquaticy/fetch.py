@@ -865,8 +865,9 @@ class Fetcher:
             candidates: list[tuple[int, str]] = []
             for selector in ('meta[property="og:image"]', 'meta[name="twitter:image"]'):
                 node = tree.css_first(selector)
-                if node and node.attributes.get("content"):
-                    candidates.append((0, node.attributes["content"]))
+                inhalt = node.attributes.get("content") if node else None
+                if inhalt:
+                    candidates.append((0, inhalt))
             for node in tree.css("img")[:80]:
                 source = node.attributes.get("src") or node.attributes.get("data-src") or ""
                 hint = " ".join(str(node.attributes.get(key) or "") for key in

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from aquaticy import web
+from tests.test_version import LABEL
 
 
 def _ui() -> str:
@@ -21,7 +22,7 @@ def _ui() -> str:
 def test_version_label() -> None:
     import aquaticy
 
-    assert aquaticy.VERSION_LABEL == "11.1.0 Luna"
+    assert aquaticy.VERSION_LABEL == LABEL
 
 
 @pytest.mark.parametrize("text", [

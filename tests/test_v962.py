@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 
 from aquaticy import web
+from tests.test_version import LABEL, NUMMER
 
 
 def _ui() -> str:
@@ -17,8 +18,8 @@ def test_version_is_public_962() -> None:
     import aquaticy
 
     # Seit 9.6.2.5 (Pruefrunde nach 9.6.2) -- weiterhin oeffentlich.
-    assert aquaticy.__version__ == "11.1.0"
-    assert aquaticy.VERSION_LABEL == "11.1.0 Luna" and not aquaticy.INTERNAL
+    assert aquaticy.__version__ == NUMMER
+    assert aquaticy.VERSION_LABEL == LABEL and not aquaticy.INTERNAL
 
 
 def test_sign_in_buttons_and_quick_link() -> None:

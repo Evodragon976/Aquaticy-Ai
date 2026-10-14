@@ -197,9 +197,10 @@ def price_condition_met(question: str, products: list[Any]) -> bool | None:
     ]
     mit_euro = [m for m in kandidaten if m.group(2) in ("€", "eur", "euro")]
     ohne_einheit = [m for m in kandidaten if not m.group(2)]
-    match = (mit_euro or ohne_einheit or [None])[-1]
-    if not match:
+    auswahl = mit_euro or ohne_einheit
+    if not auswahl:
         return None
+    match = auswahl[-1]
     limit = _number(match.group(1))
     prices = [_number(str(getattr(product, "price", "") or "")) for product in products]
     known = [price for price in prices if price is not None]

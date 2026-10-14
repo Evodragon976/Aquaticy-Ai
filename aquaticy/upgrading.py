@@ -1091,9 +1091,11 @@ class Trainer:
             self.wake_event.clear()
             if self.stop_event.is_set():
                 break
-            state = load(self.data_dir)
-            due = force or time.time() - float(state["last_train"]) >= TRAIN_EVERY
+            # Kein Fehler darf den Takt beenden (11.2.1) -- auch kein kaputter
+            # Zeitstempel in der Zustandsdatei.
             with contextlib.suppress(Exception):
+                state = load(self.data_dir)
+                due = force or time.time() - float(state["last_train"]) >= TRAIN_EVERY
                 if due:
                     self._once(force=force)
                 elif self.manifest is not None:

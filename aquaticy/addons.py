@@ -589,7 +589,8 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
     for addon in CATALOG.values():
         eintrag = state.get(addon.id) or {}
         ok, warum = usable(addon, settings, pro)
-        anmeldung = eintrag.get("login") if isinstance(eintrag.get("login"), dict) else {}
+        roh = eintrag.get("login")
+        anmeldung: dict[str, Any] = roh if isinstance(roh, dict) else {}
         if addon.login == "token":
             anmeldung = {**anmeldung, "token_set": bool(github_token(settings))}
         laeuft = installing(settings, addon.id)
@@ -1248,6 +1249,13 @@ WMO = {
 }
 
 
+def _wetterlage(code: Any) -> str:
+    """Der WMO-Wettercode als Wort ("unbekannt", wenn er fehlt oder fremd ist)."""
+    if isinstance(code, bool) or not isinstance(code, (int, float)):
+        return "unbekannt"
+    return WMO.get(int(code), "unbekannt")
+
+
 def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) -> dict[str, Any]:
     """Wetter von Open-Meteo: erst den Ort finden, dann die Vorhersage."""
     ort = " ".join(str(place or "").split())[:120]
@@ -1299,7 +1307,7 @@ def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) ->
             return werte[i] if i < len(werte) else None
 
         tage_liste.append({
-            "datum": datum, "wetter": WMO.get(feld("weather_code"), "unbekannt"),
+            "datum": datum, "wetter": _wetterlage(feld("weather_code")),
             "max_c": feld("temperature_2m_max"), "min_c": feld("temperature_2m_min"),
             "niederschlag_mm": feld("precipitation_sum"),
             "regenwahrscheinlichkeit_prozent": feld("precipitation_probability_max"),
@@ -1311,7 +1319,7 @@ def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) ->
                          if treffer.get(k)),
         "jetzt": {"temperatur_c": jetzt.get("temperature_2m"),
                   "gefuehlt_c": jetzt.get("apparent_temperature"),
-                  "wetter": WMO.get(jetzt.get("weather_code"), "unbekannt"),
+                  "wetter": _wetterlage(jetzt.get("weather_code")),
                   "wind_kmh": jetzt.get("wind_speed_10m"),
                   "niederschlag_mm": jetzt.get("precipitation"), "zeit": jetzt.get("time")},
         "tage": tage_liste,

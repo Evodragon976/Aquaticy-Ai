@@ -20,6 +20,7 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import threading
 from typing import Any, Protocol
 
 from aquaticy.fetch import SiteRules, load_rules
@@ -500,6 +501,33 @@ def no_sandbox_allowed() -> bool:
     return flag in {"1", "true", "yes", "on", "ja"}
 
 
+def _browser_limit() -> int:
+    """Wie viele Chromium gleichzeitig laufen duerfen (`AQUATICY_BROWSER_PARALLEL`)."""
+    try:
+        return max(1, min(int(os.environ.get("AQUATICY_BROWSER_PARALLEL", "") or 3), 16))
+    except ValueError:
+        return 3
+
+
+#: Jeder Chromium braucht 100 bis 300 MB. Zehn parallele Abrufe sollen nicht
+#: zehn Browser starten (11.2.1); die uebrigen warten kurz.
+BROWSER_SLOTS = threading.BoundedSemaphore(_browser_limit())
+
+#: So lange wartet ein Abruf hoechstens auf einen freien Browser (Sekunden).
+SLOT_WAIT = 60.0
+
+
+@contextlib.contextmanager
+def browser_slot(wait: float | None = None) -> Any:
+    """Haelt einen der Browserplaetze. Ist keiner frei, `TimeoutError`."""
+    if not BROWSER_SLOTS.acquire(timeout=SLOT_WAIT if wait is None else wait):
+        raise TimeoutError("kein Browser frei")
+    try:
+        yield
+    finally:
+        BROWSER_SLOTS.release()
+
+
 def launch_browser(playwright: Any, extra: list[str] | None = None) -> Any:
     """Startet Chromium -- mit Sandbox, und nur wo das nicht geht (und erlaubt ist) ohne.
 
@@ -580,7 +608,7 @@ def render_page(
         return None
 
     try:
-        with sync_playwright() as playwright:
+        with browser_slot(), sync_playwright() as playwright:
             browser = launch_browser(playwright)
             try:
                 # Frischer Kontext je Abruf -- nichts wird uebernommen.
@@ -644,7 +672,7 @@ def capture_visual(
     if not netguard.url_allowed(url):
         return None
     try:
-        with sync_playwright() as playwright:
+        with browser_slot(), sync_playwright() as playwright:
             # Ohne diese Freigabe verweigert Chromium jedes `play()` ohne
             # Mausklick -- und genau daran scheiterte die Live-Aufnahme.
             browser = launch_browser(

@@ -177,19 +177,34 @@ def api_key_name_for(model: str) -> str:
     return GENERIC_KEY_NAME if _env_str(GENERIC_KEY_NAME) else ""
 
 
+#: Anbieter, deren Praefix LiteLLM unveraendert als Anbieter nimmt (11.2.1).
+#: Fuer sie braucht :func:`resolve_model` LiteLLM nicht zu laden -- das kostet
+#: rund 190 MB und drei Sekunden. Ein Test gleicht die Liste mit LiteLLM ab.
+KNOWN_PREFIXES: frozenset[str] = frozenset({
+    *PROVIDER_KEYS, *LINKED_KEYS,
+    "azure", "bedrock", "cerebras", "cohere", "deepseek", "fireworks_ai",
+    "groq", "hosted_vllm", "huggingface", "openrouter", "perplexity",
+    "sambanova", "together_ai", "vertex_ai", "xai",
+})
+
+
 def resolve_model(model: str) -> str:
     """Prueft, ob LiteLLM den Anbieter aus *model* ableiten kann.
 
     Returns:
         Den erkannten Anbieter, oder einen leeren String, wenn nicht.
     """
-    if not model.strip():
+    model = model.strip()
+    if not model:
         return ""
+    prefix, _, rest = model.partition("/")
+    if prefix in KNOWN_PREFIXES and rest.strip():
+        return prefix
     try:
         import litellm
 
         litellm.suppress_debug_info = True
-        _, provider, *_ = litellm.get_llm_provider(model=model.strip())
+        _, provider, *_ = litellm.get_llm_provider(model=model)
         return str(provider or "")
     except Exception:
         return ""
@@ -701,11 +716,11 @@ class Settings:
             return "own"
         return "operator"
 
-    def llm_kwargs(self) -> dict[str, object]:
+    def llm_kwargs(self) -> dict[str, Any]:
         """Zusatzargumente fuer `litellm.completion` mit dem Hauptmodell."""
         return self.llm_kwargs_for(self.model)
 
-    def llm_kwargs_for(self, model: str) -> dict[str, object]:
+    def llm_kwargs_for(self, model: str) -> dict[str, Any]:
         """Zusatzargumente fuer einen Aufruf mit *model*.
 
         api_base und api_key gehoeren zum Anbieter des HAUPTmodells. Laeuft
@@ -783,7 +798,7 @@ class Settings:
             for wort in ("reason", "think", "-r1", "/r1", "qwq", "magistral", "o1", "o3", "gpt-5")
         )
 
-    def fast_kwargs_for(self, model: str) -> dict[str, object]:
+    def fast_kwargs_for(self, model: str) -> dict[str, Any]:
         """Wie :meth:`llm_kwargs_for`, aber auf Tempo getrimmt.
 
         Fuer Vorpruefung und Planung: kein Denk-Modus (Qwen3 & Co. wuerden

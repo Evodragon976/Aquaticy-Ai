@@ -275,7 +275,7 @@ def linked_providers(settings: Any) -> list[str]:
     import os
 
     stand = load(settings.data_dir)
-    eigene = getattr(settings, "own_key_names", frozenset()) or frozenset()
+    eigene: frozenset[str] = getattr(settings, "own_key_names", frozenset()) or frozenset()
     keys = getattr(settings, "api_keys", {}) or {}
     mit_konto = bool(getattr(settings, "account_email", ""))
     out = []

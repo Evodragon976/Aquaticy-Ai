@@ -5,6 +5,7 @@ Bewusst klein gehalten -- zwei Tabellen, keine ORM-Schicht.
 
 from __future__ import annotations
 
+import builtins
 import contextlib
 import hashlib
 import json
@@ -497,7 +498,7 @@ class Cache:
         with self._connect() as conn:
             conn.execute("DELETE FROM chat_unread WHERE session_id = ?", (session_id,))
 
-    def unread_chats(self) -> set[str]:
+    def unread_chats(self) -> builtins.set[str]:
         """Alle Chats, in denen etwas Ungelesenes steht."""
         with self._connect() as conn, closing(conn.cursor()) as cur:
             rows = cur.execute("SELECT session_id FROM chat_unread").fetchall()

@@ -809,7 +809,7 @@ class Cluster:
 
     @property
     def is_master(self) -> bool:
-        return self.joined and self.info.get("master") == self.node_id
+        return self.joined and (self.info or {}).get("master") == self.node_id
 
     @property
     def key(self) -> bytes:
@@ -1961,7 +1961,7 @@ class Cluster:
         self.db.install()
         neu = {"node": einladung.peer["node"], "name": einladung.peer.get("name", ""),
                "address": einladung.peer["address"], "port": einladung.peer["port"]}
-        info = dict(self.info)
+        info = dict(self.info or {})
         info.pop("previous", None)
         info["members"] = [*info["members"], neu]
         info["version"] = int(info.get("version", 0)) + 1
@@ -2304,7 +2304,11 @@ class TerminalPrompt:
                 while not self._queue:
                     self._cond.wait()
                 invite = self._queue.pop(0)
-            self._ask(invite)
+            # Eine Rueckfrage, die scheitert, darf die naechsten nicht verhindern (11.2.1).
+            try:
+                self._ask(invite)
+            except Exception as exc:
+                print(f"  [Verbund] Rückfrage fehlgeschlagen: {type(exc).__name__}: {exc}")
 
     def _ask(self, invite: dict[str, Any]) -> None:
         peer = invite.get("peer", {})

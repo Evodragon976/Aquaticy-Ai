@@ -1903,8 +1903,9 @@ def classify(
     schluessel = _decision_key(settings, "anfrage", context, text)
     jetzt = time.monotonic()
     with _cache_lock:
-        bekannt = _cache.get(schluessel) if generation == _cache_generation else None
-        if bekannt is not None and bekannt[0] > jetzt:
+        bekannt = (_cache.get(schluessel)
+                   if schluessel is not None and generation == _cache_generation else None)
+        if schluessel is not None and bekannt is not None and bekannt[0] > jetzt:
             _cache.move_to_end(schluessel)
             return bekannt[1]
     frage = ask or _ask_model
@@ -2052,8 +2053,9 @@ def answer_problem(
     schluessel = _decision_key(settings, "antwort", roh)
     jetzt = time.monotonic()
     with _cache_lock:
-        bekannt = _cache.get(schluessel) if generation == _cache_generation else None
-        if bekannt is not None and bekannt[0] > jetzt:
+        bekannt = (_cache.get(schluessel)
+                   if schluessel is not None and generation == _cache_generation else None)
+        if schluessel is not None and bekannt is not None and bekannt[0] > jetzt:
             _cache.move_to_end(schluessel)
             return bekannt[1][1] if bekannt[1] and bekannt[1][0] else ""
     frage = ask or _ask_model

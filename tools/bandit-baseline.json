@@ -1,0 +1,533 @@
+{
+ "results": [
+  {
+   "code": "1579         raise ValueError(\"Feed mit DTD/Entitaeten -- wird nicht gelesen.\")\n1580     wurzel = ET.fromstring(data)\n1581     eintraege: list[dict[str, Any]] = []\n",
+   "col_offset": 13,
+   "end_col_offset": 32,
+   "filename": "aquaticy/addons.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 20,
+    "link": "https://cwe.mitre.org/data/definitions/20.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Using xml.etree.ElementTree.fromstring to parse untrusted XML data is known to be vulnerable to XML attacks. Replace xml.etree.ElementTree.fromstring with its defusedxml equivalent function or make sure defusedxml.defuse_stdlib() is called",
+   "line_number": 1580,
+   "line_range": [
+    1580
+   ],
+   "test_id": "B314",
+   "test_name": "blacklist"
+  },
+  {
+   "code": "2091     (anzahl,) = conn.execute(\n2092         f\"SELECT COUNT(*) FROM aiguard_flags WHERE user_id=? \"\n2093         f\"AND (category='' OR category IN ({platz})) AND at>?\",\n2094         (user_id, *_MUSTER_ARTEN, jetzt - PATTERN_WINDOW),\n",
+   "col_offset": 8,
+   "end_col_offset": 62,
+   "filename": "aquaticy/aiguard.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 2092,
+   "line_range": [
+    2092,
+    2093
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "2505             rows = conn.execute(\n2506                 f\"SELECT subject, at, reason, by, until FROM aiguard_bans \"\n2507                 f\"WHERE subject IN ({platz}) ORDER BY at\",\n2508                 subjects,\n",
+   "col_offset": 16,
+   "end_col_offset": 57,
+   "filename": "aquaticy/aiguard.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 2506,
+   "line_range": [
+    2506,
+    2507
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "656                 liste = \", \".join(gemeinsam)\n657                 conn.execute(f\"INSERT INTO users_neu ({liste}) SELECT {liste} FROM users\")\n658                 conn.execute(\"DROP TABLE users\")\n",
+   "col_offset": 29,
+   "end_col_offset": 89,
+   "filename": "aquaticy/auth.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 657,
+   "line_range": [
+    657
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "664                 conn.execute(\n665                     f\"INSERT OR IGNORE INTO users ({liste}) SELECT {liste} FROM users_alt\")\n666                 conn.execute(\"DROP TABLE users_alt\")\n",
+   "col_offset": 20,
+   "end_col_offset": 90,
+   "filename": "aquaticy/auth.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 665,
+   "line_range": [
+    665
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "1174             rows = conn.execute(\n1175                 \"SELECT at, kind, detail, seen FROM account_events WHERE user_id=?\"\n1176                 + (\" AND seen=0\" if unseen_only else \"\") + \" ORDER BY at DESC LIMIT 50\",\n1177                 (str(user_id),)).fetchall()\n",
+   "col_offset": 16,
+   "end_col_offset": 83,
+   "filename": "aquaticy/auth.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 1175,
+   "line_range": [
+    1175,
+    1176
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "1259                                 (table,)).fetchone():\n1260                     conn.execute(f\"DELETE FROM {table} WHERE {column}=?\", (account.id,))\n1261         if profile.exists():\n",
+   "col_offset": 33,
+   "end_col_offset": 72,
+   "filename": "aquaticy/auth.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 1260,
+   "line_range": [
+    1260
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "1295                                 (table,)).fetchone():\n1296                     conn.execute(f\"DELETE FROM {table} WHERE {column}=?\", (account.id,))\n1297             if conn.execute(\"SELECT 1 FROM sqlite_master WHERE type='table' \"\n",
+   "col_offset": 33,
+   "end_col_offset": 72,
+   "filename": "aquaticy/auth.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 1296,
+   "line_range": [
+    1296
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "231             zeilen = conn.execute(\n232                 f\"SELECT {schluessel}, {spalte} FROM {tabelle} \"\n233                 f\"WHERE {spalte} != '' AND substr({spalte}, 1, ?) != ?\",\n234                 (len(TEXT_PREFIX), TEXT_PREFIX),\n",
+   "col_offset": 16,
+   "end_col_offset": 71,
+   "filename": "aquaticy/cache.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 232,
+   "line_range": [
+    232,
+    233
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "237                 conn.execute(\n238                     f\"UPDATE {tabelle} SET {spalte}=? WHERE {schluessel}=?\",\n239                     (self._seal(str(zeile[1]), f\"{tabelle}.{spalte}\"), zeile[0]),\n",
+   "col_offset": 20,
+   "end_col_offset": 75,
+   "filename": "aquaticy/cache.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 238,
+   "line_range": [
+    238
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "896     # und Domain gehoeren dann zusammen (11.1).\n897     bind = host or (\"0.0.0.0\" if (lan or seite) else \"127.0.0.1\")\n898     # Ersatz-Port (9.6.8 Sol): ist der eingestellte belegt, gleich den naechsten\n",
+   "col_offset": 20,
+   "end_col_offset": 29,
+   "filename": "aquaticy/cli.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 605,
+    "link": "https://cwe.mitre.org/data/definitions/605.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible binding to all interfaces.",
+   "line_number": 897,
+   "line_range": [
+    897
+   ],
+   "test_id": "B104",
+   "test_name": "hardcoded_bind_all_interfaces"
+  },
+  {
+   "code": "413                     conn.execute(\n414                         f\"CREATE TRIGGER {_ident(name)} AFTER {wann} ON {_ident(tabelle)} \"\n415                         \"WHEN (SELECT v FROM _cluster_flag LIMIT 1)=0 BEGIN \"\n416                         \"INSERT INTO _cluster_log (tbl, op, old, new, at) VALUES (\"\n417                         f\"'{tabelle.replace(chr(39), chr(39) * 2)}', '{op}', {obj(alt)}, \"\n418                         f\"{obj(neu)}, {_NOW_SQL}); END\")\n419                 for alt in vorhanden - set(gewollt):\n",
+   "col_offset": 24,
+   "end_col_offset": 55,
+   "filename": "aquaticy/cluster.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 414,
+   "line_range": [
+    414,
+    415,
+    416,
+    417,
+    418
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "555                 bedingung, params = wo(alt, pk)\n556                 treffer = conn.execute(f\"UPDATE OR REPLACE {t} SET {setze} WHERE {bedingung}\",\n557                                        vals + params).rowcount\n",
+   "col_offset": 39,
+   "end_col_offset": 93,
+   "filename": "aquaticy/cluster.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 556,
+   "line_range": [
+    556
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "560                 treffer = conn.execute(\n561                     f\"UPDATE {t} SET {setze} WHERE rowid=(SELECT rowid FROM {t} WHERE \"\n562                     f\"{bedingung} LIMIT 1)\", vals + params).rowcount\n563             if not treffer:\n",
+   "col_offset": 20,
+   "end_col_offset": 43,
+   "filename": "aquaticy/cluster.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 561,
+   "line_range": [
+    561,
+    562
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "567                 bedingung, params = wo(alt, pk)\n568                 conn.execute(f\"DELETE FROM {t} WHERE {bedingung}\", params)\n569             else:\n",
+   "col_offset": 29,
+   "end_col_offset": 65,
+   "filename": "aquaticy/cluster.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 568,
+   "line_range": [
+    568
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "570                 bedingung, params = wo(alt, cols)\n571                 conn.execute(f\"DELETE FROM {t} WHERE rowid=(SELECT rowid FROM {t} WHERE \"\n572                              f\"{bedingung} LIMIT 1)\", params)\n573 \n",
+   "col_offset": 29,
+   "end_col_offset": 52,
+   "filename": "aquaticy/cluster.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 571,
+   "line_range": [
+    571,
+    572
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "730 \n731     def __init__(self, data_dir: Path | str, host: str = \"0.0.0.0\", port: int = 8765,\n732                  hooks: Hooks | None = None, version: str = \"\",\n733                  transport: Callable[[dict[str, Any], str, bytes, float], bytes] | None = None,\n734                  ) -> None:\n",
+   "col_offset": 57,
+   "end_col_offset": 66,
+   "filename": "aquaticy/cluster.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 605,
+    "link": "https://cwe.mitre.org/data/definitions/605.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible binding to all interfaces.",
+   "line_number": 731,
+   "line_range": [
+    731,
+    732,
+    733
+   ],
+   "test_id": "B104",
+   "test_name": "hardcoded_bind_all_interfaces"
+  },
+  {
+   "code": "259         frist = time.monotonic() + max(5.0, 3 * float(timeout))\n260         with httpx.stream(\"GET\", url, timeout=timeout, verify=False,\n261                           headers={\"Accept-Encoding\": \"gzip, deflate\"},\n262                           follow_redirects=False, trust_env=False) as response:\n263             if response.status_code >= 500:\n",
+   "col_offset": 13,
+   "end_col_offset": 66,
+   "filename": "aquaticy/lan.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 295,
+    "link": "https://cwe.mitre.org/data/definitions/295.html"
+   },
+   "issue_severity": "HIGH",
+   "issue_text": "Call to httpx with verify=False disabling SSL certificate checks, security issue.",
+   "line_number": 260,
+   "line_range": [
+    260,
+    261,
+    262
+   ],
+   "test_id": "B501",
+   "test_name": "request_with_no_cert_validation"
+  },
+  {
+   "code": "415             rows = conn.execute(\n416                 \"SELECT f.id,f.text,f.source FROM learning_terms t \"\n417                 \"JOIN learning_facts f ON f.id=t.fact WHERE t.term IN (\"\n418                 + \",\".join(\"?\" for _ in hashes)\n419                 + \") AND f.expires>? AND (\"\n",
+   "col_offset": 16,
+   "end_col_offset": 72,
+   "filename": "aquaticy/learning.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 416,
+   "line_range": [
+    416,
+    417,
+    418
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "418                 + \",\".join(\"?\" for _ in hashes)\n419                 + \") AND f.expires>? AND (\"\n420                 \"(SELECT COUNT(*) FROM learning_contributions c \"\n421                 \"JOIN learning_consent s ON s.owner=c.owner \"\n422                 \"WHERE c.fact=f.id AND s.enabled=1 AND s.version=?)>=? \"\n423                 \"OR EXISTS (SELECT 1 FROM learning_contributions c \"\n424                 \"JOIN learning_consent s ON s.owner=c.owner \"\n425                 \"WHERE c.fact=f.id AND c.owner=? AND s.enabled=1 AND s.version=?)) \"\n426                 \"GROUP BY f.id ORDER BY COUNT(*) DESC,f.created DESC,f.id LIMIT 3\",\n427                 (*hashes, time.time(), LEGAL_VERSION, MIN_CONFIRMATIONS, self.owner,\n428                  LEGAL_VERSION),\n429             ).fetchall()\n430         result = []\n",
+   "col_offset": 18,
+   "end_col_offset": 82,
+   "filename": "aquaticy/learning.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 419,
+   "line_range": [
+    416,
+    417,
+    418,
+    419,
+    420,
+    421,
+    422,
+    423,
+    424,
+    425,
+    426
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "477             rows = conn.execute(\n478                 \"SELECT f.id,f.text,f.source,f.expires FROM learning_facts f WHERE f.expires>? AND \"\n479                 \"(SELECT COUNT(*) FROM learning_contributions c \"\n480                 \"JOIN learning_consent s ON s.owner=c.owner \"\n481                 \"WHERE c.fact=f.id AND s.enabled=1 AND s.version=?)>=? \" + selection + \" \"\n482                 \"ORDER BY f.created,f.id LIMIT ?\",\n",
+   "col_offset": 16,
+   "end_col_offset": 72,
+   "filename": "aquaticy/learning.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 478,
+   "line_range": [
+    478,
+    479,
+    480,
+    481
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "226             rows = conn.execute(\n227                 \"SELECT f.id,f.text,f.source,f.created,f.expires FROM research_terms t \"\n228                 \"JOIN research_facts f ON f.owner=t.owner AND f.id=t.fact \"\n229                 \"WHERE t.owner=? AND t.term IN (\" + \",\".join(\"?\" for _ in hashes) + \") \"\n230                 \"AND f.expires>? AND f.created+?>? GROUP BY f.id \"\n",
+   "col_offset": 16,
+   "end_col_offset": 49,
+   "filename": "aquaticy/research.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 227,
+   "line_range": [
+    227,
+    228,
+    229
+   ],
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "690             ),\n691             \"--tmpfs\", \"/tmp:rw,noexec,nosuid,size=64m\",\n692             # Nicht jede Laufzeit kennt diese Quote (sie braucht xfs mit\n693             # Projektquoten). Wo sie fehlt, faellt der Start damit aus -- dann\n694             # startet _start_container ohne sie und wir messen stattdessen nach.\n695             *((\"--storage-opt\", f\"size={self.disk_gb}G\") if self._quota_ok else ()),\n696             \"--workdir\", WORKDIR,\n697             # -- Umgebung: nur das Noetigste, nichts vom Rechner --\n698             \"--env\", \"HOME=\" + WORKDIR,\n699             \"--env\", \"PATH=/usr/local/bin:/usr/bin:/bin\",\n700             \"--env\", \"LANG=C.UTF-8\",\n701             \"--env\", \"PYTHONDONTWRITEBYTECODE=1\",\n702             \"--label\", \"aquaticy-werkstatt=1\",\n703             \"--label\", instance_label(),\n704         ]\n705         if offen:\n706             # iptables-legacy braucht ein beschreibbares /run fuer seine\n707             # Sperrdatei -- auch ohne Desktop (Internet im Code-Modus, 9.5.31),\n708             # sonst scheitert dort die Heimnetz-Sperre (fail-closed).\n709             flags += [\"--tmpfs\", \"/run:rw,nosuid,nodev,size=8m\"]\n710         if desktop:\n711             flags += [\n712                 # Der Browser braucht ein groesseres /dev/shm als die 64 MB ab Werk.\n713                 \"--shm-size\", \"256m\",\n714                 \"--env\", f\"DISPLAY={DISPLAY}\",\n715                 \"--label\", \"aquaticy-werkstatt-user=1\",\n716             ]\n717         return flags\n718 \n719     @property\n720     def netz_offen(self) -> bool:\n721         \"\"\"Darf die virtual machine ins Internet (User mode oder Internet, 9.5.31)?\"\"\"\n722         return self.user_mode or getattr(self, \"internet\", False)\n723 \n724     def _command(self) -> list[str]:\n725         \"\"\"Was im Behaelter als erster Prozess laeuft.\n726 \n727         Im User mode startet und beendet der Desktop Programme. Deren\n728         Ueberbleibsel raeumt nur ein echter erster Prozess weg -- `sleep` tut\n729         das nicht, und jeder nicht abgeholte Prozess zaehlt gegen die Grenze.\n730         \"\"\"\n731         if self.user_mode:\n732             return [\"tini\", \"--\", \"sleep\", \"infinity\"]\n733         return [\"sleep\", \"infinity\"]\n734 \n",
+   "col_offset": 23,
+   "end_col_offset": 55,
+   "filename": "aquaticy/sandbox.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 377,
+    "link": "https://cwe.mitre.org/data/definitions/377.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Probable insecure usage of temp file/directory.",
+   "line_number": 691,
+   "line_range": [
+    662,
+    663,
+    664,
+    665,
+    666,
+    667,
+    668,
+    669,
+    670,
+    671,
+    672,
+    673,
+    674,
+    675,
+    676,
+    677,
+    678,
+    679,
+    680,
+    681,
+    682,
+    683,
+    684,
+    685,
+    686,
+    687,
+    688,
+    689,
+    690,
+    691,
+    692,
+    693,
+    694,
+    695,
+    696,
+    697,
+    698,
+    699,
+    700,
+    701,
+    702,
+    703,
+    704
+   ],
+   "test_id": "B108",
+   "test_name": "hardcoded_tmp_directory"
+  },
+  {
+   "code": "6240     if is_public_host(host):\n6241         if host == \"0.0.0.0\":  # alle Netzwerkkarten -- per --lan gewaehlt\n6242             lan = lan_address()\n",
+   "col_offset": 19,
+   "end_col_offset": 28,
+   "filename": "aquaticy/web.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 605,
+    "link": "https://cwe.mitre.org/data/definitions/605.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible binding to all interfaces.",
+   "line_number": 6241,
+   "line_range": [
+    6241
+   ],
+   "test_id": "B104",
+   "test_name": "hardcoded_bind_all_interfaces"
+  }
+ ]
+}

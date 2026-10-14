@@ -12,21 +12,23 @@ import ast
 import math
 import operator
 import re
+from collections.abc import Callable
 
 #: Obergrenze fuer Exponenten, damit `9**9**9` nicht die CPU frisst.
 MAX_POWER = 1000
 MAX_EXPRESSION_LENGTH = 300
 
-_BINARY = {
+#: Potenzen (ast.Pow) haben einen eigenen Zweig mit Grenze.
+_BINARY: dict[type[ast.operator], Callable[[float, float], float]] = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
     ast.Mult: operator.mul,
     ast.Div: operator.truediv,
     ast.FloorDiv: operator.floordiv,
     ast.Mod: operator.mod,
-    ast.Pow: None,  # eigener Zweig mit Grenze
 }
-_UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+_UNARY: dict[type[ast.unaryop], Callable[[float], float]] = {
+    ast.UAdd: operator.pos, ast.USub: operator.neg}
 
 
 class CalcError(ValueError):
@@ -59,7 +61,7 @@ def _evaluate(node: ast.AST) -> float:
         raise CalcError(f"Nur Zahlen sind erlaubt, nicht {node.value!r}.")
     if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
         return _UNARY[type(node.op)](_evaluate(node.operand))
-    if isinstance(node, ast.BinOp) and type(node.op) in _BINARY:
+    if isinstance(node, ast.BinOp) and (type(node.op) in _BINARY or isinstance(node.op, ast.Pow)):
         left, right = _evaluate(node.left), _evaluate(node.right)
         try:
             if isinstance(node.op, ast.Pow):

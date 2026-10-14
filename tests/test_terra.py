@@ -18,6 +18,7 @@ from aquaticy.privacy import TEXT_PREFIX
 from aquaticy.tools import Toolbox
 from tests.test_agent import ScriptedLLM, _message, _tool_call
 from tests.test_v967 import learners as learners
+from tests.test_version import LABEL
 
 SOURCE = "https://de.wikipedia.org/wiki/Albert_Einstein"
 FACT = ("Albert Einstein war ein Physiker, dessen Arbeiten zur Relativitätstheorie "
@@ -272,4 +273,4 @@ def test_real_research_then_fresh_chat_uses_facts_for_new_answer(learners, setti
                          stream=False).answer == new_answer
     finally:
         fresh.close()
-    assert VERSION_LABEL == "11.1.0 Luna"
+    assert VERSION_LABEL == LABEL

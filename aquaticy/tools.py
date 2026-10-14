@@ -1609,6 +1609,8 @@ class Toolbox:
         #: Steht fremder Text im Gespraech (Web, Mails, Bildschirm)? Dann
         #: laufen Werkzeuge mit Wirkung nur noch mit Bestaetigung (9.5.15).
         self.untrusted_seen = False
+        #: Fuer das gemeinsame Lernen dieses Turns ("" = keins).
+        self.learning_ticket = ""
         #: Was der Nutzer in diesem Chat selbst geschrieben hat (setzt der
         #: Agent). Ein Wort, das er selbst nennt, ist fuer den Abfluss-Schutz
         #: kein Geheimnis (aquaticy/injection.py, seit 9.5.22).
