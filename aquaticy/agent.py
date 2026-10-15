@@ -991,6 +991,9 @@ TRACE_CHARS = 1200
 #: und sie waere vorbei, bevor sie eine zweite Quelle gefunden hat.
 RECHECK_MIN_CALLS = 4
 
+#: Kleiner wird das Kontextfenster nach Speichermangel nicht (Token, 11.2.2 Terra).
+MIN_LOCAL_CONTEXT = 4096
+
 #: So viele Werkzeugaufrufe laufen hoechstens gleichzeitig (11.2.1).
 PARALLEL_LIMIT = 8
 
@@ -1299,6 +1302,11 @@ class Agent:
         # sonst wartet der Agent auf eine Rueckmeldung, die nie kommt.
         if self.toolbox.ask_handler is not None:
             extra.append(ASK_SCHEMA)
+        if not self._model_can_use_tools():
+            # Ein oertliches Modell ohne Werkzeuge (gemma3 & Co., 11.2.2 Terra):
+            # Ollama lehnt jede Anfrage MIT Werkzeugen ab. Dann eben ohne --
+            # das Modell antwortet aus dem, was im Gespraech steht.
+            return []
         base = TOOL_SCHEMAS
         if not self.online:
             # Ohne Web bleiben die oertlichen Werkzeuge (Rechnen, Speicher,
@@ -1313,8 +1321,21 @@ class Agent:
         return [*base, *extra]
 
     def _auto_subagents_wanted(self) -> bool:
-        """Soll vor der eigentlichen Runde automatisch vorrecherchiert werden?"""
-        return self.use_subagents and self.settings.subagents_auto
+        """Soll vor der eigentlichen Runde automatisch vorrecherchiert werden?
+
+        Nicht mit einem Modell, das keine Werkzeuge kann (11.2.2 Terra): Jeder
+        Agent wuerde an der ersten Suche scheitern -- sechs Fehlschlaege samt
+        Wiederholungen, bevor das Hauptmodell ohnehin allein antwortet.
+        """
+        return (self.use_subagents and self.settings.subagents_auto
+                and self._model_can_use_tools(self.settings.effective_subagent_model))
+
+    def _model_can_use_tools(self, model: str = "") -> bool:
+        """Kann das Modell Werkzeuge aufrufen? Unbekannt zaehlt als ja (11.2.2 Terra)."""
+        from aquaticy.local_model import can
+
+        modell = model or self.active_model
+        return can(modell, "tools", self.settings.ollama_base(modell)) is not False
 
     def _needs_research(self, question: str) -> bool:
         """Vorpruefung UND Planung in einem Schritt.
@@ -1924,6 +1945,9 @@ class Agent:
         durch und der Wiederholungsversuch kann es richten.
         """
         kwargs = dict(self.settings.llm_kwargs_for(self.active_model))
+        deckel = getattr(self, "_ctx_deckel", 0)
+        if deckel and "num_ctx" in kwargs:
+            kwargs["num_ctx"] = min(int(kwargs["num_ctx"]), deckel)
         if self.settings.thinks(self.active_model):
             kwargs.setdefault("reasoning_effort", clean_effort(self.effort))
         kwargs["drop_params"] = True
@@ -2396,6 +2420,18 @@ class Agent:
             except Exception as exc:
                 last_error = exc
                 detail = f"{type(exc).__name__}: {exc}"
+                # 11.2.2 Terra: "does not support thinking/tools" -- das Modell
+                # kann etwas nicht, was mitgeschickt wurde. Merken und sofort ohne
+                # noch einmal; ein zweiter Versuch mit demselben waere zwecklos.
+                from aquaticy.local_model import missing_capability, note_missing
+
+                fehlt = missing_capability(detail)
+                if fehlt and note_missing(self.active_model, fehlt):
+                    if fehlt == "tools":
+                        self._emit("note", text=(
+                            f"{self.active_model} kann keine Werkzeuge benutzen – Aquaticy "
+                            "antwortet ohne eigene Suche."))
+                    return self._completion_with_retry(messages, stream=stream)
                 if attempt + 1 >= attempts:
                     if is_transient(detail) and self._switch_to_backup_model():
                         # Ein frischer Satz Versuche mit dem Ausweichmodell.
@@ -2406,11 +2442,14 @@ class Agent:
 
                 if resource_problem(detail):
                     freed = free_memory()
+                    kleiner = self._shrink_context()
+                    teile = [f"entladen: {', '.join(freed)}" if freed else "",
+                             f"Kontext jetzt {kleiner} Token" if kleiner else ""]
                     self._emit(
                         "retry",
                         attempt=attempt + 1,
                         reason="Speichermangel",
-                        detail=f"entladen: {', '.join(freed)}" if freed else "",
+                        detail=" · ".join(t for t in teile if t),
                     )
                 elif is_transient(detail):
                     self._emit("retry", attempt=attempt + 1, reason="Verbindung", detail="")
@@ -2427,6 +2466,27 @@ class Agent:
                 return antwort
 
         raise last_error if last_error else RuntimeError("LLM-Aufruf fehlgeschlagen")
+
+    def _shrink_context(self) -> int:
+        """Halbiert das Kontextfenster eines oertlichen Modells (11.2.2 Terra).
+
+        Passt ein Modell mit 16k Kontext nicht in den Speicher, scheitert jeder
+        Aufruf gleich -- dreimal dasselbe zu versuchen hilft nicht. Mit halbem
+        Fenster passt es oft. Der Verlauf wird passend gekuerzt, und das neue
+        Fenster gilt fuer den Rest der Sitzung.
+
+        Returns: das neue Fenster in Token, 0 wenn nichts mehr zu holen ist.
+        """
+        from aquaticy.config import provider_of
+
+        if provider_of(self.active_model) not in ("ollama", "ollama_chat"):
+            return 0
+        jetzt = getattr(self, "_ctx_deckel", 0) or self.settings.context_tokens
+        if jetzt <= MIN_LOCAL_CONTEXT:
+            return 0
+        self._ctx_deckel = max(MIN_LOCAL_CONTEXT, jetzt // 2)
+        self._trim_history()
+        return self._ctx_deckel
 
     def _switch_to_backup_model(self) -> bool:
         """Schaltet fuer diesen Turn auf ein Ausweichmodell um (9.6.8 Sol).
@@ -2464,7 +2524,8 @@ class Agent:
         # Durch den Taktgeber: der Anbieter hat ein Mass, und das haelt Aquaticy
         # ein, statt es auszureizen und die Fehler zu wiederholen.
         messages = metering.prepare_messages(self.settings, self.active_model, messages)
-        buchung = self._reserve(messages, self.tools)
+        werkzeuge = self.tools
+        buchung = self._reserve(messages, werkzeuge)
         try:
             with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
                 if self.settings.model_access is not None:
@@ -2472,8 +2533,9 @@ class Agent:
                 response = litellm.completion(
                     model=self.active_model,
                     messages=messages,
-                    tools=self.tools,
-                    tool_choice="auto",
+                    # Ohne Werkzeuge auch kein tool_choice -- manche Anbieter
+                    # lehnen das eine ohne das andere ab.
+                    **({"tools": werkzeuge, "tool_choice": "auto"} if werkzeuge else {}),
                     stream=stream,
                     **self._stream_usage(stream),
                     **getattr(buchung, "kwargs", None) or self._llm_kwargs(),
@@ -2487,6 +2549,11 @@ class Agent:
             tool_calls = repair_tool_calls(
                 _tool_calls_to_dicts(getattr(message, "tool_calls", None))
             )
+            if not tool_calls and werkzeuge:
+                aus_text = tool_calls_from_text(
+                    content, (t["function"]["name"] for t in werkzeuge))
+                if aus_text:
+                    tool_calls, content = aus_text, ""
             # Kommentar VOR Werkzeugaufrufen ("Ich suche mal ...") ist keine
             # Antwort: als answer_chunk gerendert wuerde er sich mit den
             # [Suche]-Zeilen verhaken und spaeter vor der echten Antwort
@@ -2509,6 +2576,14 @@ class Agent:
             self._note_usage(messages, {}, buchung, self._stream_zahlen)
             raise
         self._note_usage(messages, gestreamt, buchung, self._stream_zahlen)
+        if not gestreamt.get("tool_calls") and werkzeuge:
+            aus_text = tool_calls_from_text(
+                str(gestreamt.get("content") or ""), (t["function"]["name"] for t in werkzeuge))
+            if aus_text:
+                # Schon gestreamt -- die Oberflaeche nimmt den Text als
+                # Zwischennachricht wieder aus der Antwort (wie unten).
+                self._emit("interim", text=str(gestreamt.get("content") or "").strip())
+                return {**gestreamt, "content": "", "tool_calls": aus_text}
         if gestreamt.get("tool_calls") and str(gestreamt.get("content") or "").strip():
             # Was vor einem Werkzeugaufruf gestreamt wurde ("Ich suche jetzt nach
             # ..."), ist keine Antwort, sondern eine Zwischennachricht (9.6.0):
@@ -3055,6 +3130,9 @@ class Agent:
         window = self.settings.context_tokens
         if window <= 0:
             window = 8192  # Annahme fuer Anbieter ohne eigene Angabe
+        deckel = getattr(self, "_ctx_deckel", 0)
+        if deckel:
+            window = min(window, deckel)  # nach Speichermangel kleiner (11.2.2)
         return int(window * CHARS_PER_TOKEN * (1 - ANSWER_RESERVE))
 
     def _trim_history(self) -> None:
@@ -3841,6 +3919,66 @@ def split_json_objects(raw: str) -> list[str]:
             objects.append(json.dumps(value, ensure_ascii=False))
         index = end
     return objects
+
+
+#: Huellen, in die Modelle einen Werkzeugaufruf als Text packen.
+_AUFRUF_HUELLE = re.compile(r"</?tool_call>|```(?:json|tool_call|tool_code|tool)?",
+                            re.IGNORECASE)
+#: Laenger ist kein Werkzeugaufruf mehr, sondern eine Antwort.
+MAX_TEXT_CALL_CHARS = 8000
+#: So viele Aufrufe auf einmal werden aus Text gelesen -- mehr ist keiner.
+MAX_TEXT_CALLS = 8
+
+
+def tool_calls_from_text(content: str, names: Any) -> list[dict[str, Any]]:
+    """Werkzeugaufrufe, die ein Modell als Text geschrieben hat (11.2.2 Terra).
+
+    qwen2.5-coder und andere kleine Modelle schreiben ueber Ollama den Aufruf
+    oft in die Antwort statt in ``tool_calls``: ``{"name": "web_search",
+    "arguments": {...}}``, gern in ```json oder <tool_call>. Ohne das hier
+    suchten die Agenten nie, und der Nutzer bekam JSON statt einer Antwort.
+
+    Nur wenn der GANZE Text aus solchen Aufrufen besteht und jeder Name ein
+    angebotenes Werkzeug ist -- sonst ist es eine Antwort und bleibt eine.
+    Die Aufrufe laufen danach durch dieselben Pruefungen wie jeder andere.
+    """
+    text = str(content or "")
+    if not text.strip() or len(text) > MAX_TEXT_CALL_CHARS:
+        return []
+    erlaubt = {str(name) for name in names}
+    rest = _AUFRUF_HUELLE.sub(" ", text).strip()
+    aufrufe: list[dict[str, Any]] = []
+    index = 0
+    while index < len(rest):
+        while index < len(rest) and rest[index] in " \t\r\n,;":
+            index += 1
+        if index >= len(rest):
+            break
+        try:
+            wert, index = bounded_decode(rest, index)
+        except (ValueError, RecursionError):
+            return []
+        for eintrag in wert if isinstance(wert, list) else [wert]:
+            if not isinstance(eintrag, dict):
+                return []
+            # Auch die OpenAI-Form {"type": "function", "function": {...}}.
+            funktion = eintrag.get("function")
+            innen: dict[str, Any] = funktion if isinstance(funktion, dict) else eintrag
+            name = innen.get("name")
+            argumente = innen.get("arguments", innen.get("parameters", {}))
+            if isinstance(argumente, str):
+                try:
+                    argumente = bounded_json(argumente or "{}")
+                except ValueError:
+                    return []
+            if name not in erlaubt or not isinstance(argumente, dict):
+                return []
+            aufrufe.append({"id": f"text_call_{len(aufrufe)}", "type": "function",
+                            "function": {"name": name,
+                                         "arguments": json.dumps(argumente, ensure_ascii=False)}})
+            if len(aufrufe) > MAX_TEXT_CALLS:
+                return []
+    return aufrufe
 
 
 def repair_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:

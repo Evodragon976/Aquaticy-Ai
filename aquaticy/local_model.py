@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 import shutil
 import subprocess
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -356,6 +358,80 @@ def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None
 
 
 # ---------------------------------------------------------------------------
+# Was ein Modell kann (11.2.2 Terra)
+# ---------------------------------------------------------------------------
+#: So lange gilt, was Ollama ueber ein Modell gesagt hat (Sekunden).
+CAPABILITY_TTL = 600.0
+
+_CAPS: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
+#: Was ein Modell nachweislich NICHT kann -- gelernt aus seiner Fehlermeldung.
+_FEHLT: dict[str, set[str]] = {}
+_CAPS_LOCK = threading.Lock()
+
+#: Ollama lehnt eine Anfrage ab, wenn das Modell etwas nicht kann:
+#: '"qwen2.5-coder:14b" does not support thinking' oder '... does not support tools'.
+_FEHLT_RE = re.compile(r"does not support (thinking|tools)", re.IGNORECASE)
+
+
+def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
+                        timeout: float = 3.0) -> frozenset[str] | None:
+    """Was Ollama zu *name* als Faehigkeit fuehrt ("tools", "thinking", ...).
+
+    Aus ``/api/show`` (Ollama 0.9+), zehn Minuten gemerkt. ``None``, wenn
+    Ollama es nicht sagt (aelter, nicht erreichbar, Modell unbekannt) --
+    dann gilt das Gelernte aus :func:`note_missing`.
+    """
+    schluessel = (base_url.rstrip("/"), _ohne_latest(name))
+    jetzt = time.monotonic()
+    with _CAPS_LOCK:
+        gemerkt = _CAPS.get(schluessel)
+    if gemerkt is not None and jetzt - gemerkt[0] < CAPABILITY_TTL:
+        return gemerkt[1]
+    faehig: frozenset[str] | None = None
+    try:
+        antwort = httpx.post(f"{schluessel[0]}/api/show", json={"model": name},
+                             timeout=timeout, trust_env=False)
+        daten = antwort.json() if antwort.status_code == 200 else {}
+        liste = daten.get("capabilities") if isinstance(daten, dict) else None
+        if isinstance(liste, list):
+            faehig = frozenset(str(x).lower() for x in liste if isinstance(x, str))
+    except (httpx.HTTPError, ValueError):
+        faehig = None
+    with _CAPS_LOCK:
+        _CAPS[schluessel] = (jetzt, faehig)
+    return faehig
+
+
+def missing_capability(detail: str) -> str:
+    """Was ein Modell laut Fehlermeldung nicht kann: "thinking", "tools" oder ""."""
+    treffer = _FEHLT_RE.search(str(detail or ""))
+    return treffer.group(1).lower() if treffer else ""
+
+
+def note_missing(model_id: str, faehigkeit: str) -> bool:
+    """Merkt sich, dass *model_id* *faehigkeit* nicht kann. True, wenn das neu ist."""
+    with _CAPS_LOCK:
+        bekannt = _FEHLT.setdefault(str(model_id), set())
+        if faehigkeit in bekannt:
+            return False
+        bekannt.add(faehigkeit)
+        return True
+
+
+def can(model_id: str, faehigkeit: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool | None:
+    """Kann das oertliche *model_id* *faehigkeit*? None = unbekannt (kein Ollama-Modell
+    oder Ollama sagt es nicht)."""
+    with _CAPS_LOCK:
+        if faehigkeit in _FEHLT.get(str(model_id), set()):
+            return False
+    name = local_name(model_id)
+    if not name:
+        return None
+    faehig = ollama_capabilities(name, base_url)
+    return None if faehig is None else faehigkeit in faehig
+
+
+# ---------------------------------------------------------------------------
 # Der entscheidende Test: kann das Modell Werkzeuge aufrufen?
 # ---------------------------------------------------------------------------
 PROBE_TOOL = {
@@ -651,6 +727,10 @@ RESOURCE_MARKERS = (
     "cudamalloc",
     "insufficient memory",
     "failed to allocate",
+    # So sagt es Ollama selbst: 'model requires more system memory (12.5 GiB)
+    # than is available (8.0 GiB)' -- bis 11.2.2 nicht erkannt.
+    "requires more system memory",
+    "more memory than is available",
 )
 
 

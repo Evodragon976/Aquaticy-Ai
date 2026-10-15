@@ -47,7 +47,9 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
     `auth.py` (Konten), `privacy.py`/`keyvault.py` (Verschlüsselung),
     `sandbox.py` (virtual machine).
   - Plugins: `plugins.py`, Vorprüfung für Code- und Security-Review in `review_scan.py`.
-- `tests/` – je Fassung eine Datei (`test_v1121.py` für 11.2.1), dazu Dateien je Thema.
+- `tests/` – je Fassung eine Datei (`test_v1122.py` für 11.2.2), dazu Dateien je Thema.
+  `tests/ollama_nachbau.py` ist ein nachgebautes Ollama: Damit lassen sich lokale Modelle
+  (ohne Denk-Modus, ohne Werkzeuge, zu wenig Speicher) ohne echtes Ollama prüfen.
 - `tools/` – `pruefung.py` (Prüfkette), `rundgang.py` (Oberfläche im Browser),
   `bandit-baseline.json` (geprüfte, bekannte Hinweise), Benchmarks.
 

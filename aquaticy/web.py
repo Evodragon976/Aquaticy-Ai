@@ -5998,7 +5998,14 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             if kind == "error":
                 # 9.6.8 Sol: im Chat nie der technische Fehler, nur ein Satz fuer
                 # Menschen. Hinweise wie das erreichte Limit bleiben stehen.
-                payload = {**payload, "message": public_error(str(payload.get("message", "")))}
+                technisch = str(payload.get("message", ""))
+                oeffentlich = public_error(technisch)
+                if oeffentlich != " ".join(technisch.split()):
+                    # 11.2.2 Terra: Der Betreiber sieht im Terminal, was wirklich
+                    # schiefging -- ohne Geheimnisse und gekuerzt. Vorher stand
+                    # der Grund nirgends, nur "etwas ist schiefgelaufen".
+                    print(f"  [Fehler] {scrub_error(technisch, geheim)[:300]}", flush=True)
+                payload = {**payload, "message": oeffentlich}
             if AIGUARD is not None and konto is not None and kind == "abuse":
                 # Seit 9.5.24 entscheidet Ai-guard aus Art und Schwere (aus
                 # demselben Prüf-Aufruf des Rechtsrahmens): Chatsperre, Bann

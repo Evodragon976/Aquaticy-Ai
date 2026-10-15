@@ -18,6 +18,7 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 from aquaticy import metering
@@ -578,6 +579,11 @@ class SubagentResult:
         return payload
 
 
+def _TextCall(aufruf: dict[str, Any]) -> SimpleNamespace:
+    """Ein aus Text gelesener Aufruf in der Form, die LiteLLM liefert (11.2.2 Terra)."""
+    return SimpleNamespace(id=aufruf["id"], function=SimpleNamespace(**aufruf["function"]))
+
+
 def _run_one(
     task: str,
     settings: Settings,
@@ -682,11 +688,18 @@ def _run_one(
             calls = getattr(message, "tool_calls", None) or []
             content = message.content or ""
 
+            from aquaticy.agent import repair_tool_calls, run_calls, tool_calls_from_text
+
+            if not calls:
+                # 11.2.2 Terra: qwen2.5-coder & Co. schreiben den Aufruf als JSON in
+                # den Text. Ohne das galt er als "Ergebnis" -- gesucht wurde nie.
+                aus_text = tool_calls_from_text(
+                    content, (t["function"]["name"] for t in TOOL_SCHEMAS))
+                if aus_text:
+                    calls, content = [_TextCall(a) for a in aus_text], ""
             if not calls:
                 result.summary = content.strip()
                 break
-
-            from aquaticy.agent import repair_tool_calls, run_calls
 
             call_dicts = repair_tool_calls(
                 [

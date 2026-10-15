@@ -448,5 +448,6 @@ def test_the_agent_marks_text_before_a_tool_call_as_interim() -> None:
 
     quelle = inspect.getsource(Agent._completion)
     # Gestreamt und nicht gestreamt: Text vor einem Werkzeugaufruf ist eine
-    # Zwischennachricht, keine Antwort.
-    assert quelle.count('self._emit("interim"') == 2
+    # Zwischennachricht, keine Antwort. Seit 11.2.2 Terra dazu: ein als Text
+    # gestreamter Werkzeugaufruf (qwen2.5-coder & Co.) wird ebenso zurueckgenommen.
+    assert quelle.count('self._emit("interim"') == 3

@@ -183,7 +183,9 @@ def test_browser_side_self_healing() -> None:
 
 def test_chat_errors_stay_generic_but_hints_pass() -> None:
     quelle = Path(web.__file__).read_text(encoding="utf-8")
-    assert 'payload = {**payload, "message": public_error(str(payload.get("message", "")))}' \
-        in quelle
+    # Seit 11.2.2 Terra in zwei Schritten: der technische Text geht (ohne
+    # Schluessel) ins Terminal des Betreibers, in den Chat nur public_error().
+    assert "oeffentlich = public_error(technisch)" in quelle
+    assert 'payload = {**payload, "message": oeffentlich}' in quelle
     assert web.public_error("Bild.png ist kein Bild (.png, .jpg).") \
         == "Bild.png ist kein Bild (.png, .jpg)."

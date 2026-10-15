@@ -188,6 +188,13 @@ KNOWN_PREFIXES: frozenset[str] = frozenset({
 })
 
 
+#: Oertliche Modelle, die nachdenken koennen -- wenn Ollama selbst es nicht sagt.
+#: qwen3-coder und die "instruct"-Fassungen von Qwen3 denken nicht.
+OLLAMA_THINKERS = re.compile(
+    r"deepseek-r1|qwq|gpt-oss|magistral|cogito|reasoning|think|"
+    r"qwen3(?!-coder)(?![^/]*instruct)")
+
+
 def resolve_model(model: str) -> str:
     """Prueft, ob LiteLLM den Anbieter aus *model* ableiten kann.
 
@@ -780,6 +787,13 @@ class Settings:
             kwargs["num_ctx"] = self.context_tokens
         return kwargs
 
+    def ollama_base(self, model: str) -> str:
+        """Die Adresse des Ollama, bei dem *model* laeuft (wie LiteLLM sie waehlt)."""
+        from aquaticy.local_model import DEFAULT_OLLAMA_URL
+
+        adresse, _ = self.route(model)
+        return adresse or os.environ.get("OLLAMA_API_BASE", "") or DEFAULT_OLLAMA_URL
+
     def thinks(self, model: str) -> bool:
         """Kann dieses Modell ueberhaupt "nachdenken"?
 
@@ -792,7 +806,18 @@ class Settings:
         """
         name = (model or "").lower()
         if provider_of(model) in ("ollama", "ollama_chat"):
-            return True  # dort schaltet "disable" das Denken bewusst ab
+            # Nur Modelle, die Ollama als "thinking" fuehrt (11.2.2 Terra). Ein
+            # `think: true` an qwen2.5-coder, gemma & Co. lehnt Ollama mit einem
+            # Fehler ab -- bis 11.2.2 brach daran jede Antwort ab, sobald die
+            # Agenten fertig waren.
+            from aquaticy.local_model import can
+
+            kann = can(model, "thinking", self.ollama_base(model))
+            if kann is not None:
+                return kann
+            # Ollama sagt es nicht (aelter oder nicht erreichbar): nach dem Namen.
+            # Liegt der daneben, lernt der Agent aus der Ablehnung (note_missing).
+            return OLLAMA_THINKERS.search(name) is not None
         return any(
             wort in name
             for wort in ("reason", "think", "-r1", "/r1", "qwq", "magistral", "o1", "o3", "gpt-5")
