@@ -535,7 +535,9 @@ def test_retry_capabilities_and_account_controls_are_there() -> None:
                  'id="account-wipe"', 'id="account-password"', 'id="account-logout-all"',
                  'id="security-banner"', 'id="device-list"'):
         assert teil in html, teil
-    assert ".send{width:44px;height:44px}" in html
+    # Seit 11.2.2 sichtbar 34px, zum Antippen weiter 44px (unsichtbarer Rand) --
+    # nachgemessen im Rundgang (tools/rundgang.py, Abschnitt Handy).
+    assert ".send{width:34px;height:34px" in html and ".send::after{inset:-5px 0 -5px -5px}" in html
 
 
 # -- Ai-guard: getarnte Beleidigungen -------------------------------------------------

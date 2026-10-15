@@ -2240,6 +2240,23 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
         pg.eval_on_selector("body", "e => e.scrollWidth <= window.innerWidth + 1"),
         f"nichts steht seitlich ueber ({breite}px breit)",
     )
+    # 11.2.2: Der Senden-Knopf ist klein, trifft aber auf 44px Hoehe -- und
+    # die eingeklappte Seitenleiste wirft keinen Schatten mehr an den Rand.
+    treffer = pg.evaluate(
+        """() => {
+             const b = document.querySelector("#send").getBoundingClientRect();
+             const x = b.left + b.width / 2, y = b.top + b.height / 2;
+             const trifft = dy => document.elementFromPoint(x, y + dy)?.closest("#send") !== null;
+             return {w: b.width, oben: trifft(-21), unten: trifft(21)};
+           }"""
+    )
+    log.pruefe(treffer["w"] <= 36, f"der Senden-Knopf ist {treffer['w']:.0f}px gross")
+    log.pruefe(treffer["oben"] and treffer["unten"], "und trifft trotzdem auf 44px Hoehe")
+    if breite < 900:
+        schatten = pg.evaluate(
+            "() => document.body.classList.contains('collapsed') ? "
+            "getComputedStyle(document.querySelector('aside')).boxShadow : 'none'")
+        log.pruefe(schatten == "none", "die eingeklappte Seitenleiste wirft keinen Schatten")
     # Die Kopfzeile und die Modellauswahl duerfen sich nicht schneiden.
     menue(pg)
     pg.wait_for_timeout(500)
