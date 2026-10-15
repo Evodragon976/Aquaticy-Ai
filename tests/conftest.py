@@ -63,6 +63,23 @@ def _rechtspruefer_ohne_netz(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _laufzeit_unbekannt(monkeypatch):
+    """Jeder Test beginnt, ohne zu wissen, ob es Podman oder Docker gibt (11.2.2 Sol).
+
+    Der Agent merkt sich das eine Minute lang in `aquaticy.sandbox`; ein frueherer
+    Test haette sonst fuer den naechsten entschieden. "Unbekannt" heisst: die
+    virtual machine wird angeboten, wie vor 11.2.2 Sol -- und ohne die Suche im
+    Hintergrund, die mitten im Test umschalten koennte. Die echte Suche pruefen
+    tests/test_v1122.py (runtime_known) und tests/test_v9518.py.
+    """
+    from aquaticy import sandbox
+
+    monkeypatch.setattr(sandbox, "_LAUFZEIT",
+                        {"bis": 0.0, "wert": None, "bekannt": False, "sucht": False})
+    monkeypatch.setattr(sandbox, "runtime_known", lambda: (False, None))
+
+
+@pytest.fixture(autouse=True)
 def _keine_echte_env(monkeypatch, tmp_path_factory):
     """Kein Test schreibt in die echte `.env` -- und keiner erbt die eines anderen.
 

@@ -44,6 +44,11 @@ ROLE_LABELS = {"zahlen": "Zahlen", "gegenstimmen": "Gegenstimmen", "frisch": "Ak
 #: Wie die Urteile der Pruefer heissen.
 VERDICT_LABELS = {"BESTAETIGT": "bestätigt", "ABWEICHUNG": "Abweichung gefunden",
                   "UNKLAR": "nichts Belastbares gefunden"}
+#: Dasselbe auf Englisch (11.2.2 Sol).
+ROLE_LABELS_EN = {"zahlen": "numbers", "gegenstimmen": "counter-voices", "frisch": "latest",
+                  "tiefe": "deep dive"}
+VERDICT_LABELS_EN = {"BESTAETIGT": "confirmed", "ABWEICHUNG": "found a difference",
+                     "UNKLAR": "nothing solid found"}
 
 #: Vorschlaege und Begruessungen auf der Startseite -- je Modus, mindestens 50
 #: (seit 9.6.0 in aquaticy/starttexte.py).
@@ -57,6 +62,8 @@ def start_texts() -> dict[str, Any]:
         "greetings": {mode: list(texte) for mode, texte in GREETINGS.items()},
         "roles": dict(ROLE_LABELS),
         "verdicts": dict(VERDICT_LABELS),
+        "roles_en": dict(ROLE_LABELS_EN),
+        "verdicts_en": dict(VERDICT_LABELS_EN),
     }
 
 

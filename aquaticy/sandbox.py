@@ -306,16 +306,62 @@ def find_runtime() -> Runtime | None:
         virtual machine -- ein Rueckfall auf den Rechner selbst waere genau das, was
         diese Datei verhindern soll.
     """
-    for binary in ("podman", "docker"):
-        if not shutil.which(binary) or not _works(binary):
-            continue
+    # Jede Laufzeit nur einmal fragen (11.2.2 Sol): haengt der Dienst, kostet jede
+    # Frage das volle Zeitlimit -- vorher zweimal je Laufzeit.
+    da = [b for b in ("podman", "docker") if shutil.which(b) and _works(b)]
+    for binary in da:
         if _has_gvisor(binary):
             return Runtime(binary, "gvisor", f"{binary} + gVisor", ("--runtime", "runsc"))
-    if shutil.which("podman") and _works("podman"):
+    if "podman" in da:
         return Runtime("podman", "podman", "Podman (ohne Wurzelrechte)")
-    if shutil.which("docker") and _works("docker"):
+    if "docker" in da:
         return Runtime("docker", "docker", "Docker (gehaertet)")
     return None
+
+
+#: Wie lange gilt, ob Podman/Docker da ist (Sekunden). `docker info` dauert,
+#: und der Agent fragt bei jeder Runde im Code-Modus.
+RUNTIME_TTL = 60.0
+_LAUFZEIT: dict[str, Any] = {"bis": 0.0, "wert": None, "bekannt": False, "sucht": False}
+_LAUFZEIT_LOCK = threading.Lock()
+
+
+def runtime_cached() -> Runtime | None:
+    """:func:`find_runtime`, eine Minute gemerkt (11.2.2 Sol). Wartet, wenn es sucht."""
+    with _LAUFZEIT_LOCK:
+        if _LAUFZEIT["bekannt"] and time.monotonic() < _LAUFZEIT["bis"]:
+            return _LAUFZEIT["wert"]
+    wert = find_runtime()
+    with _LAUFZEIT_LOCK:
+        _LAUFZEIT.update(bis=time.monotonic() + RUNTIME_TTL, wert=wert, bekannt=True)
+    return wert
+
+
+def runtime_known() -> tuple[bool, Runtime | None]:
+    """Was zuletzt ueber Podman/Docker bekannt war -- ohne zu warten (11.2.2 Sol).
+
+    Eine Anfrage darf nie auf `docker info` warten (Fund 9.5.18). Ist der Stand
+    aelter als :data:`RUNTIME_TTL` oder noch keiner da, sucht ein kurzer Faden im
+    Hintergrund; bis dahin gilt der alte Stand. Returns: (bekannt, Laufzeit).
+    """
+    with _LAUFZEIT_LOCK:
+        bekannt, wert = bool(_LAUFZEIT["bekannt"]), _LAUFZEIT["wert"]
+        alt = not bekannt or time.monotonic() >= _LAUFZEIT["bis"]
+        suchen = alt and not _LAUFZEIT["sucht"]
+        if suchen:
+            _LAUFZEIT["sucht"] = True
+    if suchen:
+        def neu_suchen() -> None:
+            try:
+                runtime_cached()
+            except Exception:
+                pass
+            finally:
+                with _LAUFZEIT_LOCK:
+                    _LAUFZEIT["sucht"] = False
+
+        threading.Thread(target=neu_suchen, name="aquaticy-laufzeit", daemon=True).start()
+    return bekannt, wert
 
 
 @dataclass
@@ -1237,7 +1283,7 @@ class Sandbox:
     def _idle_out(self) -> None:
         self.stop("seit 20 Minuten unbenutzt")
 
-    def stop(self, reason: str = "aufgeraeumt") -> None:
+    def stop(self, reason: str = "aufgeräumt") -> None:
         """Loescht Behaelter und Datentraeger -- ohne Rueckstand."""
         with self._lock:
             if not self._name and not self._volume:

@@ -1611,6 +1611,11 @@ html.vv,html.vv body{height:var(--app-h)}
   body.start .pane{justify-content:flex-start;padding-top:max(22vh, 120px)}
 }
 
+/* 11.2.2 Sol: der Internet-Schalter haengt sichtbar am Schalter der virtual machine. */
+.picker-think.vm-netz{margin-left:22px;border-left:2px solid var(--line);padding-left:12px}
+.vm-status{margin:2px 16px 8px 34px}
+.vm-status.bad{color:var(--err)}
+
 /* Auto-Upgrading (10.0 Luna) */
 .launch-top{display:flex;align-items:center;gap:10px}
 .launch-badge{margin-left:auto;font:600 calc(11px * var(--fs))/1 var(--mono);letter-spacing:.06em;
@@ -1820,12 +1825,21 @@ html.vv,html.vv body{height:var(--app-h)}
     <label class="picker-think only-code" for="werkstatt">
       <input type="checkbox" role="switch" class="schalter" id="werkstatt">
       <span><b>Code wirklich ausprobieren</b>
-        <span class="why">Aquaticy bekommt einen eigenen, abgeschotteten Rechner und
-          lässt den Code dort laufen — statt nur zu raten, ob er funktioniert. Dieser
-          Rechner hat <b>Internet</b> (etwa für pip install), aber <b>keinen Zugriff auf
-          dein lokales Netz</b>, und er wird 20 Minuten nach deiner letzten
-          Nachricht gelöscht.</span></span>
+        <span class="why">Aquaticy bekommt einen eigenen, abgeschotteten Rechner und lässt
+          den Code dort laufen, statt nur zu raten, ob er funktioniert. Er sieht dein
+          lokales Netz nicht und wird 20 Minuten nach deiner letzten Nachricht
+          gelöscht.</span></span>
     </label>
+    <!-- 11.2.2 Sol: direkt darunter, sobald die virtual machine an ist. Aendern darf es
+         nur Ultra; der Server prueft das beim Speichern ohnehin. -->
+    <label class="picker-think only-code vm-netz" for="werkstatt-netz" id="werkstatt-netz-zeile"
+           hidden>
+      <input type="checkbox" role="switch" class="schalter" id="werkstatt-netz">
+      <span><b>Internet für die virtual machine</b> <span class="ultra-tag">Ultra</span>
+        <span class="why">Für pip install oder Downloads. Dein Heimnetz bleibt gesperrt.
+          Eine laufende virtual machine startet dafür neu.</span></span>
+    </label>
+    <div class="note vm-status" id="werkstatt-status" role="status" hidden></div>
     <label class="picker-think only-normal" for="online">
       <input type="checkbox" role="switch" class="schalter" id="online" checked>
       <span><b>Im Web suchen</b>
@@ -2728,9 +2742,9 @@ html.vv,html.vv body{height:var(--app-h)}
             <label for="upgrade-on" style="margin:0">Auto-Upgrading
               <span class="why">Aquaticy baut lokale Modelle mit Wissen weiter, das mehrere
                 Konten unabhängig bestätigt haben (aus öffentlichen Quellen; Kontokennungen
-                stehen nicht im Modelltext), und misst den Gewinn im Lückentext-Wissenstest. Ab 5 %
-                wird „Upgraden“ grün (z. B. gemma3:4b → gemma3:4b 1.1), ab 30 % gibt es eine
-                ganze Version (→ gemma3:4b 2). Gilt für jedes Konto.</span></label>
+                stehen nicht im Modelltext), und misst den Gewinn im Lückentext-Test. Ab 5 %
+                wird „Upgraden“ grün (gemma3:4b → 1.1), ab 30 % gibt es eine ganze Version
+                (→ 2). Gilt für jedes Konto.</span></label>
           </div>
           <p class="note" id="upgrade-lock" hidden>🔒 Auto-Upgrading gehört zu Ultra.</p>
           <div class="note" id="upgrade-status" role="status"></div>
@@ -2846,7 +2860,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.2.2 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.2.2 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -2981,7 +2995,61 @@ function setSandbox(on, { merken = true } = {}){
 function zeigeVmKnopf(){
   const knopf = $("#btn-vmfiles");
   if (knopf) knopf.hidden = !(mode === "code" && sandbox);
+  zeigeVmNetz();
 }
+
+// 11.2.2 Sol: unter "Code wirklich ausprobieren" -- Internet fuer die virtual
+// machine (nur Ultra) und ein Hinweis, wenn sie hier gar nicht starten kann.
+let vmStand = null;
+async function zeigeVmNetz(){
+  const zeile = $("#werkstatt-netz-zeile"), status = $("#werkstatt-status");
+  if (!zeile || !status) return;
+  const sichtbar = mode === "code" && sandbox;
+  zeile.hidden = !sichtbar;
+  if (!sichtbar){ status.hidden = true; return; }
+  try { vmStand = await (await api("/api/vm")).json(); }
+  catch { vmStand = null; }
+  if (!vmStand || typeof vmStand.internet !== "boolean") return;
+  const netz = $("#werkstatt-netz");
+  netz.checked = vmStand.internet;
+  netz.classList.toggle("gesperrt", !vmStand.ultra);
+  status.hidden = vmStand.runtime !== false;
+  status.className = "note vm-status bad";
+  status.textContent = "Auf diesem Rechner fehlt Podman oder Docker – die virtual machine "
+    + "kann nicht starten.";
+}
+$("#werkstatt-netz").addEventListener("click", async (e) => {
+  const schalter = e.currentTarget;
+  if (!vmStand?.ultra){
+    e.preventDefault();
+    schalter.checked = false;
+    await guardDialog({
+      title: "Das gibt es leider nur mit einem Ultra-Konto.",
+      text: "Bei Normal- und Pro-Konten hat die virtual machine kein Netz — weder Internet "
+        + "noch dein lokales Netz. Rechnen, Code ausführen und Dateien bearbeiten geht trotzdem.",
+      ok: "Verstanden",
+    });
+    return;
+  }
+  const an = schalter.checked;
+  try {
+    const res = await api("/api/config", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ AQUATICY_VM_INTERNET: String(an) }),
+    });
+    const daten = await res.json();
+    if (!daten.ok) throw new Error(daten.error || "");
+    vmStand.internet = an;
+    // Der Schalter in den Einstellungen zeigt dasselbe.
+    const gleich = $("#vminternet");
+    if (gleich) gleich.checked = an;
+    toast(an ? "Die virtual machine hat jetzt Internet."
+             : "Die virtual machine hat jetzt kein Internet mehr.");
+  } catch (fehler){
+    schalter.checked = !an;
+    toast(nutzerFehler(fehler.message, "Das ließ sich nicht speichern."));
+  }
+});
 
 function setOnline(on, { merken = true } = {}){
   online = !!on;
@@ -3573,6 +3641,18 @@ const PHASEN = { think: "Denken", web: "Websuche", code: "Code ausführen",
   bild: "Bild erstellen", rechnen: "Rechnen", agenten: "Agenten arbeiten", pruefen: "Prüfen",
   netz: "Netzwerk", haus: "Smart Home", mail: "E-Mail", termine: "Kalender", lager: "Lager",
   erinnern: "Erinnern", modell: "Modell laden", work: "Arbeiten" };
+// Was der Server deutsch schickt und hier fuer Englisch nachgeschlagen wird (11.2.2 Sol).
+const VM_GRUENDE_EN = { "seit 20 Minuten unbenutzt": "unused for 20 minutes",
+  "aufgeräumt": "cleaned up", "Programm beendet": "program closed",
+  "neu aufgebaut": "rebuilt", "Installation fertig": "installation finished",
+  "Coworker beendet": "coworker finished" };
+const KATEGORIEN_EN = { bild: "creating an image", code: "programming",
+  schnell: "short chat", schreiben: "writing", recherche: "research and questions" };
+function autoGrundEn(ev){
+  const grund = KATEGORIEN_EN[ev.kategorie] || ev.grund || "";
+  return String(ev.grund || "").includes("kein Bildmodell")
+    ? grund + " (no image model reachable)" : grund;
+}
 const CODE_WOERTER = ["Noodling", "Aquaticing", "Pondering", "Schlepping", "Booping",
   "Tinkering", "Brewing", "Percolating", "Mulling", "Cogitating", "Wrangling", "Doodling",
   "Fiddling", "Simmering", "Splashing", "Diving", "Rippling", "Bubbling", "Swirling",
@@ -3761,7 +3841,7 @@ function stagger(nodes, step = 26, cap = 10){
 function flash(node, text){
   // Auf Englisch steht die Uebersetzung da -- auch das ist "unveraendert".
   if (node.textContent === text
-      || (sprache === "en" && node.textContent === EN[schluessel(text)])) return;
+      || (sprache === "en" && node.textContent === aufEnglisch(text))) return;
   node.textContent = text;
   node.classList.remove("flash");
   void node.offsetWidth;
@@ -3958,7 +4038,9 @@ async function runCommand(line){
     });
     const data = await res.json();
     if (view !== chatView) return;
-    bubble.innerHTML = md(data.ok ? (data.text || "") : ("**Das hat nicht geklappt:** " + nutzerFehler(data.error)));
+    bubble.innerHTML = md(data.ok ? (data.text || "")
+      : sp("**Das hat nicht geklappt:** ", "**That didn't work:** ")
+        + enOderDe(nutzerFehler(data.error)));
     // /export: die Datei kommt als Download -- nicht als Pfad auf dem Server,
     // mit dem man an einem anderen Geraet nichts anfangen kann.
     if (data.ok && data.download && typeof data.download.content === "string"){
@@ -3970,7 +4052,8 @@ async function runCommand(line){
     if (data.reload){ refreshHeader(); }
   } catch (err){
     if (view !== chatView) return;
-    bubble.innerHTML = md("**Das hat nicht geklappt:** " + FEHLER_VERBINDUNG);
+    bubble.innerHTML = md(sp("**Das hat nicht geklappt:** ", "**That didn't work:** ")
+      + enOderDe(FEHLER_VERBINDUNG));
   }
   scroll();
   setBusy(false); input.focus();
@@ -4043,7 +4126,7 @@ function streamRenderer(bubble, readText, active){
   }
   function paint(cursor){
     if (!active()) return;
-    bubble.innerHTML = md(readText() || (cursor ? "" : "(keine Antwort)"))
+    bubble.innerHTML = md(readText() || (cursor ? "" : sp("(keine Antwort)", "(no answer)")))
       + (cursor ? '<span class="cursor"></span>' : "");
     scroll();
   }
@@ -4189,7 +4272,7 @@ async function verfolge(hole, steps, bubble, text){
         if (laden){
           laden.classList.remove("load");
           laden.querySelector(".txt").textContent =
-            "ist bereit" + (ev.seconds ? ` (${ev.seconds}s)` : "");
+            sp("ist bereit", "is ready") + (ev.seconds ? ` (${ev.seconds}s)` : "");
           laden = null;
         }
         break;
@@ -4202,29 +4285,34 @@ async function verfolge(hole, steps, bubble, text){
           planning = null;
         } else if (planning){
           planning.querySelector(".txt").textContent =
-            "Recherche" + (ev.seconds ? ` (${ev.seconds}s)` : "");
+            sp("Recherche", "Research") + (ev.seconds ? ` (${ev.seconds}s)` : "");
         }
         break;
       case "recheck":
-        step(steps, "[Gegenprobe]",
-          `andere Quellen als die ${ev.sources} gelesenen`); break;
+        step(steps, "[Gegenprobe]", sp(`andere Quellen als die ${ev.sources} gelesenen`,
+          `sources other than the ${ev.sources} already read`)); break;
       case "recheck_done":
         step(steps, "[Gegenprobe]", ev.changed ? "abgeschlossen" : "nichts Neues");
         // Und dasselbe noch einmal an der Antwort selbst: die Zwischenschritte
         // sieht nur, wer sie aufklappt -- dass gegengeprueft wurde, gehoert
         // aber zur Antwort dazu.
         mark(bubble, ev.changed
-          ? "Gegengeprüft — mit anderen Quellen, Änderungen sind eingearbeitet"
-          : "Gegengeprüft — andere Quellen, nichts widersprochen");
+          ? sp("Gegengeprüft — mit anderen Quellen, Änderungen sind eingearbeitet",
+               "Double-checked — with other sources, changes are worked in")
+          : sp("Gegengeprüft — andere Quellen, nichts widersprochen",
+               "Double-checked — other sources, nothing contradicted"));
         break;
       case "subagents":
-        step(steps, "[Teile]", `${ev.tasks.length} Teilfragen`);
+        step(steps, "[Teile]", sp(`${ev.tasks.length} Teilfragen`,
+                                  `${ev.tasks.length} sub-questions`));
         ev.tasks.forEach((t, i) => {
           const s = document.createElement("div");
           s.className = "step"; s.innerHTML = `<span class="sub"></span>`;
           // Der Blickwinkel steht dahinter, wenn es einen gibt: wer nach
           // Preisen fragt, bekommt den Agenten, der auf Zahlen achtet.
-          const rolle = TEXTE.roles[(ev.roles || [])[i]] || "";
+          const art = (ev.roles || [])[i];
+          const rolle = (sprache === "en" ? (TEXTE.roles_en || {})[art] : "")
+            || TEXTE.roles[art] || "";
           s.querySelector(".sub").textContent = rolle ? `${t}  · ${rolle}` : t;
           ablaufAnhaengen(steps, s);
         }); break;
@@ -4232,23 +4320,26 @@ async function verfolge(hole, steps, bubble, text){
         // Der Master hat die Einheit aufgestellt. Das ist die erste Zeile,
         // die im Pro-Modus etwas ueber die Groesse der Recherche sagt.
         step(steps, "[Master]",
-          `${ev.agents} ${ev.agents === 1 ? "Agent" : "Agenten"}`
-          + (ev.strong ? `, davon ${ev.strong} auf dem starken Modell` : "")
-          + (ev.forced ? " (volle Mannschaft)" : "")
+          `${ev.agents} ${ev.agents === 1 ? sp("Agent", "agent") : sp("Agenten", "agents")}`
+          + (ev.strong ? sp(`, davon ${ev.strong} auf dem starken Modell`,
+                            `, ${ev.strong} of them on the strong model`) : "")
+          + (ev.forced ? sp(" (volle Mannschaft)", " (full team)") : "")
           + (ev.plan ? ` — ${ev.plan}` : ""),
           ev.fallback ? "warn" : "");
         break;
       case "master_review":
         step(steps, "[Master]", ev.verdict === "gut"
-          ? "die Rückmeldungen tragen"
-          : `Lücken: ${(ev.missing || []).join(" · ") || "es fehlt etwas"}`,
+          ? sp("die Rückmeldungen tragen", "the results hold up")
+          : sp("Lücken: ", "Gaps: ")
+            + ((ev.missing || []).join(" · ") || sp("es fehlt etwas", "something is missing")),
           ev.verdict === "gut" ? "" : "warn");
         break;
       case "master_retry":
         // Genau dafuer gibt es den Master: was nichts hergab, geht noch
         // einmal los -- und man sieht es, statt es zu vermissen.
-        step(steps, "[Nachrunde]",
-          `${ev.tasks.length} ${ev.tasks.length === 1 ? "Auftrag" : "Aufträge"} noch einmal`);
+        step(steps, "[Nachrunde]", ev.tasks.length === 1
+          ? sp("1 Auftrag noch einmal", "1 task once more")
+          : sp(`${ev.tasks.length} Aufträge noch einmal`, `${ev.tasks.length} tasks once more`));
         (ev.tasks || []).forEach(t => {
           const s = document.createElement("div");
           s.className = "step"; s.innerHTML = `<span class="sub"></span>`;
@@ -4258,19 +4349,25 @@ async function verfolge(hole, steps, bubble, text){
       case "places":
         step(steps, "[Karte]", `${ev.what}${ev.where ? " in " + ev.where : ""}`); break;
       case "places_done":
-        step(steps, "[Karte]", `${ev.hits} ${ev.hits === 1 ? "Ort" : "Orte"}`); break;
+        step(steps, "[Karte]", `${ev.hits} ${ev.hits === 1 ? sp("Ort", "place")
+                                                      : sp("Orte", "places")}`); break;
       case "note":
-        step(steps, "[Hinweis]", ev.text, "warn"); break;
+        step(steps, "[Hinweis]", sp(ev.text, ev.text_en || ev.text), "warn"); break;
       case "council": {
         // AI Council (9.6.1): Bearbeiter, Pruefer, Richter -- Runde fuer Runde.
         const kurz = (m) => String(m || "").split("/").pop();
+        const runde = sp(`Runde ${ev.round}`, `Round ${ev.round}`);
+        const wer = (ev.workers || []).map(kurz).join(" + ");
         const texte = {
-          start: `${(ev.workers || []).map(kurz).join(" + ")} arbeiten, ${kurz(ev.checker)} prüft, ${kurz(ev.judge)} richtet`,
-          work: `Runde ${ev.round}: die Bearbeiter arbeiten`,
-          check: `Runde ${ev.round}: ${kurz(ev.model)} prüft auf Fehler`,
-          judge: `Runde ${ev.round}: Aquaticy entscheidet`,
-          verdict: ev.ok ? `Runde ${ev.round}: Lösung trägt` : `Runde ${ev.round}: nachbessern — ${ev.feedback || ""}`,
-          final: "Aquaticy schreibt die Antwort",
+          start: sp(`${wer} arbeiten, ${kurz(ev.checker)} prüft, ${kurz(ev.judge)} richtet`,
+                    `${wer} work, ${kurz(ev.checker)} checks, ${kurz(ev.judge)} decides`),
+          work: runde + sp(": die Bearbeiter arbeiten", ": the workers are on it"),
+          check: runde + sp(`: ${kurz(ev.model)} prüft auf Fehler`,
+                            `: ${kurz(ev.model)} checks for mistakes`),
+          judge: runde + sp(": Aquaticy entscheidet", ": Aquaticy decides"),
+          verdict: runde + (ev.ok ? sp(": Lösung trägt", ": the solution holds")
+            : sp(": nachbessern — ", ": needs work — ") + (ev.feedback || "")),
+          final: sp("Aquaticy schreibt die Antwort", "Aquaticy writes the answer"),
         };
         step(steps, "[AI Council]", texte[ev.phase] || ev.phase);
         break;
@@ -4279,8 +4376,11 @@ async function verfolge(hole, steps, bubble, text){
         // Die Absage selbst steht in der Antwort. Hier steht, WAS abgelehnt
         // wurde -- die ganze Anfrage oder ein einzelner Schritt unterwegs.
         step(steps, "[Rechtsrahmen]",
-          `${ev.stage === "werkzeug" ? "Schritt" : "Anfrage"} abgelehnt — `
-          + `${ev.title || "Rechtsrahmen"}${ev.basis ? " (" + ev.basis + ")" : ""}`,
+          (ev.stage === "werkzeug" ? sp("Schritt abgelehnt — ", "Step declined — ")
+                                   : sp("Anfrage abgelehnt — ", "Request declined — "))
+          + `${(sprache === "en" && RECHT_EN[ev.rule]?.[0])
+                || ev.title || sp("Rechtsrahmen", "Legal framework")}`
+          + `${ev.basis ? " (" + ev.basis + ")" : ""}`,
           "warn");
         break;
       case "injection":
@@ -4292,46 +4392,62 @@ async function verfolge(hole, steps, bubble, text){
             : "Eine Quelle enthielt Anweisungen an die KI — ignoriert.", "warn");
         break;
       case "checkers":
-        step(steps, "[Prüfer]",
-          `${ev.count} prüfen mit, während die anderen noch suchen`); break;
+        step(steps, "[Prüfer]", sp(`${ev.count} prüfen mit, während die anderen noch suchen`,
+          `${ev.count} check along while the others are still searching`)); break;
       case "check":
-        step(steps, "[Prüfer]", "prüft: " + ev.task); break;
+        step(steps, "[Prüfer]", sp("prüft: ", "checking: ") + ev.task); break;
       case "check_done":
-        step(steps, "[Prüfer]", `${ev.task} — ${TEXTE.verdicts[ev.verdict] || "geprüft"}`,
+        step(steps, "[Prüfer]", `${ev.task} — `
+             + ((sprache === "en" ? (TEXTE.verdicts_en || {})[ev.verdict] : "")
+                || TEXTE.verdicts[ev.verdict] || sp("geprüft", "checked")),
              ev.verdict === "ABWEICHUNG" ? "warn" : ""); break;
       case "checks_done":
         // Wie bei der Gegenprobe im Standardmodus: dass geprueft wurde,
         // gehoert an die Antwort und nicht nur in die Zwischenschritte.
         mark(bubble, ev.deviations
-          ? `Gegengeprüft — ${ev.checked} Teilergebnisse, ${ev.deviations} mit abweichenden Angaben`
-          : `Gegengeprüft — ${ev.checked} Teilergebnisse auf anderen Quellen, nichts widersprochen`);
+          ? sp(`Gegengeprüft — ${ev.checked} Teilergebnisse, `
+               + `${ev.deviations} mit abweichenden Angaben`,
+               `Double-checked — ${ev.checked} partial results, `
+               + `${ev.deviations} with differing details`)
+          : sp(`Gegengeprüft — ${ev.checked} Teilergebnisse auf anderen Quellen, `
+               + "nichts widersprochen",
+               `Double-checked — ${ev.checked} partial results against other sources, `
+               + "nothing contradicted"));
         break;
       case "vm_start":
-        step(steps, "[virtual machine]", `wird gestartet (${ev.runtime})`); break;
+        step(steps, "[virtual machine]", sp(`wird gestartet (${ev.runtime})`,
+                                            `starting (${ev.runtime})`)); break;
       case "vm_run":
         step(steps, "[virtual machine]", ev.command); break;
       case "vm_write":
-        step(steps, "[virtual machine]", `schreibt ${ev.path}`); break;
+        step(steps, "[virtual machine]", sp("schreibt ", "writes ") + ev.path); break;
       case "vm_done":
         step(steps, "[virtual machine]", ev.exit_code === 0
-          ? `lief durch (${ev.seconds}s)`
-          : `Rückgabewert ${ev.exit_code} (${ev.seconds}s)`,
+          ? sp(`lief durch (${ev.seconds}s)`, `ran through (${ev.seconds}s)`)
+          : sp(`Rückgabewert ${ev.exit_code} (${ev.seconds}s)`,
+               `exit code ${ev.exit_code} (${ev.seconds}s)`),
           ev.exit_code === 0 ? "" : "warn"); break;
       case "vm_stop":
-        step(steps, "[virtual machine]", `abgeräumt — ${ev.reason}`); break;
+        step(steps, "[virtual machine]", sp(`abgeräumt — ${ev.reason}`,
+          `removed — ${VM_GRUENDE_EN[ev.reason] || ev.reason}`)); break;
       case "vm_net":
         step(steps, "[virtual machine]", "Internet an, Heimnetz gesperrt"); break;
       case "vm_desktop":
         step(steps, "[virtual machine]", "Desktop bereit (User mode)"); break;
       case "desktop": {
-        const was = {sieht: "sieht", klickt: "klickt", tippt: "tippt", drueckt: "drückt",
-          scrollt: "scrollt", oeffnet: "öffnet", abgelehnt: "abgelehnt",
-          "nicht bestaetigt": "nicht bestätigt"}[ev.action] || ev.action || "";
+        const was = (sprache === "en"
+          ? {sieht: "looks", klickt: "clicks", tippt: "types", drueckt: "presses",
+             scrollt: "scrolls", oeffnet: "opens", abgelehnt: "declined",
+             "nicht bestaetigt": "not confirmed"}
+          : {sieht: "sieht", klickt: "klickt", tippt: "tippt", drueckt: "drückt",
+             scrollt: "scrollt", oeffnet: "öffnet", abgelehnt: "abgelehnt",
+             "nicht bestaetigt": "nicht bestätigt"})[ev.action] || ev.action || "";
         const zeile = step(steps, "[Desktop]", `${was}: ${ev.detail || ""}`,
           ev.action === "abgelehnt" || ev.action === "nicht bestaetigt" ? "warn" : "");
         if (/^[0-9]{13}-[0-9a-f]{16}\.(jpg|png|webp|gif)$/.test(String(ev.media_id || ""))){
           const bild = document.createElement("img");
-          bild.className = "shot"; bild.alt = "Bildschirm der virtual machine";
+          bild.className = "shot";
+          bild.alt = sp("Bildschirm der virtual machine", "Screen of the virtual machine");
           bild.loading = "lazy"; bild.src = "/api/media?id=" + encodeURIComponent(ev.media_id);
           bild.addEventListener("error", () => bild.remove());
           zeile.querySelector(".txt").appendChild(bild);
@@ -4340,19 +4456,22 @@ async function verfolge(hole, steps, bubble, text){
       }
       case "model_auto":
         step(steps, "[Modell]",
-             `automatisch: ${String(ev.model || "").split("/").pop()} — ${ev.grund || ""}`
-             + (ev.bild ? ` · Bild: ${ev.bild}` : "")); break;
-      case "image_mode": step(steps, "[Bild]", `Bilderstellung mit ${ev.modell || "einem Bildmodell"}`); break;
+             sp("automatisch: ", "automatic: ") + String(ev.model || "").split("/").pop()
+             + ` — ${sprache === "en" ? autoGrundEn(ev) : ev.grund || ""}`
+             + (ev.bild ? sp(" · Bild: ", " · image: ") + ev.bild : "")); break;
+      case "image_mode": step(steps, "[Bild]", ev.modell
+        ? sp("Bilderstellung mit ", "Creating images with ") + ev.modell
+        : sp("Bilderstellung mit einem Bildmodell", "Creating images with an image model")); break;
       case "image_create": step(steps, "[Bild]", "wird erstellt …"); break;
       case "image_created":
-        step(steps, "[Bild]", ev.error ? ev.error : `erstellt mit ${ev.modell}`,
+        step(steps, "[Bild]", ev.error ? ev.error : sp("erstellt mit ", "made with ") + ev.modell,
              ev.error ? "warn" : ""); break;
       case "code_model":
         // Im Code- wie im Pro-Modus zaehlt das staerkste Modell, nicht das
         // eingestellte. Die Marke sagt, aus welchem der beiden Gruende --
         // "[Code]" ueber einer Recherche waere eine falsche Auskunft.
         step(steps, mode === "pro" ? "[Pro]" : "[Code]",
-             `stärkstes Modell: ${ev.model}`); break;
+             sp("stärkstes Modell: ", "strongest model: ") + ev.model); break;
       case "subagents_empty":
         // Die Vorrecherche kam mit leeren Haenden zurueck. Das wandert
         // bewusst NICHT in den Kontext -- sonst schriebe das Modell eine
@@ -4360,9 +4479,10 @@ async function verfolge(hole, steps, bubble, text){
         step(steps, "[Vorab]", "nichts gefunden — ich mache selbst weiter",
              "warn"); break;
       case "subagent_done":
-        step(steps, "[Fertig]", ev.task + (ev.error ? "  (fehlgeschlagen)" : ""),
+        step(steps, "[Fertig]",
+             ev.task + (ev.error ? sp("  (fehlgeschlagen)", "  (failed)") : ""),
              ev.error ? "warn" : ""); break;
-      case "waiting": step(steps, "[Warte]", ev.reason); break;
+      case "waiting": step(steps, "[Warte]", sp(ev.reason, ev.reason_en || ev.reason)); break;
       case "upload": step(steps, "[Datei]", `${ev.name} (${prettySize(ev.bytes)})`); break;
       case "ask": openAsk(bubble, ev.question, ev.options || []); break;
       case "image": step(steps, "[Bild]", ev.path); break;
@@ -4371,7 +4491,8 @@ async function verfolge(hole, steps, bubble, text){
       case "memory_save": step(steps, "[Merke]", ev.text); break;
       case "lan_scan": step(steps, "[Netz]", `${ev.subnet} …`); break;
       case "lan_done": step(steps, "[Netz]",
-        `${ev.found} ${ev.found === 1 ? "Gerät" : "Geräte"} erreichbar`); break;
+        sp(`${ev.found} ${ev.found === 1 ? "Gerät" : "Geräte"} erreichbar`,
+           `${ev.found} ${ev.found === 1 ? "device" : "devices"} reachable`)); break;
       case "lan_check": step(steps, "[Netz]", ev.host); break;
       case "setting": step(steps, "[Stelle um]", `${ev.label}: ${ev.value}`); break;
       case "setting_done": break;   // die Antwort sagt es ohnehin
@@ -4382,13 +4503,17 @@ async function verfolge(hole, steps, bubble, text){
         break;
       case "storage": step(steps, "[Lager]", `${ev.action} ${ev.detail || ""}`.trim()); break;
       case "storage_done": step(steps, "[Lager]", ev.action
-        || `${ev.found} ${ev.found === 1 ? "Eintrag" : "Einträge"}`); break;
-      case "calendar": step(steps, "[Termine]", ev.query || `${ev.days || 7} Tage`); break;
+        || sp(`${ev.found} ${ev.found === 1 ? "Eintrag" : "Einträge"}`,
+              `${ev.found} ${ev.found === 1 ? "entry" : "entries"}`)); break;
+      case "calendar": step(steps, "[Termine]",
+        ev.query || sp(`${ev.days || 7} Tage`, `${ev.days || 7} days`)); break;
       case "calendar_done": step(steps, "[Termine]",
-        `${ev.found} ${ev.found === 1 ? "Termin" : "Termine"}`); break;
+        sp(`${ev.found} ${ev.found === 1 ? "Termin" : "Termine"}`,
+           `${ev.found} ${ev.found === 1 ? "event" : "events"}`)); break;
       case "mail": step(steps, "[Mail]", ev.query); break;
       case "mail_done": step(steps, "[Mail]",
-        `${ev.found} ${ev.found === 1 ? "Nachricht" : "Nachrichten"}`); break;
+        sp(`${ev.found} ${ev.found === 1 ? "Nachricht" : "Nachrichten"}`,
+           `${ev.found} ${ev.found === 1 ? "message" : "messages"}`)); break;
       case "ha_read": step(steps, "[Haus]", ev.search); break;
       case "ha_call": step(steps, "[Haus]",
         `${ev.domain}.${ev.service} → ${ev.entity_id || ev.domain}`, "warn"); break;
@@ -4399,7 +4524,8 @@ async function verfolge(hole, steps, bubble, text){
         }
         break;
       case "search_done":
-        trace(steps, "[Treffer]", `${ev.hits} nach dem Zusammenführen`); break;
+        trace(steps, "[Treffer]", sp(`${ev.hits} nach dem Zusammenführen`,
+                                     `${ev.hits} after merging`)); break;
       case "thought": thought(steps, ev.text); break;
       case "action":
         trace(steps, "[Aufruf]", ev.tool + " " + JSON.stringify(ev.arguments || {})); break;
@@ -4408,7 +4534,10 @@ async function verfolge(hole, steps, bubble, text){
       case "fetch":
         readCount++;
         if (!reading) reading = step(steps, "[Lese]", "");
-        reading.querySelector(".txt").textContent = `${readCount} Seiten …`; break;
+        reading.querySelector(".txt").textContent = readCount === 1
+          ? sp("1 Seite …", "1 page …")
+          : sp(`${readCount} Seiten …`, `${readCount} pages …`);
+        break;
       case "skip":
         if (reading) reading.className = "step warn";
         step(steps, "[Skip]", `${ev.url} — ${ev.reason}`, "warn"); break;
@@ -4418,7 +4547,9 @@ async function verfolge(hole, steps, bubble, text){
       case "retry":
         if (ev.reason === "Ausweichmodell")
           step(steps, "[Ausweichen]", "Das Modell antwortet gerade nicht — ein anderes übernimmt.", "warn");
-        else step(steps, "[Neu]", `Versuch ${ev.attempt}: ${ev.reason}`, "warn");
+        else step(steps, "[Neu]", sp(`Versuch ${ev.attempt}: ${ev.reason}`,
+          `Attempt ${ev.attempt}: ${ev.reason === "Verbindung" ? "connection" : ev.reason}`),
+          "warn");
         break;
       case "banned":
         // Ai-guard hat das Konto gesperrt (9.5.16 Lion). Seit 9.5.24 erscheint
@@ -5017,10 +5148,6 @@ const EN = {
 "Schriftgröße": "Font size",
 "Klein": "Small",
 "Groß": "Large",
-"Kann:": "Can:",
-"im Web recherchieren, Quellen nennen, Bilder und PDFs lesen, programmieren, Aufträge regelmäßig erledigen.": "research the web, cite sources, read images and PDFs, write code, run recurring tasks.",
-"Kann nicht:": "Cannot:",
-"sich hinter Anmeldungen, Bezahlschranken oder Captchas einloggen — und Antworten können Fehler enthalten.": "get past logins, paywalls or captchas — and answers can contain mistakes.",
 "Sicherheit": "Security",
 "Deine Geräte und deine Adresse liegen verschlüsselt. Sehen kannst nur du sie hier — der Betreiber nicht.": "Your devices and your address are stored encrypted. Only you can see them here — the operator cannot.",
 "Passwort ändern": "Change password",
@@ -5035,7 +5162,6 @@ const EN = {
 "Bitte bestätigen": "Please confirm",
 "🔒 Mit Ultra verfügbar": "🔒 Available with Ultra",
 "↻ Erneut versuchen": "↻ Try again",
-"Gespeichert — gilt sofort.": "Saved — applies right away.",
 "Noch kein Gerät vermerkt.": "No device recorded yet.",
 "Dein Passwort": "Your password",
 "Neues Passwort": "New password",
@@ -5059,7 +5185,6 @@ const EN = {
 "Deine IP-Adresse, eine Geräte-Kennung und Angaben zu Gerät und Browser werden verschlüsselt gespeichert. Der Betreiber sieht sie nicht. So fällt auf, wenn ein Fremder deine Anmeldung nutzt oder viele Konten vom selben Gerät kommen.": "Your IP address, a device ID and details about your device and browser are stored encrypted. The operator can't see them. That way it's noticed if a stranger uses your sign-in or many accounts come from the same device.",
 "Name, E-Mail, Einstellungen und Chats gehören nur zu deinem Konto. Andere sehen davon nichts.": "Name, email, settings and chats belong to your account only. Nobody else sees any of it.",
 "Keine Werbung, kein Tracking.": "No ads, no tracking.",
-"Wenn du ablehnst, wird nichts gespeichert — dann kannst du Aquaticy hier aber nicht nutzen.": "If you decline, nothing is stored — but then you can't use Aquaticy here.",
 "Rechtliche Informationen": "Legal information",
 "Datenschutz": "Privacy",
 "Nutzungsbedingungen": "Terms of use",
@@ -5103,9 +5228,12 @@ const EN = {
 "Anzahl der Agenten": "Number of agents",
 "Wie viele Helfer gleichzeitig suchen, wenn „Strukturieren“ an ist. Normal: 1 bis 12.": "How many helpers search at the same time when “Structure” is on. Normal: 1 to 12.",
 "Code wirklich ausprobieren": "Actually try the code",
-"Aquaticy bekommt einen eigenen, abgeschotteten Rechner und lässt den Code dort laufen — statt nur zu raten, ob er funktioniert. Dieser Rechner hat": "Aquaticy gets its own isolated computer and runs the code there — instead of just guessing whether it works. This computer has",
-"kein Internet": "no internet",
-"und wird 20 Minuten nach deiner letzten Nachricht gelöscht. Im Web nachschlagen kann Aquaticy trotzdem.": "and is deleted 20 minutes after your last message. Aquaticy can still look things up on the web.",
+"Aquaticy bekommt einen eigenen, abgeschotteten Rechner und lässt den Code dort laufen, statt nur zu raten, ob er funktioniert. Er sieht dein lokales Netz nicht und wird 20 Minuten nach deiner letzten Nachricht gelöscht.": "Aquaticy gets its own isolated computer and runs the code there instead of just guessing whether it works. It can't see your local network and is deleted 20 minutes after your last message.",
+"Internet für die virtual machine": "Internet for the virtual machine",
+"Für pip install oder Downloads. Dein Heimnetz bleibt gesperrt. Eine laufende virtual machine startet dafür neu.": "For pip install or downloads. Your home network stays blocked. A running virtual machine restarts for this.",
+"Auf diesem Rechner fehlt Podman oder Docker – die virtual machine kann nicht starten.": "Podman or Docker is missing on this computer – the virtual machine can't start.",
+"Die virtual machine hat jetzt Internet.": "The virtual machine now has internet.",
+"Die virtual machine hat jetzt kein Internet mehr.": "The virtual machine no longer has internet.",
 "Im Web suchen": "Search the web",
 "Aus: keine Suche im Internet. Aquaticy antwortet mit seinem Wissen, dem Chat und deinen Anhängen und sagt, wo das veraltet sein kann.": "Off: no internet search. Aquaticy answers from what it knows, the chat and your attachments, and says where that may be outdated.",
 "Öffentliche Webcams & Satellitenbilder": "Public webcams & satellite images",
@@ -5211,7 +5339,6 @@ const EN = {
 "Serverlast aufteilen": "Split server load",
 "Alle Server rechnen gemeinsam an einem Modell, auch an einem, das in keinen Server allein passt. Alle Konten bedient dann der Master. llama.cpp installiert Aquaticy selbst.": "All servers compute one model together, even one that fits into no single server. The master then serves all accounts. Aquaticy installs llama.cpp by itself.",
 "Für dieses System gibt es llama.cpp nicht fertig gebaut — siehe README.": "There is no prebuilt llama.cpp for this system — see the README.",
-"Sucht die passende Fassung von llama.cpp …": "Looking for the right llama.cpp version …",
 "Sucht die neueste Fassung von llama.cpp …": "Looking for the latest llama.cpp version …",
 "Neu verteilen": "Redistribute",
 "Alle Befehle": "All commands",
@@ -5511,7 +5638,6 @@ const EN = {
 "Gespeichert.": "Saved.",
 "Der Export ist nicht durchgekommen.": "The export didn't get through.",
 "Der Chat ließ sich gerade nicht öffnen. Versuch es gleich noch einmal.": "The chat couldn't be opened just now. Try again in a moment.",
-"In diesem Chat steht noch nichts.": "There's nothing in this chat yet.",
 "Das hat nicht geklappt.": "That didn't work.",
 "Heute": "Today",
 "Gestern": "Yesterday",
@@ -5527,21 +5653,460 @@ const EN = {
 "Installiert": "Installed",
 "An": "On",
 "Aus": "Off",
-"Unbegrenzt": "Unlimited"
+"Unbegrenzt": "Unlimited",
+"Websuche": "Web search",
+"Code ausführen": "Running code",
+"Bild erstellen": "Creating image",
+"Rechnen": "Calculating",
+"Agenten arbeiten": "Agents at work",
+"Prüfen": "Checking",
+"Netzwerk": "Network",
+"Smart Home": "Smart home",
+"Kalender": "Calendar",
+"Lager": "Storage",
+"Erinnern": "Remembering",
+"Modell laden": "Loading model",
+"Arbeiten": "Working",
+"Gedacht": "Thought",
+"Das Modell hat seine Gedanken hier nicht offengelegt.": "The model didn't share its thoughts here.",
+"Keine Einzelheiten.": "No details.",
+"[Denkt]": "[Thinks]",
+"[Plane]": "[Plans]",
+"[Vorab]": "[Pre-research]",
+"[Suche]": "[Search]",
+"[Treffer]": "[Hits]",
+"[Lese]": "[Reading]",
+"[Anfragen]": "[Queries]",
+"[Karte]": "[Map]",
+"[Bild]": "[Image]",
+"[Rechne]": "[Calculates]",
+"[Teile]": "[Splits]",
+"[Nachrunde]": "[Extra round]",
+"[Prüfer]": "[Checkers]",
+"[Gegenprobe]": "[Double-check]",
+"[Netz]": "[Network]",
+"[Haus]": "[Home]",
+"[Termine]": "[Calendar]",
+"[Lager]": "[Storage]",
+"[Speicher]": "[Memory]",
+"[Merke]": "[Remembers]",
+"[Modell]": "[Model]",
+"[Aufruf]": "[Call]",
+"[Zurueck]": "[Result]",
+"[Fehler]": "[Error]",
+"[Abgebrochen]": "[Cancelled]",
+"[Weiter]": "[Continue]",
+"[Rechtsrahmen]": "[Legal framework]",
+"[Schutz]": "[Protection]",
+"[Verbindung]": "[Connection]",
+"[Hinweis]": "[Note]",
+"[Fertig]": "[Done]",
+"[Warte]": "[Waiting]",
+"[Datei]": "[File]",
+"[Stelle um]": "[Changes setting]",
+"[Ausweich]": "[Fallback]",
+"[Ausweichen]": "[Fallback]",
+"[Neu]": "[Retry]",
+"wird noch geladen — der erste Satz dauert deshalb länger …": "is still loading — so the first sentence takes a little longer …",
+"sichte die Anfrage …": "reading the request …",
+"abgeschlossen": "done",
+"nichts Neues": "nothing new",
+"Eine private Angabe sollte nach außen — Aquaticy fragt erst dich.": "A private detail was about to go out — Aquaticy asks you first.",
+"Eine Quelle enthielt Anweisungen an die KI — ignoriert.": "A source contained instructions for the AI — ignored.",
+"Internet an, Heimnetz gesperrt": "Internet on, home network blocked",
+"Desktop bereit (User mode)": "Desktop ready (User mode)",
+"wird erstellt …": "being created …",
+"nichts gefunden — ich mache selbst weiter": "nothing found — I'll carry on myself",
+"beschrieben": "described",
+"Das Modell antwortet gerade nicht — ein anderes übernimmt.": "The model isn't answering right now — another one takes over.",
+"Konto gesperrt — Details unter „Info“ oben links": "Account blocked — details under “Info” at the top left",
+"Dieser Chat ist gesperrt (unangemessene Sprache). Ein neuer Chat geht.": "This chat is blocked (inappropriate language). A new chat works.",
+"In den Normal-Modus gewechselt (virtual machine aus).": "Switched to Normal mode (virtual machine off).",
+"Oben steht, was bis dahin da war.": "Above is what had arrived by then.",
+"Die Verbindung ist mittendrin abgerissen. Oben steht, was bis dahin ankam.": "The connection dropped midway. Above is what had arrived by then.",
+"Keine Verbindung zu Aquaticy. Läuft das Programm noch? Bei einem Modell aus der Cloud kann die erste Antwort etwas dauern.": "No connection to Aquaticy. Is the program still running? With a cloud model the first answer can take a moment.",
+"Da ist etwas schiefgelaufen. Bitte versuch es gleich noch einmal.": "Something went wrong. Please try again in a moment.",
+"Da ist bei Aquaticy etwas schiefgelaufen. Bitte versuch es gleich noch einmal.": "Something went wrong at Aquaticy. Please try again in a moment.",
+"Keine Verbindung zu Aquaticy. Bitte prüfe die Verbindung und versuch es gleich noch einmal.": "No connection to Aquaticy. Please check the connection and try again in a moment.",
+"Wenn Auto-Upgrading aktiv ist, können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte eingehen. Dort liegen öffentliche Auszüge unverschlüsselt. Bei Ablauf oder fehlender Bestätigung werden betroffene Fassungen zurückgezogen und gelöscht. Einzelheiten stehen im Datenschutz.": "When Auto-Upgrading is active, excerpts confirmed several times can also go into local Ollama model texts. Public excerpts are stored there unencrypted. When they expire or are no longer confirmed, the affected versions are withdrawn and deleted. Details are in the privacy policy.",
+"Bilderstellung": "Image creation",
+"🎨 Bilderstellung": "🎨 Image creation",
+"Aquaticy malt ein Bild nach deiner Beschreibung. Es geht sofort in den Standard-Modus und wählt selbst ein Modell, das Bilder erstellen kann.": "Aquaticy paints a picture from your description. It switches to Standard mode right away and picks a model that can create images by itself.",
+"Aufwand": "Effort",
+"Denktiefe und Zahl der Agenten": "Thinking depth and number of agents",
+"Weitere Einstellungen": "More settings",
+"virtual machine, Suche, Strukturieren und mehr": "virtual machine, search, structuring and more",
+"Dateien anhängen": "Attach files",
+"Keine Verbindung — Aquaticy macht von selbst weiter, sobald das Netz wieder da ist.": "No connection — Aquaticy carries on by itself as soon as the network is back.",
+"Neues Modell": "New model",
+"Ausprobieren": "Try it",
+"Fehler": "Error",
+"Da ist etwas schiefgelaufen.": "Something went wrong.",
+"Bitte versuch es gleich noch einmal. Wenn es so bleibt, lade die Seite neu.": "Please try again in a moment. If it keeps happening, reload the page.",
+"Seite neu laden": "Reload page",
+"API-Schlüssel von Claude, ChatGPT oder Gemini": "API key from Claude, ChatGPT or Gemini",
+"Bild des Coworkers": "Coworker picture",
+"Bei aktivem Auto-Upgrading können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte eingehen (dort unverschlüsselt). Abgelaufenes oder nicht mehr bestätigtes Wissen zieht betroffene Fassungen zurück; die Löschung wird wiederholt, bis der Ollama-Dienst erreichbar ist. Einzelheiten:": "With Auto-Upgrading active, excerpts confirmed several times can also go into local Ollama model texts (unencrypted there). Expired or no longer confirmed knowledge withdraws the affected versions; the deletion is retried until the Ollama service is reachable. Details:",
+"Im Code-Modus darf die virtual machine dann ins Internet — etwa für pip install oder um eine Seite abzurufen; dein Heimnetz bleibt dabei gesperrt. Bei Normal- und Pro-Konten hat sie gar kein Netz.": "In Code mode the virtual machine may then go online — for example for pip install or to fetch a page; your home network stays blocked. With Normal and Pro accounts it has no network at all.",
+"Auch ins lokale Netz": "Also into the local network",
+"Nur mit Ultra: Die virtual machine erreicht dann zusätzlich Geräte in deinem Heimnetz (Router, Lager, Home Assistant …), nicht nur das Internet. Die Sperre fällt weg — schalte das nur ein, wenn du es brauchst.": "Ultra only: the virtual machine then also reaches devices in your home network (router, storage, Home Assistant …), not just the internet. The block is lifted — only turn this on if you need it.",
+"Aquaticy baut lokale Modelle mit Wissen weiter, das mehrere Konten unabhängig bestätigt haben (aus öffentlichen Quellen; Kontokennungen stehen nicht im Modelltext), und misst den Gewinn im Lückentext-Test. Ab 5 % wird „Upgraden“ grün (gemma3:4b → 1.1), ab 30 % gibt es eine ganze Version (→ 2). Gilt für jedes Konto.": "Aquaticy keeps building local models with knowledge that several accounts confirmed independently (from public sources; account IDs are not in the model text) and measures the gain in a fill-in-the-gap test. From 5 % “Upgrade” turns green (gemma3:4b → 1.1), from 30 % there is a whole new version (→ 2). Applies to every account.",
+"🔒 Auto-Upgrading gehört zu Ultra.": "🔒 Auto-Upgrading is part of Ultra.",
+"Jetzt trainieren": "Train now",
+"Modell, das verteilt laufen soll": "Model to run distributed",
+"IP-Adresse": "IP address",
+"kein Ortsfilter": "no location filter",
+"ohne Web": "without web",
+"Webcams & Satelliten": "webcams & satellites",
+"strukturiert": "structured",
+"4 Prüfer": "4 checkers",
+"gegenprüfen": "double-check",
+"Zuhause verbunden": "home connected",
+"Speicher an": "memory on",
+"Wie viele Helfer gleichzeitig suchen, wenn „Strukturieren“ an ist. Pro: 1 bis 50.": "How many helpers search at the same time when “Structure” is on. Pro: 1 to 50.",
+"Das gibt es leider nur mit einem Ultra-Konto.": "Sorry, that's only available with an Ultra account.",
+"Bei Normal- und Pro-Konten hat die virtual machine kein Netz — weder Internet noch dein lokales Netz. Rechnen, Code ausführen und Dateien bearbeiten geht trotzdem.": "With Normal and Pro accounts the virtual machine has no network — neither the internet nor your local network. Calculating, running code and editing files still work.",
+"Das ließ sich nicht speichern.": "That couldn't be saved.",
+"Melde dich an, um deine Chats und Einstellungen auf diesem Gerät zu öffnen.": "Sign in to open your chats and settings on this device.",
+"Als Datei": "As file",
+"Ging nicht": "Didn't work",
+"KI-Bild": "AI image",
+"Bildschirm der virtual machine": "Screen of the virtual machine",
+"Öffentliches Bild": "Public image",
+"Aktuelles öffentliches Bild": "Current public image",
+"Bildquelle öffnen": "Open image source",
+"Quelle öffnen": "Open source",
+"Datei": "File",
+"→ (übersprungen)": "→ (skipped)",
+"Angehängte Datei": "Attached file",
+"Konto gesperrt": "Account blocked",
+"Chat gesperrt": "Chat blocked",
+"Die Anfrage lief weiter, während du weg warst.": "The request kept running while you were away.",
+"Die Anfrage ist fertig geworden, während du weg warst.": "The request finished while you were away.",
+"Umbenennen hat nicht geklappt.": "Renaming didn't work.",
+"Das lässt sich nicht rückgängig machen.": "This can't be undone.",
+"Löschen hat nicht geklappt.": "Deleting didn't work.",
+"Der Chat ließ sich nicht öffnen.": "The chat couldn't be opened.",
+"Kein Modell gefunden.": "No model found.",
+"Dein Schlüssel": "Your key",
+"Das Modell ließ sich nicht umstellen.": "The model couldn't be switched.",
+"Beschreibe das Bild, das Aquaticy malen soll …": "Describe the image Aquaticy should paint …",
+"Aquaticy antwortet gerade nicht. Versuch es gleich noch einmal.": "Aquaticy isn't answering right now. Try again in a moment.",
+"Diese Adresse legt der Betreiber fest (nur Ultra ändert sie).": "The operator sets this address (only Ultra can change it).",
+"Verstoß gegen die Nutzungsregeln": "Violation of the terms of use",
+"Die Rechts-Leitplanken nach Grundgesetz und BGB lassen sich nur mit einem Ultra-Konto abschalten. Bei deinem Konto bleiben sie immer an.": "The legal guardrails based on the German Basic Law and Civil Code can only be turned off with an Ultra account. On your account they always stay on.",
+"Bist du dir wirklich sicher?": "Are you really sure?",
+"Aquaticy prüft Anfragen dann nicht mehr gegen Grundgesetz und BGB. Die festen Grenzen (Paywalls, Heimnetz, Schalten, Google) bleiben. Gilt sofort.": "Aquaticy then no longer checks requests against the German Basic Law and Civil Code. The fixed limits (paywalls, home network, switching devices, Google) stay. Applies immediately.",
+"Der User mode — die virtual machine als Desktop mit Internet — gehört zu Ultra. Die Add-ons ohne virtual machine (GitHub, Wetter, RSS-Feeds, Tagesschau, Wikipedia, Währungsrechner, Feiertage) kannst du trotzdem nutzen.": "User mode — the virtual machine as a desktop with internet — is part of Ultra. You can still use the add-ons without a virtual machine (GitHub, weather, RSS feeds, Tagesschau, Wikipedia, currency converter, public holidays).",
+"Nur Ultra darf mit der virtual machine auch ins lokale Netz. Bei Normal- und Pro-Konten hat sie gar kein Netz.": "Only Ultra may take the virtual machine into the local network as well. With Normal and Pro accounts it has no network at all.",
+"Programm und Anmeldung werden gelöscht. Eine laufende virtual machine startet dafür neu.": "The program and the sign-in are deleted. A running virtual machine restarts for this.",
+"Die Einrichtung und die Anmeldung werden gelöscht.": "The setup and the sign-in are deleted.",
+"Keine Anmeldung nötig.": "No sign-in needed.",
+"ghp_… oder github_pat_…": "ghp_… or github_pat_…",
+"Feed-Adressen, eine je Zeile": "Feed addresses, one per line",
+"Schalte es oben rechts in der Karte ein.": "Turn it on at the top right of the card.",
+"Die Anmeldung in der virtual machine wird gelöscht. Eine laufende virtual machine startet dafür neu.": "The sign-in in the virtual machine is deleted. A running virtual machine restarts for this.",
+"Rechte": "Permissions",
+"— was Aquaticy hier darf": "— what Aquaticy may do here",
+"arbeitet gerade …": "working …",
+"pausiert": "paused",
+"legt gleich los": "starts shortly",
+"Die Coworker ließen sich nicht laden.": "The coworkers couldn't be loaded.",
+"Aufgabe, Notizen, Regeln und Verlauf werden gelöscht. Der Chat mit seinen Meldungen bleibt.": "Task, notes, rules and history are deleted. The chat with its messages stays.",
+"Beschreib die Aufgabe in ein, zwei Sätzen.": "Describe the task in one or two sentences.",
+"Einen Moment — frage beim Anbieter nach …": "One moment — asking the provider …",
+"In der Zwischenablage ist kein Schlüssel — bitte selbst einfügen.": "There's no key in the clipboard — please paste it yourself.",
+"Schlüssel kopiert? Dann auf „Einfügen“ klicken.": "Key copied? Then click “Paste”.",
+"Schlüssel kopiert? Dann oben einfügen und „Verknüpfen“ klicken.": "Key copied? Then paste it above and click “Link”.",
+"verknüpft": "linked",
+"Der Schlüssel wird gelöscht, die Modelle verschwinden aus der Auswahl.": "The key is deleted and the models disappear from the picker.",
+"Die virtual machine läuft gerade nicht. Öffne oben eine Adresse — oder starte eine Login-App über 🧩 Add-ons → Anmelden.": "The virtual machine isn't running right now. Open an address above — or start a login app via 🧩 Add-ons → Sign in.",
+"Login-Apps laufen in der virtual machine im User mode — und der gehört zu Ultra.": "Login apps run in the virtual machine in User mode — and that's part of Ultra.",
+"Unbekannter Browser": "Unknown browser",
+"unbekanntes Gerät": "unknown device",
+"Überall sonst abmelden?": "Sign out everywhere else?",
+"Alle anderen Geräte und Browser werden abgemeldet. Dieses Gerät bleibt angemeldet.": "All other devices and browsers are signed out. This device stays signed in.",
+"Chats, Bilder, Uploads, Erinnerungen, Aufträge, Einstellungen und eigene Schlüssel sind danach weg. Dein Konto bleibt.": "Chats, images, uploads, memories, tasks, settings and your own keys are gone afterwards. Your account stays.",
+"Tritt gerade bei — die Daten werden übernommen …": "Joining — the data is being taken over …",
+"Dieser Server ist nur lokal erreichbar. Für den Verbund mit „aquaticy web --lan“ starten.": "This server is only reachable locally. Start it with “aquaticy web --lan” for the cluster.",
+"Dieser Server ist der Master.": "This server is the master.",
+"Dieser Server ist Mitglied im Verbund.": "This server is a member of the cluster.",
+"Noch kein Verbund. Lade einen anderen Server ein — dieser wird dann Master.": "No cluster yet. Invite another server — this one then becomes master.",
+"nicht erreichbar": "not reachable",
+"Konten übernehmen": "Take over accounts",
+"Nur, wenn der Server wirklich aus ist: die anderen Server arbeiten dann mit ihrer letzten Kopie weiter, die wenige Sekunden zurückliegen kann. Kommt der Server zurück, gibt er die Konten ab.": "Only if the server is really off: the other servers then carry on with their last copy, which can be a few seconds old. If the server comes back, it hands the accounts over.",
+"Der Server behält seine Kopie der Daten, bekommt aber keine neuen mehr.": "The server keeps its copy of the data but gets no new data.",
+"Verbund auflösen": "Dissolve cluster",
+"Den Verbund auflösen?": "Dissolve the cluster?",
+"Den Verbund verlassen?": "Leave the cluster?",
+"Jeder Server arbeitet danach allein mit seiner Kopie der Daten weiter.": "Each server then carries on alone with its copy of the data.",
+"Auflösen": "Dissolve",
+"Verlassen": "Leave",
+"Keine weiteren Server gefunden.": "No other servers found.",
+"Auf dem anderen Server muss der Server-Verbund ebenfalls an sein.": "The server cluster must be turned on on the other server too.",
+"schon in einem Verbund": "already in a cluster",
+"Bestätigen": "Confirm",
+"noch nicht bereit": "not ready yet",
+"Das schaltet der Master.": "The master switches this.",
+"Dieser Server rechnet am verteilten Modell mit.": "This server helps compute the distributed model.",
+"llama.cpp installiert sich beim Einschalten von selbst.": "llama.cpp installs itself when you turn this on.",
+"Warte auf die anderen Server …": "Waiting for the other servers …",
+"Verteilt das Modell auf die Server — bei großen Modellen kann das einige Minuten dauern …": "Distributing the model across the servers — with large models this can take a few minutes …",
+"Wähle zuerst ein Modell aus, das in Ollama auf diesem Server liegt.": "First choose a model that is in Ollama on this server.",
+"Alle Server rechnen dann gemeinsam an einem Modell, und alle Konten werden vom Master bedient. Antworten, die gerade auf einem anderen Server laufen, laufen dort noch zu Ende.": "All servers then compute one model together, and all accounts are served by the master. Answers currently running on another server finish there.",
+"Einschalten": "Turn on",
+"Schlüssel einfügen": "Paste key",
+"Hauptmodell (noch nicht gespeichert)": "Main model (not saved yet)",
+"Die virtual machine läuft gerade nicht. Sie entsteht mit der nächsten Frage im Code-Modus — und verschwindet zwanzig Minuten nach der letzten wieder.": "The virtual machine isn't running right now. It is created with the next question in Code mode — and disappears twenty minutes after the last one.",
+"Der Speicher ist abgeschaltet. Solange er aus ist, legt Aquaticy AI nichts ab — und es steht auch nichts drin.": "Memory is turned off. While it's off, Aquaticy AI stores nothing — and there's nothing in it.",
+"Noch nichts gemerkt. Was du im Gespräch über dich erzählst, landet von selbst hier.": "Nothing remembered yet. What you tell about yourself in a conversation ends up here by itself.",
+"Wirklich alles vergessen, was Aquaticy AI über dich weiß?": "Really forget everything Aquaticy AI knows about you?",
+"Diesen Auftrag löschen?": "Delete this task?",
+"Die bisherigen Chats bleiben.": "The chats so far stay.",
+"Freiwillig: eine Seite, auf der zuerst gesucht wird. Leer = überall suchen.": "Optional: a page to search first. Empty = search everywhere.",
+"z. B. neu oder gebraucht, Versand nach Deutschland": "e.g. new or used, shipping to Germany",
+"Nichts gefunden. Die Adresse steht in der Browserzeile, wenn du Home Assistant offen hast.": "Nothing found. The address is in the browser bar when you have Home Assistant open.",
+"Noch kein Konto verbunden.": "No account connected yet.",
+"Erst Client-ID und Secret speichern.": "Save the client ID and secret first.",
+"Suche im Netz …": "Searching the network …",
+"Frage nach …": "Asking …",
+"Nicht gespeichert": "Not saved",
+"Auto-Upgrading läuft nur mit der Weboberfläche.": "Auto-Upgrading only runs with the web interface.",
+"Trainiert gerade …": "Training …",
+"An — trainiert von selbst, sobald es neues bestätigtes Wissen gibt.": "On — trains by itself as soon as there's new confirmed knowledge.",
+"Kein lokales Modell gefunden — Auto-Upgrading braucht Ollama.": "No local model found — Auto-Upgrading needs Ollama.",
+"Neueste Version — noch keine bessere": "Newest version — no better one yet",
+"Version überspringen?": "Skip version?",
+"Zurückziehen: diese Version wird wieder die neueste": "Withdraw: this version becomes the newest again",
+"Version zurückziehen?": "Withdraw version?",
+"Zurückziehen": "Withdraw",
+"Stärkstes Code-Modell wählen": "Choose the strongest code model",
+"Stärkstes Modell wählen": "Choose the strongest model",
+"Kein Modell gefunden. Trag unter Einstellungen → Modell einen eigenen Schlüssel ein, oder installiere eins mit aquaticy install-model.": "No model found. Enter your own key under Settings → Model, or install one with aquaticy install-model.",
+"Mit deinem Schlüssel": "With your key",
+"zählt nicht in dein Limit": "doesn't count toward your limit",
+"auf deine Rechnung beim Anbieter": "billed to you by the provider",
+"Gestellt": "Provided",
+"Noch nichts gezählt.": "Nothing counted yet.",
+"Rechtsprüfung nicht erreichbar": "Legal check not reachable",
+"Konten": "Accounts",
+"Deine Repos, Issues, Pull Requests und Dateien — Aquaticy liest sie, schreibt aber nie etwas.": "Your repos, issues, pull requests and files — Aquaticy reads them but never writes anything.",
+"Erstelle auf github.com unter Settings → Developer settings → Personal access tokens ein Token (am besten „Fine-grained“ mit nur Leserechten) und füge es hier ein.": "Create a token on github.com under Settings → Developer settings → Personal access tokens (ideally “Fine-grained” with read-only access) and paste it here.",
+"Aquaticy nutzt nur lesende Aufrufe — auch wenn das Token mehr dürfte. Inhalte privater Repos landen nie in einer Websuche.": "Aquaticy only uses read calls — even if the token would allow more. Content from private repos never ends up in a web search.",
+"WhatsApp im Browser der virtual machine: Aquaticy kann Chats lesen und Antworten vorbereiten. Senden nur nach deinem Ja.": "WhatsApp in the browser of the virtual machine: Aquaticy can read chats and prepare replies. Sending only after your yes.",
+"„Anmelden“ öffnet WhatsApp Web in der virtual machine. Auf dem Handy: WhatsApp → Einstellungen → Verknüpfte Geräte → Gerät hinzufügen, dann den QR-Code im Bildschirm unten scannen.": "“Sign in” opens WhatsApp Web in the virtual machine. On your phone: WhatsApp → Settings → Linked devices → Link a device, then scan the QR code in the screen below.",
+"WhatsApp mag keine Automatisierung: nutze es für dich, nie für Massennachrichten — sonst droht eine Sperre. Was Aquaticy liest, geht an dein Modell. Braucht Firefox (wird beim Installieren mitgeladen).": "WhatsApp doesn't like automation: use it for yourself, never for mass messages — otherwise you risk a ban. What Aquaticy reads goes to your model. Needs Firefox (downloaded during installation).",
+"Signal Desktop in der virtual machine (ein „Signal Web“ gibt es nicht): Aquaticy liest mit und bereitet Antworten vor. Senden nur nach deinem Ja.": "Signal Desktop in the virtual machine (there is no “Signal Web”): Aquaticy reads along and prepares replies. Sending only after your yes.",
+"„Anmelden“ startet Signal in der virtual machine. Auf dem Handy: Signal → Einstellungen → Gekoppelte Geräte → +, dann den QR-Code im Bildschirm unten scannen.": "“Sign in” starts Signal in the virtual machine. On your phone: Signal → Settings → Linked devices → +, then scan the QR code in the screen below.",
+"Signal Desktop gibt es nur für x86_64. Nachrichten, die Aquaticy liest, gehen an dein Modell — bei einem Messenger mit Ende-zu-Ende-Verschlüsselung solltest du das bewusst entscheiden.": "Signal Desktop is only available for x86_64. Messages Aquaticy reads go to your model — with an end-to-end encrypted messenger you should decide that deliberately.",
+"Telegram im Browser der virtual machine — Kanäle und Gruppen lesen, Antworten vorbereiten. Senden nur nach deinem Ja.": "Telegram in the browser of the virtual machine — read channels and groups, prepare replies. Sending only after your yes.",
+"„Anmelden“ öffnet Telegram Web. Auf dem Handy: Telegram → Einstellungen → Geräte → Desktop-Gerät verbinden, dann den QR-Code scannen. Alternativ Telefonnummer und Code selbst in den Bildschirm tippen.": "“Sign in” opens Telegram Web. On your phone: Telegram → Settings → Devices → Link Desktop Device, then scan the QR code. Alternatively type your phone number and code into the screen yourself.",
+"Was Aquaticy liest, geht an dein Modell. Braucht Firefox (wird beim Installieren mitgeladen).": "What Aquaticy reads goes to your model. Needs Firefox (downloaded during installation).",
+"Programme": "Programs",
+"Das 3D-Programm von blender.org: mit Oberfläche im Desktop der virtual machine und für Skripte (blender_run) — Modelle bauen, Szenen einrichten, rendern.": "The 3D program from blender.org: with its interface on the desktop of the virtual machine and for scripts (blender_run) — build models, set up scenes, render.",
+"Gut 350 MB Download, ausgepackt über 1 GB. Mit der Größe der virtual machine „Plus“ läuft es deutlich ruhiger.": "A good 350 MB download, over 1 GB unpacked. It runs much more smoothly with the “Plus” virtual machine size.",
+"Wetter": "Weather",
+"Dienste": "Services",
+"Aktuelles Wetter und Vorhersage bis 7 Tage für jeden Ort — von Open-Meteo (freie Wetterdaten u. a. vom DWD), ohne Schlüssel.": "Current weather and forecasts up to 7 days for any place — from Open-Meteo (free weather data, among others from the DWD), no key needed.",
+"Nur der Ortsname geht an Open-Meteo, sonst nichts.": "Only the place name goes to Open-Meteo, nothing else.",
+"RSS-Feeds": "RSS feeds",
+"Deine eigenen Nachrichtenquellen: Aquaticy liest die Feeds, die du hier einträgst, und fasst zusammen, was neu ist.": "Your own news sources: Aquaticy reads the feeds you enter here and sums up what's new.",
+"Trag die Adressen deiner Feeds ein (eine je Zeile, höchstens 20).": "Enter the addresses of your feeds (one per line, at most 20).",
+"Abgerufen wird höflich: robots.txt zählt, eine Anfrage je Sekunde und Server, ehrliche Kennung.": "Fetching is polite: robots.txt counts, one request per second and server, an honest identifier.",
+"Die aktuellen Meldungen der Tagesschau — nach Thema (Inland, Ausland, Wirtschaft, Sport …) oder als Suche. Ohne Anmeldung.": "The latest Tagesschau news — by topic (domestic, foreign, business, sports …) or as a search. No sign-in.",
+"Nur für den privaten Gebrauch. Die Tagesschau erlaubt höchstens 60 Abrufe pro Stunde — Aquaticy hält sich daran.": "For private use only. Tagesschau allows at most 60 requests per hour — Aquaticy sticks to that.",
+"Schnell nachschlagen: Artikel finden und die Kurzfassung lesen — ohne Umweg über eine Websuche.": "Quick lookup: find articles and read the summary — without a detour through a web search.",
+"Nur dein Suchbegriff geht an Wikipedia. Texte stehen unter CC BY-SA.": "Only your search term goes to Wikipedia. Texts are under CC BY-SA.",
+"Währungsrechner": "Currency converter",
+"Tageskurse der Europäischen Zentralbank für gut 30 Währungen — umrechnen, ohne zu suchen.": "Daily rates from the European Central Bank for a good 30 currencies — convert without searching.",
+"Die Kurse kommen einmal pro Werktag gegen 16 Uhr (Frankfurter, Referenzkurse der EZB). Für Überweisungen gilt der Kurs deiner Bank.": "The rates come once per working day around 4 pm (Frankfurt time, ECB reference rates). For transfers, your bank's rate applies.",
+"Feiertage": "Public holidays",
+"Gesetzliche Feiertage für Deutschland und über 100 andere Länder — auch, welche nur in einzelnen Bundesländern gelten.": "Public holidays for Germany and over 100 other countries — including which ones only apply in individual states.",
+"Daten von Nager.Date. Nur Jahr und Land gehen raus.": "Data from Nager.Date. Only the year and country are sent.",
+"Code-Review": "Code review",
+"Prüft Code auf typische Fehler — besonders auf die, die KI-generierter Code oft hat: erfundene Funktionen und Pakete, fehlende Randfälle, verschluckte Fehler.": "Checks code for typical mistakes — especially the ones AI-generated code often has: made-up functions and packages, missing edge cases, swallowed errors.",
+"Keine Anmeldung nötig. Im Chat: /code-review und dahinter Code, eine angehängte Datei oder ein GitHub-Repo.": "No sign-in needed. In the chat: /code-review followed by code, an attached file or a GitHub repo.",
+"Der Code geht an dein Modell. Mit dem Add-on GitHub liest Aquaticy auch Repos und Pull Requests.": "The code goes to your model. With the GitHub add-on, Aquaticy also reads repos and pull requests.",
+"Security-Review": "Security review",
+"Sucht Sicherheitslücken wie XSS, SQL-Injection, fehlende Zugriffskontrolle oder Prompt-Injection — nach OWASP Top 10 — und sagt, wie man sie schließt.": "Looks for security holes such as XSS, SQL injection, missing access control or prompt injection — following the OWASP Top 10 — and says how to close them.",
+"Keine Anmeldung nötig. Im Chat: /security-review und dahinter Code, eine angehängte Datei oder ein GitHub-Repo.": "No sign-in needed. In the chat: /security-review followed by code, an attached file or a GitHub repo.",
+"Prüft aus Sicht eines Verteidigers: finden, belegen, beheben — ohne Angriffsanleitungen. Der Code geht an dein Modell.": "Checks from a defender's point of view: find, prove, fix — without attack instructions. The code goes to your model.",
+"Logik: Bedingungen, Randfälle (leer, None, 0, negativ), um eins daneben": "Logic: conditions, edge cases (empty, None, 0, negative), off by one",
+"Fehlerbehandlung: verschluckte Ausnahmen, ungeprüfte Rückgaben, fehlende Zeitlimits": "Error handling: swallowed exceptions, unchecked return values, missing timeouts",
+"Ressourcen und Nebenläufigkeit: offene Dateien, Race Conditions, async ohne await": "Resources and concurrency: open files, race conditions, async without await",
+"Daten und Zeit: Zeitzonen, Rundung, Kodierung, Kommazahlen mit ==": "Data and time: time zones, rounding, encoding, floats compared with ==",
+"KI-Code: erfundene Funktionen und Pakete (Slopsquatting), Platzhalter, Tests, die nur den Erfolgsfall prüfen, veraltete Bibliotheken": "AI code: made-up functions and packages (slopsquatting), placeholders, tests that only check the happy path, outdated libraries",
+"OWASP Top 10:2025 — Zugriffskontrolle, Fehlkonfiguration, Lieferkette, Kryptografie, Injection, Design, Anmeldung, Integrität, Protokolle, Ausnahmen": "OWASP Top 10:2025 — access control, misconfiguration, supply chain, cryptography, injection, design, authentication, integrity, logging, exceptions",
+"Geheimnisse im Code, unsichere Cookies, JWT, Deserialisierung, Zip Slip": "Secrets in code, insecure cookies, JWT, deserialization, Zip Slip",
+"OWASP LLM Top 10 2025 — Prompt-Injection, Datenabfluss, ungeprüfte Modellausgabe, zu viel Handlungsfreiheit für Agenten": "OWASP LLM Top 10 2025 — prompt injection, data leakage, unchecked model output, too much agency for agents",
+"Welche Repos": "Which repos",
+"Nur öffentliche": "Public only",
+"Auch private": "Private too",
+"Dateien": "Files",
+"Nur Übersicht": "Overview only",
+"Auch Inhalte lesen": "Read contents too",
+"Was Aquaticy darf": "What Aquaticy may do",
+"Nur lesen": "Read only",
+"Lesen und schreiben": "Read and write",
+"Schreiben in": "Write in",
+"Nur Einzelchats": "Direct chats only",
+"Einzelchats und Gruppen": "Direct chats and groups",
+"Blender nutzen": "Use Blender",
+"Nur Skripte": "Scripts only",
+"Skripte und Oberfläche": "Scripts and interface",
+"Orte": "Places",
+"Jeder Ort": "Any place",
+"Nur mein Ort": "My place only",
+"Einträge je Abruf": "Entries per fetch",
+"Meldungen je Abruf": "News items per fetch",
+"Deutsch": "German",
+"Englisch": "English",
+"Welche Währungen": "Which currencies",
+"Alle": "All",
+"Nur von oder nach Euro": "Only from or to euro",
+"Länder": "Countries",
+"Jedes Land": "Any country",
+"Nur Deutschland": "Germany only",
+"Was gemeldet wird": "What gets reported",
+"Alle Befunde": "All findings",
+"Nur Kritisches und Hohes": "Only critical and high",
+"Korrekturen": "Fixes",
+"Mit Code für den Fix": "With code for the fix",
+"Nur Befunde": "Findings only",
+"Alle Lücken": "All holes"
 };
 const SPRACHEN = ["de", "en"];
 const ATTRIBUTE = ["placeholder", "title", "aria-label"];
 const ORIGINAL = new WeakMap();
-const NICHT_UEBERSETZEN = ".bubble, .recent, .recents-leer, .merk, code, pre, textarea, script, style, #account-username, #account-email";
+// Der Sprachwaehler (#langs) nennt jede Sprache in ihrer eigenen Sprache.
+const NICHT_UEBERSETZEN = ".bubble, .recent, .recents-leer, .merk, code, pre, textarea, script, style, #account-username, #account-email, #langs";
 let sprache = SPRACHEN.includes(START.lang) ? START.lang : "de";
+// Seit 11.2.2 Sol: Texte mit Zahlen oder Namen darin passen in kein EN-Woerterbuch.
+// Sie bekommen ihre englische Fassung gleich dort, wo sie entstehen.
+function sp(de, en){ return sprache === "en" ? en : de; }
 const schluessel = text => text.replace(/\s+/g, " ").trim();
+// Saetze mit Zahlen oder Namen darin (11.2.2 Sol): kein fester Schluessel passt,
+// also ein Muster. Jedes Muster gilt fuer den ganzen Text (^...$); die Teile in
+// Klammern werden selbst noch einmal nachgeschlagen ("unbekanntes Gerät").
+const EN_MUSTER = [
+  [/^Höchstens (\d+) Dateien\.$/, "At most $1 files."],
+  [new RegExp("^(.+): PHP- und JSP-Dateien lassen sich nicht hochladen\\. "
+              + "Füg den Code lieber als Text in die Nachricht ein\\.$"),
+   "$1: PHP and JSP files can't be uploaded. Better paste the code into the message as text."],
+  [/^(.+) ist zu groß \((.+), erlaubt sind 25 MB\)\.$/, "$1 is too big ($2, 25 MB allowed)."],
+  [/^(.+) konnte nicht gelesen werden\.$/, "$1 couldn't be read."],
+  [/^Chat öffnen: (.*)$/s, "Open chat: $1"],
+  [/^„(.*)" löschen\?$/s, "Delete “$1”?"],
+  [/^(.+) ein- oder ausschalten$/, "Turn $1 on or off"],
+  [/^(.+) läuft in der virtual machine im User mode — und der gehört zu Ultra\.$/,
+   "$1 runs in the virtual machine in User mode — and that's part of Ultra."],
+  [/^(.+) ist gerade nicht nutzbar\.$/, "$1 can't be used right now."],
+  [/^(.+) ist ausgeschaltet\.$/, "$1 is turned off."],
+  [/^Von (.+) abmelden\?$/, "Sign out of $1?"],
+  [/^angehalten — (.+)$/, "stopped — $1"],
+  [/^wacht (.+) Uhr auf$/, "wakes up at $1"],
+  [/^(.+) fängt beim nächsten Schritt ohne sein bisheriges Gedächtnis an\.$/,
+   "$1 starts the next step without its previous memory."],
+  [/^Notizen von (.+) \(sein Gedächtnis\)$/, "Notes of $1 (its memory)"],
+  [/^Aufgabe von (.+)$/, "Task of $1"],
+  [/^(.+) ist verknüpft\.$/, "$1 is linked."],
+  [/^verknüpft · (.+)$/, "linked · $1"],
+  [/^Tokens frei: (.+) von (.+) je (.+)$/, "Tokens free: $1 of $2 per $3"],
+  [/^Modelle: (.+)$/s, "Models: $1"],
+  [/^(.+) trennen\?$/, "Disconnect $1?"],
+  [/^(.+) API-Schlüssel einfügen$/, "$1  paste API key"],
+  [/^(.+): API-Schlüssel$/, "$1: API key"],
+  [/^Bearbeiter: (.*)$/, "Workers: $1"],
+  [/^Prüfer: (.*)$/, "Checker: $1"],
+  [/^Richter: (.*)$/, "Judge: $1"],
+  [/^(.+) — zuletzt (.+)$/, (m, a, b) => `${enOder(a)} — last ${b}`],
+  [/^Zuletzt genutzte Adresse: (.+)$/, "Last used address: $1"],
+  [/^angemeldet auf (\d+) Gerät\(en\)$/, "signed in on $1 device(s)"],
+  [new RegExp("^Neue Anmeldung bei deinem Konto: (.+) \\((.+)\\)\\. Warst du das nicht\\? "
+              + "Ändere dein Passwort und melde dich überall sonst ab\\.$"),
+   (m, a, b) => `New sign-in to your account: ${enOder(a)} (${b}). Wasn't that you? `
+     + "Change your password and sign out everywhere else."],
+  [/^Die (\d+) Konten von „(.+)“ übernehmen\?$/, "Take over the $1 accounts of “$2”?"],
+  [/^„(.+)“ aus dem Verbund nehmen\?$/, "Remove “$1” from the cluster?"],
+  [/^Warte auf (.+): dort im Terminal mit „yes“ oder „no“ antworten\.$/,
+   "Waiting for $1: answer “yes” or “no” in the terminal there."],
+  [/^(\d+) von (\d+) Servern\.$/, "$1 of $2 servers."],
+  [/^rechnet direkt über seine Grafikkarte mit(?: \(etwa (.+) GB\))?$/,
+   (m, gb) => "computes directly on its graphics card" + (gb ? ` (about ${gb} GB)` : "")],
+  [/^rechnet mit(?: \(etwa (.+) GB\))?$/,
+   (m, gb) => "helps compute" + (gb ? ` (about ${gb} GB)` : "")],
+  [/^Im Verbund stehen zusammen etwa (.+) GB Speicher bereit\.\s*(.*)$/,
+   (m, gb, rest) => `About ${gb} GB of memory are available in the cluster.`
+     + (rest ? " " + enOder(rest) : "")],
+  [/^(.+) ist installiert\.$/, "$1 is installed."],
+  [/^Bereit: (.+) läuft verteilt auf (\d+) Servern und steht in der Modellauswahl\.$/,
+   "Ready: $1 runs distributed across $2 servers and is in the model picker."],
+  [/^Das hat nicht geklappt: (.+)$/s, (m, a) => "That didn't work: " + enOder(a)],
+  [/^Deinen (.+)-Schlüssel entfernen\?$/, "Remove your $1 key?"],
+  [/^(.+): Schlüssel$/, "$1: key"],
+  [/^Setzt sich (.+) zurück$/, "Resets $1"],
+  [/^1 Datei$/, "1 file"], [/^(\d+) Dateien$/, "$1 files"],
+  [/^1 Eintrag$/, "1 entry"], [/^(\d+) Einträge$/, "$1 entries"],
+  [/^1 Notiz$/, "1 note"], [/^(\d+) Notizen$/, "$1 notes"],
+  [/^(.+) von (.+) (GB|MB) belegt$/, "$1 of $2 $3 used"],
+  [/^noch (\d+) Min\.$/, "$1 min left"],
+  [/^Denktiefe (\w+)$/, "thinking depth $1"],
+  [/^Sitzung (.+)$/, "Session $1"], [/^Woche (.+)$/, "Week $1"],
+  [/^(\S+) fehlt \(für Modell (.+)\)$/, "$1 missing (for model $2)"],
+  [/^(\S+) fehlt \(für Suchmaschine (.+)\)$/, "$1 missing (for search engine $2)"],
+  [/^Gespeichert als (.+) — das Anbieter-Kürzel hat gefehlt\. Bildanalyse: (.+)\.$/,
+   "Saved as $1 — the provider prefix was missing. Image analysis: $2."],
+  [/^(.+) ist jetzt aktiv\. Bildanalyse: (.+)\.$/, "$1 is now active. Image analysis: $2."],
+  [/^Gefunden: (.+)\. Zum Übernehmen unten speichern\.$/, "Found: $1. Save below to apply."],
+  [/^Gefunden: (.+) — die erste ist eingetragen\.$/, "Found: $1 — the first one is filled in."],
+  [/^Gefunden: (.+)$/, "Found: $1"],
+  [/^Verbunden mit (.+) — (\d+) Geräte und Werte\. Zum Übernehmen unten speichern\.$/,
+   "Connected to $1 — $2 devices and values. Save below to apply."],
+  [/^Verbunden(?: als (.+?))? — (darf auch ändern|nur lesend)\.$/,
+   (m, wer, recht) => "Connected" + (wer ? ` as ${wer}` : "")
+     + (recht === "nur lesend" ? " — read only." : " — may also make changes.")],
+  [/^(.+) unter (.+) — (\d+) (?:Raum|Räume), (\d+) Artikel\. Zum Übernehmen unten speichern\.$/,
+   "$1 at $2 — $3 room(s), $4 item(s). Save below to apply."],
+  [/^(.+) stärker$/, "$1 stronger"],
+  [/^Neu: (.+)$/, "New: $1"], [/^Upgraden ab (\d+) %$/, "Upgrade from $1 %"],
+  [/^(.+) wird verworfen\.$/, "$1 will be discarded."],
+  [/^(.+) als neueste$/, "$1 as newest"],
+  [/^(.+) wird wieder die neueste Version für alle\.$/,
+   "$1 becomes the newest version for everyone again."],
+  [/^(.+) löschen\?$/, "Delete $1?"],
+];
+// Ein Text auf Englisch -- oder "", wenn es keine Fassung gibt. Laengere Zeilen
+// aus Teilen (" · ", "; ") werden Teil fuer Teil nachgeschlagen.
+function aufEnglisch(text, tiefe = 0){
+  const k = schluessel(String(text || ""));
+  if (!k) return "";
+  if (EN[k]) return EN[k];
+  // Muster nur fuer kurze Zeilen: Gedanken und Antworten wachsen Token fuer Token,
+  // und ein Muster mit zwei (.+) wuerde dort bei jedem Token teuer.
+  if (k.length > 400) return "";
+  for (const [muster, ersatz] of EN_MUSTER){
+    if (muster.test(k)) return k.replace(muster, ersatz);
+  }
+  if (tiefe > 0) return "";
+  for (const trenner of [" · ", "; "]){
+    if (!k.includes(trenner)) continue;
+    const teile = k.split(trenner);
+    const en = teile.map(t => aufEnglisch(t, 1) || t);
+    if (en.some((t, i) => t !== teile[i])) return en.join(trenner);
+  }
+  return "";
+}
+// Fuer Teile eines Musters; jeder Teil ist kuerzer als das Ganze, das endet also.
+function enOder(text){ return aufEnglisch(text) || text; }
+// Fuer Text in der Antwortblase, die das Woerterbuch absichtlich nicht anfasst.
+function enOderDe(text){ return sprache === "en" ? aufEnglisch(text) || text : text; }
 function tauscheText(node){
   const eltern = node.parentElement;
   if (!eltern || eltern.closest(NICHT_UEBERSETZEN)) return;
   const roh = node.nodeValue;
   if (sprache === "en"){
-    const en = EN[schluessel(roh)];
-    if (!en) return;
+    const en = aufEnglisch(roh);
+    if (!en || en === schluessel(roh)) return;
     ORIGINAL.set(node, roh);
     const vorne = roh.match(/^\s*/)[0], hinten = roh.match(/\s*$/)[0];
     node.nodeValue = vorne + en + hinten;
@@ -5549,7 +6114,7 @@ function tauscheText(node){
     const alt = ORIGINAL.get(node);
     ORIGINAL.delete(node);
     // Nur zurueck, wenn niemand den Text inzwischen neu gesetzt hat.
-    if (EN[schluessel(alt)] === schluessel(roh)) node.nodeValue = alt;
+    if (aufEnglisch(alt) === schluessel(roh)) node.nodeValue = alt;
   }
 }
 function tauscheAttribute(el){
@@ -5561,10 +6126,10 @@ function tauscheAttribute(el){
     if (!wert) continue;
     const merk = "data-de-" + name;
     if (sprache === "en"){
-      const en = EN[schluessel(wert)];
-      if (en){ el.setAttribute(merk, wert); el.setAttribute(name, en); }
+      const en = aufEnglisch(wert);
+      if (en && en !== wert){ el.setAttribute(merk, wert); el.setAttribute(name, en); }
     } else if (el.hasAttribute(merk)){
-      if (EN[schluessel(el.getAttribute(merk))] === wert) el.setAttribute(name, el.getAttribute(merk));
+      if (aufEnglisch(el.getAttribute(merk)) === wert) el.setAttribute(name, el.getAttribute(merk));
       el.removeAttribute(merk);
     }
   }
@@ -6407,11 +6972,65 @@ function showLegalRules(rules){
   for (const rule of rules){
     const item = document.createElement("li");
     const title = document.createElement("strong");
-    title.textContent = rule.title;
-    item.append(title, ` (${rule.basis}) — ${rule.text}`);
+    // Die Regeln schreibt der Server deutsch; die englische Fassung steht hier (11.2.2 Sol).
+    const en = sprache === "en" ? RECHT_EN[rule.id] : null;
+    title.textContent = en ? en[0] : rule.title;
+    item.append(title, ` (${rule.basis}) — ${en ? en[1] : rule.text}`);
     list.appendChild(item);
   }
 }
+// Titel und Text jeder Leitplanke aus aquaticy/guardrails.py, auf Englisch.
+const RECHT_EN = {
+  menschenwuerde: ["Human dignity",
+    "No content that holds real people or groups in contempt or denies them their worth as "
+    + "persons. Jokes, black humour, quotes for context and factual discussion of even hard "
+    + "topics are allowed."],
+  persoenlichkeit: ["Personality rights and informational self-determination",
+    "Searching for a person is fine: gathering publicly available information — what someone "
+    + "has published themselves, their professional role, a company or club page, public "
+    + "profiles, a legal notice, published ways to get in touch. Not fine is secretly digging "
+    + "into private matters: finding out someone's private home address or mobile number, "
+    + "tracking down their current whereabouts, following private circumstances (health, "
+    + "relationships, finances) or building a surveillance-style dossier that pulls together "
+    + "exactly such private details. Public figures in their public role can be researched "
+    + "freely anyway."],
+  gleichheit: ["Equal treatment",
+    "No selecting, rating or disadvantaging people because of sex, descent, racial "
+    + "attribution, language, homeland and origin, faith, religious or political views or "
+    + "disability. Talking about these topics, citing statistics or explaining discrimination "
+    + "is allowed."],
+  fernmeldegeheimnis: ["Secrecy of correspondence, post and telecommunications",
+    "No help secretly reading or intercepting other people's messages, accounts or "
+    + "conversations. Your own mail, messages you received yourself, and explanations of how "
+    + "encryption or messengers work are fine."],
+  wohnung: ["Inviolability of the home",
+    "No targeted look into the homes, gardens or other private spaces of specific people, "
+    + "neither through cameras nor through recordings. Camera images only from cameras that "
+    + "are officially run for the public."],
+  eigentum: ["Property and possession",
+    "No help controlling, disrupting or damaging other people's devices, accounts or things "
+    + "without permission. Your own devices, repairs, instructions and general explanations "
+    + "of how something works are fine."],
+  name: ["Right to one's name",
+    "Not posing as another real person to deceive others — for example with forged messages, "
+    + "signatures or profiles. Drafts that someone checks and sends themselves, texts in a "
+    + "person's style, parody and fiction are fine."],
+  ruf: ["Honour and creditworthiness",
+    "No unproven statements of fact and no made-up quotes that can damage the reputation or "
+    + "creditworthiness of a person or a company. Facts with a source, opinion as opinion — "
+    + "criticism, honest reviews from your own experience and satire are allowed."],
+  schaedigung: ["Intentional damage contrary to public policy",
+    "No help with deliberately harming someone in a way contrary to public policy — for "
+    + "example with fake reviews, deception or harassment. Whoever helps with it is liable as "
+    + "an accessory."],
+  vertrag: ["Statutory prohibition and usury",
+    "No contracts or clauses that violate a statutory prohibition or exploit the other "
+    + "party's predicament, inexperience or weakness."],
+  rechtsrahmen: ["Legal framework", ""],
+  erziehung: ["Non-violent upbringing",
+    "No advice on physical punishment, emotional harm or other degrading measures against "
+    + "children."],
+};
 // Ob das angemeldete Konto Pro ist -- setzt loadAccount.
 let kontoUltra = false;
 const guardBox = $("#guardbox");
@@ -7207,11 +7826,19 @@ function coworkerZeigen(sofort = false){
       avatare.appendChild(b);
     }
   }
-  const info = [`Mit ${d.plan === "ultra" ? "Ultra" : "Pro"}: bis zu ${d.max} Coworker, je Coworker bis zu ${d.daily} Arbeitsschritte am Tag.`];
+  const plan = d.plan === "ultra" ? "Ultra" : "Pro";
+  const info = [sp(`Mit ${plan}: bis zu ${d.max} Coworker, `
+                   + `je Coworker bis zu ${d.daily} Arbeitsschritte am Tag.`,
+                   `With ${plan}: up to ${d.max} coworkers, `
+                   + `each with up to ${d.daily} work steps a day.`)];
   info.push((d.connections || []).length
-    ? "Er kann lesen: " + d.connections.join(", ") + "."
-    : "Verbindungen wie Gmail, Google Kalender oder GitHub schaltest du in den Einstellungen und unter Add-ons ein.");
-  if (d.vm) info.push("Er bekommt eine eigene virtual machine.");
+    ? sp("Er kann lesen: ", "It can read: ") + d.connections.join(", ") + "."
+    : sp("Verbindungen wie Gmail, Google Kalender oder GitHub schaltest du in den "
+         + "Einstellungen und unter Add-ons ein.",
+         "You turn on connections like Gmail, Google Calendar or GitHub in the settings "
+         + "and under Add-ons."));
+  if (d.vm) info.push(sp("Er bekommt eine eigene virtual machine.",
+                         "It gets its own virtual machine."));
   $("#cw-info").textContent = info.join(" ");
   $("#cw-create").disabled = (d.coworkers || []).length >= (d.max || 0);
   liste.replaceChildren(...(d.coworkers || []).map(cw => coworkerKarte(cw, d)));
@@ -8945,11 +9572,54 @@ form.addEventListener("submit", async (e) => {
 /* ---------- Start ---------- */
 // Auf Englisch (9.5.25) stehen Gruss und Vorschlaege hier -- die deutschen
 // Saetze kommen vom Server und werden nicht Wort fuer Wort uebersetzt.
+// Seit 11.2.2 Sol ganze Saetze wie auf Deutsch, je Modus, mit und ohne Namen.
 const GRUSS_EN = {
-  normal: ["what would you like to find out?", "what should I look up for you?",
-           "what are you curious about today?", "how can I help?"],
-  code: ["what should we build?", "which code should I look at?",
-         "what are you working on?"],
+  normal: ["{gruss}, {name}. What can I help you with?",
+           "{gruss}, {name}. What would you like to find out?",
+           "{gruss}, {name}. What should we look into?", "{gruss}! What's on your mind?",
+           "Where do we start, {name}?", "Where do we start?",
+           "What would you like to know, {name}?", "What would you like to know today?",
+           "Ask me anything, {name}.", "Ask me anything.",
+           "Good to see you, {name}. What are we looking for?",
+           "Hey {name}, what should I look up for you?", "Welcome back, {name}. What's new?",
+           "What are you curious about today?", "What should I find on the web for you?",
+           "Let's find something out, {name}.", "One question is enough. I'll do the searching.",
+           "What should I compare, check or explain?",
+           "A question, a plan, an idea? I'm listening.",
+           "What can I take off your plate today, {name}?", "Ready for a new question, {name}?",
+           "What should we figure out today?", "I'm all ears, {name}.",
+           "Need something looked up?"],
+  pro: ["{gruss}, {name}. Which big question are we taking on?",
+        "{gruss}, {name}. What should I research thoroughly?",
+        "Where do we start, {name}?", "Where do we start?",
+        "Time for something bigger, {name}?", "What should I check in detail?",
+        "Give me a hard topic, {name}.", "We can dig deep. What's the topic?",
+        "Ready for some proper research, {name}?",
+        "Which decision should I prepare for you?",
+        "What should I gather from several sources?",
+        "What do you really want to understand, {name}?",
+        "I can send out several agents. What for?",
+        "What should I compare, weigh up and back with sources?",
+        "A complex question? That's what I'm here for.", "Let's go deep today, {name}.",
+        "What should be on the table at the end?",
+        "A report, a comparison, a plan? Tell me, {name}.",
+        "Thorough rather than fast. What's the topic?",
+        "Welcome back, {name}. Which topic are we taking on?",
+        "Which question deserves a detailed answer?"],
+  code: ["{gruss}, {name}. What are we building?",
+         "{gruss}, {name}. Which problem are we solving?",
+         "Where do we start, {name}?", "Where do we start?", "What should we build?",
+         "Which bug is bugging you today, {name}?", "What should I code for you?",
+         "Editor's open, {name}. What's next?", "Which script do you need?",
+         "Show me the code, {name}.", "What should be running that isn't?",
+         "What are we refactoring today?", "Stack trace at hand, {name}? Send it over.",
+         "What are we automating today?", "Which function should I write?",
+         "Where are you stuck, {name}?", "Which code should I look at?",
+         "What are you working on, {name}?",
+         "Welcome back, {name}. What are we building on?",
+         "Give me the error, I'll find the cause.",
+         "What should go into the virtual machine?",
+         "Ready for a few lines of code, {name}?"],
 };
 const VORSCHLAEGE_EN = {
   normal: ["Good cafés with Wi-Fi in my town", "Laptop up to €1200 for photo editing",
@@ -8972,21 +9642,25 @@ function greet(){
   // Seit 9.6.0 ganze Saetze, je Modus mindestens 50, bei jedem neuen Chat
   // zufaellig ("{gruss}" = Tageszeit, "{name}" = Nutzername).
   const modus = MODI.includes(mode) ? mode : "normal";
-  if (englisch){
-    const phrases = GRUSS_EN[modus === "code" ? "code" : "normal"];
-    const name = currentUsername ? ` ${currentUsername}` : "";
-    $("#greeting").textContent = `${when}${name} — ${zufaellig(phrases)}`;
-  } else {
-    const saetze = TEXTE.greetings[modus] || TEXTE.greetings.normal || ["{gruss}, {name}. Wobei kann ich dir helfen?"];
-    $("#greeting").textContent = grussSatz(zufaellig(saetze), when, currentUsername);
-  }
+  const saetze = englisch ? (GRUSS_EN[modus] || GRUSS_EN.normal)
+    : (TEXTE.greetings[modus] || TEXTE.greetings.normal
+       || ["{gruss}, {name}. Wobei kann ich dir helfen?"]);
+  $("#greeting").textContent = grussZiehen(saetze, when, currentUsername);
   rotateSuggestions();
+}
+// Seit 11.2.2 Sol: etwa jeder zweite Gruss mit Namen, und dann nur aus Saetzen,
+// die einen tragen. Ohne Namen zaehlen alle Saetze, der Name faellt weg.
+function grussZiehen(saetze, gruss, name, wurf = Math.random()){
+  const mitName = Boolean(name) && wurf < 0.5;
+  const auswahl = mitName ? saetze.filter(s => String(s).includes("{name}")) : saetze;
+  return grussSatz(zufaellig(auswahl.length ? auswahl : saetze), gruss, mitName ? name : "");
 }
 function zufaellig(liste){ return liste[Math.floor(Math.random() * liste.length)]; }
 // "{gruss}, {name}. ..." -> "Guten Morgen, Anna. ..."; ohne Namen faellt er samt Komma weg.
 function grussSatz(satz, gruss, name){
   let text = String(satz || "").replaceAll("{gruss}", gruss);
-  text = name ? text.replaceAll("{name}", name)
+  // Als Funktion: ein Name wie "Jo$&nas" bleibt sonst nicht, wie er ist (11.2.2 Sol).
+  text = name ? text.replaceAll("{name}", () => name)
               : text.replace(/,\s*\{name\}/g, "").replace(/\s*\{name\}/g, "");
   return text.replace(/\s+([.,?!])/g, "$1").replace(/^\s+/, "");
 }

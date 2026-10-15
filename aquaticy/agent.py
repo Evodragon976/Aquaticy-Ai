@@ -630,6 +630,31 @@ Die virtual machine wird zwanzig Minuten nach der letzten Nutzung geloescht, mit
 allem darin. Was aufgehoben werden soll, gehoert in die Antwort."""
 
 #: Der Satz ueber das Netz in der virtual machine -- ohne und mit User mode.
+#: Eingeschaltet, aber ohne Podman/Docker auf dem Rechner (11.2.2 Sol). Vorher bekam
+#: das Modell trotzdem die Werkzeuge, jeder Aufruf scheiterte, und es sagte dem
+#: Nutzer nur "ich kann keine virtual machine benutzen".
+VM_MISSING_PROMPT = """
+
+Die virtual machine ist eingeschaltet, kann auf diesem Rechner aber nicht starten: \
+Podman oder Docker fehlt. Du kannst Code also NICHT ausfuehren. Sag das dem Nutzer \
+in einem Satz (einrichten: Podman oder Docker installieren, dann neu starten) und \
+kennzeichne deinen Code als ungetestet.
+"""
+
+#: Einmal je Anfrage, wenn Code ohne einen einzigen Lauf in der virtual machine
+#: zurueckkam (11.2.2 Sol). Kleine Modelle ueberlesen die Anleitung im Systemtext.
+VM_NUDGE_PROMPT = (
+    "Du hast eine virtual machine und hast deinen Code noch nicht ausgeführt. Leg ihn "
+    "jetzt mit vm_write an, führe ihn mit vm_run aus und prüfe die Ausgabe. Antworte erst "
+    "danach -- mit dem, was der Lauf ergeben hat."
+)
+
+#: Steht an jeder Frage, solange die virtual machine an ist (11.2.2 Sol).
+VM_TURN_HINT = (
+    "[virtual machine ist an: Code mit vm_write anlegen, mit vm_run ausführen und die "
+    "Ausgabe prüfen, bevor du antwortest.]"
+)
+
 VM_NET_OFF_PROMPT = (
     "Was sie NICHT hat: Netz. Kein `pip install`, kein `curl`, kein `apt-get` -- komm "
     "mit der Standardbibliothek aus und sag es, wenn eine Fremdbibliothek noetig waere."
@@ -1280,7 +1305,7 @@ class Agent:
             extra.append(PUBLIC_VISUAL_SCHEMA)
         # Die virtual machine gibt es nur im Code-Modus -- beim Recherchieren waere
         # eine Maschine, in der man Programme startet, nur eine Ablenkung.
-        if self.workshop_on:
+        if self._vm_ready():
             extra.extend(vm_schemas_for(self.settings))
         # Add-ons: nur, was der Nutzer installiert UND eingeschaltet hat --
         # und nur mit Web, denn alle drei fragen einen Dienst im Internet.
@@ -1733,7 +1758,7 @@ class Agent:
                 from aquaticy import metering
                 from aquaticy import sandbox as werkstatt
 
-                if werkstatt.find_runtime() is None:
+                if werkstatt.runtime_cached() is None:
                     return
                 metering.check_work(self.settings, "werkstatt")
                 werkstatt_box = self.toolbox._sandbox()
@@ -1959,6 +1984,27 @@ class Agent:
         """Laeuft dieser Turn mit virtual machine?"""
         return bool(self.sandbox) and clean_mode(self.mode) == "code"
 
+    def _vm_can_start(self) -> bool:
+        """Gibt es auf diesem Rechner eine Abschottung (Podman/Docker)? Wartet nie.
+
+        Noch nie nachgesehen: wie vor 11.2.2 Sol anbieten -- die Suche laeuft dann
+        im Hintergrund, und ab der naechsten Frage gilt, was sie gefunden hat.
+        """
+        from aquaticy import sandbox as werkstatt
+
+        try:
+            bekannt, laufzeit = werkstatt.runtime_known()
+        except Exception:
+            return True
+        return laufzeit is not None or not bekannt
+
+    def _vm_ready(self) -> bool:
+        """Mit virtual machine -- und kann sie hier starten? Je Frage einmal entschieden."""
+        if not self.workshop_on:
+            return False
+        da = getattr(self, "_vm_da", None)
+        return self._vm_can_start() if da is None else bool(da)
+
     @property
     def active_model(self) -> str:
         """Das Modell fuer diesen Turn.
@@ -1993,7 +2039,9 @@ class Agent:
         arbeiter, pruefer = linked.council_roles(self.settings)
         if not arbeiter or pruefer is None:
             self._emit("note", text="AI Council: dafür braucht es mindestens zwei verknüpfte "
-                                    "KI-Konten (Add-ons → KI-Konten). Die Frage läuft normal.")
+                                    "KI-Konten (Add-ons → KI-Konten). Die Frage läuft normal.",
+                       text_en="AI Council needs at least two linked AI accounts "
+                               "(Add-ons → AI accounts). The question runs normally.")
             return None
         self._emit("triage", decision="council", source="einstellung")
         try:
@@ -2152,7 +2200,9 @@ class Agent:
             if self.pro_mode:
                 text += PRO_PROMPT % {"agents": self.agent_limit}
         text += ASK_PROMPT if self.toolbox.ask_handler is not None else NO_ASK_PROMPT
-        if self.workshop_on:
+        if self.workshop_on and not self._vm_ready():
+            text += VM_MISSING_PROMPT
+        elif self.workshop_on:
             cpus = max(1, int(self.settings.vm_cpus or 1))
             user_mode = bool(getattr(self.settings, "vm_user_mode", False))
             # Internet ohne Desktop (Ultra, 9.5.31): dasselbe Netz wie im User mode.
@@ -2430,7 +2480,9 @@ class Agent:
                     if fehlt == "tools":
                         self._emit("note", text=(
                             f"{self.active_model} kann keine Werkzeuge benutzen – Aquaticy "
-                            "antwortet ohne eigene Suche."))
+                            "antwortet ohne eigene Suche."), text_en=(
+                            f"{self.active_model} can't use tools – Aquaticy answers "
+                            "without its own search."))
                     return self._completion_with_retry(messages, stream=stream)
                 if attempt + 1 >= attempts:
                     if is_transient(detail) and self._switch_to_backup_model():
@@ -2734,7 +2786,7 @@ class Agent:
         if effort:
             self.effort = clean_effort(effort)
         before = (self.mode, self.structured, self.online, self.workshop_on,
-                  self.visual_sources)
+                  self.visual_sources, getattr(self, "_vm_da", None))
         if online is not None:
             self.online = bool(online)
         if sandbox is not None:
@@ -2753,15 +2805,18 @@ class Agent:
         # Rechte der Add-ons koennen sich zwischen zwei Fragen aendern (Add-on-
         # Fenster). Durchgesetzt werden sie ohnehin im Code; der Systemtext
         # soll trotzdem stimmen, sonst plant das Modell mit alten Rechten.
+        # Einmal je Frage, damit Systemtext und Werkzeuge zusammenpassen.
+        self._vm_da = self._vm_can_start() if self.workshop_on else None
         if (self.mode, self.structured, self.online, self.workshop_on,
-                self.visual_sources) != before or (
+                self.visual_sources, self._vm_da) != before or (
                 self._addon_prompt() != getattr(self, "_addon_prompt_seen", "")):
             self._refresh_system()
         self.max_run = bool(gewuenscht_max) and self.pro_mode
         if gewuenscht_max and not self.pro_mode:
             self._emit(
                 "note",
-                text="/max gibt es nur im Pro-Modus -- die Frage laeuft normal.",
+                text="/max gibt es nur im Pro-Modus – die Frage läuft normal.",
+                text_en="/max is only available in Pro mode – the question runs normally.",
             )
         self._stop.clear()
         # Je Frage einmal nachsehen: zwischen zwei Fragen kann das Modell
@@ -2801,7 +2856,15 @@ class Agent:
             if beantwortet is not None:
                 return beantwortet
 
-        if self.workshop_on:
+        if self.workshop_on and not self._vm_ready():
+            # Der Schalter ist an, aber es gibt keine Abschottung (11.2.2 Sol) --
+            # das soll der Nutzer sehen, nicht erst aus einer Ausrede des Modells.
+            self._emit("note", text=(
+                "Die virtual machine kann nicht starten: Auf diesem Rechner fehlt Podman "
+                "oder Docker. Der Code bleibt deshalb ungetestet."), text_en=(
+                "The virtual machine can't start: Podman or Docker is missing on this "
+                "computer. So the code stays untested."))
+        elif self.workshop_on:
             self._touch_workshop()
             self._warm_workshop()
         self._auto_choose(question)
@@ -2831,6 +2894,8 @@ class Agent:
         genudged = False
         #: Dasselbe fuer das fehlende Bild -- ebenfalls hoechstens einmal.
         gebildert = False
+        #: Und fuer Code, der nie in der virtual machine lief (11.2.2 Sol).
+        vm_angestossen = False
 
         # Automatische Vorrecherche: die Anfrage wird zerlegt und die Teile
         # laufen parallel, bevor der Hauptagent uebernimmt. Was die
@@ -2933,6 +2998,14 @@ class Agent:
                     self.messages.append(
                         {"role": "user", "content": self._visual_nudge(antwort)}
                     )
+                    continue
+                # Code-Modus mit virtual machine: Code, der nie lief, ist eine
+                # Behauptung. Einmal zurueckschicken -- kleine Modelle ueberlesen
+                # die Anleitung sonst und sagen spaeter, sie haetten keine.
+                if not vm_angestossen and self._should_force_vm(antwort):
+                    vm_angestossen = True
+                    self._emit("answer_reset", reason="virtual machine")
+                    self.messages.append({"role": "user", "content": VM_NUDGE_PROMPT})
                     continue
                 result.answer = antwort
                 break
@@ -3376,6 +3449,15 @@ class Agent:
         self.messages.append({"role": "assistant", "content": text})
         return text
 
+    def _should_force_vm(self, answer: str) -> bool:
+        """Kam Code zurueck, ohne dass er ein einziges Mal in der virtual machine lief?"""
+        return (
+            self._vm_ready()
+            and "```" in str(answer or "")
+            and getattr(self.toolbox.stats, "vm_calls", 0) == 0
+            and any(t["function"]["name"] == "vm_run" for t in self.tools)
+        )
+
     def _should_force_ask(self, answer: str, used: int) -> bool:
         """Soll die Antwort zurueckgehen, weil sie nur eine Frage war?
 
@@ -3550,7 +3632,10 @@ class Agent:
             return
         self._emit("answer_reset", reason="antwort_geprueft")
         self._emit("answer_chunk", text=ANSWER_REFUSAL)
-        self._emit("note", text="Ai-guard hat die Antwort zurückgezogen (" + art + ").")
+        self._emit("note", text="Ai-guard hat die Antwort zurückgezogen (" + art + ").",
+                   # Die Art kommt deutsch (oft vom Modell); bekannt ist nur die eine.
+                   text_en="Ai-guard withdrew the answer"
+                           + (" (insult)." if art == "Beleidigung" else "."))
         result.answer = ANSWER_REFUSAL
         # Auch aus dem Verlauf nehmen: sonst steht es im Kontext der naechsten Frage.
         for nachricht in reversed(self.messages):
@@ -3580,16 +3665,21 @@ class Agent:
                                        stats.learning_pages, soft | hard)
                 if added:
                     self._emit("note", text=f"{added} öffentliche Quellenauszüge für "
-                               "das gemeinsame Wissen übernommen.")
+                               "das gemeinsame Wissen übernommen.",
+                               text_en=f"{added} public source excerpts added to the "
+                               "shared knowledge.")
                 remembered = learning.research.learn(
                     self.toolbox.learning_ticket, question, result.answer,
                     stats.research_pages, soft | hard)
                 if remembered:
                     self._emit("note", text=f"{remembered} öffentliche Schlüsselinformationen "
-                               "für dein Konto für höchstens 48 Stunden gemerkt.")
+                               "für dein Konto für höchstens 48 Stunden gemerkt.",
+                               text_en=f"{remembered} public key facts kept for your account "
+                               "for at most 48 hours.")
             except Exception:
                 # A failed optional knowledge write must never lose an answer.
-                self._emit("note", text="Gemeinsames Lernen ist gerade nicht verfügbar.")
+                self._emit("note", text="Gemeinsames Lernen ist gerade nicht verfügbar.",
+                           text_en="Shared learning isn't available right now.")
         stats.learning_pages.clear()
         stats.research_pages.clear()
         self._emit(
@@ -3630,6 +3720,8 @@ class Agent:
                 "create_image ein Bild zu dieser Nachricht (Beschreibung auf Englisch, "
                 "konkret). Suche nicht im Web. Antworte danach mit einem kurzen Satz.]"
             )
+        if self._vm_ready():
+            question = f"{question}\n\n{VM_TURN_HINT}"
         location = (self.settings.location or "").strip()
         if not location:
             return question

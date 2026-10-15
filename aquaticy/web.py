@@ -1563,7 +1563,8 @@ class ChatSession:
                     "reason": (
                         "Es läuft noch eine früher gestellte Anfrage — ich bin "
                         "gleich da."
-                    )
+                    ),
+                    "reason_en": "An earlier question is still running — I'll be right there.",
                 },
             )
         try:
@@ -4857,6 +4858,22 @@ class Handler(BaseHTTPRequestHandler):
             from aquaticy import addons
 
             self._json(addons.public_view(SESSION.settings(), SESSION.ultra))
+        elif route == "/api/vm":
+            # Fuer den Schalter unter "Code wirklich ausprobieren" (11.2.2 Sol): ob
+            # die virtual machine Internet hat, ob das Konto es aendern darf und ob
+            # es auf diesem Rechner ueberhaupt eine Abschottung gibt.
+            from aquaticy import sandbox as werkstatt
+
+            einstellungen = SESSION.settings()
+            laufzeit = None
+            with contextlib.suppress(Exception):
+                laufzeit = werkstatt.runtime_cached()
+            self._json({
+                "internet": bool(getattr(einstellungen, "vm_internet", False)),
+                "lan": bool(getattr(einstellungen, "vm_lan", False)),
+                "ultra": bool(SESSION.ultra),
+                "runtime": laufzeit is not None,
+            })
         elif route == "/api/plugins":
             # Die Befehle fuer die Liste beim Tippen von "/" (11.0.0 Luna).
             from aquaticy import plugins as plugin_mod

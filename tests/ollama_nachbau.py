@@ -28,6 +28,8 @@ class Ollama:
         #: Groesseres num_ctx passt "nicht in den Speicher" (0 = alles passt).
         self.max_ctx = max_ctx
         self.anfragen: list[dict[str, Any]] = []
+        #: Je Chat-Anfrage: angebotene Werkzeuge und Systemtext.
+        self.details: list[dict[str, Any]] = []
         nachbau = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -62,9 +64,14 @@ class Ollama:
                     self._json(200, {"done": True})
                     return
                 optionen = daten.get("options") or {}
+                system = next((str(m.get("content") or "") for m in daten.get("messages") or []
+                               if m.get("role") == "system"), "")
                 nachbau.anfragen.append({"model": name, "think": daten.get("think"),
                                          "tools": bool(daten.get("tools")),
                                          "num_ctx": optionen.get("num_ctx")})
+                nachbau.details.append({
+                    "werkzeuge": [t["function"]["name"] for t in daten.get("tools") or []],
+                    "system": system})
                 if nachbau.max_ctx and int(optionen.get("num_ctx") or 0) > nachbau.max_ctx:
                     self._json(500, {"error": "model requires more system memory (12.5 GiB) "
                                               "than is available (8.0 GiB)"})

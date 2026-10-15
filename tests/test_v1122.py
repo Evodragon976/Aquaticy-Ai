@@ -384,3 +384,477 @@ def test_chat_with_a_local_coder_model_answers_end_to_end(client, session, ollam
     for anfrage in ollama.anfragen:
         if anfrage["think"] is True:
             assert "thinking" in FAEHIGKEITEN[anfrage["model"]], anfrage
+
+
+# --- 11.2.2 Sol: die virtual machine im Code-Modus ------------------------------------
+# Gemeldet: Im Code-Modus mit eingeschalteter virtual machine nutzte Aquaticy sie
+# nie und sagte auf Nachfrage, es habe keine.
+
+from aquaticy import agent as agent_mod  # noqa: E402
+from aquaticy import sandbox as sandbox_mod  # noqa: E402
+
+#: Die echte Suche -- tests/conftest.py stellt sie fuer alle anderen Tests auf "unbekannt".
+_RUNTIME_KNOWN_ECHT = sandbox_mod.runtime_known
+_DOCKER = sandbox_mod.Runtime("docker", "docker", "Docker (gehaertet)")
+
+
+@pytest.fixture
+def vm_da(monkeypatch):
+    """Eine Abschottung ist da; vm_write/vm_run laufen in einer Attrappe."""
+    monkeypatch.setattr(sandbox_mod, "runtime_known", lambda: (True, _DOCKER))
+    monkeypatch.setattr(agent_mod.Agent, "_warm_workshop", lambda self: None)
+    monkeypatch.setattr(agent_mod.Agent, "_touch_workshop", lambda self: None)
+    befehle: list[str] = []
+
+    def einrichten(toolbox):
+        def vm_run(command: str, timeout: int = 0):
+            befehle.append(command)
+            toolbox.stats.vm_calls += 1
+            return {"exit_code": 0, "stdout": "Hallo\n", "stderr": ""}
+
+        def vm_write(path: str, text: str):
+            toolbox.stats.vm_calls += 1
+            return {"ok": True, "path": path}
+
+        toolbox.vm_run = vm_run
+        toolbox.vm_write = vm_write
+        return befehle
+
+    return einrichten
+
+
+def _code_agent(settings, toolbox, ereignisse):
+    return Agent(settings, cache=None, toolbox=toolbox,
+                 on_event=lambda n, p: ereignisse.append((n, p)))
+
+
+def test_code_that_never_ran_goes_back_once(monkeypatch, settings, toolbox, vm_da) -> None:
+    befehle = vm_da(toolbox)
+    llm = ScriptedLLM(
+        _message(content="```python\nprint('Hallo')\n```"),
+        _message(tool_calls=[_tool_call("vm_run", {"command": "python3 -c \"print('Hallo')\""})]),
+        _message(content="Läuft: gibt Hallo aus.\n```python\nprint('Hallo')\n```"),
+    )
+    monkeypatch.setattr("litellm.completion", llm)
+    ereignisse: list = []
+    ergebnis = _code_agent(settings, toolbox, ereignisse).ask(
+        "Schreib Hallo Welt", stream=False, mode="code", sandbox=True)
+    assert befehle == ["python3 -c \"print('Hallo')\""]
+    assert ergebnis.answer.startswith("Läuft")
+    assert agent_mod.VM_NUDGE_PROMPT in [m["content"] for m in llm.calls[1]["messages"]]
+    assert ("answer_reset", {"reason": "virtual machine"}) in ereignisse
+
+
+def test_the_nudge_comes_only_once_and_not_after_a_run(monkeypatch, settings, toolbox,
+                                                       vm_da) -> None:
+    vm_da(toolbox)
+    llm = ScriptedLLM(
+        _message(content="```python\nx = 1\n```"),
+        _message(content="```python\nx = 1\n```"),  # bleibt dabei -- seine Entscheidung
+    )
+    monkeypatch.setattr("litellm.completion", llm)
+    ergebnis = _code_agent(settings, toolbox, []).ask(
+        "Code bitte", stream=False, mode="code", sandbox=True)
+    assert ergebnis.answer == "```python\nx = 1\n```" and len(llm.calls) == 2
+    # Ohne Codeblock (eine Erklaerung) gibt es keinen Anstoss.
+    llm = ScriptedLLM(_message(content="Ein Decorator umhüllt eine Funktion."))
+    monkeypatch.setattr("litellm.completion", llm)
+    _code_agent(settings, toolbox, []).ask("Was ist ein Decorator?", stream=False,
+                                           mode="code", sandbox=True)
+    assert len(llm.calls) == 1
+
+
+def test_every_question_reminds_of_the_vm(monkeypatch, settings, toolbox, vm_da) -> None:
+    vm_da(toolbox)
+    llm = ScriptedLLM(_message(content="Erklärung ohne Code."))
+    monkeypatch.setattr("litellm.completion", llm)
+    _code_agent(settings, toolbox, []).ask("Frage", stream=False, mode="code", sandbox=True)
+    frage = [m for m in llm.calls[0]["messages"] if m["role"] == "user"][-1]["content"]
+    assert agent_mod.VM_TURN_HINT in frage
+    namen = [t["function"]["name"] for t in llm.calls[0]["tools"]]
+    assert "vm_run" in namen and "vm_write" in namen
+
+
+def test_vm_on_without_docker_says_so(monkeypatch, settings, toolbox) -> None:
+    monkeypatch.setattr(sandbox_mod, "runtime_known", lambda: (True, None))
+    llm = ScriptedLLM(_message(content="```python\nprint(1)\n```"))
+    monkeypatch.setattr("litellm.completion", llm)
+    ereignisse: list = []
+    _code_agent(settings, toolbox, ereignisse).ask("Code", stream=False, mode="code",
+                                                   sandbox=True)
+    aufruf = llm.calls[0]
+    assert not any(t["function"]["name"].startswith("vm_") for t in aufruf.get("tools") or [])
+    system = aufruf["messages"][0]["content"]
+    assert "Podman oder Docker fehlt" in system
+    assert any(n == "note" and "Podman oder Docker" in p["text"] for n, p in ereignisse)
+    assert len(llm.calls) == 1  # kein Anstoss zu etwas, das nicht geht
+
+
+def test_runtime_lookup_is_cached(monkeypatch) -> None:
+    aufrufe: list[int] = []
+    monkeypatch.setattr(sandbox_mod, "find_runtime", lambda: aufrufe.append(1) or None)
+    for _ in range(5):
+        assert sandbox_mod.runtime_cached() is None
+    assert aufrufe == [1]
+
+
+def test_looking_for_docker_never_holds_up_a_question(monkeypatch) -> None:
+    """Fund aus dem Volllauf: die erste Fassung fragte `docker info` mitten in ask()."""
+    import threading
+    import time
+
+    gesucht = threading.Event()
+    aufrufe: list[int] = []
+
+    def langsam():
+        aufrufe.append(1)
+        time.sleep(0.5)
+        gesucht.set()
+        return _DOCKER
+
+    monkeypatch.setattr(sandbox_mod, "find_runtime", langsam)
+    vorher = time.monotonic()
+    assert _RUNTIME_KNOWN_ECHT() == (False, None)      # noch nie gesucht
+    assert _RUNTIME_KNOWN_ECHT() == (False, None)      # sucht schon -- kein zweiter Faden
+    assert time.monotonic() - vorher < 0.2
+    assert gesucht.wait(3)
+    for _ in range(50):
+        if _RUNTIME_KNOWN_ECHT() == (True, _DOCKER):
+            break
+        time.sleep(0.02)
+    assert _RUNTIME_KNOWN_ECHT() == (True, _DOCKER) and aufrufe == [1]
+    # Abgelaufen: der alte Stand gilt sofort weiter, neu gesucht wird nebenher.
+    sandbox_mod._LAUFZEIT["bis"] = 0.0
+    gesucht.clear()
+    vorher = time.monotonic()
+    assert _RUNTIME_KNOWN_ECHT() == (True, _DOCKER)
+    assert time.monotonic() - vorher < 0.2
+    assert gesucht.wait(3)
+
+
+def test_the_agent_answers_without_waiting_for_docker(monkeypatch, settings, toolbox) -> None:
+    import threading
+    import time
+
+    frei = threading.Event()
+    monkeypatch.setattr(sandbox_mod, "runtime_known", _RUNTIME_KNOWN_ECHT)
+    monkeypatch.setattr(sandbox_mod, "find_runtime", lambda: frei.wait(5) and None)
+    monkeypatch.setattr(agent_mod.Agent, "_warm_workshop", lambda self: None)
+    llm = ScriptedLLM(_message(content="Erklärung ohne Code."))
+    monkeypatch.setattr("litellm.completion", llm)
+    vorher = time.monotonic()
+    _code_agent(settings, toolbox, []).ask("Frage", stream=False, mode="code", sandbox=True)
+    dauer = time.monotonic() - vorher
+    frei.set()
+    assert dauer < 2, "die Frage wartet nicht auf docker info"
+    # Noch unbekannt: angeboten wie vor 11.2.2 Sol.
+    assert "vm_run" in [t["function"]["name"] for t in llm.calls[0]["tools"]]
+
+
+def test_vm_status_endpoint(client, session, monkeypatch) -> None:
+    monkeypatch.setattr(sandbox_mod, "runtime_cached", lambda: None)
+    status, body = client("GET", "/api/vm")
+    daten = json.loads(body)
+    assert status == 200
+    assert daten == {"internet": False, "lan": False, "ultra": bool(session.ultra),
+                     "runtime": False}
+
+
+def test_vm_internet_needs_ultra_at_the_server(client, session, monkeypatch) -> None:
+    # Der neue Schalter speichert ueber /api/config -- dort prueft der Server Ultra.
+    monkeypatch.setattr(type(session), "ultra", property(lambda self: False))
+    status, body = client("POST", "/api/config", {"AQUATICY_VM_INTERNET": "true"})
+    assert status == 400
+    assert "nur mit einem Ultra-Konto" in json.loads(body).get("error", "")
+
+
+def test_vm_switch_text_no_longer_promises_internet() -> None:
+    html = _ui()
+    start = html.index('id="werkstatt"')
+    abschnitt = html[start:html.index("</label>", start)]
+    assert "Internet" not in abschnitt
+    assert 'id="werkstatt-netz"' in html and 'id="werkstatt-status"' in html
+    # Jeder sichtbare Satz hat seine englische Fassung.
+    for satz in ("Internet für die virtual machine",
+                 "Auf diesem Rechner fehlt Podman oder Docker – die virtual machine kann "
+                 "nicht starten."):
+        assert f'"{satz}":' in html, satz
+
+
+# --- 11.2.2 Sol: Begruessung auch ohne Namen ---------------------------------
+
+def _gruss_en() -> dict[str, list[str]]:
+    html = _ui()
+    start = html.index("const GRUSS_EN = {")
+    block = html[start:html.index("\n};", start)]
+    return {modus: re.findall(r'"([^"]+)"', teil)
+            for modus, teil in re.findall(r"\n  (\w+): \[(.*?)\]", block, re.S)}
+
+
+def test_greetings_come_with_and_without_name() -> None:
+    from aquaticy.starttexte import GREETINGS
+
+    englisch = _gruss_en()
+    for modus in ("normal", "pro", "code"):
+        saetze = GREETINGS[modus]
+        assert len(saetze) == len(set(saetze))
+        # Die Saetze mit Namen bleiben, dazu kommen eigene ohne.
+        assert sum("{name}" in s for s in saetze) >= 50, modus
+        assert sum("{name}" not in s for s in saetze) >= 15, modus
+        assert {"Womit fangen wir an?", "Womit fangen wir an, {name}?"} <= set(saetze)
+        # Englisch hat jetzt auch je Modus ganze Saetze, mit und ohne Namen.
+        en = englisch[modus]
+        assert len(en) >= 20 and len(en) == len(set(en)), modus
+        assert any("{name}" in s for s in en) and any("{name}" not in s for s in en)
+        assert "Where do we start?" in en and "Where do we start, {name}?" in en
+
+
+def test_about_every_second_greeting_names_the_user() -> None:
+    import subprocess
+
+    from aquaticy.starttexte import GREETINGS
+
+    html = _ui()
+
+    def stueck(anfang: str) -> str:
+        i = html.index(anfang)
+        return html[i:html.index("\n}", i) + 2]
+
+    skript = "\n".join((
+        "function zufaellig(l){ return l[Math.floor(Math.random() * l.length)]; }",
+        stueck("function grussSatz("), stueck("function grussZiehen("),
+        f"const DE = {json.dumps(GREETINGS, ensure_ascii=False)};",
+        f"const EN = {json.dumps(_gruss_en())};",
+        """const kaputt = [];
+for (const [quelle, gruss] of [[DE, "Guten Morgen"], [EN, "Good morning"]])
+  for (const liste of Object.values(quelle))
+    for (const satz of liste)
+      for (const name of ["Jonas", ""]){
+        const t = grussSatz(satz, gruss, name);
+        if (/[{}]|,\\s*[.?!:]|\\s[.,?!:]|^[,.]|  /.test(t)) kaputt.push(t);
+      }
+let mit = 0;
+for (let i = 0; i < 4000; i++)
+  if (grussZiehen(DE.normal, "Hallo", "Jonas").includes("Jonas")) mit++;
+console.log(JSON.stringify({kaputt, mit,
+  wenig: grussZiehen(DE.normal, "Hallo", "Jonas", 0.1),
+  viel: grussZiehen(DE.normal, "Hallo", "Jonas", 0.9),
+  gast: grussZiehen(DE.normal, "Hallo", "", 0.1),
+  ohne: grussSatz("Womit fangen wir an, {name}?", "Hallo", ""),
+  dollar: grussSatz("Womit fangen wir an, {name}?", "Hallo", "Jo$&nas$1")}));""",
+    ))
+    try:
+        aus = subprocess.run(["node", "-e", skript], capture_output=True, text=True,
+                             timeout=30)
+    except FileNotFoundError:
+        pytest.skip("node fehlt")
+    ergebnis = json.loads(aus.stdout)
+    assert ergebnis["kaputt"] == []
+    assert 1600 < ergebnis["mit"] < 2400            # rund die Haelfte
+    assert "Jonas" in ergebnis["wenig"] and "Jonas" not in ergebnis["viel"]
+    assert "{" not in ergebnis["gast"] and "Jonas" not in ergebnis["gast"]
+    assert ergebnis["ohne"] == "Womit fangen wir an?"
+    # Ein "$" im Namen ist erlaubt (auth.USERNAME_RE) und bleibt stehen, wie er ist.
+    assert ergebnis["dollar"] == "Womit fangen wir an, Jo$&nas$1?"
+    assert "grussZiehen(saetze, when, currentUsername)" in html
+
+
+# --- 11.2.2 Sol: alles auf Englisch -------------------------------------------
+
+def _en() -> dict[str, str]:
+    roh = re.search(r"const EN = (\{.*?\n\});", _ui(), re.S)
+    assert roh
+    return json.loads(roh.group(1))
+
+
+def _js_block(anfang: str, ende: str = "\n};") -> str:
+    html = _ui()
+    start = html.index(anfang)
+    return html[start:html.index(ende, start)]
+
+
+def test_run_phases_and_step_tags_have_english() -> None:
+    en = _en()
+    # "Modell laden", "Agenten arbeiten" ... standen beim Schreiben auf Deutsch da.
+    phasen = re.findall(r'\w+: "([^"]+)"', _js_block("const PHASEN = {", "};"))
+    assert "Modell laden" in phasen and len(phasen) >= 15
+    for name in [*phasen, "Gedacht", "Keine Einzelheiten.",
+                 "Das Modell hat seine Gedanken hier nicht offengelegt."]:
+        assert name in en, name
+    marken = set(re.findall(r'(?:step|trace)\([a-zA-Z_]+, "(\[[^"\]]+\])"', _ui()))
+    assert len(marken) >= 40
+    gleich = {"[Master]", "[Desktop]", "[AI Council]", "[Ai-guard]", "[Skip]", "[Mail]",
+              "[virtual machine]", "[Limit]", "[Code]", "[Pro]"}
+    assert sorted(m for m in marken - gleich if m not in en) == []
+
+
+def test_every_english_key_is_used_somewhere() -> None:
+    """Strenger als test_every_translated_text_exists_on_the_page (9.5.25): dort
+    zaehlte das Woerterbuch selbst mit. Jetzt muss jeder Schluessel ausserhalb davon
+    stehen -- in der Seite, in einem zusammengesetzten Satz oder beim Server."""
+    import html as html_mod
+    from pathlib import Path
+
+    seite = _ui()
+    roh = re.search(r"const EN = (\{.*?\n\});", seite, re.S)
+    assert roh
+    rest = seite[:roh.start()] + seite[roh.end():]
+    rest = html_mod.unescape(re.sub(r"[\"'`]\s*\+\s*[\"'`]", "", rest))
+    quellen = [" ".join(rest.split()), " ".join(re.sub(r"<[^>]+>", " ", rest).split())]
+    py = "".join(p.read_text(encoding="utf-8")
+                 for p in (Path(web.__file__).parent).glob("*.py"))
+    py = re.sub(r"\"\s+\"", "", py)
+    quellen.append(" ".join(py.split()))
+    tot = [k for k in _en() if not any(k in q for q in quellen)]
+    assert tot == []
+
+
+def test_static_texts_with_german_have_english() -> None:
+    from html.parser import HTMLParser
+
+    en = _en()
+    deutsch = re.compile(r"[äöüßÄÖÜ]|\b(und|nicht|ist|mit|für|ein|eine|wird|noch|auf|dein|"
+                         r"deine|ich|du|wir|oder|bei|nach|von|im|den|dem|kein|keine|jetzt|"
+                         r"hier|nur|auch|wie|wenn|der|das|zum|zur|aus|kann|bitte)\b")
+    raus = {"code", "pre", "textarea", "script", "style"}
+    leer = {"br", "img", "input", "meta", "link", "hr", "source", "wbr"}
+
+    class Leser(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.stapel: list[str] = []
+            self.fehlt: list[str] = []
+
+        def handle_starttag(self, tag: str, attrs: list) -> None:
+            werte = dict(attrs)
+            if tag not in leer:
+                self.stapel.append(tag)
+            if set(self.stapel) & raus:
+                return
+            for name in ("placeholder", "title", "aria-label"):
+                wert = " ".join(str(werte.get(name) or "").split())
+                if wert and deutsch.search(wert) and wert not in en:
+                    self.fehlt.append(wert)
+
+        def handle_endtag(self, tag: str) -> None:
+            if tag in self.stapel:
+                del self.stapel[len(self.stapel) - 1 - self.stapel[::-1].index(tag):]
+
+        def handle_data(self, data: str) -> None:
+            text = " ".join(data.split())
+            if text and not set(self.stapel) & raus and deutsch.search(text) \
+                    and text not in en:
+                self.fehlt.append(text)
+
+    seite = _ui()
+    body = seite[seite.index("<body"):]
+    leser = Leser()
+    leser.feed(body[:body.index("<script")])
+    assert [t for t in leser.fehlt if t != "Mönchengladbach"] == []
+
+
+def test_legal_rules_and_addons_have_english() -> None:
+    from aquaticy import addons, guardrails
+
+    ids = set(re.findall(r"\n  (\w+): \[", _js_block("const RECHT_EN = {", "\n};")))
+    assert ids == {r.id for r in guardrails.RULES} | {guardrails.GENERIC.id}
+    en = _en()
+    texte = []
+    for a in addons.CATALOG.values():
+        texte += [a.summary, a.anmelden, a.hinweis]
+    for gruppe in addons.PLUGIN_CONTENT.values():
+        texte += list(gruppe)
+    for rechte in addons.RIGHTS.values():
+        for r in rechte:
+            texte += [r.label] + [o[1] for o in r.options if not o[1].isdigit()]
+    fehlt = {" ".join(t.split()) for t in texte if t} - set(en)
+    # Was in beiden Sprachen gleich heisst, braucht keinen Eintrag.
+    assert fehlt <= {"Injection: SQL, Shell, XSS (innerHTML & Co.), Templates, Logs"}
+
+
+def test_server_notes_and_waits_carry_english() -> None:
+    import ast
+    import inspect
+
+    from aquaticy import agent as agent_quelle
+
+    baum = ast.parse(inspect.getsource(agent_quelle))
+    hinweise = [k for k in ast.walk(baum) if isinstance(k, ast.Call)
+                and getattr(k.func, "attr", "") == "_emit" and k.args
+                and isinstance(k.args[0], ast.Constant) and k.args[0].value == "note"]
+    assert len(hinweise) >= 7
+    for k in hinweise:
+        assert "text_en" in {w.arg for w in k.keywords}, ast.unparse(k)[:80]
+    assert '"reason_en":' in inspect.getsource(web)
+    html = _ui()
+    assert 'sp(ev.text, ev.text_en || ev.text)' in html
+    assert 'sp(ev.reason, ev.reason_en || ev.reason)' in html
+    # Sichtbare Texte mit echten Umlauten (AGENTS.md).
+    assert "laeuft normal" not in inspect.getsource(agent_quelle)
+
+
+def test_patterns_translate_texts_with_numbers_and_names() -> None:
+    import subprocess
+
+    html = _ui()
+    skript = "\n".join((
+        "const EN = " + json.dumps(_en(), ensure_ascii=False) + ";",
+        'const schluessel = text => text.replace(/\\s+/g, " ").trim();',
+        html[html.index("const EN_MUSTER = ["):html.index("// Fuer Text in der Antwortblase")],
+        """const faelle = {
+  "3 Dateien": "3 files", "1 Datei": "1 file",
+  "kein Ortsfilter · Pro · strukturiert · 4 Prüfer · Speicher an":
+    "no location filter · Pro · structured · 4 checkers · memory on",
+  "Bremen · virtual machine · Denktiefe high · Speicher an":
+    "Bremen · Virtual machine · thinking depth high · memory on",
+  "0.1 von 400 MB belegt · 0 Notizen": "0.1 of 400 MB used · 0 notes",
+  "MISTRAL_API_KEY fehlt (für Modell mistral/large)":
+    "MISTRAL_API_KEY missing (for model mistral/large)",
+  "Firefox · unbekanntes Gerät — zuletzt 15.10.2026":
+    "Firefox · unknown device — last 15.10.2026",
+  "angemeldet auf 2 Gerät(en)": "signed in on 2 device(s)",
+  "Das hat nicht geklappt: Da ist etwas schiefgelaufen.":
+    "That didn't work: Something went wrong.",
+  ["a.php: PHP- und JSP-Dateien lassen sich nicht hochladen. "
+   + "Füg den Code lieber als Text in die Nachricht ein."]:
+    "a.php: PHP and JSP files can't be uploaded. "
+    + "Better paste the code into the message as text.",
+  ["Neue Anmeldung bei deinem Konto: unbekanntes Gerät (15.10.2026). Warst du das nicht? "
+   + "Ändere dein Passwort und melde dich überall sonst ab."]:
+    "New sign-in to your account: unknown device (15.10.2026). Wasn't that you? "
+    + "Change your password and sign out everywhere else.",
+};
+const aus = {};
+for (const [de, soll] of Object.entries(faelle)) aus[de] = [aufEnglisch(de), soll];
+aus.lang = aufEnglisch("x ".repeat(300) + "von y GB belegt");
+aus.englisch = aufEnglisch("3 files");
+console.log(JSON.stringify(aus));""",
+    ))
+    try:
+        lauf = subprocess.run(["node", "-e", skript], capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        pytest.skip("node fehlt")
+    ergebnis = json.loads(lauf.stdout)
+    assert ergebnis.pop("lang") == "" and ergebnis.pop("englisch") == ""
+    for de, (ist, soll) in ergebnis.items():
+        assert ist == soll, de
+
+
+def test_every_vm_stop_reason_has_english() -> None:
+    from pathlib import Path
+
+    quelle = "".join(p.read_text(encoding="utf-8")
+                     for p in Path(web.__file__).parent.glob("*.py"))
+    gruende = set(re.findall(r'\.stop\("([^"]+)"\)', quelle))
+    gruende |= set(re.findall(r'def stop\(self, reason: str = "([^"]+)"', quelle))
+    assert len(gruende) >= 5
+    block = _js_block("const VM_GRUENDE_EN = {", "};")
+    assert sorted(g for g in gruende if f'"{g}":' not in block) == []
+
+
+def test_role_and_verdict_names_come_from_the_server_in_both_languages() -> None:
+    from aquaticy import webview
+
+    texte = webview.start_texts()
+    assert set(texte["roles_en"]) == set(texte["roles"])
+    assert set(texte["verdicts_en"]) == set(texte["verdicts"])

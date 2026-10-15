@@ -1,4 +1,4 @@
-# Aquaticy AI 11.2.2 Terra
+# Aquaticy AI 11.2.2 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -115,7 +115,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.2.2 Terra
+aquaticy --version            # 11.2.2 Sol
 
 # 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -346,7 +346,8 @@ die Frage noch einmal.
 - **⚡ Aufwand:** Denktiefe Low, Medium oder High und die Zahl der Helfer (Normal und Code
   1–12, Pro 1–50).
 - **⚙ Weitere Einstellungen:** Websuche, Webcams und Satellitenbilder, Denken, Strukturieren,
-  Gegenprüfen. Im Code-Modus: Code in der virtual machine ausprobieren.
+  Gegenprüfen. Im Code-Modus: Code in der virtual machine ausprobieren, darunter (Ultra) ob sie
+  Internet hat.
 
 **Einstellungen** speichern sich selbst. Schalter sofort, Textfelder beim Verlassen. Was nur
 Ultra darf, trägt ein 🔒.
@@ -554,6 +555,8 @@ Die **virtual machine** ist ein abgeschotteter Rechner. Darin führt Aquaticy Co
   trotzdem. **Ultra** schaltet das Internet selbst frei. Heimnetz, Router und der eigene Rechner
   bleiben dann gesperrt – außer Ultra wählt **Auch ins lokale Netz**. Das Modell kann beides nicht
   umschalten.
+- Ist sie an, führt Aquaticy Code dort aus, bevor es antwortet. Fehlt Podman oder Docker auf dem
+  Rechner, sagt Aquaticy das, statt Code als getestet auszugeben.
 - Angehängte Dateien liegen unter `eingang`. Alles Erstellte kannst du herunterladen.
 - 20 Minuten nach der letzten Nachricht wird die virtual machine gelöscht.
 
@@ -1004,7 +1007,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.2.2-Terra.md).
+[Prüfbericht](TESTREPORT-11.2.2-Sol.md).
 
 ---
 
