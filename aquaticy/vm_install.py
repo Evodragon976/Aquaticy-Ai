@@ -137,7 +137,11 @@ def start_machine(run: Callable[..., Any] = subprocess.run) -> bool:
 
     if sandbox.find_runtime() is not None:
         return True
-    _laufen(["podman", "machine", "init"], MACHINE_TIMEOUT, run)
+    # Eine fehlende Maschine anzulegen kann ein Abbild herunterladen und viel
+    # Platz belegen. Das gehoert in die bestaetigten Installationsschritte,
+    # nicht in den automatischen Start eines Dienstes ohne Terminal.
+    if not _laufen(["podman", "machine", "inspect"], MACHINE_TIMEOUT, run):
+        return False
     ok = _laufen(["podman", "machine", "start"], MACHINE_TIMEOUT, run)
     _vergessen()
     return ok

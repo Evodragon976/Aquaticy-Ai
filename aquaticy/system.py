@@ -282,6 +282,17 @@ def _ollama_liste(settings: Any, model_id: str) -> list[str]:
         return []
 
 
+def ollama_base(settings: Any) -> str:
+    """Ollama hat eine eigene Route, auch wenn das Hauptmodell in der Wolke laeuft."""
+    from aquaticy.local_model import DEFAULT_OLLAMA_URL, local_name
+
+    basis_von = getattr(settings, "ollama_base", None)
+    if callable(basis_von):
+        model = str(getattr(settings, "model", "") or "")
+        return str(basis_von(model if local_name(model) else "ollama_chat/_discovery"))
+    return str(getattr(settings, "api_base", "") or DEFAULT_OLLAMA_URL)
+
+
 def model_usable(settings: Any, model_id: str, installed: list[str] | None = None) -> bool:
     """Antwortet *model_id* gerade wirklich? (11.3.0 Luna)
 
@@ -355,7 +366,7 @@ def strongest_models(
     Modell ist genau dort am teuersten.
     """
     from aquaticy.config import provider_of
-    from aquaticy.local_model import DEFAULT_OLLAMA_URL, installed_models, model_size_gb
+    from aquaticy.local_model import installed_models, model_size_gb
 
     ranked: list[dict[str, str]] = []
 
@@ -408,7 +419,7 @@ def strongest_models(
             model_origin(settings, stark, key_origin(settings, provider)),
         )
 
-    base = getattr(settings, "api_base", "") or DEFAULT_OLLAMA_URL
+    base = ollama_base(settings)
     try:
         local = installed_models(base)
     except Exception:
@@ -462,7 +473,6 @@ def available_models(settings: Any) -> list[dict[str, str]]:
     """
     from aquaticy.config import provider_of
     from aquaticy.local_model import (
-        DEFAULT_OLLAMA_URL,
         installed_models,
         is_installed,
         known_model,
@@ -471,7 +481,7 @@ def available_models(settings: Any) -> list[dict[str, str]]:
 
     found: list[dict[str, str]] = []
     current = getattr(settings, "model", "")
-    base = getattr(settings, "api_base", "") or DEFAULT_OLLAMA_URL
+    base = ollama_base(settings)
     # Jedes Mal live gefragt: was eben mit `ollama pull` dazukam, steht sofort da.
     lokal = installed_models(base)
     for name in lokal:

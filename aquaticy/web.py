@@ -694,15 +694,20 @@ def context_view(settings: Settings, model: str, account_cap: int = 0) -> dict[s
         return {"local": False, "model": model, "tokens": jetzt}
     basis = settings.ollama_base(model)
     je_token = lm.kv_bytes_per_token(name, basis)
-    grenze = lm.context_limit(name, basis)
+    try:
+        grenze = lm.context_limit(name, basis)
+    except lm.ContextLimitError as exc:
+        return {"local": True, "model": model, "error": str(exc)}
     if account_cap:
         grenze = min(grenze, account_cap)
-    grenze = max(lm.CONTEXT_MIN, grenze)
-    wirksam = max(lm.CONTEXT_MIN, min(jetzt, grenze)) if jetzt > 0 else grenze
+    minimum = min(lm.CONTEXT_MIN, grenze)
+    wirksam = min(jetzt, grenze) if jetzt > 0 else None
     return {
         "local": True, "model": model, "tokens": jetzt, "effective": wirksam,
-        "min": lm.CONTEXT_MIN, "max": grenze, "known": bool(je_token),
-        "per_token": je_token, "ram_gb": round(wirksam * je_token / 1024 ** 3, 2),
+        "min": min(minimum, wirksam) if wirksam is not None else minimum,
+        "max": grenze, "known": bool(je_token), "automatic": jetzt <= 0,
+        "per_token": je_token,
+        "ram_gb": round(wirksam * je_token / 1024 ** 3, 2) if wirksam is not None else None,
         "cap_gb": round(lm.CONTEXT_RAM_BYTES / 1024 ** 3),
     }
 

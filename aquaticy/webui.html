@@ -2875,7 +2875,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.0 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.1 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5151,6 +5151,8 @@ try {
    Chat-Titel, Gemerktes), bleibt unangetastet: das sind Inhalte, keine
    Bedienelemente. Gespeichert wird die Wahl am Konto, wie das Design. */
 const EN = {
+"Dieses Modell braucht mehr Kontextspeicher als erlaubt.":
+  "This model needs more context memory than allowed.",
 "Die Anfrage ist zu lang. Bitte teile sie in kleinere Schritte.":
   "The request is too long. Please split it into smaller steps.",
 "Dieser Coworker ist angehalten oder gelöscht.":
@@ -6657,6 +6659,8 @@ function setzePickerHoehe(){
 addEventListener("resize", () => { if (pickerOpen()) setzePickerHoehe(); });
 
 async function openPicker(){
+  ctxAnfrage++;
+  ctxStand = null;
   const list = $("#model-list");
   list.innerHTML = '<div class="picker-foot">Sehe nach …</div>';
   $("#picker-ctx").hidden = true;
@@ -6766,7 +6770,9 @@ document.addEventListener("keydown", (e) => {
 // hoechstens sein darf, rechnet der Server aus dem Aufbau des Modells: nie mehr
 // als 5 GB Arbeitsspeicher. Bei Wolkenmodellen gibt es nichts zu stellen.
 let ctxStand = null;
-function ctxText(tokens){
+let ctxAnfrage = 0;
+function ctxText(tokens, manuell = false){
+  if (ctxStand?.automatic && !manuell) return sp("Ollama-Standard", "Ollama default");
   const zahl = Number(tokens).toLocaleString(sprache === "en" ? "en-GB" : "de-DE");
   if (!ctxStand?.known) return sp(`${zahl} Tokens`, `${zahl} tokens`);
   const gb = (tokens * ctxStand.per_token / 1024 ** 3)
@@ -6775,16 +6781,28 @@ function ctxText(tokens){
 }
 async function zeigeKontext(modell){
   const zeile = $("#picker-ctx");
+  const anfrage = ++ctxAnfrage;
+  let stand = null;
   try {
-    ctxStand = await (await api("/api/context?model=" + encodeURIComponent(modell || ""))).json();
-  } catch { ctxStand = null; }
+    stand = await (await api("/api/context?model=" + encodeURIComponent(modell || ""))).json();
+  } catch { /* Nach einem Fehler bleibt der Regler verborgen. */ }
+  if (anfrage !== ctxAnfrage || !pickerOpen()) return;
+  ctxStand = stand;
   if (!ctxStand?.local){ zeile.hidden = true; return; }
+  if (ctxStand.error){
+    zeile.hidden = true;
+    toast(nutzerFehler(ctxStand.error));
+    return;
+  }
   const regler = $("#ctx-regler");
   regler.min = String(ctxStand.min);
   regler.max = String(ctxStand.max);
-  regler.value = String(ctxStand.effective);
+  regler.value = String(ctxStand.effective ?? ctxStand.max);
   $("#ctx-wert").textContent = ctxText(ctxStand.effective);
-  $("#ctx-why").textContent = ctxStand.known
+  $("#ctx-why").textContent = ctxStand.automatic
+    ? sp("Ollama bestimmt das Fenster. Wähle einen Wert, um Aquaticys Begrenzung zu nutzen.",
+         "Ollama controls the window. Choose a value to use Aquaticy's limit.")
+    : ctxStand.known
     ? sp(`Wie viel vom Gespräch das lokale Modell auf einmal überblickt. Höchstens `
          + `${ctxStand.cap_gb} GB Arbeitsspeicher.`,
          `How much of the conversation the local model sees at once. At most `
@@ -6794,10 +6812,11 @@ async function zeigeKontext(modell){
   zeile.hidden = false;
 }
 $("#ctx-regler").addEventListener("input", (e) => {
-  $("#ctx-wert").textContent = ctxText(Number(e.target.value));
+  $("#ctx-wert").textContent = ctxText(Number(e.target.value), true);
 });
 $("#ctx-regler").addEventListener("change", async (e) => {
-  const regler = e.target, wert = Number(regler.value), vorher = ctxStand?.effective;
+  const regler = e.target, wert = Number(regler.value), stand = ctxStand;
+  const vorher = stand?.effective;
   try {
     const res = await api("/api/config", {
       method: "POST", headers: {"Content-Type": "application/json"},
@@ -6805,10 +6824,15 @@ $("#ctx-regler").addEventListener("change", async (e) => {
     });
     const daten = await res.json();
     if (!daten.ok) throw new Error(daten.error || "");
-    if (ctxStand) ctxStand.effective = wert;
+    if (ctxStand !== stand) return;
+    if (ctxStand) { ctxStand.effective = wert; ctxStand.automatic = false; }
     toast(sp("Kontextfenster: ", "Context window: ") + ctxText(wert));
   } catch (fehler){
-    if (vorher) { regler.value = String(vorher); $("#ctx-wert").textContent = ctxText(vorher); }
+    if (ctxStand !== stand) return;
+    if (stand) {
+      regler.value = String(vorher ?? stand.max);
+      $("#ctx-wert").textContent = ctxText(vorher);
+    }
     toast(nutzerFehler(fehler.message, "Das ließ sich nicht speichern."));
   }
 });

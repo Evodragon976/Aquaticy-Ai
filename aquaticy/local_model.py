@@ -371,11 +371,13 @@ def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None
 CAPABILITY_TTL = 600.0
 
 _CAPS: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
-#: Die ganze Antwort von /api/show -- fuer den Aufbau des Modells (11.3.0 Luna).
+#: Benoetigte Metadaten aus /api/show; private Modelltexte werden nicht gemerkt.
 _SHOW: dict[tuple[str, str], tuple[float, dict[str, Any] | None]] = {}
 #: Hoechstens so viele Modelle gemerkt: ein Name kommt auch aus einer Anfrage
 #: (/api/context), und jeder fremde Name waere sonst fuer immer ein Eintrag.
 _MERK_MAX = 256
+#: Metadaten bleiben auch bei HTTP-Komprimierung und tiefem JSON begrenzt.
+MAX_MODEL_INFO_BYTES = 8 * 1024 * 1024
 #: Was ein Modell nachweislich NICHT kann -- gelernt aus seiner Fehlermeldung.
 _FEHLT: dict[str, set[str]] = {}
 _CAPS_LOCK = threading.Lock()
@@ -400,11 +402,35 @@ def _show(name: str, base_url: str = DEFAULT_OLLAMA_URL,
         return gemerkt[1]
     daten: dict[str, Any] | None = None
     try:
-        antwort = httpx.post(f"{schluessel[0]}/api/show", json={"model": name},
-                             timeout=timeout, trust_env=False)
-        roh = antwort.json() if antwort.status_code == 200 else None
-        daten = roh if isinstance(roh, dict) else None
-    except (httpx.HTTPError, ValueError):
+        from aquaticy.jsonutil import loads
+        from aquaticy.netguard import read_response
+
+        frist = time.monotonic() + timeout
+        with httpx.stream("POST", f"{schluessel[0]}/api/show", json={"model": name},
+                          timeout=timeout, trust_env=False) as antwort:
+            roh = loads(read_response(antwort, MAX_MODEL_INFO_BYTES, frist)) \
+                if antwort.status_code == 200 else None
+        if isinstance(roh, dict):
+            # /api/show kann private Systemtexte trainierter Modelle enthalten.
+            # Nur die hier benoetigten Felder im gemeinsamen Prozess merken.
+            info = roh.get("model_info")
+            arch = info.get("general.architecture") if isinstance(info, dict) else None
+            aufbau: dict[str, Any] = {}
+            if isinstance(info, dict) and isinstance(arch, str) and 0 < len(arch) <= 64:
+                aufbau["general.architecture"] = arch
+                for feld in ("block_count", "context_length", "embedding_length",
+                             "attention.head_count", "attention.head_count_kv",
+                             "attention.key_length", "attention.value_length"):
+                    wert = info.get(f"{arch}.{feld}")
+                    if isinstance(wert, (int, float)) or (
+                            isinstance(wert, list) and len(wert) <= 4096
+                            and all(isinstance(x, (int, float)) for x in wert)):
+                        aufbau[f"{arch}.{feld}"] = wert
+            caps = roh.get("capabilities")
+            daten = {"model_info": aufbau, "capabilities": (
+                [x for x in caps[:64] if isinstance(x, str) and len(x) <= 100]
+                if isinstance(caps, list) else None)}
+    except (httpx.HTTPError, httpx.InvalidURL, ValueError, UnicodeError):
         daten = None
     with _CAPS_LOCK:
         if len(_SHOW) >= _MERK_MAX:
@@ -443,12 +469,16 @@ def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
 # ---------------------------------------------------------------------------
 #: So viel Arbeitsspeicher darf das Kontextfenster eines lokalen Modells belegen.
 CONTEXT_RAM_BYTES = 5 * 1024 ** 3
-#: Kleiner wird es nie -- darunter passt kaum eine Frage samt Quellen.
+#: Bevorzugte Regler-Mindestgroesse; harte Modell- und RAM-Grenzen gehen vor.
 CONTEXT_MIN = 2048
 #: Gilt, wenn Ollama den Aufbau des Modells nicht verraet: der bisherige Standard.
 CONTEXT_UNKNOWN_MAX = 16384
 #: Ollama haelt den Zwischenspeicher je Token (K und V) in 16 Bit.
 _KV_BYTES = 2
+
+
+class ContextLimitError(ValueError):
+    """Selbst ein Token passt laut Modellangaben nicht in das Speicherlimit."""
 
 
 def _zahl(wert: Any) -> int:
@@ -460,7 +490,7 @@ def _zahl(wert: Any) -> int:
     """
     if isinstance(wert, bool) or not isinstance(wert, (int, float)):
         return 0
-    if isinstance(wert, float) and not math.isfinite(wert):
+    if isinstance(wert, float) and (not math.isfinite(wert) or not wert.is_integer()):
         return 0
     return int(wert) if wert > 0 else 0
 
@@ -485,18 +515,25 @@ def kv_bytes_per_token(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
     koepfe = feld("attention.head_count")
     kv = feld("attention.head_count_kv")
     breite = _zahl(feld("embedding_length"))
-    if isinstance(koepfe, list):
-        koepfe = max((_zahl(k) for k in koepfe), default=0)
-    koepfe = _zahl(koepfe)
-    schluessel = _zahl(feld("attention.key_length")) or (breite // koepfe if koepfe else 0)
-    wert = _zahl(feld("attention.value_length")) or schluessel
-    if not schichten or not schluessel:
+    if not schichten or schichten > 4096:
         return 0
-    if isinstance(kv, list):
-        kv_summe = sum(_zahl(k) for k in kv[:schichten])
-    else:
-        kv_summe = (_zahl(kv) or koepfe) * schichten
-    return max(0, kv_summe * (schluessel + wert) * _KV_BYTES)
+    heads = [_zahl(k) for k in koepfe] if isinstance(koepfe, list) \
+        else [_zahl(koepfe)] * schichten
+    if len(heads) != schichten or not all(heads):
+        return 0
+    # Eine abgeschnittene Liste beschreibt nicht alle Schichten. Dann mit
+    # vollen Koepfen rechnen, statt fehlende Schichten mit null anzusetzen.
+    kv_heads = (kv if isinstance(kv, list) and len(kv) == schichten else
+                [(_zahl(kv) or h) if not isinstance(kv, list) else h for h in heads])
+    summe = 0
+    for h, k in zip(heads, kv_heads, strict=True):
+        schluessel = _zahl(feld("attention.key_length")) or breite // h
+        wert = _zahl(feld("attention.value_length")) or schluessel
+        if not schluessel:
+            return 0
+        anzahl = _zahl(k) if not isinstance(k, bool) and (k == 0 or _zahl(k)) else h
+        summe += anzahl * (schluessel + wert) * _KV_BYTES
+    return summe
 
 
 def trained_context(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
@@ -511,7 +548,7 @@ def trained_context(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
 def context_limit(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
     """Das groesste Kontextfenster fuer *name*, das hoechstens 5 GB belegt.
 
-    Abgerundet auf ganze 1024 Tokens und nie ueber die trainierte Laenge.
+    Ab 1024 Tokens abgerundet auf ganze 1024, nie ueber die trainierte Laenge.
     Verraet Ollama den Aufbau nicht, gilt der bisherige Standard (16384).
     """
     je_token = kv_bytes_per_token(name, base_url)
@@ -519,7 +556,10 @@ def context_limit(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
     trainiert = trained_context(name, base_url)
     if trainiert:
         grenze = min(grenze, trainiert)
-    return max(CONTEXT_MIN, grenze // 1024 * 1024)
+    if grenze < 1:
+        raise ContextLimitError("Dieses Modell braucht mehr Kontextspeicher als erlaubt.")
+    # Eine Bedienungs-Mindestgroesse darf harte Obergrenzen nicht vergroessern.
+    return grenze // 1024 * 1024 if grenze >= 1024 else grenze
 
 
 def missing_capability(detail: str) -> str:

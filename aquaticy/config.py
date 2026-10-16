@@ -790,20 +790,23 @@ class Settings:
     def context_for(self, model: str) -> int:
         """Das Kontextfenster fuer *model*: wie eingestellt, aber hoechstens 5 GB RAM.
 
-        Seit 11.3.0 Luna wird das bei jedem Aufruf eines lokalen Modells gerechnet
+        Seit 11.3.0 Luna wird das fuer positive Werte bei lokalen Modellen gerechnet
         (aquaticy/local_model.py: context_limit) -- gleich, woher der Wert kommt:
-        Regler, Einstellungen, Umgebung. Wolkenmodelle halten ihr Fenster selbst.
+        Regler, Einstellungen, Umgebung. Ohne Aufbau gilt die Token-Ersatzgrenze.
+        Null behaelt Ollamas Standard bei; Wolkenmodelle halten ihr Fenster selbst.
         """
         wunsch = int(self.context_tokens or 0)
         if wunsch <= 0 or provider_of(model) not in ("ollama", "ollama_chat"):
             return wunsch
-        from aquaticy.local_model import context_limit, local_name
+        from aquaticy.local_model import ContextLimitError, context_limit, local_name
 
         name = local_name(model)
         if not name:
             return wunsch
         try:
             return min(wunsch, context_limit(name, self.ollama_base(model)))
+        except ContextLimitError:
+            raise
         except Exception:
             return min(wunsch, 16384)
 

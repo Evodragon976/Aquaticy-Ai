@@ -1576,9 +1576,9 @@ def _ollama_beim_start(settings: Any) -> list[str]:
     from urllib.parse import urlsplit
 
     from aquaticy import local_model as lm
-    from aquaticy.system import model_usable
+    from aquaticy.system import model_usable, ollama_base
 
-    basis = settings.api_base or lm.DEFAULT_OLLAMA_URL
+    basis = ollama_base(settings)
     lokal = bool(lm.local_name(settings.model))
     try:
         laeuft = lm.server_running(basis, timeout=2.0)

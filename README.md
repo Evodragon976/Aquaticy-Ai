@@ -1,4 +1,4 @@
-# Aquaticy AI 11.3.0 Luna
+# Aquaticy AI 11.3.1 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -115,7 +115,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.3.0 Luna
+aquaticy --version            # 11.3.1 Luna
 
 # 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -348,8 +348,11 @@ die Frage noch einmal.
   wenn das eingestellte Modell lokal ist.
 - **Kontextfenster** (nur lokale Modelle): Ein Regler unter der Liste stellt ein, wie viel vom
   Gespräch das Modell auf einmal überblickt. Daneben steht, wie viel Arbeitsspeicher das kostet.
-  Höchstens 5 GB: Aquaticy rechnet das aus dem Aufbau des Modells (Schichten, Köpfe) und hält
-  die Grenze bei jedem Aufruf ein, egal woher der Wert kommt.
+  Bei bekanntem Aufbau begrenzt Aquaticy ein eingestelltes Fenster auf höchstens 5 GB
+  Kontextspeicher. Fehlen Modellangaben, gilt höchstens der Standard von 16.384 Tokens;
+  der tatsächliche Speicherbedarf ist dann unbekannt. Der Expertenwert `0` überlässt das
+  Fenster weiterhin Ollama und unterliegt dieser Begrenzung nicht. Die Auswahl zeigt das
+  ausdrücklich als „Ollama-Standard“. Modellgewichte kommen zum Kontextspeicher hinzu.
 - **🎨 Bilderstellung:** Aquaticy nimmt ein Modell, das Bilder kann (NVIDIA FLUX oder Mistral).
 - **⚡ Aufwand:** Denktiefe Low, Medium oder High und die Zahl der Helfer (Normal und Code
   1–12, Pro 1–50).
@@ -946,7 +949,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_SUBAGENT_BUDGET` | Suchen je Helfer | `6` |
 | `AQUATICY_SUBAGENT_PARALLEL` | Helfer gleichzeitig (`0` = automatisch) | lokal `2` |
 | `AQUATICY_PLANNER_TIMEOUT` | Zeit fürs Aufteilen einer Frage (s) | `20` |
-| `AQUATICY_CONTEXT_TOKENS` | Gesprächsgedächtnis lokaler Modelle (höchstens 5 GB RAM) | `16384` |
+| `AQUATICY_CONTEXT_TOKENS` | Lokales Kontextfenster; `0` = Ollama-Standard, sonst begrenzt | `16384` |
 | `AQUATICY_RPM` | Anfragen pro Minute an den Anbieter | NVIDIA `40`, Mistral `240` |
 | `AQUATICY_PARALLEL_CALLS` | gleichzeitige Anfragen | NVIDIA `4`, Mistral `8` |
 | `AQUATICY_FETCH_TIMEOUT` | Wartezeit je Seite (s) | `15` |
@@ -1019,7 +1022,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.3.0-Luna.md).
+[Prüfbericht](TESTREPORT-11.3.1-Luna.md).
 
 ---
 

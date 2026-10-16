@@ -337,7 +337,7 @@ def test_a_deleted_upgrade_version_is_not_offered(tmp_path) -> None:
 
 
 def test_foreign_model_names_do_not_fill_the_memory(monkeypatch) -> None:
-    monkeypatch.setattr(local_model.httpx, "post",
+    monkeypatch.setattr(local_model.httpx, "stream",
                         lambda *a, **k: (_ for _ in ()).throw(local_model.httpx.ConnectError("x")))
     for nummer in range(local_model._MERK_MAX * 3):
         local_model.ollama_capabilities(f"fremd-{nummer}", "http://o")
