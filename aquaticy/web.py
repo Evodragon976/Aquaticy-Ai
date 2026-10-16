@@ -2238,11 +2238,17 @@ def previous_user_message(session: Any) -> str:
     Fuer Ai-guard (9.5.28): ein Zitat in der Nachricht davor und der Auftrag
     in dieser gehoeren zusammen.
     """
+    from aquaticy.agent import own_words
+
     agent = getattr(session, "_agent", None)
     for eintrag in reversed(list(getattr(agent, "messages", None) or [])):
         if isinstance(eintrag, dict) and eintrag.get("role") == "user":
-            inhalt = eintrag.get("content")
-            return inhalt[:2000] if isinstance(inhalt, str) else ""
+            if not isinstance(eintrag.get("content"), str):
+                return ""
+            # Nachfass-Texte von Aquaticy selbst sind nicht "die vorige Frage".
+            inhalt = own_words(eintrag.get("content"))
+            if inhalt:
+                return inhalt[:2000]
     return ""
 
 

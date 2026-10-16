@@ -94,3 +94,31 @@ englische Fassung. Einige englische Einträge passten nicht mehr zum geänderten
   benutzt wird, ist mit gestellten Werkzeugen geprüft; der Weg „Podman/Docker fehlt“ ist echt.
 - **Inhalte vom Modell** (Teilfragen der Agenten, Lücken des Masters, Gedanken) schreibt das
   Modell selbst. Sie sind nicht Teil der Oberfläche und werden nicht übersetzt.
+
+## Nachprüfung (2026-10-16)
+
+Weiter gesucht, gefunden und behoben:
+
+1. **Übersetzung traf fremden Text.** Die Muster für Sätze mit Zahlen oder Namen griffen
+   auch in der Ablaufanzeige: Die Suche „Wie kann ich Cookies löschen?“ wurde zu „Delete Wie
+   kann ich Cookies?“, „Sitzung Bundestag“ zu „Session Bundestag“. Wo Modell, Web oder Nutzer
+   schreiben (Suchen, Gedanken, Agenten-Aufgaben, Rückfragen, Treffer, Aufträge, Coworker),
+   gilt jetzt nur noch ein ganzer fester Oberflächentext. Im Browser bestätigt.
+2. **Ai-guard sah den falschen Vorgänger.** „Die vorige Nachricht des Nutzers“ konnte ein
+   interner Nachfass-Text sein (virtual machine, Bild, Rückfrage, Budget, Gegenprobe). Planer
+   und Rechtsprüfer sahen dazu den VM-Hinweis. Eine gemeinsame Funktion (`own_words`) lässt
+   nur die Frage selbst durch.
+3. **Modell ohne Werkzeuge mit virtual machine.** Der Systemtext behauptete eine virtual
+   machine, die das Modell gar nicht aufrufen kann. Jetzt: eigener Satz, eigener Hinweis
+   („kann keine Werkzeuge benutzen“) statt „Podman oder Docker fehlt“.
+4. **JSON als Antwort wurde ausgeführt.** Fragt der Nutzer selbst nach JSON, einem
+   Werkzeugaufruf oder `web_search` & Co., bleibt ein JSON-Aufruf in der Antwort die Antwort
+   (Terra-Umwandlung gilt sonst weiter, auch in den Agenten).
+5. **Internet-Schalter zu früh geklickt:** Bevor der Stand geladen war, hieß es bei Ultra
+   „nur mit Ultra“. Jetzt wird erst geladen.
+6. **Laufzeit-Suche:** Konnte der Hintergrund-Faden nicht starten, wäre nie wieder gesucht
+   worden. Abgefangen.
+7. **Sichtbare Texte mit „ae/oe“:** „Gegenprüfung“, „Möbel“.
+
+Prüfkette: Rückgabewert 0, **4893 bestanden, 27 übersprungen, keine Fehlschläge**
+(4920 Tests). Neue Tests in `tests/test_v1122.py` für jeden Fund.

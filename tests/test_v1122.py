@@ -858,3 +858,107 @@ def test_role_and_verdict_names_come_from_the_server_in_both_languages() -> None
     texte = webview.start_texts()
     assert set(texte["roles_en"]) == set(texte["roles"])
     assert set(texte["verdicts_en"]) == set(texte["verdicts"])
+
+
+# --- Nachpruefung nach 11.2.2 Sol --------------------------------------------
+
+def test_patterns_never_touch_text_from_the_model_or_the_user() -> None:
+    import subprocess
+
+    html = _ui()
+    # Suchanfragen, Gedanken, Agenten-Aufgaben, Rueckfragen, Treffer, Auftraege ...
+    teil = html[html.index("const NUR_FEST = "):html.index("let sprache = ")]
+    for auswahl in (".steps .txt", ".steps .sub", ".interim", "#ask-q", ".result-card",
+                    ".cw-eintrag .inhalt", ".frage"):
+        assert auswahl in teil, auswahl
+    tausch = html[html.index("function tauscheText("):html.index("function tauscheAttribute(")]
+    assert "closest(NUR_FEST)" in tausch and "aufEnglisch(roh, 0, fest)" in tausch
+    skript = "\n".join((
+        "const EN = " + json.dumps(_en(), ensure_ascii=False) + ";",
+        'const schluessel = text => text.replace(/\\s+/g, " ").trim();',
+        html[html.index("const EN_MUSTER = ["):html.index("// Fuer Text in der Antwortblase")],
+        """console.log(JSON.stringify([
+  aufEnglisch("Wie kann ich Cookies löschen?", 0, true),
+  aufEnglisch("Sitzung Bundestag heute", 0, true),
+  aufEnglisch("sichte die Anfrage …", 0, true),
+  aufEnglisch("3 Dateien", 0, false)]));""",
+    ))
+    try:
+        lauf = subprocess.run(["node", "-e", skript], capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        pytest.skip("node fehlt")
+    assert json.loads(lauf.stdout) == ["", "", "reading the request …", "3 files"]
+
+
+def test_own_words_skip_aquaticys_own_nudges() -> None:
+    hinweis = "Hallo\n\n" + agent_mod.VM_TURN_HINT + "\n\n[Ortsfilter: Bremen · Sprache de]"
+    assert agent_mod.own_words(hinweis) == "Hallo"
+    for eigen in (agent_mod.VM_NUDGE_PROMPT, agent_mod.FORCE_ASK_PROMPT,
+                  agent_mod.BUDGET_PROMPT, agent_mod.RECHECK_PROMPT,
+                  agent_mod.FORCE_VISUAL_PROMPT % {"kandidaten": ""},
+                  agent_mod.PRE_RESEARCH_PREFIX + " ..."):
+        assert agent_mod.own_words(eigen) == ""
+    assert agent_mod.own_words([{"type": "text", "text": "x"}]) == ""
+
+
+def test_ai_guard_sees_the_real_previous_question() -> None:
+    from types import SimpleNamespace
+
+    verlauf = [
+        {"role": "system", "content": "s"},
+        {"role": "user", "content": "Zitat: „xyz“\n\n" + agent_mod.VM_TURN_HINT},
+        {"role": "assistant", "content": "```python\nx\n```"},
+        {"role": "user", "content": agent_mod.VM_NUDGE_PROMPT},
+        {"role": "assistant", "content": "Lief."},
+    ]
+    sitzung = SimpleNamespace(_agent=SimpleNamespace(messages=verlauf))
+    assert web.previous_user_message(sitzung) == "Zitat: „xyz“"
+
+
+def test_planner_context_has_no_internal_texts(settings) -> None:
+    a = Agent(settings, cache=None)
+    a.messages = [
+        {"role": "system", "content": "s"},
+        {"role": "user", "content": "Frage eins\n\n" + agent_mod.VM_TURN_HINT},
+        {"role": "assistant", "content": "Antwort eins"},
+        {"role": "user", "content": agent_mod.VM_NUDGE_PROMPT},
+        {"role": "assistant", "content": "Antwort zwei"},
+    ]
+    kontext = a._recent_context(include_last=True)
+    assert "Frage eins" in kontext and "Antwort zwei" in kontext
+    assert "vm_write" not in kontext and agent_mod.VM_NUDGE_PROMPT[:30] not in kontext
+
+
+def test_a_model_without_tools_is_told_why_there_is_no_vm(monkeypatch, settings,
+                                                           toolbox) -> None:
+    monkeypatch.setattr(sandbox_mod, "runtime_known", lambda: (True, _DOCKER))
+    monkeypatch.setattr(agent_mod.Agent, "_model_can_use_tools", lambda self, model="": False)
+    llm = ScriptedLLM(_message(content="```python\nprint(1)\n```"))
+    monkeypatch.setattr("litellm.completion", llm)
+    ereignisse: list = []
+    _code_agent(settings, toolbox, ereignisse).ask("Code", stream=False, mode="code",
+                                                   sandbox=True)
+    system = llm.calls[0]["messages"][0]["content"]
+    assert "keine Werkzeuge aufrufen" in system and "Podman oder Docker fehlt" not in system
+    frage = [m for m in llm.calls[0]["messages"] if m["role"] == "user"][-1]["content"]
+    assert agent_mod.VM_TURN_HINT not in frage
+    hinweise = [p["text"] for n, p in ereignisse if n == "note"]
+    assert any("kann keine Werkzeuge benutzen" in h for h in hinweise)
+    assert not any("Podman" in h for h in hinweise)
+    assert len(llm.calls) == 1
+
+
+def test_asked_for_json_the_json_is_the_answer(monkeypatch, settings, toolbox) -> None:
+    beispiel = '```json\n{"name": "web_search", "arguments": {"query": "Bremen"}}\n```'
+    for frage in ("Gib mir ein JSON-Beispiel für eine Suche",
+                  "Wie sieht ein web_search-Aufruf aus?", "Zeig einen Tool Call"):
+        assert tool_calls_from_text(beispiel, NAMEN, frage) == []
+    # Ohne solche Frage bleibt es ein Aufruf (11.2.2 Terra).
+    assert len(tool_calls_from_text(beispiel, NAMEN, "Cafés in Bremen?")) == 1
+    rechnen = '{"name": "calculate", "arguments": {"expression": "2*3"}}'
+    assert len(tool_calls_from_text(rechnen, {"calculate"}, "calculate 2 times 3")) == 1
+    llm = ScriptedLLM(_message(content=beispiel))
+    monkeypatch.setattr("litellm.completion", llm)
+    ergebnis = Agent(settings, cache=None, toolbox=toolbox).ask(
+        "Wie sieht ein web_search-Aufruf als JSON aus?", stream=False)
+    assert ergebnis.searches == [] and "web_search" in ergebnis.answer

@@ -641,6 +641,14 @@ in einem Satz (einrichten: Podman oder Docker installieren, dann neu starten) un
 kennzeichne deinen Code als ungetestet.
 """
 
+#: Eingeschaltet, aber das Modell kann gar keine Werkzeuge aufrufen (gemma3 & Co.).
+VM_NO_TOOLS_PROMPT = """
+
+Die virtual machine ist eingeschaltet, aber du kannst keine Werkzeuge aufrufen und sie \
+deshalb nicht benutzen. Sag das dem Nutzer in einem Satz und kennzeichne deinen Code als \
+ungetestet.
+"""
+
 #: Einmal je Anfrage, wenn Code ohne einen einzigen Lauf in der virtual machine
 #: zurueckkam (11.2.2 Sol). Kleine Modelle ueberlesen die Anleitung im Systemtext.
 VM_NUDGE_PROMPT = (
@@ -914,6 +922,23 @@ ANSWER_URL_RE = re.compile(r"https?://[^\s<>\]\)\"'`]{6,}")
 URL_TRAILING = ".,;:!?"
 
 
+def own_words(content: Any) -> str:
+    """Was der Nutzer in einer Nachricht selbst geschrieben hat (11.2.2 Sol).
+
+    Aquaticy legt eigene Nachrichten mit der Rolle "user" in den Verlauf: die
+    Quellenlage, Nachfass-Texte (Rueckfrage, Bild, virtual machine, Budget,
+    Gegenprobe) und Anhaenge an der Frage (Ortsfilter, VM-Hinweis). Fuer den
+    Planer, den Rechtspruefer und Ai-guard zaehlt nur die Frage selbst --
+    sonst galt der Nachfass-Text als "die vorige Nachricht des Nutzers".
+    Returns: die Frage ohne Anhaenge, "" fuer eine eigene Nachricht von Aquaticy.
+    """
+    text = str(content or "").strip() if isinstance(content, str) else ""
+    if not text or text.startswith(_EIGENE_ANFAENGE):
+        return ""
+    text = text.split("\n\n[Ortsfilter:")[0]
+    return text.replace("\n\n" + VM_TURN_HINT, "").strip()
+
+
 def answer_urls(text: str) -> list[str]:
     """Die Adressen aus *text*, in Reihenfolge und ohne Doppelte."""
     gefunden: list[str] = []
@@ -978,6 +1003,12 @@ def new_session_id() -> str:
 
 #: Beginn der internen Nachricht mit den Vorrecherche-Ergebnissen.
 PRE_RESEARCH_PREFIX = "Zu deiner Unterstuetzung wurde die Anfrage"
+
+#: Womit die Nachrichten beginnen, die Aquaticy selbst als "user" schreibt.
+_EIGENE_ANFAENGE = (
+    PRE_RESEARCH_PREFIX, BUDGET_PROMPT[:40], FORCE_ASK_PROMPT[:40],
+    FORCE_VISUAL_PROMPT[:40], VM_NUDGE_PROMPT[:40], RECHECK_PROMPT[:40], RECHECK_FRESH[:40],
+)
 
 #: Platzhalter fuer aeltere Werkzeug-Ergebnisse, die aus dem Verlauf fliegen.
 TRIMMED_NOTE = "[gekuerzt -- aeltere Werkzeug-Ausgabe, die Fakten stehen in der Antwort]"
@@ -1430,10 +1461,10 @@ class Agent:
             role = message.get("role")
             if role not in ("user", "assistant"):
                 continue
-            content = str(message.get("content") or "").strip()
-            if not content or content.startswith((PRE_RESEARCH_PREFIX, BUDGET_PROMPT[:40])):
+            content = (own_words(message.get("content")) if role == "user"
+                       else str(message.get("content") or "").strip())
+            if not content:
                 continue
-            content = content.split("\n\n[Ortsfilter:")[0]
             parts.append(f"{'Nutzer' if role == 'user' else 'Aquaticy AI'}: {content[:400]}")
         return "\n".join(parts[-turns * 2 :])
 
@@ -2003,7 +2034,9 @@ class Agent:
         if not self.workshop_on:
             return False
         da = getattr(self, "_vm_da", None)
-        return self._vm_can_start() if da is None else bool(da)
+        laufzeit = self._vm_can_start() if da is None else bool(da)
+        # Ohne Werkzeuge kein vm_run -- dann hat das Modell auch keine virtual machine.
+        return laufzeit and self._model_can_use_tools()
 
     @property
     def active_model(self) -> str:
@@ -2201,7 +2234,7 @@ class Agent:
                 text += PRO_PROMPT % {"agents": self.agent_limit}
         text += ASK_PROMPT if self.toolbox.ask_handler is not None else NO_ASK_PROMPT
         if self.workshop_on and not self._vm_ready():
-            text += VM_MISSING_PROMPT
+            text += VM_MISSING_PROMPT if self._model_can_use_tools() else VM_NO_TOOLS_PROMPT
         elif self.workshop_on:
             cpus = max(1, int(self.settings.vm_cpus or 1))
             user_mode = bool(getattr(self.settings, "vm_user_mode", False))
@@ -2577,6 +2610,8 @@ class Agent:
         # ein, statt es auszureizen und die Fehler zu wiederholen.
         messages = metering.prepare_messages(self.settings, self.active_model, messages)
         werkzeuge = self.tools
+        frage = next((t for t in (own_words(m.get("content")) for m in reversed(messages)
+                                  if m.get("role") == "user") if t), "")
         buchung = self._reserve(messages, werkzeuge)
         try:
             with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
@@ -2603,7 +2638,7 @@ class Agent:
             )
             if not tool_calls and werkzeuge:
                 aus_text = tool_calls_from_text(
-                    content, (t["function"]["name"] for t in werkzeuge))
+                    content, (t["function"]["name"] for t in werkzeuge), frage)
                 if aus_text:
                     tool_calls, content = aus_text, ""
             # Kommentar VOR Werkzeugaufrufen ("Ich suche mal ...") ist keine
@@ -2630,7 +2665,8 @@ class Agent:
         self._note_usage(messages, gestreamt, buchung, self._stream_zahlen)
         if not gestreamt.get("tool_calls") and werkzeuge:
             aus_text = tool_calls_from_text(
-                str(gestreamt.get("content") or ""), (t["function"]["name"] for t in werkzeuge))
+                str(gestreamt.get("content") or ""), (t["function"]["name"] for t in werkzeuge),
+                frage)
             if aus_text:
                 # Schon gestreamt -- die Oberflaeche nimmt den Text als
                 # Zwischennachricht wieder aus der Antwort (wie unten).
@@ -2856,7 +2892,13 @@ class Agent:
             if beantwortet is not None:
                 return beantwortet
 
-        if self.workshop_on and not self._vm_ready():
+        if self.workshop_on and not self._vm_ready() and not self._model_can_use_tools():
+            self._emit("note", text=(
+                f"{self.active_model} kann keine Werkzeuge benutzen – die virtual machine "
+                "bleibt deshalb aus, der Code ungetestet."), text_en=(
+                f"{self.active_model} can't use tools – so the virtual machine stays off "
+                "and the code is untested."))
+        elif self.workshop_on and not self._vm_ready():
             # Der Schalter ist an, aber es gibt keine Abschottung (11.2.2 Sol) --
             # das soll der Nutzer sehen, nicht erst aus einer Ausrede des Modells.
             self._emit("note", text=(
@@ -3145,7 +3187,7 @@ class Agent:
                 except Exception as exc:
                     # Die erste Antwort steht schon -- eine gescheiterte
                     # Gegenpruefung darf sie nicht mitreissen.
-                    self._emit("error", message=f"Gegenpruefung: {exc}")
+                    self._emit("error", message=f"Gegenprüfung: {exc}")
                     return
                 calls = message.get("tool_calls") or []
                 if not calls:
@@ -4022,7 +4064,13 @@ MAX_TEXT_CALL_CHARS = 8000
 MAX_TEXT_CALLS = 8
 
 
-def tool_calls_from_text(content: str, names: Any) -> list[dict[str, Any]]:
+#: Fragt der Nutzer selbst nach JSON oder einem Werkzeugaufruf, ist JSON die Antwort.
+_FRAGT_NACH_AUFRUF = re.compile(
+    r"\bjson\b|\b(?:tool|function)[\s_-]?calls?\b|werkzeug-?aufruf|funktionsaufruf",
+    re.IGNORECASE)
+
+
+def tool_calls_from_text(content: str, names: Any, frage: str = "") -> list[dict[str, Any]]:
     """Werkzeugaufrufe, die ein Modell als Text geschrieben hat (11.2.2 Terra).
 
     qwen2.5-coder und andere kleine Modelle schreiben ueber Ollama den Aufruf
@@ -4033,11 +4081,20 @@ def tool_calls_from_text(content: str, names: Any) -> list[dict[str, Any]]:
     Nur wenn der GANZE Text aus solchen Aufrufen besteht und jeder Name ein
     angebotenes Werkzeug ist -- sonst ist es eine Antwort und bleibt eine.
     Die Aufrufe laufen danach durch dieselben Pruefungen wie jeder andere.
+
+    Seit 11.2.2 Sol nicht, wenn *frage* (die Frage des Nutzers) selbst nach JSON,
+    einem Werkzeugaufruf oder einem Werkzeug beim Namen fragt: "Gib mir ein
+    Beispiel fuer einen web_search-Aufruf" wurde sonst ausgefuehrt statt gezeigt.
     """
     text = str(content or "")
     if not text.strip() or len(text) > MAX_TEXT_CALL_CHARS:
         return []
     erlaubt = {str(name) for name in names}
+    frage = str(frage or "")
+    # Nur technische Namen ("web_search"), nicht "calculate" in "calculate my taxes".
+    if _FRAGT_NACH_AUFRUF.search(frage) or any(
+            "_" in name and name in frage for name in erlaubt):
+        return []
     rest = _AUFRUF_HUELLE.sub(" ", text).strip()
     aufrufe: list[dict[str, Any]] = []
     index = 0

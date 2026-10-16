@@ -3020,7 +3020,13 @@ async function zeigeVmNetz(){
 }
 $("#werkstatt-netz").addEventListener("click", async (e) => {
   const schalter = e.currentTarget;
-  if (!vmStand?.ultra){
+  if (!vmStand){
+    // Der Stand ist noch nicht da -- nicht raten (sonst hiess es bei Ultra "nur Ultra").
+    e.preventDefault();
+    zeigeVmNetz();
+    return;
+  }
+  if (!vmStand.ultra){
     e.preventDefault();
     schalter.checked = false;
     await guardDialog({
@@ -5980,6 +5986,12 @@ const ATTRIBUTE = ["placeholder", "title", "aria-label"];
 const ORIGINAL = new WeakMap();
 // Der Sprachwaehler (#langs) nennt jede Sprache in ihrer eigenen Sprache.
 const NICHT_UEBERSETZEN = ".bubble, .recent, .recents-leer, .merk, code, pre, textarea, script, style, #account-username, #account-email, #langs";
+// Hier steht, was Modell, Web oder Nutzer geschrieben haben (11.2.2 Sol): nur ein
+// ganzer fester Oberflaechentext wird uebersetzt, nie ein Muster. Sonst wurde aus
+// der Suche "Wie kann ich Cookies löschen?" ein "Delete Wie kann ich Cookies?".
+const NUR_FEST = ".steps .txt, .steps .sub, .interim, #ask-q, #ask-opts, .q, .given, "
+  + ".frage, .result-card, .cw-name, .cw-aufgabe, .cw-freigabe, .cw-eintrag .inhalt, "
+  + "#greeting";
 let sprache = SPRACHEN.includes(START.lang) ? START.lang : "de";
 // Seit 11.2.2 Sol: Texte mit Zahlen oder Namen darin passen in kein EN-Woerterbuch.
 // Sie bekommen ihre englische Fassung gleich dort, wo sie entstehen.
@@ -6077,10 +6089,10 @@ const EN_MUSTER = [
 ];
 // Ein Text auf Englisch -- oder "", wenn es keine Fassung gibt. Laengere Zeilen
 // aus Teilen (" · ", "; ") werden Teil fuer Teil nachgeschlagen.
-function aufEnglisch(text, tiefe = 0){
+function aufEnglisch(text, tiefe = 0, nurFest = false){
   const k = schluessel(String(text || ""));
   if (!k) return "";
-  if (EN[k]) return EN[k];
+  if (EN[k] || nurFest) return EN[k] || "";
   // Muster nur fuer kurze Zeilen: Gedanken und Antworten wachsen Token fuer Token,
   // und ein Muster mit zwei (.+) wuerde dort bei jedem Token teuer.
   if (k.length > 400) return "";
@@ -6104,8 +6116,9 @@ function tauscheText(node){
   const eltern = node.parentElement;
   if (!eltern || eltern.closest(NICHT_UEBERSETZEN)) return;
   const roh = node.nodeValue;
+  const fest = !!eltern.closest(NUR_FEST);
   if (sprache === "en"){
-    const en = aufEnglisch(roh);
+    const en = aufEnglisch(roh, 0, fest);
     if (!en || en === schluessel(roh)) return;
     ORIGINAL.set(node, roh);
     const vorne = roh.match(/^\s*/)[0], hinten = roh.match(/\s*$/)[0];
@@ -6114,7 +6127,7 @@ function tauscheText(node){
     const alt = ORIGINAL.get(node);
     ORIGINAL.delete(node);
     // Nur zurueck, wenn niemand den Text inzwischen neu gesetzt hat.
-    if (aufEnglisch(alt) === schluessel(roh)) node.nodeValue = alt;
+    if (aufEnglisch(alt, 0, fest) === schluessel(roh)) node.nodeValue = alt;
   }
 }
 function tauscheAttribute(el){

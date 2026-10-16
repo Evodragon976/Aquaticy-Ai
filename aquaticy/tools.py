@@ -2241,7 +2241,7 @@ class Toolbox:
         client = self._storage()
         try:
             if furniture_id:
-                self._emit("storage", action="ansehen", detail=f"Moebel {furniture_id}")
+                self._emit("storage", action="ansehen", detail=f"Möbel {furniture_id}")
                 rows, kind = client.items(furniture_id), "items"
             elif room_id:
                 self._emit("storage", action="ansehen", detail=f"Raum {room_id}")

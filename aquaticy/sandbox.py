@@ -360,7 +360,12 @@ def runtime_known() -> tuple[bool, Runtime | None]:
                 with _LAUFZEIT_LOCK:
                     _LAUFZEIT["sucht"] = False
 
-        threading.Thread(target=neu_suchen, name="aquaticy-laufzeit", daemon=True).start()
+        try:
+            threading.Thread(target=neu_suchen, name="aquaticy-laufzeit", daemon=True).start()
+        except RuntimeError:
+            # Kein Faden frei: beim naechsten Mal wieder versuchen statt nie mehr.
+            with _LAUFZEIT_LOCK:
+                _LAUFZEIT["sucht"] = False
     return bekannt, wert
 
 

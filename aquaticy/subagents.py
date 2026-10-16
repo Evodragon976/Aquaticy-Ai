@@ -694,7 +694,7 @@ def _run_one(
                 # 11.2.2 Terra: qwen2.5-coder & Co. schreiben den Aufruf als JSON in
                 # den Text. Ohne das galt er als "Ergebnis" -- gesucht wurde nie.
                 aus_text = tool_calls_from_text(
-                    content, (t["function"]["name"] for t in TOOL_SCHEMAS))
+                    content, (t["function"]["name"] for t in TOOL_SCHEMAS), task)
                 if aus_text:
                     calls, content = [_TextCall(a) for a in aus_text], ""
             if not calls:
