@@ -784,8 +784,28 @@ class Settings:
             if schluessel:
                 kwargs["api_key"] = schluessel
         if provider_of(model) in ("ollama", "ollama_chat") and self.context_tokens > 0:
-            kwargs["num_ctx"] = self.context_tokens
+            kwargs["num_ctx"] = self.context_for(model)
         return kwargs
+
+    def context_for(self, model: str) -> int:
+        """Das Kontextfenster fuer *model*: wie eingestellt, aber hoechstens 5 GB RAM.
+
+        Seit 11.3.0 Luna wird das bei jedem Aufruf eines lokalen Modells gerechnet
+        (aquaticy/local_model.py: context_limit) -- gleich, woher der Wert kommt:
+        Regler, Einstellungen, Umgebung. Wolkenmodelle halten ihr Fenster selbst.
+        """
+        wunsch = int(self.context_tokens or 0)
+        if wunsch <= 0 or provider_of(model) not in ("ollama", "ollama_chat"):
+            return wunsch
+        from aquaticy.local_model import context_limit, local_name
+
+        name = local_name(model)
+        if not name:
+            return wunsch
+        try:
+            return min(wunsch, context_limit(name, self.ollama_base(model)))
+        except Exception:
+            return min(wunsch, 16384)
 
     def ollama_base(self, model: str) -> str:
         """Die Adresse des Ollama, bei dem *model* laeuft (wie LiteLLM sie waehlt)."""

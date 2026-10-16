@@ -13,6 +13,7 @@ muss bestaetigt werden.
 from __future__ import annotations
 
 import json
+import math
 import platform
 import re
 import shutil
@@ -65,18 +66,18 @@ class LocalModel:
 DUAL_MODELS: tuple[LocalModel, ...] = (
     LocalModel("gemma4:12b", 6.6, 10, "Vision + Werkzeuge, guter Allrounder", vision=True),
     LocalModel("qwen3-vl:8b", 6.1, 12, "Vision + Werkzeuge, sehr langer Kontext", vision=True),
-    LocalModel("gemma4:e4b", 3.5, 6, "Kompakt, laeuft auch auf kleinen Karten", vision=True),
+    LocalModel("gemma4:e4b", 3.5, 6, "Kompakt, läuft auch auf kleinen Karten", vision=True),
     LocalModel("qwen3-vl:4b", 3.3, 6, "Kleinste Vision-Variante mit Werkzeugen", vision=True),
-    LocalModel("gemma4:26b", 16.0, 24, "Deutlich staerker, braucht eine grosse Karte", vision=True),
+    LocalModel("gemma4:26b", 16.0, 24, "Deutlich stärker, braucht eine große Karte", vision=True),
 )
 
 #: Reine Textmodelle -- staerker im Recherchieren, sehen aber nichts.
 LOCAL_MODELS: tuple[LocalModel, ...] = (
-    LocalModel("qwen3:8b", 5.2, 8, "Sehr zuverlaessig beim Werkzeugaufruf"),
-    LocalModel("qwen2.5:7b", 4.7, 8, "Bewaehrt, guter Kompromiss"),
+    LocalModel("qwen3:8b", 5.2, 8, "Sehr zuverlässig beim Werkzeugaufruf"),
+    LocalModel("qwen2.5:7b", 4.7, 8, "Bewährt, guter Kompromiss"),
     LocalModel("llama3.1:8b", 4.9, 8, "Breit getestet"),
-    LocalModel("qwen2.5:14b", 9.0, 16, "Staerker, braucht mehr Speicher"),
-    LocalModel("qwen2.5:3b", 1.9, 4, "Notloesung fuer schwache Rechner"),
+    LocalModel("qwen2.5:14b", 9.0, 16, "Stärker, braucht mehr Speicher"),
+    LocalModel("qwen2.5:3b", 1.9, 4, "Notlösung für schwache Rechner"),
 )
 
 DEFAULT_MODEL = LOCAL_MODELS[0]
@@ -92,13 +93,13 @@ VISION_MODELS: tuple[LocalModel, ...] = (
     ),
     LocalModel("qwen3-vl:4b", 3.3, 6, "Klein und aktuell", tools=False, vision=True),
     LocalModel(
-        "gemma3:12b", 8.1, 12, "Groessere offizielle Gemma-Variante", tools=False, vision=True
+        "gemma3:12b", 8.1, 12, "Größere offizielle Gemma-Variante", tools=False, vision=True
     ),
     LocalModel(
-        "llava:7b", 4.7, 8, "Bewaehrt, versteht Fotos und Schilder", tools=False, vision=True
+        "llava:7b", 4.7, 8, "Bewährt, versteht Fotos und Schilder", tools=False, vision=True
     ),
     LocalModel("minicpm-v", 5.5, 8, "Stark bei Text im Bild", tools=False, vision=True),
-    LocalModel("moondream", 1.7, 3, "Winzig, fuer schwache Rechner", tools=False, vision=True),
+    LocalModel("moondream", 1.7, 3, "Winzig, für schwache Rechner", tools=False, vision=True),
 )
 
 DEFAULT_VISION_MODEL = VISION_MODELS[0]
@@ -109,11 +110,11 @@ DEFAULT_VISION_MODEL = VISION_MODELS[0]
 #: neben dem Hauptmodell, und der Speicher ist endlich.
 #: Stand August 2026, Groessen sind Richtwerte fuer Q4.
 SUBAGENT_MODELS: tuple[LocalModel, ...] = (
-    LocalModel("qwen3:1.7b", 1.4, 3, "Klein und flink, ruft zuverlaessig Werkzeuge auf"),
-    LocalModel("qwen2.5:3b", 1.9, 4, "Etwas groesser, etwas gruendlicher"),
+    LocalModel("qwen3:1.7b", 1.4, 3, "Klein und flink, ruft zuverlässig Werkzeuge auf"),
+    LocalModel("qwen2.5:3b", 1.9, 4, "Etwas größer, etwas gründlicher"),
     LocalModel("gemma4:e2b", 1.8, 3, "Sparsamste Gemma-Variante"),
     LocalModel("qwen3:4b", 2.5, 5, "Merklich besser, wenn Platz ist"),
-    LocalModel("qwen3:0.6b", 0.5, 2, "Winzig -- nur fuer sehr enge Teilfragen"),
+    LocalModel("qwen3:0.6b", 0.5, 2, "Winzig – nur für sehr enge Teilfragen"),
 )
 
 DEFAULT_SUBAGENT_MODEL = SUBAGENT_MODELS[0]
@@ -294,6 +295,12 @@ def _ohne_latest(name: str) -> str:
     return text[: -len(":latest")] if text.endswith(":latest") else text
 
 
+def is_installed(name: str, installed: list[str]) -> bool:
+    """Steht *name* in der Liste von Ollama? `gemma3` und `gemma3:latest` sind dasselbe."""
+    gesucht = _ohne_latest(name)
+    return bool(gesucht) and any(_ohne_latest(eintrag) == gesucht for eintrag in installed)
+
+
 def model_is_loaded(model_id: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool | None:
     """Liegt das Modell schon im Speicher?
 
@@ -364,6 +371,11 @@ def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None
 CAPABILITY_TTL = 600.0
 
 _CAPS: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
+#: Die ganze Antwort von /api/show -- fuer den Aufbau des Modells (11.3.0 Luna).
+_SHOW: dict[tuple[str, str], tuple[float, dict[str, Any] | None]] = {}
+#: Hoechstens so viele Modelle gemerkt: ein Name kommt auch aus einer Anfrage
+#: (/api/context), und jeder fremde Name waere sonst fuer immer ein Eintrag.
+_MERK_MAX = 256
 #: Was ein Modell nachweislich NICHT kann -- gelernt aus seiner Fehlermeldung.
 _FEHLT: dict[str, set[str]] = {}
 _CAPS_LOCK = threading.Lock()
@@ -371,6 +383,34 @@ _CAPS_LOCK = threading.Lock()
 #: Ollama lehnt eine Anfrage ab, wenn das Modell etwas nicht kann:
 #: '"qwen2.5-coder:14b" does not support thinking' oder '... does not support tools'.
 _FEHLT_RE = re.compile(r"does not support (thinking|tools)", re.IGNORECASE)
+
+
+def _show(name: str, base_url: str = DEFAULT_OLLAMA_URL,
+          timeout: float = 3.0) -> dict[str, Any] | None:
+    """Die Antwort von ``/api/show`` zu *name* -- zehn Minuten gemerkt, None ohne Antwort.
+
+    Seit 11.3.0 Luna eine Abfrage fuer beides: die Faehigkeiten und den Aufbau
+    des Modells (Schichten, Koepfe), aus dem sich der Speicher je Token ergibt.
+    """
+    schluessel = (base_url.rstrip("/"), _ohne_latest(name))
+    jetzt = time.monotonic()
+    with _CAPS_LOCK:
+        gemerkt = _SHOW.get(schluessel)
+    if gemerkt is not None and jetzt - gemerkt[0] < CAPABILITY_TTL:
+        return gemerkt[1]
+    daten: dict[str, Any] | None = None
+    try:
+        antwort = httpx.post(f"{schluessel[0]}/api/show", json={"model": name},
+                             timeout=timeout, trust_env=False)
+        roh = antwort.json() if antwort.status_code == 200 else None
+        daten = roh if isinstance(roh, dict) else None
+    except (httpx.HTTPError, ValueError):
+        daten = None
+    with _CAPS_LOCK:
+        if len(_SHOW) >= _MERK_MAX:
+            _SHOW.clear()
+        _SHOW[schluessel] = (jetzt, daten)
+    return daten
 
 
 def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
@@ -387,19 +427,99 @@ def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
         gemerkt = _CAPS.get(schluessel)
     if gemerkt is not None and jetzt - gemerkt[0] < CAPABILITY_TTL:
         return gemerkt[1]
-    faehig: frozenset[str] | None = None
-    try:
-        antwort = httpx.post(f"{schluessel[0]}/api/show", json={"model": name},
-                             timeout=timeout, trust_env=False)
-        daten = antwort.json() if antwort.status_code == 200 else {}
-        liste = daten.get("capabilities") if isinstance(daten, dict) else None
-        if isinstance(liste, list):
-            faehig = frozenset(str(x).lower() for x in liste if isinstance(x, str))
-    except (httpx.HTTPError, ValueError):
-        faehig = None
+    daten = _show(name, base_url, timeout)
+    liste = daten.get("capabilities") if daten else None
+    faehig = (frozenset(str(x).lower() for x in liste if isinstance(x, str))
+              if isinstance(liste, list) else None)
     with _CAPS_LOCK:
+        if len(_CAPS) >= _MERK_MAX:
+            _CAPS.clear()
         _CAPS[schluessel] = (jetzt, faehig)
     return faehig
+
+
+# ---------------------------------------------------------------------------
+# Kontextfenster: hoechstens 5 GB Arbeitsspeicher (11.3.0 Luna)
+# ---------------------------------------------------------------------------
+#: So viel Arbeitsspeicher darf das Kontextfenster eines lokalen Modells belegen.
+CONTEXT_RAM_BYTES = 5 * 1024 ** 3
+#: Kleiner wird es nie -- darunter passt kaum eine Frage samt Quellen.
+CONTEXT_MIN = 2048
+#: Gilt, wenn Ollama den Aufbau des Modells nicht verraet: der bisherige Standard.
+CONTEXT_UNKNOWN_MAX = 16384
+#: Ollama haelt den Zwischenspeicher je Token (K und V) in 16 Bit.
+_KV_BYTES = 2
+
+
+def _zahl(wert: Any) -> int:
+    """Eine positive ganze Zahl aus der Antwort von Ollama -- sonst 0.
+
+    JSON darf auch ``NaN`` und ``Infinity`` enthalten; ``int()`` darauf warf bis
+    zur Pruefung fuer 11.3.0 Luna. Negative Werte zaehlen ebenso wenig: zwei davon
+    ergaeben zusammen eine kleine positive Zahl und damit ein riesiges Fenster.
+    """
+    if isinstance(wert, bool) or not isinstance(wert, (int, float)):
+        return 0
+    if isinstance(wert, float) and not math.isfinite(wert):
+        return 0
+    return int(wert) if wert > 0 else 0
+
+
+def kv_bytes_per_token(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
+    """Wie viele Bytes das Kontextfenster je Token belegt -- 0, wenn unbekannt.
+
+    Je Schicht ein Schluessel und ein Wert fuer jeden KV-Kopf:
+    Schichten x KV-Koepfe x (Schluessel- + Wertlaenge) x 2 Byte. Zaehlt Ollama
+    die KV-Koepfe je Schicht einzeln auf, wird ueber die Schichten summiert.
+    """
+    daten = _show(name, base_url)
+    info = daten.get("model_info") if daten else None
+    if not isinstance(info, dict):
+        return 0
+    arch = str(info.get("general.architecture") or "")
+
+    def feld(endung: str) -> Any:
+        return info.get(f"{arch}.{endung}")
+
+    schichten = _zahl(feld("block_count"))
+    koepfe = feld("attention.head_count")
+    kv = feld("attention.head_count_kv")
+    breite = _zahl(feld("embedding_length"))
+    if isinstance(koepfe, list):
+        koepfe = max((_zahl(k) for k in koepfe), default=0)
+    koepfe = _zahl(koepfe)
+    schluessel = _zahl(feld("attention.key_length")) or (breite // koepfe if koepfe else 0)
+    wert = _zahl(feld("attention.value_length")) or schluessel
+    if not schichten or not schluessel:
+        return 0
+    if isinstance(kv, list):
+        kv_summe = sum(_zahl(k) for k in kv[:schichten])
+    else:
+        kv_summe = (_zahl(kv) or koepfe) * schichten
+    return max(0, kv_summe * (schluessel + wert) * _KV_BYTES)
+
+
+def trained_context(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
+    """Wie lang das Modell trainiert wurde (Tokens) -- 0, wenn unbekannt."""
+    daten = _show(name, base_url)
+    info = daten.get("model_info") if daten else None
+    if not isinstance(info, dict):
+        return 0
+    return _zahl(info.get(f"{info.get('general.architecture') or ''}.context_length"))
+
+
+def context_limit(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
+    """Das groesste Kontextfenster fuer *name*, das hoechstens 5 GB belegt.
+
+    Abgerundet auf ganze 1024 Tokens und nie ueber die trainierte Laenge.
+    Verraet Ollama den Aufbau nicht, gilt der bisherige Standard (16384).
+    """
+    je_token = kv_bytes_per_token(name, base_url)
+    grenze = (CONTEXT_RAM_BYTES // je_token) if je_token else CONTEXT_UNKNOWN_MAX
+    trainiert = trained_context(name, base_url)
+    if trainiert:
+        grenze = min(grenze, trainiert)
+    return max(CONTEXT_MIN, grenze // 1024 * 1024)
 
 
 def missing_capability(detail: str) -> str:

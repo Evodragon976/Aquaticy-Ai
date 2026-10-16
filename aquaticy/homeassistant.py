@@ -137,13 +137,18 @@ def normalize_url(url: str) -> str:
     # Ohne Portangabe den Standardport ergaenzen -- niemand tippt ihn gern mit.
     from urllib.parse import urlparse
 
-    parsed = urlparse(url)
     # Seit 9.5.34: der Port gehoert an den Rechnernamen, nicht hinter den Pfad
     # ("nas.local/ha" -> "nas.local:{port}/ha"); ein ungueltiger Port
-    # ("ha.local:abc") ergibt "" statt eines Absturzes.
+    # ("ha.local:abc") ergibt "" statt eines Absturzes. Seit 11.3.0 ebenso eine
+    # unlesbare Adresse ("[1, 2]", Steuerzeichen) -- sonst stuerzte der Test ab.
+    if any(ord(zeichen) < 33 or ord(zeichen) == 127 for zeichen in url):
+        return ""
     try:
+        parsed = urlparse(url)
         port = parsed.port
     except ValueError:
+        return ""
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return ""
     if port is None and parsed.scheme == "http" and parsed.hostname:
         url = parsed._replace(netloc=f"{parsed.netloc}:{HA_PORT}").geturl()
@@ -180,6 +185,9 @@ class HomeAssistant:
             )
         except httpx.HTTPError as exc:
             raise HomeAssistantError(f"{self.url} nicht erreichbar: {exc}") from exc
+        except (httpx.InvalidURL, ValueError, UnicodeError) as exc:
+            # Ein Rechnername, den es so nicht geben kann (zu lang, falsche Zeichen).
+            raise HomeAssistantError("Die Adresse von Home Assistant ist ungültig.") from exc
         if response.status_code == 401:
             raise HomeAssistantError(
                 "Das Zugriffstoken wird abgelehnt. Ein neues gibt es in Home Assistant "

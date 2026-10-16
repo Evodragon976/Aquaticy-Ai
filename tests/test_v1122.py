@@ -108,6 +108,7 @@ def ollama():
 def _frisch_gemerkt(monkeypatch):
     # Was ein Modell kann, merkt sich Aquaticy -- jeder Test faengt leer an.
     monkeypatch.setattr(local_model, "_CAPS", {})
+    monkeypatch.setattr(local_model, "_SHOW", {})
     monkeypatch.setattr(local_model, "_FEHLT", {})
 
 

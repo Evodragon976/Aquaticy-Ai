@@ -941,6 +941,8 @@ def web_command(
         )
     # Ohne Podman/Docker keine virtual machine -- einmal anbieten (11.2.2 Sol).
     _vm_beim_start(settings)
+    # Was Ollama gerade hat -- bei jedem Start neu (11.3.0 Luna).
+    _ollama_beim_start(settings)
     import time as _time
 
     # Selbstheilung (9.6.8 Sol): stuerzt der Server unerwartet ab, startet er
@@ -1560,6 +1562,48 @@ def _vm_beim_start(settings: Any) -> None:
         with contextlib.suppress(OSError):
             nein.parent.mkdir(parents=True, exist_ok=True)
             nein.write_text("Podman beim Start nicht installieren.\n", encoding="utf-8")
+
+
+def _ollama_beim_start(settings: Any) -> list[str]:
+    """Beim Start von `aquaticy web`: was hat Ollama gerade? (11.3.0 Luna)
+
+    Jeder Start fragt neu -- ein Modell, das seit dem letzten Mal mit
+    `ollama pull` dazukam, steht damit gleich in der Auswahl (die fragt beim
+    Oeffnen ohnehin jedes Mal live). Ist das Hauptmodell lokal und Ollama
+    installiert, laeuft aber nicht, wird es gestartet: sonst antwortete die
+    erste Frage mit einem Verbindungsfehler. Gibt die gefundenen Namen zurueck.
+    """
+    from urllib.parse import urlsplit
+
+    from aquaticy import local_model as lm
+    from aquaticy.system import model_usable
+
+    basis = settings.api_base or lm.DEFAULT_OLLAMA_URL
+    lokal = bool(lm.local_name(settings.model))
+    try:
+        laeuft = lm.server_running(basis, timeout=2.0)
+        hier = urlsplit(basis).hostname in ("localhost", "127.0.0.1", "::1")
+        if not laeuft and lokal and hier and lm.ollama_binary() is not None:
+            with console.status("  starte Ollama ..."):
+                laeuft = lm.start_server(basis, wait_seconds=15.0)
+        modelle = lm.installed_models(basis) if laeuft else []
+    except Exception:
+        return []
+    if modelle:
+        namen = ", ".join(modelle[:6]) + (f" und {len(modelle) - 6} weitere"
+                                         if len(modelle) > 6 else "")
+        console.print(f"[green]Ollama:[/green] {len(modelle)} "
+                      f"{'Modell' if len(modelle) == 1 else 'Modelle'} [dim]({namen})[/dim]")
+    elif laeuft and lokal:
+        console.print("[yellow]Ollama:[/yellow] läuft, aber ohne Modell – "
+                      "[bold]aquaticy install-model[/bold] lädt eins.")
+    elif lokal:
+        console.print("[yellow]Ollama:[/yellow] nicht erreichbar – das lokale Modell antwortet "
+                      "erst, wenn Ollama läuft ([bold]ollama serve[/bold]).")
+    if lokal and modelle and not model_usable(settings, settings.model, modelle):
+        console.print(f"[yellow]Hinweis:[/yellow] {settings.model} ist in Ollama nicht "
+                      "installiert. In der Oberfläche ein anderes Modell wählen.")
+    return modelle
 
 
 # ---------------------------------------------------------------------------

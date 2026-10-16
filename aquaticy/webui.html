@@ -1616,6 +1616,14 @@ html.vv,html.vv body{height:var(--app-h)}
 .vm-status{margin:2px 16px 8px 34px}
 .vm-status.bad{color:var(--err)}
 
+/* Kontextfenster unter der Modellauswahl (11.3.0 Luna) */
+.picker-ctx{display:flex;flex-direction:column;gap:4px;padding:10px 16px;
+  border-top:1px solid var(--line)}
+.picker-ctx label{display:flex;justify-content:space-between;gap:8px;
+  font-size:calc(13px * var(--fs));color:var(--text)}
+.picker-ctx .ctx-wert{color:var(--text-3);font-variant-numeric:tabular-nums}
+.picker-ctx input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
+.picker-ctx .why{font-size:calc(11.5px * var(--fs));color:var(--text-3);line-height:1.5}
 /* Auto-Upgrading (10.0 Luna) */
 .launch-top{display:flex;align-items:center;gap:10px}
 .launch-badge{margin-left:auto;font:600 calc(11px * var(--fs))/1 var(--mono);letter-spacing:.06em;
@@ -1778,6 +1786,13 @@ html.vv,html.vv body{height:var(--app-h)}
   <div class="picker" id="picker-models" hidden>
     <div class="picker-head" id="picker-head">Modell wählen</div>
     <div class="picker-list" id="model-list"></div>
+    <div class="picker-ctx" id="picker-ctx" hidden>
+      <label for="ctx-regler"><b>Kontextfenster</b>
+        <span class="ctx-wert" id="ctx-wert"></span></label>
+      <input type="range" id="ctx-regler" min="2048" max="16384" step="1024">
+      <span class="why" id="ctx-why">Wie viel vom Gespräch das lokale Modell auf einmal
+        überblickt. Höchstens 5 GB Arbeitsspeicher.</span>
+    </div>
     <button type="button" class="picker-image" id="btn-imagemode" aria-pressed="false">
       <span class="pi-icon" aria-hidden="true">🎨</span>
       <span><b>Bilderstellung</b>
@@ -2860,7 +2875,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.2.3 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5987,7 +6002,46 @@ const EN = {
 "Korrekturen": "Fixes",
 "Mit Code für den Fix": "With code for the fix",
 "Nur Befunde": "Findings only",
-"Alle Lücken": "All holes"
+"Alle Lücken": "All vulnerabilities",
+"Kontextfenster": "Context window",
+"Wie viel vom Gespräch das lokale Modell auf einmal überblickt. Höchstens 5 GB Arbeitsspeicher.": "How much of the conversation the local model sees at once. At most 5 GB of memory.",
+"Die Adresse ist ungültig.": "The address is invalid.",
+"Die Adresse von Home Assistant ist ungültig.": "The Home Assistant address is invalid.",
+"Die Adresse der Lagerverwaltung ist ungültig.": "The storage manager address is invalid.",
+"Vision + Werkzeuge, guter Allrounder": "Vision + tools, good all-rounder",
+"Vision + Werkzeuge, sehr langer Kontext": "Vision + tools, very long context",
+"Kompakt, läuft auch auf kleinen Karten": "Compact, runs on small graphics cards too",
+"Kleinste Vision-Variante mit Werkzeugen": "Smallest vision variant with tools",
+"Deutlich stärker, braucht eine große Karte": "Much stronger, needs a big graphics card",
+"Sehr zuverlässig beim Werkzeugaufruf": "Very reliable at calling tools",
+"Bewährt, guter Kompromiss": "Proven, a good compromise",
+"Breit getestet": "Widely tested",
+"Stärker, braucht mehr Speicher": "Stronger, needs more memory",
+"Notlösung für schwache Rechner": "Fallback for weak computers",
+"Offizielles Google-Modell, sieht gut": "Official Google model, sees well",
+"Klein und aktuell": "Small and up to date",
+"Größere offizielle Gemma-Variante": "Larger official Gemma variant",
+"Bewährt, versteht Fotos und Schilder": "Proven, understands photos and signs",
+"Stark bei Text im Bild": "Strong at text in images",
+"Winzig, für schwache Rechner": "Tiny, for weak computers",
+"Klein und flink, ruft zuverlässig Werkzeuge auf": "Small and quick, calls tools reliably",
+"Etwas größer, etwas gründlicher": "A bit bigger, a bit more thorough",
+"Sparsamste Gemma-Variante": "Most frugal Gemma variant",
+"Merklich besser, wenn Platz ist": "Noticeably better if there's room",
+"Winzig – nur für sehr enge Teilfragen": "Tiny – only for very narrow sub-questions",
+"lokal": "local",
+"Läuft auf deinem Rechner": "Runs on your computer",
+"Läuft auf deinem Rechner: keine Kosten, nichts verlässt das Haus": "Runs on your computer: no cost, nothing leaves the house",
+"Klein und schnell: kurze Antworten in Sekunden": "Small and fast: short answers in seconds",
+"Fürs Programmieren": "For programming",
+"Über die Schnittstelle des Anbieters": "Via the provider's API",
+"Verbund": "Cluster",
+"Offene Modelle bei NVIDIA, großzügiges Freikontingent (40 Anfragen/Minute)": "Open models at NVIDIA, generous free tier (40 requests/minute)",
+"Europäischer Anbieter, antwortet schnell, Server in der EU": "European provider, answers fast, servers in the EU",
+"von dir eingetragen": "entered by you",
+"Neueste Version": "Latest version",
+"Ältere Version · nur Ultra": "Older version · Ultra only",
+"eigenes": "own"
 };
 const SPRACHEN = ["de", "en"];
 const ATTRIBUTE = ["placeholder", "title", "aria-label"];
@@ -6010,6 +6064,12 @@ const schluessel = text => text.replace(/\s+/g, " ").trim();
 // Klammern werden selbst noch einmal nachgeschlagen ("unbekanntes Gerät").
 const EN_MUSTER = [
   [/^Höchstens (\d+) Dateien\.$/, "At most $1 files."],
+  [/^(\d+) GB auf deinem Rechner$/, "$1 GB on your computer"],
+  [/^Verteilt auf (\d+) Server$/, "Spread across $1 servers"],
+  [/^Neueste Version · (.+) stärker$/, "Latest version · $1 stronger"],
+  [/^Auto · Modell wählen$/, "Auto · Choose model"],
+  [/^Vorherige Version · wählbar bis (.+)$/, "Previous version · selectable until $1"],
+  [/^(.+) · noch nicht freigegeben · nur Ultra$/, "$1 · not released yet · Ultra only"],
   [new RegExp("^(.+): PHP- und JSP-Dateien lassen sich nicht hochladen\\. "
               + "Füg den Code lieber als Text in die Nachricht ein\\.$"),
    "$1: PHP and JSP files can't be uploaded. Better paste the code into the message as text."],
@@ -6599,6 +6659,7 @@ addEventListener("resize", () => { if (pickerOpen()) setzePickerHoehe(); });
 async function openPicker(){
   const list = $("#model-list");
   list.innerHTML = '<div class="picker-foot">Sehe nach …</div>';
+  $("#picker-ctx").hidden = true;
   clearTimeout(pickerClosing);          // eine laufende Ausblende gilt nicht mehr
   modelBox.classList.remove("closing");
   modelBox.hidden = false;
@@ -6670,6 +6731,7 @@ async function openPicker(){
     models.forEach(zeichne);
   }
   stagger(list.querySelectorAll(".pick"), 22);
+  zeigeKontext(currentModel);
   // Tastatur (9.6.0): der Fokus springt ins Menue -- auf das gewaehlte Modell.
   if (pickerOpen() && (document.activeElement === $("#btn-model")
                        || document.activeElement === document.body))
@@ -6698,6 +6760,57 @@ document.addEventListener("keydown", (e) => {
   if (minwinOffen) { fokusFalle(minwinOffen, e); return; }
   if (pickerOpen() && (modelBox.contains(document.activeElement)
                        || document.activeElement === $("#btn-model"))) fokusFalle(modelBox, e);
+});
+
+// Das Kontextfenster des gewaehlten lokalen Modells (11.3.0 Luna). Wie gross es
+// hoechstens sein darf, rechnet der Server aus dem Aufbau des Modells: nie mehr
+// als 5 GB Arbeitsspeicher. Bei Wolkenmodellen gibt es nichts zu stellen.
+let ctxStand = null;
+function ctxText(tokens){
+  const zahl = Number(tokens).toLocaleString(sprache === "en" ? "en-GB" : "de-DE");
+  if (!ctxStand?.known) return sp(`${zahl} Tokens`, `${zahl} tokens`);
+  const gb = (tokens * ctxStand.per_token / 1024 ** 3)
+    .toLocaleString(sprache === "en" ? "en-GB" : "de-DE", { maximumFractionDigits: 1 });
+  return sp(`${zahl} Tokens · ≈ ${gb} GB RAM`, `${zahl} tokens · ≈ ${gb} GB RAM`);
+}
+async function zeigeKontext(modell){
+  const zeile = $("#picker-ctx");
+  try {
+    ctxStand = await (await api("/api/context?model=" + encodeURIComponent(modell || ""))).json();
+  } catch { ctxStand = null; }
+  if (!ctxStand?.local){ zeile.hidden = true; return; }
+  const regler = $("#ctx-regler");
+  regler.min = String(ctxStand.min);
+  regler.max = String(ctxStand.max);
+  regler.value = String(ctxStand.effective);
+  $("#ctx-wert").textContent = ctxText(ctxStand.effective);
+  $("#ctx-why").textContent = ctxStand.known
+    ? sp(`Wie viel vom Gespräch das lokale Modell auf einmal überblickt. Höchstens `
+         + `${ctxStand.cap_gb} GB Arbeitsspeicher.`,
+         `How much of the conversation the local model sees at once. At most `
+         + `${ctxStand.cap_gb} GB of memory.`)
+    : sp("Ollama nennt den Aufbau dieses Modells nicht – deshalb höchstens der Standard.",
+         "Ollama doesn't report this model's layout – so at most the default.");
+  zeile.hidden = false;
+}
+$("#ctx-regler").addEventListener("input", (e) => {
+  $("#ctx-wert").textContent = ctxText(Number(e.target.value));
+});
+$("#ctx-regler").addEventListener("change", async (e) => {
+  const regler = e.target, wert = Number(regler.value), vorher = ctxStand?.effective;
+  try {
+    const res = await api("/api/config", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ AQUATICY_CONTEXT_TOKENS: String(wert) }),
+    });
+    const daten = await res.json();
+    if (!daten.ok) throw new Error(daten.error || "");
+    if (ctxStand) ctxStand.effective = wert;
+    toast(sp("Kontextfenster: ", "Context window: ") + ctxText(wert));
+  } catch (fehler){
+    if (vorher) { regler.value = String(vorher); $("#ctx-wert").textContent = ctxText(vorher); }
+    toast(nutzerFehler(fehler.message, "Das ließ sich nicht speichern."));
+  }
 });
 
 async function chooseModel(model, feld){

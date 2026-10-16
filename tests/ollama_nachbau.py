@@ -19,6 +19,23 @@ FAEHIGKEITEN = {
     "qwen3:8b": ["completion", "tools", "thinking"],
 }
 
+#: Der Aufbau, wie ihn das echte Ollama unter "model_info" meldet (11.3.0 Luna):
+#: daraus rechnet Aquaticy, wie viel Speicher das Kontextfenster belegt.
+MODELLINFO = {
+    "qwen2.5-coder:14b": {"general.architecture": "qwen2", "qwen2.block_count": 48,
+                          "qwen2.attention.head_count": 40,
+                          "qwen2.attention.head_count_kv": 8,
+                          "qwen2.embedding_length": 5120, "qwen2.context_length": 32768},
+    "gemma3:4b": {"general.architecture": "gemma3", "gemma3.block_count": 34,
+                  "gemma3.attention.head_count": 8, "gemma3.attention.head_count_kv": 4,
+                  "gemma3.attention.key_length": 256, "gemma3.attention.value_length": 256,
+                  "gemma3.embedding_length": 2560, "gemma3.context_length": 131072},
+    "qwen3:8b": {"general.architecture": "qwen3", "qwen3.block_count": 36,
+                 "qwen3.attention.head_count": 32, "qwen3.attention.head_count_kv": 8,
+                 "qwen3.attention.key_length": 128, "qwen3.attention.value_length": 128,
+                 "qwen3.embedding_length": 4096, "qwen3.context_length": 40960},
+}
+
 
 class Ollama:
     """Startet den Nachbau auf einem freien Port; ``url``, ``anfragen``, ``stop()``."""
@@ -28,6 +45,8 @@ class Ollama:
         #: Groesseres num_ctx passt "nicht in den Speicher" (0 = alles passt).
         self.max_ctx = max_ctx
         self.anfragen: list[dict[str, Any]] = []
+        #: Was ``/api/tags`` als installiert meldet -- im Test aenderbar (11.3.0 Luna).
+        self.installiert: list[str] = list(FAEHIGKEITEN)
         #: Je Chat-Anfrage: angebotene Werkzeuge und Systemtext.
         self.details: list[dict[str, Any]] = []
         nachbau = self
@@ -45,7 +64,10 @@ class Ollama:
                 self.wfile.write(body)
 
             def do_GET(self) -> None:
-                if self.path in ("/api/ps", "/api/tags"):
+                if self.path == "/api/tags":
+                    self._json(200, {"models": [{"name": n, "size": 1}
+                                                for n in nachbau.installiert]})
+                elif self.path == "/api/ps":
                     self._json(200, {"models": [{"name": n, "size": 1} for n in FAEHIGKEITEN]})
                 else:
                     self._json(404, {"error": "not found"})
@@ -58,7 +80,8 @@ class Ollama:
                     if nachbau.alt or name not in FAEHIGKEITEN:
                         self._json(200 if nachbau.alt else 404, {"modelfile": ""})
                     else:
-                        self._json(200, {"capabilities": FAEHIGKEITEN[name]})
+                        self._json(200, {"capabilities": FAEHIGKEITEN[name],
+                                         "model_info": MODELLINFO.get(name, {})})
                     return
                 if self.path != "/api/chat":
                     self._json(200, {"done": True})

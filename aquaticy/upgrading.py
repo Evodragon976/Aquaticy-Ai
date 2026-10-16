@@ -360,9 +360,15 @@ def picker_entries(data_dir: Path, models: list[dict[str, Any]], ultra: bool,
     rest = [m for m in models
             if _model_key(_local(str(m.get("id", "")))) not in eigene
             and not _model_key(_local(str(m.get("id", "")))).startswith(PREFIX)]
+    # Nur Fassungen, die Ollama auch hat (11.3.0 Luna): eine geloeschte stand
+    # sonst weiter zur Wahl und scheiterte erst beim Anklicken.
+    da = {_model_key(_local(str(m.get("id", "")))) for m in models
+          if _local(str(m.get("id", "")))}
     neu: list[dict[str, Any]] = []
     for liste in alle.values():
         for wahl in liste:
+            if _model_key(wahl.model) not in da:
+                continue
             neu.append({"id": f"ollama_chat/{wahl.model}", "label": wahl.label,
                         "kind": "lokal", "note": wahl.note, "source": "operator",
                         "upgrade": wahl.kind})

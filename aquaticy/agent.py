@@ -2566,7 +2566,8 @@ class Agent:
 
         if provider_of(self.active_model) not in ("ollama", "ollama_chat"):
             return 0
-        jetzt = getattr(self, "_ctx_deckel", 0) or self.settings.context_tokens
+        jetzt = (getattr(self, "_ctx_deckel", 0)
+                 or self.settings.context_for(self._fenster_modell()))
         if jetzt <= MIN_LOCAL_CONTEXT:
             return 0
         self._ctx_deckel = max(MIN_LOCAL_CONTEXT, jetzt // 2)
@@ -3242,9 +3243,22 @@ class Agent:
         """
         return max(1000, min(self.settings.max_tool_chars, int(self._budget_chars() * TOOL_SHARE)))
 
+    def _fenster_modell(self) -> str:
+        """Fuer welches Modell das Kontextfenster gerechnet wird (11.3.0 Luna).
+
+        Das, das gerade antwortet. Ein halb gebauter Agent ohne Modus (ein
+        Werkzeug, das nur kuerzt) rechnet mit dem eingestellten -- Kuerzen
+        darf nie an einer fehlenden Angabe scheitern.
+        """
+        if not hasattr(self, "mode"):
+            return self.settings.model
+        return self.active_model
+
     def _budget_chars(self) -> int:
         """Wie viele Zeichen der Verlauf hoechstens belegen darf."""
-        window = self.settings.context_tokens
+        # Lokal hoechstens, was in 5 GB passt (11.3.0 Luna) -- sonst passte der
+        # Verlauf rechnerisch, und Ollama schnitte ihn doch vorn ab.
+        window = self.settings.context_for(self._fenster_modell())
         if window <= 0:
             window = 8192  # Annahme fuer Anbieter ohne eigene Angabe
         deckel = getattr(self, "_ctx_deckel", 0)

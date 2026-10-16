@@ -896,9 +896,10 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         # Der Fuss ist die letzte Zeile -- kommt man dort hin, kommt man
         # ueberall hin. Frueher scrollte nur die Modellliste, und alles
         # darunter war unerreichbar.
-        pg.locator("#picker-models .picker-foot").scroll_into_view_if_needed()
+        # Der Fuss des Menues selbst -- nicht der Hinweis in einer leeren Liste.
+        pg.locator("#picker-models > .picker-foot").scroll_into_view_if_needed()
         pg.wait_for_timeout(300)
-        kasten = pg.locator("#picker-models .picker-foot").bounding_box()
+        kasten = pg.locator("#picker-models > .picker-foot").bounding_box()
         log.pruefe(kasten is not None and kasten["y"] + kasten["height"] <= hoehen[3] + 1,
                    "und der Fuss ist erreichbar")
         log.pruefe(pg.is_visible("#btn-aufwand") and pg.is_visible("#btn-weitere"),

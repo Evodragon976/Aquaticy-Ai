@@ -251,10 +251,24 @@ def test_cloud_models_never_get_num_ctx(monkeypatch: pytest.MonkeyPatch) -> None
 def test_context_tokens_is_configurable(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("AQUATICY_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("AQUATICY_MODEL", "ollama_chat/gemma4:12b")
-    monkeypatch.setenv("AQUATICY_CONTEXT_TOKENS", "32768")
-    assert config.get_settings().llm_kwargs()["num_ctx"] == 32768
+    from aquaticy import local_model
+    from tests.ollama_nachbau import Ollama
+
+    monkeypatch.setattr(local_model, "_SHOW", {})
+    nachbau = Ollama()
+    try:
+        monkeypatch.setenv("AQUATICY_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("AQUATICY_MODEL", "ollama_chat/qwen3:8b")
+        monkeypatch.setenv("AQUATICY_API_BASE", nachbau.url)
+        monkeypatch.setenv("AQUATICY_CONTEXT_TOKENS", "32768")
+        assert config.get_settings().llm_kwargs()["num_ctx"] == 32768
+        # Seit 11.3.0 Luna hoechstens 5 GB: nennt Ollama den Aufbau des Modells
+        # nicht, gilt der Standard (16384) -- 32768 Tokens koennen 12 GB sein.
+        config.get_settings.cache_clear()
+        monkeypatch.setenv("AQUATICY_MODEL", "ollama_chat/gemma4:12b")
+        assert config.get_settings().llm_kwargs()["num_ctx"] == 16384
+    finally:
+        nachbau.stop()
 
 
 def test_context_tokens_zero_uses_the_ollama_default() -> None:

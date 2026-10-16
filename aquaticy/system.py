@@ -260,6 +260,74 @@ def model_origin(settings: Any, model_id: str, fallback: str = "operator") -> st
         return fallback
 
 
+#: Anbieter, bei denen LiteLLM die Zugangsdaten selbst aus der Umgebung liest --
+#: ohne einen Schluessel namens <ANBIETER>_API_KEY.
+_ZUGANG_AUS_UMGEBUNG: dict[str, tuple[str, ...]] = {
+    "bedrock": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"),
+    "sagemaker": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"),
+    "vertex_ai": ("GOOGLE_APPLICATION_CREDENTIALS", "VERTEXAI_PROJECT"),
+    "lm_studio": ("LM_STUDIO_API_BASE",),
+}
+
+
+def _ollama_liste(settings: Any, model_id: str) -> list[str]:
+    from aquaticy.local_model import DEFAULT_OLLAMA_URL, installed_models
+
+    basis_von = getattr(settings, "ollama_base", None)
+    try:
+        basis = (basis_von(model_id) if callable(basis_von)
+                 else getattr(settings, "api_base", "") or DEFAULT_OLLAMA_URL)
+        return installed_models(basis)
+    except Exception:
+        return []
+
+
+def model_usable(settings: Any, model_id: str, installed: list[str] | None = None) -> bool:
+    """Antwortet *model_id* gerade wirklich? (11.3.0 Luna)
+
+    Die Modellauswahl zeigt nur noch, was beim Anklicken auch laeuft: ein
+    lokales Modell, das in Ollama installiert ist, sonst eines mit Schluessel
+    (eigener, gestellter, allgemeiner, der eines verknuepften Kontos) oder mit
+    eingetragener Adresse (LM Studio, Proxy). Das voreingestellte Modell eines
+    frischen Servers zaehlt nicht von selbst -- bis dahin stand zum Beispiel
+    Mistral in der Liste, obwohl es keinen Mistral-Schluessel gab.
+
+    Args:
+        installed: die Liste von Ollama, wenn sie schon da ist. Sonst wird
+            jetzt gefragt -- ein eben installiertes Modell zaehlt sofort.
+    """
+    from aquaticy.config import SPLIT_MODEL_ID, provider_of
+    from aquaticy.local_model import is_installed, local_name
+
+    model_id = str(model_id or "").strip()
+    if not model_id or model_id == SPLIT_MODEL_ID:
+        # Den Server-Verbund zeigt web.py selbst -- nur, solange er laeuft.
+        return False
+    name = local_name(model_id)
+    if name:
+        return is_installed(name, _ollama_liste(settings, model_id) if installed is None
+                            else installed)
+    provider = provider_of(model_id)
+    if not provider:
+        return False
+    try:
+        verknuepft = getattr(settings, "is_linked", None)
+        if callable(verknuepft) and verknuepft(model_id):
+            return True
+        weg = getattr(settings, "route", None)
+        if callable(weg) and weg(model_id)[0]:
+            return True
+        if PROVIDER_KEYS.get(provider):
+            return bool(key_origin(settings, provider))
+        schluessel = getattr(settings, "key_for", None)
+        if callable(schluessel) and schluessel(model_id):
+            return True
+    except Exception:
+        return False
+    namen = _ZUGANG_AUS_UMGEBUNG.get(provider, (f"{provider.upper()}_API_KEY",))
+    return any(os.environ.get(n, "").strip() for n in namen)
+
+
 def _mit_herkunft(eintrag: dict[str, str], herkunft: str) -> dict[str, str]:
     eintrag["source"] = herkunft
     eintrag["source_label"] = SOURCE_LABELS.get(herkunft, "")
@@ -312,7 +380,9 @@ def strongest_models(
         ))
 
     wanted = str(getattr(settings, "code_model", "") or "").strip()
-    if wanted:
+    # Nur wenn es auch antwortet (11.3.0 Luna): ein eingetragenes Modell ohne
+    # Schluessel oder ein geloeschtes Ollama-Modell stand sonst ganz oben.
+    if wanted and model_usable(settings, wanted):
         dazu(wanted, PROVIDER_LABELS.get(provider_of(wanted), "eigenes"), "von dir eingetragen",
              model_origin(settings, wanted))
 
@@ -391,15 +461,27 @@ def available_models(settings: Any) -> list[dict[str, str]]:
     auf -- eine Auswahl, die beim Anklicken scheitert, hilft niemandem.
     """
     from aquaticy.config import provider_of
-    from aquaticy.local_model import DEFAULT_OLLAMA_URL, installed_models, known_model
+    from aquaticy.local_model import (
+        DEFAULT_OLLAMA_URL,
+        installed_models,
+        is_installed,
+        known_model,
+        local_name,
+    )
 
     found: list[dict[str, str]] = []
+    current = getattr(settings, "model", "")
     base = getattr(settings, "api_base", "") or DEFAULT_OLLAMA_URL
-    for name in installed_models(base):
+    # Jedes Mal live gefragt: was eben mit `ollama pull` dazukam, steht sofort da.
+    lokal = installed_models(base)
+    for name in lokal:
         model = known_model(name)
+        # `gemma3` eingestellt, `gemma3:latest` installiert: dasselbe Modell --
+        # dann gilt die eingestellte Kennung, sonst waere nichts ausgewaehlt.
+        gleich = local_name(current) and is_installed(local_name(current), [name])
         found.append(_mit_herkunft(
             {
-                "id": f"ollama_chat/{name}",
+                "id": current if gleich else f"ollama_chat/{name}",
                 "label": name,
                 "kind": "lokal",
                 "note": model.note if model else "Läuft auf deinem Rechner",
@@ -407,7 +489,6 @@ def available_models(settings: Any) -> list[dict[str, str]]:
             "operator",
         ))
 
-    current = getattr(settings, "model", "")
     # Eigene Schluessel zuerst (seit 9.5.14 Seashell): diese Modelle sieht nur
     # dieses Konto -- gestellte sieht jedes.
     anbieter = sorted(
@@ -449,8 +530,11 @@ def available_models(settings: Any) -> list[dict[str, str]]:
             ))
 
     # Das laufende Modell gehoert in die Liste, auch wenn es sonst nirgends
-    # auftaucht -- sonst steht die Auswahl auf nichts.
-    if current and not any(item["id"] == current for item in found):
+    # auftaucht -- sonst steht die Auswahl auf nichts. Aber nur, wenn es auch
+    # antwortet (11.3.0 Luna): das voreingestellte Mistral ohne Schluessel
+    # oder ein geloeschtes Ollama-Modell gehoeren nicht zur Wahl.
+    if (current and not any(item["id"] == current for item in found)
+            and model_usable(settings, current, lokal)):
         provider = provider_of(current)
         herkunft = model_origin(settings, current)
         found.insert(

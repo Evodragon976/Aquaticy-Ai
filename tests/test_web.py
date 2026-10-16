@@ -1668,10 +1668,15 @@ def test_the_model_list_offers_what_actually_works(
     models = json.loads(body)["models"]
     ids = [item["id"] for item in models]
     assert "ollama_chat/gemma4:12b" in ids
-    assert "mistral/mistral-large-latest" in ids
     # Ohne Schluessel keine Zeile -- sonst waehlt man etwas, das nicht laeuft.
+    # Seit 11.3.0 Luna gilt das auch fuer das eingestellte Modell: das
+    # voreingestellte Mistral ohne Mistral-Schluessel steht nicht mehr da.
+    assert "mistral/mistral-large-latest" not in ids
     assert not any(item["id"].startswith("anthropic/") for item in models)
     assert all(item["note"] for item in models), "jede Zeile braucht eine Erklaerung"
+    session._settings.api_keys["MISTRAL_API_KEY"] = "m-test"
+    _, body = client("GET", "/api/models")
+    assert "mistral/mistral-large-latest" in [m["id"] for m in json.loads(body)["models"]]
 
 
 def test_every_model_says_where_it_runs(

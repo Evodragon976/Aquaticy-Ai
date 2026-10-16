@@ -674,6 +674,37 @@ _INT_SETTINGS = {
 
 #: So gross darf das Kontextfenster lokaler Modelle bei normalen Konten sein.
 NORMAL_CONTEXT_CAP = 32_768
+#: Wie ein Modellname aussehen darf, nach dem die Oberflaeche fragt.
+_MODELL_RE = re.compile(r"^[A-Za-z0-9_.:/@+-]{1,200}$")
+
+
+def context_view(settings: Settings, model: str, account_cap: int = 0) -> dict[str, Any]:
+    """Der Regler fuer das Kontextfenster unter der Modellauswahl (11.3.0 Luna).
+
+    Nur lokale Modelle: ihr Fenster liegt im Arbeitsspeicher dieses Rechners und
+    darf hoechstens 5 GB belegen (aquaticy/local_model.py: context_limit).
+    Wolkenmodelle halten ihr Fenster beim Anbieter -- dort gibt es nichts zu stellen.
+    """
+    from aquaticy import local_model as lm
+    from aquaticy.config import provider_of
+
+    jetzt = int(settings.context_tokens or 0)
+    name = lm.local_name(model) if provider_of(model) in ("ollama", "ollama_chat") else ""
+    if not name:
+        return {"local": False, "model": model, "tokens": jetzt}
+    basis = settings.ollama_base(model)
+    je_token = lm.kv_bytes_per_token(name, basis)
+    grenze = lm.context_limit(name, basis)
+    if account_cap:
+        grenze = min(grenze, account_cap)
+    grenze = max(lm.CONTEXT_MIN, grenze)
+    wirksam = max(lm.CONTEXT_MIN, min(jetzt, grenze)) if jetzt > 0 else grenze
+    return {
+        "local": True, "model": model, "tokens": jetzt, "effective": wirksam,
+        "min": lm.CONTEXT_MIN, "max": grenze, "known": bool(je_token),
+        "per_token": je_token, "ram_gb": round(wirksam * je_token / 1024 ** 3, 2),
+        "cap_gb": round(lm.CONTEXT_RAM_BYTES / 1024 ** 3),
+    }
 
 
 def header_for(settings: Settings) -> dict[str, Any]:
@@ -688,6 +719,17 @@ def header_for(settings: Settings) -> dict[str, Any]:
     )
     if kopf.get("model") == SPLIT_MODEL_ID and SHARDING is not None:
         kopf["model_label"] = SHARDING.label()
+    else:
+        from aquaticy.local_model import local_name
+        from aquaticy.system import model_usable
+
+        modell = str(kopf.get("model") or "")
+        # Ein Wolkenmodell ohne Schluessel antwortet nicht (11.3.0 Luna) -- dann
+        # steht oben nicht das voreingestellte Mistral, sondern "Modell wählen".
+        # Lokale Modelle prueft die Auswahl beim Oeffnen; hier kein Netz.
+        if modell and not local_name(modell) and not model_usable(settings, modell):
+            auto = str(kopf.get("model_label") or "").startswith("Auto · ")
+            kopf["model_label"] = ("Auto · " if auto else "") + "Modell wählen"
     if UPGRADE_DIR is not None:
         # Auto-Upgrading: "gemma3:4b 1.1" statt "aquaticy-gemma3-4b:1.1".
         from aquaticy import upgrading
@@ -4864,6 +4906,15 @@ class Handler(BaseHTTPRequestHandler):
             from aquaticy import addons
 
             self._json(addons.public_view(SESSION.settings(), SESSION.ultra))
+        elif route == "/api/context":
+            # Der Regler unter der Modellauswahl (11.3.0 Luna).
+            einstellungen = SESSION.settings()
+            gewuenscht = (parse_qs(urlsplit(self.path).query).get("model") or [""])[0].strip()
+            modell = gewuenscht if _MODELL_RE.match(gewuenscht) else einstellungen.model
+            konto = self._account()
+            obergrenze = (max(int(get_settings().context_tokens or 0), NORMAL_CONTEXT_CAP)
+                          if konto is not None and not SESSION.ultra else 0)
+            self._json(context_view(einstellungen, modell, obergrenze))
         elif route == "/api/vm":
             # Fuer den Schalter unter "Code wirklich ausprobieren" (11.2.2 Sol): ob
             # die virtual machine Internet hat, ob das Konto es aendern darf und ob
@@ -5500,6 +5551,10 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 }
             return {"ok": True, "url": found[0], "found": found}
 
+        from aquaticy.storage import normalize_url
+
+        if not normalize_url(url):
+            return {"ok": False, "error": "Die Adresse ist ungültig."}
         # Getestet wird immer lesend -- ein Verbindungstest soll nichts anlegen.
         client = Storage(url, access="read")
         try:
@@ -5729,6 +5784,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             )}
         if not url or not token:
             return {"ok": False, "error": "Bitte trag die Adresse und den Zugangsschlüssel ein."}
+        if not normalize_url(url):
+            return {"ok": False, "error": "Die Adresse ist ungültig."}
         client = HomeAssistant(url, token)
         try:
             hello = client.ping()
@@ -6538,6 +6595,27 @@ def free_port(host: str, port: int) -> int:
     return port
 
 
+#: Abbrueche durch die Gegenseite: ein Handy schlaeft ein, das WLAN wechselt,
+#: Tailscale baut neu auf. Kein Fehler von Aquaticy -- nichts fuers Terminal.
+VERBINDUNG_WEG = (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError)
+
+
+class AquaticyServer(ThreadingHTTPServer):
+    """Der Webserver -- ohne Ablaufverfolgung im Terminal fuer jede abgerissene Leitung.
+
+    Die Standardbibliothek druckte bei jedem "Connection reset by peer" einen
+    ganzen Traceback (gemeldet mit Python 3.14, ueber Tailscale). Jetzt bleibt
+    ein Abbruch durch die Gegenseite still, alles andere steht als eine Zeile da.
+    """
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        fehler = sys.exc_info()[1]
+        if isinstance(fehler, VERBINDUNG_WEG):
+            return
+        wer = client_address[0] if client_address else "?"
+        print(f"  [Verbindung] {wer}: {type(fehler).__name__}", flush=True)
+
+
 def bind_server(host: str, port: int) -> ThreadingHTTPServer:
     """Der Webserver auf dem eingestellten Port -- oder dem naechsten freien (9.6.8 Sol).
 
@@ -6547,7 +6625,7 @@ def bind_server(host: str, port: int) -> ThreadingHTTPServer:
     letzter: OSError | None = None
     for kandidat in port_candidates(port):
         try:
-            return ThreadingHTTPServer((host, kandidat), Handler)
+            return AquaticyServer((host, kandidat), Handler)
         except OSError as exc:
             if exc.errno not in _PORT_BELEGT:
                 raise
@@ -6600,7 +6678,7 @@ class PublicHandler(Handler):
         self._json({"error": "unbekannter Pfad"}, 404)
 
 
-class _TLSServer(ThreadingHTTPServer):
+class _TLSServer(AquaticyServer):
     """HTTPS fuer den Tunnel-Eingang.
 
     Der TLS-Handschlag laeuft im Faden der Verbindung, nicht in der Schleife,

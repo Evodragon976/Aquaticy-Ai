@@ -63,13 +63,18 @@ def normalize_url(url: str) -> str:
         return ""
     if "://" not in url:
         url = f"http://{url}"
-    parsed = urlparse(url)
     # Seit 9.5.34: der Port gehoert an den Rechnernamen, nicht hinter den Pfad
     # ("nas.local/ha" -> "nas.local:{port}/ha"); ein ungueltiger Port
-    # ("ha.local:abc") ergibt "" statt eines Absturzes.
+    # ("ha.local:abc") ergibt "" statt eines Absturzes. Seit 11.3.0 ebenso eine
+    # unlesbare Adresse ("[1, 2]", Steuerzeichen) -- sonst stuerzte der Test ab.
+    if any(ord(zeichen) < 33 or ord(zeichen) == 127 for zeichen in url):
+        return ""
     try:
+        parsed = urlparse(url)
         port = parsed.port
     except ValueError:
+        return ""
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return ""
     if port is None and parsed.scheme == "http" and parsed.hostname:
         url = parsed._replace(netloc=f"{parsed.netloc}:{STORAGE_PORT}").geturl()
@@ -127,6 +132,8 @@ class Storage:
             response = self._http.request(method, f"{self.url}{path}", **kwargs)
         except httpx.HTTPError as exc:
             raise StorageError(f"Lagerverwaltung nicht erreichbar: {exc}") from exc
+        except (httpx.InvalidURL, ValueError, UnicodeError) as exc:
+            raise StorageError("Die Adresse der Lagerverwaltung ist ungültig.") from exc
         if response.status_code >= 400:
             raise StorageError(_explain(response))
         try:
