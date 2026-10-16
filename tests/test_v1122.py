@@ -485,8 +485,9 @@ def test_vm_on_without_docker_says_so(monkeypatch, settings, toolbox) -> None:
     aufruf = llm.calls[0]
     assert not any(t["function"]["name"].startswith("vm_") for t in aufruf.get("tools") or [])
     system = aufruf["messages"][0]["content"]
-    assert "Podman oder Docker fehlt" in system
-    assert any(n == "note" and "Podman oder Docker" in p["text"] for n, p in ereignisse)
+    assert "Podman oder Docker fehlt" in system and "aquaticy install-vm" in system
+    assert any(n == "note" and "Podman oder Docker" in p["text"]
+               and "aquaticy install-vm" in p["text"] for n, p in ereignisse)
     assert len(llm.calls) == 1  # kein Anstoss zu etwas, das nicht geht
 
 
@@ -577,7 +578,7 @@ def test_vm_switch_text_no_longer_promises_internet() -> None:
     # Jeder sichtbare Satz hat seine englische Fassung.
     for satz in ("Internet für die virtual machine",
                  "Auf diesem Rechner fehlt Podman oder Docker – die virtual machine kann "
-                 "nicht starten."):
+                 "nicht starten. Einrichten: im Terminal aquaticy install-vm."):
         assert f'"{satz}":' in html, satz
 
 
@@ -962,3 +963,220 @@ def test_asked_for_json_the_json_is_the_answer(monkeypatch, settings, toolbox) -
     ergebnis = Agent(settings, cache=None, toolbox=toolbox).ask(
         "Wie sieht ein web_search-Aufruf als JSON aus?", stream=False)
     assert ergebnis.searches == [] and "web_search" in ergebnis.answer
+
+
+# --- 11.2.2 Sol: Podman wird mit eingerichtet ---------------------------------
+
+from pathlib import Path  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+from aquaticy import cli as cli_mod  # noqa: E402
+from aquaticy import vm_install  # noqa: E402
+
+
+def _system(monkeypatch, name: str, da: set[str], root: bool = False) -> None:
+    monkeypatch.setattr(vm_install.platform, "system", lambda: name)
+    monkeypatch.setattr(vm_install.shutil, "which",
+                        lambda b: f"/usr/bin/{b}" if b in da else None)
+    monkeypatch.setattr(vm_install, "_root", lambda: root)
+
+
+def test_install_steps_per_system(monkeypatch) -> None:
+    _system(monkeypatch, "Linux", {"apt-get", "sudo"})
+    assert vm_install.install_steps() == [
+        ["sudo", "apt-get", "update"], ["sudo", "apt-get", "install", "-y", "podman", "uidmap"]]
+    _system(monkeypatch, "Linux", {"dnf"}, root=True)
+    assert vm_install.install_steps() == [["dnf", "install", "-y", "podman"]]
+    _system(monkeypatch, "Linux", {"pacman"})          # kein sudo, kein root
+    assert vm_install.install_steps() is None
+    _system(monkeypatch, "Darwin", {"brew"})
+    assert vm_install.install_steps()[0] == ["brew", "install", "podman"]
+    assert vm_install.install_steps()[-1] == ["podman", "machine", "start"]
+    _system(monkeypatch, "Windows", {"winget"})
+    assert vm_install.install_steps()[0][:4] == ["winget", "install", "--id", "RedHat.Podman"]
+    _system(monkeypatch, "Darwin", set())
+    assert vm_install.install_steps() is None and "podman.io" in vm_install.install_hint()
+
+
+def test_run_steps_stops_at_a_failure_and_forgets_the_old_state(monkeypatch) -> None:
+    gelaufen: list[list[str]] = []
+
+    def run(befehl, **kw):
+        gelaufen.append(befehl)
+        # "machine init" gibt es schon -> Fehlercode, zaehlt trotzdem.
+        code = 1 if befehl[-1] in ("init", "kaputt") else 0
+        return SimpleNamespace(returncode=code)
+
+    sandbox_mod._LAUFZEIT.update(bekannt=True, wert=None, bis=10 ** 12)
+    ok = vm_install.run_steps([["brew", "install", "podman"], ["podman", "machine", "init"],
+                               ["podman", "machine", "start"]], run=run)
+    assert ok and len(gelaufen) == 3
+    assert sandbox_mod._LAUFZEIT["bekannt"] is False
+    gelaufen.clear()
+    assert not vm_install.run_steps([["sudo", "apt-get", "kaputt"], ["sudo", "x"]], run=run)
+    assert gelaufen == [["sudo", "apt-get", "kaputt"]]
+
+
+def _fake_vm(monkeypatch, nachher=_DOCKER):
+    stand = {"installiert": False, "schritte": []}
+    monkeypatch.setattr(sandbox_mod, "find_runtime",
+                        lambda: nachher if stand["installiert"] else None)
+    monkeypatch.setattr(vm_install, "podman_installed", lambda: False)
+    monkeypatch.setattr(vm_install, "install_steps",
+                        lambda: [["sudo", "apt-get", "install", "-y", "podman"]])
+
+    def run_steps(schritte, on_step=None, run=None):
+        stand["schritte"] += schritte
+        stand["installiert"] = True
+        return True
+
+    monkeypatch.setattr(vm_install, "run_steps", run_steps)
+    return stand
+
+
+def test_install_vm_command(monkeypatch, tmp_path) -> None:
+    from typer.testing import CliRunner
+
+    monkeypatch.setenv("AQUATICY_DATA_DIR", str(tmp_path))
+    stand = _fake_vm(monkeypatch)
+    ergebnis = CliRunner().invoke(cli_mod.app, ["install-vm"], input="n\n")
+    assert ergebnis.exit_code == 1 and stand["schritte"] == []
+    assert "sudo apt-get install -y podman" in ergebnis.output    # vorher gezeigt
+    ergebnis = CliRunner().invoke(cli_mod.app, ["install-vm", "--yes"])
+    assert ergebnis.exit_code == 0, ergebnis.output
+    assert stand["schritte"] == [["sudo", "apt-get", "install", "-y", "podman"]]
+    assert "virtual machine bereit" in ergebnis.output
+
+
+def test_web_start_offers_podman_once(monkeypatch, tmp_path, settings, capsys) -> None:
+    stand = _fake_vm(monkeypatch)
+    # Ohne Terminal (als Dienst): nur der Befehl, nichts wird ausgefuehrt.
+    monkeypatch.setattr(cli_mod.sys.stdin, "isatty", lambda: False, raising=False)
+    cli_mod._vm_beim_start(settings)
+    assert stand["schritte"] == []
+    # Mit Terminal: einmal fragen; ein Nein wird gemerkt.
+    monkeypatch.setattr(cli_mod.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True, raising=False)
+    fragen: list[str] = []
+    monkeypatch.setattr(cli_mod.typer, "confirm", lambda *a, **k: fragen.append(a[0]) or False)
+    cli_mod._vm_beim_start(settings)
+    cli_mod._vm_beim_start(settings)
+    assert len(fragen) == 1 and stand["schritte"] == []
+    assert (Path(settings.data_dir) / cli_mod.VM_INSTALL_NEIN).exists()
+    # install-vm vergisst das Nein wieder.
+    (Path(settings.data_dir) / cli_mod.VM_INSTALL_NEIN).unlink()
+    monkeypatch.setattr(cli_mod.typer, "confirm", lambda *a, **k: True)
+    cli_mod._vm_beim_start(settings)
+    assert stand["schritte"] and stand["installiert"]
+    assert "aquaticy install-vm" in capsys.readouterr().out
+
+
+def test_a_failed_install_asks_again_next_time(monkeypatch, settings) -> None:
+    _fake_vm(monkeypatch, nachher=None)          # installiert, laeuft aber nicht
+    monkeypatch.setattr(cli_mod.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(cli_mod.typer, "confirm", lambda *a, **k: True)
+    cli_mod._vm_beim_start(settings)
+    assert not (Path(settings.data_dir) / cli_mod.VM_INSTALL_NEIN).exists()
+
+
+def test_a_stopped_podman_machine_is_started(monkeypatch) -> None:
+    _system(monkeypatch, "Darwin", {"podman"})
+    laeuft = {"an": False}
+    monkeypatch.setattr(sandbox_mod, "find_runtime",
+                        lambda: _DOCKER if laeuft["an"] else None)
+    befehle: list[list[str]] = []
+
+    def run(befehl, **kw):
+        befehle.append(befehl)
+        laeuft["an"] = befehl[-1] == "start"
+        return SimpleNamespace(returncode=0)
+
+    assert vm_install.start_machine(run=run)
+    assert befehle[-1] == ["podman", "machine", "start"]
+    _system(monkeypatch, "Linux", {"podman"})
+    assert not vm_install.start_machine(run=run)    # unter Linux gibt es keine Maschine
+
+
+def test_the_browser_can_never_install_anything() -> None:
+    # Verwalterrechte entscheidet der Mensch am Terminal, kein Konto im Chat.
+    import inspect
+
+    assert "vm_install" not in inspect.getsource(web)
+    assert "install_steps" not in _ui() and "install-vm" in _ui()
+
+
+# --- 11.2.2 Sol: mit echtem Podman gefunden ------------------------------------
+
+from tests.test_sandbox import FakeRun  # noqa: E402
+
+
+def test_podman_is_asked_for_its_own_version_field(monkeypatch) -> None:
+    # Podman kennt kein ".ServerVersion" -- ein laufendes Podman galt so als "fehlt".
+    aufrufe: list[list[str]] = []
+    monkeypatch.setattr(sandbox_mod, "_runs", lambda *a, **k: aufrufe.append(list(a))
+                        or SimpleNamespace(returncode=0, stdout="false\n"))
+    assert sandbox_mod._works("podman") and sandbox_mod._works("docker")
+    assert aufrufe[0][-1] == "{{.Version.Version}}" and aufrufe[1][-1] == "{{.ServerVersion}}"
+    assert sandbox_mod._has_gvisor("podman") is False
+
+
+def test_podman_as_root_does_not_claim_to_be_rootless(monkeypatch) -> None:
+    monkeypatch.setattr(sandbox_mod.shutil, "which",
+                        lambda b: "/usr/bin/podman" if b == "podman" else None)
+    monkeypatch.setattr(sandbox_mod, "_works", lambda b: True)
+    for antwort, art, etikett in (("true", "podman", "Podman (ohne Wurzelrechte)"),
+                                  ("false", "podman-root", "Podman (gehaertet)")):
+        monkeypatch.setattr(sandbox_mod, "_runs", lambda *a, _x=antwort, **k:
+                            SimpleNamespace(returncode=0, stdout=_x + "\n"))
+        laufzeit = sandbox_mod.find_runtime()
+        assert (laufzeit.kind, laufzeit.label) == (art, etikett)
+        assert laufzeit.strength
+    assert "Wurzelrechten" in sandbox_mod.Runtime("podman", "podman-root", "x").strength
+
+
+def test_the_podman_quota_message_falls_back_to_no_quota() -> None:
+    assert sandbox_mod.quota_unsupported_message(
+        'level=error msg="[graphdriver] prior storage driver overlay failed: storage option '
+        'overlay.size and overlay.inodes only supported for backingFS XFS. Found extfs"')
+    assert sandbox_mod.quota_unsupported_message(
+        "--storage-opt is supported only for overlay over xfs with 'pquota' mount option")
+    assert not sandbox_mod.quota_unsupported_message("Error: image not known")
+
+
+def _startzeile(monkeypatch, binary: str) -> list[str]:
+    fake = FakeRun({"inspect": (0, "true\n", "")})
+    monkeypatch.setattr(sandbox_mod.subprocess, "run", fake)
+    monkeypatch.setattr(sandbox_mod, "_runs_capped",
+                        lambda b, *a, **k: fake([b, *a], **k))
+    kasten = sandbox_mod.Sandbox(image="python:3.12-slim")
+    kasten.runtime = sandbox_mod.Runtime(binary, binary, binary)
+    kasten.ensure()
+    return fake.zeile("--detach")
+
+
+def test_podman_mounts_work_without_nocopy_and_no_host_proxy_gets_in(monkeypatch) -> None:
+    podman = _startzeile(monkeypatch, "podman")
+    docker = _startzeile(monkeypatch, "docker")
+    # runc lehnte "nocopy" unter Podman als "invalid mount" ab.
+    assert not any(":nocopy" in teil for teil in podman)
+    assert any(teil.endswith(f":{sandbox_mod.WORKDIR}:nocopy") for teil in docker)
+    # Proxys samt Zugangsdaten bleiben draussen -- bei beiden Laufzeiten.
+    for zeile in (podman, docker):
+        for name in ("HTTPS_PROXY", "http_proxy", "ALL_PROXY", "no_proxy"):
+            assert f"{name}=" in zeile, name
+    assert "--http-proxy=false" in podman and "--http-proxy=false" not in docker
+    # Die Wand bleibt dieselbe.
+    for zeile in (podman, docker):
+        assert zeile[zeile.index("--network") + 1] == "none" and "--read-only" in zeile
+
+
+def test_vm_write_takes_content_and_refuses_an_empty_call(toolbox) -> None:
+    geschrieben: list[tuple[str, str]] = []
+    toolbox.vm_write = lambda path, text: geschrieben.append((path, text)) or {"ok": True}
+    ausfuehren = toolbox._call
+    ausfuehren("vm_write", {"path": "a.py", "content": "print(1)"})
+    ausfuehren("vm_write", {"path": "b.py", "text": "print(2)"})
+    leer = ausfuehren("vm_write", {"path": "c.py"})
+    assert geschrieben == [("a.py", "print(1)"), ("b.py", "print(2)")]
+    assert "text" in json.dumps(leer, ensure_ascii=False)

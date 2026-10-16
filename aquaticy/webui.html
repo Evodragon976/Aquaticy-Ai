@@ -3016,7 +3016,7 @@ async function zeigeVmNetz(){
   status.hidden = vmStand.runtime !== false;
   status.className = "note vm-status bad";
   status.textContent = "Auf diesem Rechner fehlt Podman oder Docker – die virtual machine "
-    + "kann nicht starten.";
+    + "kann nicht starten. Einrichten: im Terminal aquaticy install-vm.";
 }
 $("#werkstatt-netz").addEventListener("click", async (e) => {
   const schalter = e.currentTarget;
@@ -5245,7 +5245,7 @@ const EN = {
 "Aquaticy bekommt einen eigenen, abgeschotteten Rechner und lässt den Code dort laufen, statt nur zu raten, ob er funktioniert. Er sieht dein lokales Netz nicht und wird 20 Minuten nach deiner letzten Nachricht gelöscht.": "Aquaticy gets its own isolated computer and runs the code there instead of just guessing whether it works. It can't see your local network and is deleted 20 minutes after your last message.",
 "Internet für die virtual machine": "Internet for the virtual machine",
 "Für pip install oder Downloads. Dein Heimnetz bleibt gesperrt. Eine laufende virtual machine startet dafür neu.": "For pip install or downloads. Your home network stays blocked. A running virtual machine restarts for this.",
-"Auf diesem Rechner fehlt Podman oder Docker – die virtual machine kann nicht starten.": "Podman or Docker is missing on this computer – the virtual machine can't start.",
+"Auf diesem Rechner fehlt Podman oder Docker – die virtual machine kann nicht starten. Einrichten: im Terminal aquaticy install-vm.": "Podman or Docker is missing on this computer – the virtual machine can't start. Set it up with aquaticy install-vm in the terminal.",
 "Die virtual machine hat jetzt Internet.": "The virtual machine now has internet.",
 "Die virtual machine hat jetzt kein Internet mehr.": "The virtual machine no longer has internet.",
 "Im Web suchen": "Search the web",

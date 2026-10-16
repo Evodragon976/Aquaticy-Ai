@@ -188,7 +188,7 @@ class Runtime:
     """Womit die virtual machine betrieben wird."""
 
     binary: str
-    #: "gvisor", "podman" oder "docker" -- absteigend nach Staerke.
+    #: "gvisor", "podman", "podman-root" oder "docker" -- absteigend nach Staerke.
     kind: str
     label: str
     #: Zusaetzliche Argumente fuer `run`, etwa die gVisor-Laufzeit.
@@ -205,6 +205,11 @@ class Runtime:
             "podman": (
                 "Podman ohne Wurzelrechte: ein Ausbruch landet in einem "
                 "unprivilegierten Nutzernamensraum, nicht bei root."
+            ),
+            "podman-root": (
+                "Podman mit Wurzelrechten und gehaertetem Profil: kein Netz, keine "
+                "Faehigkeiten, unveraenderliches Wurzeldateisystem. Der Kernel ist "
+                "geteilt -- ohne Wurzelrechte oder mit gVisor waere der Abstand groesser."
             ),
             "docker": (
                 "Docker mit gehaertetem Profil: kein Netz, keine Faehigkeiten, "
@@ -283,19 +288,57 @@ def _runs_capped(
 def _works(binary: str) -> bool:
     """Antwortet die Laufzeit ueberhaupt? Ein installierter Client ohne
     laufenden Dienst ist so gut wie keiner."""
+    # Jede mit ihrem eigenen Feld (11.2.2 Sol): Podman kennt kein ".ServerVersion"
+    # und brach damit immer ab -- ein laufendes Podman galt so als "fehlt".
+    feld = "{{.Version.Version}}" if Path(binary).name.startswith("podman") \
+        else "{{.ServerVersion}}"
     try:
-        return _runs(binary, "info", "--format", "{{.ServerVersion}}").returncode == 0
+        return _runs(binary, "info", "--format", feld).returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
 
 
 def _has_gvisor(binary: str) -> bool:
-    """Kennt diese Laufzeit `runsc`?"""
+    """Kennt diese Laufzeit `runsc`? Nur Docker meldet das ueber `info`.
+
+    Podman fuehrt keine Liste der Laufzeiten; wie bisher laeuft es dann ohne
+    gVisor als Podman ohne Wurzelrechte.
+    """
+    if Path(binary).name.startswith("podman"):
+        return False
     try:
         found = _runs(binary, "info", "--format", "{{.Runtimes}}")
     except (OSError, subprocess.SubprocessError):
         return False
     return found.returncode == 0 and "runsc" in found.stdout
+
+
+#: Was Laufzeiten sonst vom Rechner in den Behaelter reichen (beide Schreibweisen).
+PROXY_VARS = tuple(n for name in ("HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "ALL_PROXY",
+                                   "NO_PROXY") for n in (name, name.lower()))
+
+
+def quota_unsupported_message(stderr: str) -> bool:
+    """Sagt die Laufzeit, dass sie keine Plattengrenze je Behaelter kann?
+
+    Docker: "--storage-opt is supported only for overlay over xfs ...". Podman
+    (11.2.2 Sol): "storage option overlay.size and overlay.inodes only supported
+    for backingFS XFS" -- bis dahin nicht erkannt, und auf ext4 (dem Standard der
+    meisten Linux-Rechner) startete die virtual machine mit Podman nie.
+    """
+    text = str(stderr or "").lower()
+    return any(zeichen in text for zeichen in (
+        "storage-opt", "storage option", "overlay.size", "backingfs",
+        "filesystem does not support, or has not enabled quotas"))
+
+
+def _podman_rootless() -> bool:
+    """Laeuft Podman ohne Wurzelrechte? Im Zweifel nein -- dann steht nichts Falsches da."""
+    try:
+        found = _runs("podman", "info", "--format", "{{.Host.Security.Rootless}}")
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return found.returncode == 0 and found.stdout.strip().lower() == "true"
 
 
 def find_runtime() -> Runtime | None:
@@ -313,7 +356,10 @@ def find_runtime() -> Runtime | None:
         if _has_gvisor(binary):
             return Runtime(binary, "gvisor", f"{binary} + gVisor", ("--runtime", "runsc"))
     if "podman" in da:
-        return Runtime("podman", "podman", "Podman (ohne Wurzelrechte)")
+        # Als root laeuft Podman mit Wurzelrechten -- dann nicht "ohne" draufschreiben.
+        if _podman_rootless():
+            return Runtime("podman", "podman", "Podman (ohne Wurzelrechte)")
+        return Runtime("podman", "podman-root", "Podman (gehaertet)")
     if "docker" in da:
         return Runtime("docker", "docker", "Docker (gehaertet)")
     return None
@@ -708,6 +754,7 @@ class Sandbox:
         # Ohne Sperre (lokales Netz, nur Ultra) braucht es auch NET_ADMIN nicht.
         faehigkeiten = ["--cap-drop", "ALL",
                         *(("--cap-add", "NET_ADMIN") if offen and not self.lan else ())]
+        kein_kopieren = "" if Path(runtime.binary).name.startswith("podman") else ":nocopy"
         prozesse = DESKTOP_PID_LIMIT if desktop else PID_LIMIT
         dateien = DESKTOP_FILE_LIMIT if desktop else FILE_LIMIT
         flags = [
@@ -733,11 +780,14 @@ class Sandbox:
             # beim ersten Einhaengen in den noch leeren Datentraeger. Das
             # machte das chown aus _create_volume zunichte, und die virtual machine
             # konnte in /work nichts schreiben (bis 9.5.12).
-            "-v", f"{self._volume}:{WORKDIR}:nocopy",
+            # Podman (11.2.2 Sol) reicht `nocopy` an runc durch, und runc lehnt es
+            # als "invalid mount" ab -- die virtual machine startete mit Podman nie.
+            # Podman braucht es auch nicht: ohne laesst es /work beschreibbar.
+            "-v", f"{self._volume}:{WORKDIR}{kein_kopieren}",
             *(
                 flag
                 for volume, ziel in sorted(self.addon_mounts.items())
-                for flag in ("-v", f"{volume}:{ziel}:nocopy")
+                for flag in ("-v", f"{volume}:{ziel}{kein_kopieren}")
             ),
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
             # Nicht jede Laufzeit kennt diese Quote (sie braucht xfs mit
@@ -750,6 +800,12 @@ class Sandbox:
             "--env", "PATH=/usr/local/bin:/usr/bin:/bin",
             "--env", "LANG=C.UTF-8",
             "--env", "PYTHONDONTWRITEBYTECODE=1",
+            # Proxys des Rechners bleiben draussen (11.2.2 Sol): Podman reicht
+            # HTTP(S)_PROXY von sich aus hinein, Docker die aus ~/.docker/config.json
+            # -- samt Zugangsdaten, falls sie in der Adresse stehen. Leer gesetzt
+            # gilt bei beiden, was hier steht.
+            *(flag for name in PROXY_VARS for flag in ("--env", f"{name}=")),
+            *(("--http-proxy=false",) if kein_kopieren == "" else ()),
             "--label", "aquaticy-werkstatt=1",
             "--label", instance_label(),
         ]
@@ -794,10 +850,7 @@ class Sandbox:
             *self._command(),
         ]
         started = _runs(runtime.binary, *args, timeout=300)
-        quota_unsupported = (
-            "storage-opt" in started.stderr
-            or "filesystem does not support, or has not enabled quotas" in started.stderr.lower()
-        )
+        quota_unsupported = quota_unsupported_message(started.stderr)
         if started.returncode != 0 and quota_unsupported:
             # Die Laufzeit kann keine Quote -- dann eben ohne, und der Platz
             # wird nach jedem Befehl nachgemessen.

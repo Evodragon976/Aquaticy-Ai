@@ -297,6 +297,7 @@ aquaticy export html -n 3       # letzte 3 Recherchen exportieren
 aquaticy notes                  # Merkzettel (--delete N löscht)
 aquaticy cache                  # Zwischenspeicher (--clear leert ihn)
 aquaticy install-model          # lokales Modell einrichten
+aquaticy install-vm             # Podman für die virtual machine einrichten
 aquaticy install-browser        # echter Browser für schwierige Seiten
 aquaticy google                 # Gmail und Kalender verbinden (--aendern: auch schreiben)
 aquaticy connect-ha             # Home Assistant verbinden
@@ -555,8 +556,12 @@ Die **virtual machine** ist ein abgeschotteter Rechner. Darin führt Aquaticy Co
   trotzdem. **Ultra** schaltet das Internet selbst frei. Heimnetz, Router und der eigene Rechner
   bleiben dann gesperrt – außer Ultra wählt **Auch ins lokale Netz**. Das Modell kann beides nicht
   umschalten.
-- Ist sie an, führt Aquaticy Code dort aus, bevor es antwortet. Fehlt Podman oder Docker auf dem
-  Rechner, sagt Aquaticy das, statt Code als getestet auszugeben.
+- Ist sie an, führt Aquaticy Code dort aus, bevor es antwortet.
+- **Podman wird mit eingerichtet.** Fehlt Podman oder Docker, bietet `aquaticy web` beim Start
+  an, Podman zu installieren (Linux: Paketmanager mit sudo, macOS: Homebrew, Windows: winget;
+  dazu die Podman-Maschine). Jeder Befehl wird vorher gezeigt. Nach einem Nein fragt es nicht
+  wieder; `aquaticy install-vm` holt es jederzeit nach. Aus dem Browser lässt sich nichts
+  installieren – das entscheidet, wer am Rechner sitzt.
 - Angehängte Dateien liegen unter `eingang`. Alles Erstellte kannst du herunterladen.
 - 20 Minuten nach der letzten Nachricht wird die virtual machine gelöscht.
 

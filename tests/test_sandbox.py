@@ -95,7 +95,12 @@ def test_nothing_of_the_computer_goes_in(box: tuple[werkstatt.Sandbox, FakeRun])
     umgebung = [zeile[i + 1] for i, teil in enumerate(zeile) if teil == "--env"]
     erlaubt = {"HOME", "PATH", "LANG", "PYTHONDONTWRITEBYTECODE"}
     for eintrag in umgebung:
-        name = eintrag.split("=", 1)[0]
+        name, wert = eintrag.split("=", 1)
+        # Seit 11.2.2 Sol werden die Proxys des Rechners ausdruecklich LEER gesetzt --
+        # sonst reichten Podman und Docker sie selbst hinein.
+        if name in werkstatt.PROXY_VARS:
+            assert wert == "", f"{name} darf nur leer in die virtual machine"
+            continue
         assert name in erlaubt, f"{name} hat in der virtual machine nichts zu suchen"
 
 
@@ -107,6 +112,8 @@ def test_the_strongest_runtime_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(werkstatt, "_works", lambda binary: binary in vorhanden)
     monkeypatch.setattr(werkstatt, "_has_gvisor", lambda binary: "gvisor" in vorhanden)
+    # Podman ohne Wurzelrechte (11.2.2 Sol fragt das wirklich ab; als root -> podman-root).
+    monkeypatch.setattr(werkstatt, "_podman_rootless", lambda: True)
 
     assert werkstatt.find_runtime() is None, "ohne Laufzeit gibt es keine virtual machine"
 

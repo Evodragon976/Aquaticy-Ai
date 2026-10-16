@@ -3001,9 +3001,12 @@ class Toolbox:
                 timeout=int(arguments.get("timeout") or 0),
             )
         if name == "vm_write":
-            return self.vm_write(
-                path=str(arguments.get("path", "")), text=str(arguments.get("text", ""))
-            )
+            # Kleine Modelle schreiben gern "content" statt "text" (11.2.2 Sol). Bisher
+            # entstand dann still eine leere Datei, und der Lauf danach gab nichts aus.
+            inhalt = arguments.get("text", arguments.get("content"))
+            if inhalt is None:
+                return {"error": "vm_write braucht den Dateiinhalt im Feld 'text'."}
+            return self.vm_write(path=str(arguments.get("path", "")), text=str(inhalt))
         if name == "vm_read":
             return self.vm_read(path=str(arguments.get("path", "")))
         if name == "vm_files":

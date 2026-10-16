@@ -637,7 +637,7 @@ VM_MISSING_PROMPT = """
 
 Die virtual machine ist eingeschaltet, kann auf diesem Rechner aber nicht starten: \
 Podman oder Docker fehlt. Du kannst Code also NICHT ausfuehren. Sag das dem Nutzer \
-in einem Satz (einrichten: Podman oder Docker installieren, dann neu starten) und \
+in einem Satz (einrichten: im Terminal des Servers `aquaticy install-vm`) und \
 kennzeichne deinen Code als ungetestet.
 """
 
@@ -2903,9 +2903,11 @@ class Agent:
             # das soll der Nutzer sehen, nicht erst aus einer Ausrede des Modells.
             self._emit("note", text=(
                 "Die virtual machine kann nicht starten: Auf diesem Rechner fehlt Podman "
-                "oder Docker. Der Code bleibt deshalb ungetestet."), text_en=(
+                "oder Docker. Einrichten: im Terminal aquaticy install-vm – bis dahin bleibt "
+                "der Code ungetestet."), text_en=(
                 "The virtual machine can't start: Podman or Docker is missing on this "
-                "computer. So the code stays untested."))
+                "computer. Set it up with aquaticy install-vm in the terminal – until then "
+                "the code stays untested."))
         elif self.workshop_on:
             self._touch_workshop()
             self._warm_workshop()

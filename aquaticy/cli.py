@@ -279,6 +279,8 @@ def setup_command(
             border_style="green",
         )
     )
+    # Die virtual machine gleich mit einrichten (11.2.2 Sol) -- fragt nur am Terminal.
+    _vm_beim_start(get_settings())
 
 
 def _ask_website(*, no_probe: bool = False) -> dict[str, str]:
@@ -937,6 +939,8 @@ def web_command(
             + "; ".join(problems)
             + "\n[dim]Lässt sich in der Oberfläche unter Einstellungen beheben.[/dim]"
         )
+    # Ohne Podman/Docker keine virtual machine -- einmal anbieten (11.2.2 Sol).
+    _vm_beim_start(settings)
     import time as _time
 
     # Selbstheilung (9.6.8 Sol): stuerzt der Server unerwartet ab, startet er
@@ -1468,6 +1472,95 @@ def install_browser_command() -> None:
         raise typer.Exit(code=result.returncode)
 
 
+# ---------------------------------------------------------------------------
+# install-vm (11.2.2 Sol): Podman fuer die virtual machine
+# ---------------------------------------------------------------------------
+#: Steht diese Datei im Datenordner, fragt `aquaticy web` nicht mehr nach Podman.
+VM_INSTALL_NEIN = "vm-install-abgelehnt"
+
+
+def _ensure_vm(assume_yes: bool = False) -> str:
+    """Sorgt dafuer, dass es Podman (oder Docker) gibt und es laeuft.
+
+    Wie bei Ollama: Jeder Befehl wird gezeigt, und ohne ``--yes`` wird gefragt.
+    Returns: "bereit", "abgelehnt", "fehlgeschlagen" oder "unbekannt" (kein Weg).
+    """
+    from aquaticy import sandbox, vm_install
+
+    laufzeit = sandbox.find_runtime()
+    if laufzeit is not None:
+        console.print(f"[green]virtual machine bereit:[/green] {laufzeit.label}")
+        return "bereit"
+    if vm_install.podman_installed() and vm_install.start_machine():
+        console.print("[green]Podman-Maschine gestartet.[/green]")
+        return "bereit"
+    schritte = vm_install.install_steps()
+    if schritte is None:
+        console.print(f"[yellow]Podman fehlt.[/yellow] {vm_install.install_hint()}")
+        return "unbekannt"
+    console.print("\n[bold]Podman für die virtual machine installieren[/bold]")
+    console.print("  [dim]Ohne Podman oder Docker bleibt Code im Code-Modus ungetestet. "
+                  "Diese Befehle würden ausgeführt:[/dim]")
+    for befehl in schritte:
+        console.print(f"  [cyan]{' '.join(befehl)}[/cyan]")
+    if not (assume_yes or typer.confirm("  Ausführen?", default=True)):
+        console.print("  [dim]Abgebrochen. Später: aquaticy install-vm[/dim]")
+        return "abgelehnt"
+    if not vm_install.run_steps(schritte, on_step=lambda b: console.print(
+            f"  [dim]→ {' '.join(b)}[/dim]")):
+        console.print(f"[red]Installation fehlgeschlagen.[/red] {vm_install.install_hint()}")
+        return "fehlgeschlagen"
+    laufzeit = sandbox.find_runtime()
+    if laufzeit is None:
+        console.print("[yellow]Podman ist installiert, antwortet aber noch nicht.[/yellow] "
+                      "Nach einem Neustart des Rechners geht es meist.")
+        return "fehlgeschlagen"
+    console.print(f"[green]virtual machine bereit:[/green] {laufzeit.label}")
+    return "bereit"
+
+
+@app.command("install-vm")
+def install_vm_command(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Ohne Rückfrage installieren."),
+) -> None:
+    """Richtet Podman für die virtual machine ein (Code im Code-Modus wirklich ausführen)."""
+    load_env()
+    settings = get_settings()
+    with contextlib.suppress(OSError):
+        (Path(settings.data_dir) / VM_INSTALL_NEIN).unlink(missing_ok=True)
+    if _ensure_vm(assume_yes=yes) != "bereit":
+        raise typer.Exit(code=1)
+
+
+def _vm_beim_start(settings: Any) -> None:
+    """Beim Start von `aquaticy web`: fehlt Podman, wird es angeboten -- einmal.
+
+    Nur mit einem Menschen am Terminal. Als Dienst (ohne Terminal) steht nur der
+    Befehl da; nach einem Nein fragt Aquaticy nicht wieder.
+    """
+    from aquaticy import sandbox, vm_install
+
+    try:
+        if sandbox.find_runtime() is not None:
+            return
+        # Podman ist da, nur seine Maschine laeuft nicht (macOS/Windows nach einem Neustart).
+        if vm_install.podman_installed() and vm_install.start_machine():
+            console.print("[green]Podman-Maschine gestartet[/green] [dim](virtual machine)[/dim]")
+            return
+    except Exception:
+        return
+    nein = Path(settings.data_dir) / VM_INSTALL_NEIN
+    terminal = sys.stdin.isatty() and sys.stdout.isatty()
+    if not terminal or nein.exists() or vm_install.install_steps() is None:
+        console.print("[yellow]virtual machine:[/yellow] Podman oder Docker fehlt – "
+                      "[bold]aquaticy install-vm[/bold] richtet es ein.")
+        return
+    # Nur ein Nein wird gemerkt -- nach einem Fehlschlag fragt der naechste Start wieder.
+    if _ensure_vm() == "abgelehnt":
+        with contextlib.suppress(OSError):
+            nein.parent.mkdir(parents=True, exist_ok=True)
+            nein.write_text("Podman beim Start nicht installieren.\n", encoding="utf-8")
+
 
 # ---------------------------------------------------------------------------
 # install-model
@@ -1940,6 +2033,7 @@ HELP_TEXT = """\
   aquaticy lan                  LAN-Funktionen
   aquaticy install-browser      Browser einrichten
   aquaticy install-model        Lokales Modell einrichten
+  aquaticy install-vm           Podman für die virtual machine einrichten
   aquaticy export               Recherchen exportieren
   aquaticy cluster              Server-Verbund: Anfrage annehmen (yes/no)
   aquaticy website              eigene Domain: Stand, setup, remove
