@@ -330,10 +330,28 @@ class Cache:
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
+        conn = sqlite3.connect(self.db_path, timeout=0)
         conn.row_factory = sqlite3.Row
         try:
-            conn.execute("PRAGMA journal_mode=WAL")
+            # Beim ersten parallelen Zugriff legen auch Coworker, Auftraege und
+            # UIState Tabellen an. Der Wechsel zu WAL kann dabei sofort BUSY
+            # melden, ohne den SQLite-Timeout abzuwarten. Nur diesen Konflikt
+            # innerhalb derselben zehn Sekunden wiederholen, andere Fehler nicht.
+            frist = time.monotonic() + 10
+            while True:
+                try:
+                    conn.execute("PRAGMA journal_mode=WAL")
+                    break
+                except sqlite3.OperationalError as exc:
+                    # Erweiterte Codes wie BUSY_RECOVERY gehoeren ebenfalls dazu.
+                    code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
+                    if (code not in
+                            (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+                            or time.monotonic() >= frist):
+                        raise
+                    time.sleep(0.01)
+            # Ab hier gilt wieder der bisherige Timeout fuer normale Abfragen.
+            conn.execute("PRAGMA busy_timeout=10000")
             yield conn
             conn.commit()
         finally:

@@ -2860,7 +2860,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.2.2 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.2.3 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5136,6 +5136,14 @@ try {
    Chat-Titel, Gemerktes), bleibt unangetastet: das sind Inhalte, keine
    Bedienelemente. Gespeichert wird die Wahl am Konto, wie das Design. */
 const EN = {
+"Die Anfrage ist zu lang. Bitte teile sie in kleinere Schritte.":
+  "The request is too long. Please split it into smaller steps.",
+"Dieser Coworker ist angehalten oder gelöscht.":
+  "This coworker has been stopped or deleted.",
+"Die gespeicherte Anfrage ist beschädigt. Bitte stelle sie neu.":
+  "The saved request is damaged. Please create it again.",
+"Der Download enthält eine unerwartete HTTP-Komprimierung.":
+  "The download uses unexpected HTTP compression.",
 "Gemeinsames Lernen kannst du während einer Kontosperre nur ausschalten.": "During an account suspension, you can only turn off shared learning.",
 "Ohne die notwendigen Angaben kannst du Aquaticy hier nicht nutzen. Die freiwillige Lern-Zustimmung ist davon unabhängig.": "Without the necessary information you can't use Aquaticy here. The optional learning consent is separate.",
 "Gemeinsames Lernen": "Shared learning",

@@ -312,10 +312,12 @@ class JobStore:
     """Die Auftraege auf der Platte -- in derselben Datenbank wie alles andere."""
 
     def __init__(self, db_path: Path | str) -> None:
+        from aquaticy.cache import _initializing
+
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with _initializing(self.db_path), self._connect() as conn:
             conn.executescript(SCHEMA)
             columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(jobs)")}
             for name, declaration in MIGRATIONS.items():

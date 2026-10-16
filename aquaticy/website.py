@@ -1124,6 +1124,7 @@ class Website:
     _thread: threading.Thread | None = None
     _next_try: float = 0.0
     _ingress: tuple[int, bool] | None = None
+    _lifecycle: Any = field(default_factory=threading.Lock, repr=False)
     #: Wartet zwischen den Schritten bei Let's Encrypt (Tests setzen das auf nichts).
     pause: Callable[[float], None] = time.sleep
 
@@ -1136,19 +1137,25 @@ class Website:
 
     def start(self, port: int) -> None:
         """Startet die Arbeit im Hintergrund: einrichten, Zertifikat, Tunnel."""
-        self.port = int(port)
-        self.tls()
-        self.tunnel = Tunnel(self.data_dir, lambda: self.state.tunnel_token if self.state else "")
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._run, name="aquaticy-website", daemon=True)
-        self._thread.start()
+        with self._lifecycle:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self.port = int(port)
+            self.tls()
+            self.tunnel = Tunnel(self.data_dir,
+                                 lambda: self.state.tunnel_token if self.state else "")
+            self._stop.clear()
+            self._thread = threading.Thread(target=self._run, name="aquaticy-website", daemon=True)
+            self._thread.start()
 
     def stop(self) -> None:
-        self._stop.set()
-        if self.tunnel is not None:
-            self.tunnel.stop()
-        if self._thread is not None:
-            self._thread.join(timeout=15)
+        with self._lifecycle:
+            self._stop.set()
+            if self.tunnel is not None:
+                self.tunnel.stop()
+            thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=15)
 
     def _cloudflare(self) -> Cloudflare:
         return Cloudflare(self.config.token)
@@ -1173,6 +1180,8 @@ class Website:
                 return
 
     def _step(self) -> None:
+        if self._stop.is_set():
+            return
         if not self.config.token:
             raise WebsiteError(f"Für {self.config.domain} fehlt das Cloudflare-Token "
                                f"({TOKEN_ENV}).")
@@ -1181,8 +1190,11 @@ class Website:
         if self.state is None:
             self.message = "Richte Tunnel und Domain bei Cloudflare ein …"
             self.state = provision(self.config, self.data_dir, self.port)
-        if self.tunnel is not None:
-            self.tunnel.start()
+        with self._lifecycle:
+            if self._stop.is_set():
+                return
+            if self.tunnel is not None:
+                self.tunnel.start()
         if needs_certificate(self.data_dir, self.config.domain) and time.monotonic() >= \
                 self._next_try:
             self.message = "Hole das Zertifikat von Let's Encrypt …"
@@ -1194,6 +1206,8 @@ class Website:
             except WebsiteError:
                 self._next_try = time.monotonic() + RETRY_SECONDS
                 raise
+        if self._stop.is_set():
+            return
         echt = load_certificate(self.tls(), self.data_dir, self.config.domain)
         if self._ingress != (self.port, echt):
             # Der Tunnel muss wissen, wohin (Port) und wie streng er prueft.

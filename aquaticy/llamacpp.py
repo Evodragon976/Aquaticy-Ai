@@ -262,6 +262,10 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
                 continue
             if antwort.status_code != 200:
                 raise LlamaError(f"Der Download antwortet mit {antwort.status_code}.")
+            if antwort.headers.get("content-encoding", "identity").strip().lower() not in (
+                    "", "identity"):
+                # iter_bytes wuerde vor unserer Groessenpruefung unbegrenzt entpacken.
+                raise LlamaError("Der Download enthält eine unerwartete HTTP-Komprimierung.")
             pruefer = hashlib.sha256()
             geladen = 0
             with ziel.open("wb") as datei:
@@ -302,6 +306,16 @@ def _inside(pfad: str, wurzel: Path) -> bool:
     return pfad == basis or pfad.startswith(basis.rstrip(os.sep) + os.sep)
 
 
+def _check_path(pfad: Path, wurzel: Path) -> None:
+    """Auch vorhandene und verkettete Verknuepfungen muessen im Ziel bleiben."""
+    try:
+        sicher = _inside(str(pfad.resolve()), wurzel)
+    except (OSError, RuntimeError) as exc:
+        raise LlamaError("Das Archiv enthält eine unsichere Verknüpfung.") from exc
+    if not sicher:
+        raise LlamaError("Eine Verknüpfung im Archiv zeigt aus dem Ordner heraus.")
+
+
 def _link(pfad: Path, ziel_text: str, wurzel: Path) -> None:
     """Eine Verknuepfung aus dem Archiv -- nur, wenn sie im Ordner bleibt."""
     if os.name == "nt":
@@ -312,6 +326,8 @@ def _link(pfad: Path, ziel_text: str, wurzel: Path) -> None:
     aufgeloest = os.path.normpath(os.path.join(os.path.dirname(pfad), ziel_text))
     if not _inside(aufgeloest, wurzel):
         raise LlamaError("Eine Verknüpfung im Archiv zeigt aus dem Ordner heraus.")
+    _check_path(pfad.parent, wurzel)
+    _check_path(pfad.parent / ziel_text, wurzel)
     if pfad.exists() or pfad.is_symlink():
         raise LlamaError("Das Archiv enthält einen Eintrag doppelt.")
     pfad.parent.mkdir(parents=True, exist_ok=True)
@@ -334,6 +350,7 @@ def unpack_zip(archiv: Path, ziel: Path) -> None:
             if name is None:
                 raise LlamaError("Das Archiv enthält einen unsicheren Pfad.")
             pfad = wurzel.joinpath(*name.parts)
+            _check_path(pfad, wurzel)
             modus = (eintrag.external_attr >> 16) & 0xFFFF
             if eintrag.is_dir():
                 pfad.mkdir(parents=True, exist_ok=True)
@@ -359,6 +376,9 @@ def unpack_zip(archiv: Path, ziel: Path) -> None:
             pfad.chmod(0o755 if modus & 0o111 else 0o644)
         for pfad, ziel_text in links:
             _link(pfad, ziel_text, wurzel)
+        # Spaeter angelegte Links koennen fruehere Ziele veraendern.
+        for pfad, _ in links:
+            _check_path(pfad, wurzel)
 
 
 def unpack_tar(archiv: Path, ziel: Path) -> None:

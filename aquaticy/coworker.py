@@ -225,10 +225,12 @@ class CoworkerStore:
     """Die Coworker eines Kontos -- in derselben Datenbank wie alles andere."""
 
     def __init__(self, db_path: Path | str) -> None:
+        from aquaticy.cache import _initializing
+
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with _initializing(self.db_path), self._connect() as conn:
             conn.executescript(SCHEMA)
             spalten = {str(row[1]) for row in conn.execute("PRAGMA table_info(coworkers)")}
             if "hold_until" not in spalten:
@@ -445,9 +447,11 @@ class CoworkerStore:
         with self._lock, self._connect() as conn:
             cur = conn.execute(
                 "INSERT INTO coworker_log (coworker, at, kind, title, text, seen)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                " SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM coworkers WHERE id = ?)",
                 (int(coworker_id), time.time(), kind, _clean_text(title, 120),
-                 _clean_text(text, MAX_REPORT), 1 if seen else 0))
+                 _clean_text(text, MAX_REPORT), 1 if seen else 0, int(coworker_id)))
+            if not cur.rowcount:
+                return 0
             # Aelteres faellt heraus -- der Verlauf ist ein Protokoll, kein Archiv.
             conn.execute(
                 "DELETE FROM coworker_log WHERE coworker = ? AND id NOT IN (SELECT id FROM"
@@ -508,8 +512,14 @@ class CoworkerStore:
     def add_action(self, coworker_id: int, tool: str, arguments: dict[str, Any],
                    summary: str, category: str) -> tuple[int, bool]:
         """Legt eine Anfrage an. Returns: (Nummer, neu?) -- dieselbe gibt es nur einmal."""
-        argumente = json.dumps(arguments, ensure_ascii=False, sort_keys=True)[:20_000]
+        argumente = json.dumps(arguments, ensure_ascii=False, sort_keys=True)
+        if len(argumente) > 20_000:
+            raise CoworkerError("Die Anfrage ist zu lang. Bitte teile sie in kleinere Schritte.")
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if not conn.execute("SELECT 1 FROM coworkers WHERE id = ?",
+                                (int(coworker_id),)).fetchone():
+                raise CoworkerError("Diesen Coworker gibt es nicht.")
             gleich = conn.execute(
                 "SELECT id FROM coworker_actions WHERE coworker = ? AND state = 'offen'"
                 " AND tool = ? AND arguments = ?", (int(coworker_id), tool, argumente),
@@ -546,10 +556,10 @@ class CoworkerStore:
         try:
             argumente = json.loads(r["arguments"])
         except ValueError:
-            argumente = {}
+            argumente = None
         return {"id": int(r["id"]), "coworker": int(r["coworker"]),
                 "created_at": float(r["created_at"]), "tool": str(r["tool"]),
-                "arguments": argumente if isinstance(argumente, dict) else {},
+                "arguments": argumente if isinstance(argumente, dict) else None,
                 "summary": str(r["summary"]), "category": str(r["category"]),
                 "state": str(r["state"]), "decided_at": float(r["decided_at"] or 0),
                 "result": str(r["result"]), "reported": bool(r["reported"])}
@@ -563,10 +573,15 @@ class CoworkerStore:
     def decide(self, coworker_id: int, action_id: int, approve: bool) -> dict[str, Any] | None:
         """Erlaubt oder lehnt ab -- nur eine offene Anfrage genau dieses Coworkers."""
         with self._lock, self._connect() as conn:
+            jetzt = time.time()
+            conn.execute(
+                "UPDATE coworker_actions SET state = 'abgelaufen' WHERE id = ? AND"
+                " coworker = ? AND state = 'offen' AND created_at < ?",
+                (int(action_id), int(coworker_id), jetzt - ACTION_DAYS * 86400))
             cur = conn.execute(
                 "UPDATE coworker_actions SET state = ?, decided_at = ? WHERE id = ? AND"
                 " coworker = ? AND state = 'offen'",
-                ("erlaubt" if approve else "abgelehnt", time.time(), int(action_id),
+                ("erlaubt" if approve else "abgelehnt", jetzt, int(action_id),
                  int(coworker_id)))
             if not cur.rowcount:
                 return None
@@ -735,6 +750,9 @@ class Session:
 
         Returns: ein Ergebnis (dann laeuft das Werkzeug nicht) oder None (dann laeuft es).
         """
+        aktuell = self.store.get(self.cw.id)
+        if aktuell is None or not aktuell.enabled:
+            return {"error": "Dieser Coworker ist angehalten oder gelöscht.", "gesperrt": True}
         if name == "coworker_report":
             return self._report(arguments)
         if name == "coworker_notes":
@@ -755,7 +773,7 @@ class Session:
         kat = CATEGORY_OF.get(name)
         if kat is None:
             return None  # lesend -- laeuft wie im Chat
-        regel = self.cw.rule(kat.key)
+        regel = aktuell.rule(kat.key)
         if regel == "sperren" or (kat.key == "werkstatt" and not self.vm):
             return {"error": f"„{kat.label}“ hat der Nutzer für Coworker gesperrt.",
                     "gesperrt": True}
@@ -979,6 +997,10 @@ def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
     from aquaticy import metering
     from aquaticy.guardrails import UNAVAILABLE
 
+    aktuell = store.get(cw.id)
+    if aktuell is None or not aktuell.enabled:
+        return "angehalten"
+    cw = aktuell
     ultra = plan == "ultra"
     if vm is None:
         vm = vm_possible(settings, ultra) and cw.rule("werkstatt") != "sperren"
@@ -1052,13 +1074,15 @@ def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
     finally:
         with contextlib.suppress(Exception):
             agent.close()
+    aktuell = store.get(cw.id)
+    if aktuell is None:
+        return "gelöscht"
     store.mark_read([n["id"] for n in nachrichten])
     store.mark_reported([a["id"] for a in entscheidungen])
     berichte = list(session.reports)
     if nachrichten and not berichte and protokoll:
         # Wer schreibt, bekommt eine Antwort -- notfalls das Arbeitsprotokoll.
         berichte.append({"titel": "Antwort", "text": protokoll, "frage": False})
-    aktuell = store.get(cw.id) or cw
     for bericht in berichte:
         store.add_log(cw.id, "frage" if bericht["frage"] else "meldung", bericht["text"],
                       title=bericht["titel"])
@@ -1092,6 +1116,8 @@ def run_action(store: CoworkerStore, action: dict[str, Any], settings: Any,
     """
     from aquaticy.tools import Toolbox
 
+    if not isinstance(action.get("arguments"), dict):
+        return False, "Die gespeicherte Anfrage ist beschädigt. Bitte stelle sie neu."
     tool = action["tool"]
     kat = CATEGORY_OF.get(tool)
     cw = store.get(action["coworker"])
@@ -1245,6 +1271,20 @@ class Scheduler:
         for cw in store.due():
             if self._stop.is_set():
                 break
+            if self._paused is not None:
+                try:
+                    if self._paused():
+                        break
+                except Exception:
+                    LOG.exception("Coworker: Sperrprüfung fehlgeschlagen")
+                    break
+            plan = str(self._plan() or "")
+            if plan not in MAX_COWORKERS:
+                break
+            aktuell = store.get(cw.id)
+            if aktuell is None or not aktuell.enabled:
+                continue
+            cw = aktuell
             if not claim(settings.db_path, cw.id):
                 continue
             try:
