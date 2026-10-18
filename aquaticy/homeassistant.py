@@ -15,9 +15,12 @@ Zwei Vorsichtsmassnahmen sind eingebaut:
 
 from __future__ import annotations
 
+import hashlib
 import re
+import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -87,8 +90,23 @@ ALLOWED_DOMAINS: frozenset[str] = frozenset(
 #: nicht: ein Licht kann in zehn Sekunden ausgehen.
 STATES_TTL = 10.0
 
-#: (Adresse, Token) -> (Zeitpunkt, Zustaende)
-_states_cache: dict[tuple[str, str], tuple[float, list[Entity]]] = {}
+#: (Profil, Adresse, Token-Hash) -> (Zeitpunkt, Zustaende), nie Klartext-Tokens.
+_states_cache: dict[tuple[str, str, str], tuple[float, list[Entity]]] = {}
+_states_lock = threading.Lock()
+_states_generation = 0
+MAX_STATE_CACHES = 128
+
+
+def forget_states(profile: Path | str | None = None) -> None:
+    """Zustaende bei Aenderungen und beim Loeschen eines Profils vergessen."""
+    global _states_generation
+
+    scope = str(Path(profile).resolve()) if profile is not None else None
+    with _states_lock:
+        _states_generation += 1
+        for key in list(_states_cache):
+            if scope is None or key[0] == scope:
+                _states_cache.pop(key, None)
 
 #: So viele Entitaeten gibt aquaticy hoechstens an das Modell weiter. Eine
 #: gewachsene Installation hat schnell tausend -- die wuerden das
@@ -158,10 +176,15 @@ def normalize_url(url: str) -> str:
 class HomeAssistant:
     """Schmaler Client fuer die REST-Schnittstelle."""
 
-    def __init__(self, url: str, token: str, timeout: float = 10.0) -> None:
+    def __init__(self, url: str, token: str, timeout: float = 10.0, *,
+                 profile: Path | str | None = None) -> None:
         self.url = normalize_url(url)
         self.token = (token or "").strip()
         self.timeout = timeout
+        self._scope = str(Path(profile).resolve()) if profile is not None else ""
+
+    def _cache_key(self) -> tuple[str, str, str]:
+        return self._scope, self.url, hashlib.sha256(self.token.encode("utf-8")).hexdigest()
 
     @property
     def configured(self) -> bool:
@@ -218,16 +241,28 @@ class HomeAssistant:
 
         Kurz zwischengespeichert -- siehe :data:`STATES_TTL`.
         """
-        key = (self.url, self.token)
-        if not fresh:
+        key = self._cache_key()
+        with _states_lock:
+            now = time.monotonic()
+            for expired, (at, _) in list(_states_cache.items()):
+                if now - at >= STATES_TTL:
+                    _states_cache.pop(expired, None)
             cached = _states_cache.get(key)
-            if cached and time.monotonic() - cached[0] < STATES_TTL:
+            if cached and not fresh:
                 return cached[1]
+            generation = _states_generation
         raw = self._request("GET", "states")
         if not isinstance(raw, list):
             raise HomeAssistantError("Unerwartete Antwort auf die Zustandsabfrage.")
         entities = [_entity(item) for item in raw if isinstance(item, dict)]
-        _states_cache[key] = (time.monotonic(), entities)
+        with _states_lock:
+            # Eine spaete Leseantwort darf nach Schalten/Loeschen nicht erneut
+            # als frischer Zustand im gemeinsamen Speicher landen.
+            if generation == _states_generation:
+                _states_cache.pop(key, None)
+                while len(_states_cache) >= MAX_STATE_CACHES:
+                    _states_cache.pop(next(iter(_states_cache)))
+                _states_cache[key] = (time.monotonic(), entities)
         return entities
 
     def find(self, search: str = "", domain: str = "", limit: int = MAX_ENTITIES) -> list[Entity]:
@@ -261,7 +296,7 @@ class HomeAssistant:
         payload = check_call(domain, service, entity_id, data)
         result = self._request("POST", f"services/{domain}/{service}", payload)
         # Nach dem Schalten stimmt der zwischengespeicherte Zustand nicht mehr.
-        _states_cache.pop((self.url, self.token), None)
+        forget_states(self._scope or None)
         return result if isinstance(result, list) else []
 
 
@@ -309,6 +344,8 @@ def check_call(domain: str, service: str, entity_id: str = "", data: Any = None)
 
 def _entity(raw: dict[str, Any]) -> Entity:
     attributes = raw.get("attributes") or {}
+    if not isinstance(attributes, dict):
+        attributes = {}
     return Entity(
         entity_id=str(raw.get("entity_id") or ""),
         state=str(raw.get("state") or ""),
@@ -320,7 +357,8 @@ def _entity(raw: dict[str, Any]) -> Entity:
 
 def from_settings(settings: Any) -> HomeAssistant:
     """Baut den Client aus den Einstellungen."""
-    return HomeAssistant(getattr(settings, "ha_url", ""), getattr(settings, "ha_token", ""))
+    return HomeAssistant(getattr(settings, "ha_url", ""), getattr(settings, "ha_token", ""),
+                         profile=getattr(settings, "data_dir", None))
 
 
 def discover(subnet: str = "", timeout: float = 1.0) -> list[str]:

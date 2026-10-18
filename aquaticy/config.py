@@ -394,12 +394,12 @@ class Settings:
     #: nirgends auf der Platte.
     memory_key: str = ""
     #: Darf Aquaticy AI Gmail und den Google Kalender lesen? Aus, bis es jemand
-    #: einschaltet -- und selbst dann nur lesend (siehe aquaticy/google.py).
+    #: einschaltet -- mit Leserechten als Standard (siehe aquaticy/google.py).
     google_enabled: bool = False
     #: Darf Aquaticy AI bei Google auch etwas aendern? Aus, bis es jemand
     #: einschaltet -- und selbst dann nur Termine anlegen/aendern und
     #: Mail-ENTWUERFE schreiben. Verschickt wird nie etwas, geloescht auch
-    #: nicht: dafuer fehlen die Rechte, nicht nur der Wille.
+    #: nicht: die festen API-Pfade bieten nur Termine und Entwuerfe an.
     google_write: bool = False
     #: Zugangsdaten der eigenen Google-Cloud-Anwendung (Typ "Desktop").
     google_client_id: str = ""

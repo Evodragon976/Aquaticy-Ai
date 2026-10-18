@@ -737,12 +737,14 @@ class AuthStore:
         plan = (plan or "normal").strip().lower()
         if plan not in ("normal", "pro", "ultra"):
             raise ValueError("Wähle ein normales, ein Pro- oder ein Ultra-Konto.")
-        if plan == "pro" and not hmac.compare_digest(code_from_input(pro_code), self.pro_code):
+        if plan == "pro" and not hmac.compare_digest(
+                code_from_input(pro_code).encode("utf-8"), self.pro_code.encode("utf-8")):
             raise ValueError("Der Pro-Code stimmt nicht.")
         # Ultra hat ein eigenes, langes Passwort (14 Zeichen mit Sonderzeichen).
         # Es wird als Ganzes verglichen, nicht als 9-stelliger Block.
         if plan == "ultra" and not hmac.compare_digest(
-                (pro_code or "").strip(), self.ultra_code):
+                (pro_code or "").strip().encode("utf-8", "surrogatepass"),
+                self.ultra_code.encode("utf-8")):
             raise ValueError("Der Ultra-Code stimmt nicht.")
         salt = secrets.token_bytes(16)
         password_hash = _argon_hash(password, salt, self._pepper)
@@ -1241,11 +1243,13 @@ class AuthStore:
         if profile.is_symlink():
             raise ValueError("Das Kontoprofil ist ein symbolischer Link; nichts gelöscht.")
         from aquaticy import aiguard, guardrails, upgrading
+        from aquaticy.homeassistant import forget_states
         from aquaticy.learning import Learning
 
         # Stored outside the personal profile. Do this before destructive DB
         # changes; a failed JSON write must not silently leave account metadata.
         upgrading.forget_account(self.data_dir, account.id)
+        forget_states(profile)
         guardrails.forget_verdicts()
         aiguard.forget_judgements()
         learning = Learning(profile)
@@ -1270,9 +1274,11 @@ class AuthStore:
         if profile.is_symlink():
             raise ValueError("Das Kontoprofil ist ein symbolischer Link; Löschung abgebrochen.")
         from aquaticy import aiguard, guardrails, upgrading
+        from aquaticy.homeassistant import forget_states
         from aquaticy.learning import Learning
 
         upgrading.forget_account(self.data_dir, account.id)
+        forget_states(profile)
         guardrails.forget_verdicts()
         aiguard.forget_judgements()
         learning = Learning(profile)

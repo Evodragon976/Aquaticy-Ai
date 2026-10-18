@@ -1941,7 +1941,7 @@ class Cluster:
         if einladung.status != "accepted":
             raise ClusterError("Der andere Server hat noch nicht angenommen.")
         eingabe = re.sub(r"\D", "", str(code or ""))
-        if not hmac.compare_digest(eingabe, einladung.code):
+        if not hmac.compare_digest(eingabe.encode("utf-8"), einladung.code.encode("ascii")):
             einladung.tries += 1
             if einladung.tries >= CODE_TRIES:
                 einladung.status = "failed"

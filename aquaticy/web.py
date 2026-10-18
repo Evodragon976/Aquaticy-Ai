@@ -1504,6 +1504,9 @@ class ChatSession:
         wechselt, will ein anderes Modell -- nicht ein anderes Gespraech.
         """
         if _peers:
+            from aquaticy.homeassistant import forget_states
+
+            forget_states(self.profile or getattr(self._settings, "data_dir", None))
             for session in self.chat_sessions():
                 if session is not self:
                     session.reload(workshop, _peers=False)

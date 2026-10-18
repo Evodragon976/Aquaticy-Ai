@@ -2875,7 +2875,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.1 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.2 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5190,6 +5190,9 @@ const EN = {
 "Ansehen": "View",
 "Das war ich": "That was me",
 "Hinweis": "Notice",
+"Die Google-Verbindung hat sich geändert. Bitte erneut versuchen.":
+  "The Google connection has changed. Please try again.",
+"Ungültige Kennung für Mail oder Termin.": "Invalid message or event ID.",
 "Bitte bestätigen": "Please confirm",
 "🔒 Mit Ultra verfügbar": "🔒 Available with Ultra",
 "↻ Erneut versuchen": "↻ Try again",

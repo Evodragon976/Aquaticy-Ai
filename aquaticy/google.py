@@ -1,14 +1,13 @@
-"""Gmail und Google Kalender -- lesend.
+"""Gmail und Google Kalender -- standardmaessig lesend.
 
 Aquaticy AI soll auf die Frage "wann ist mein naechster Termin" nicht das Web
 durchsuchen muessen. Dieses Modul holt Termine und Mails direkt beim
 Konto des Nutzers ab.
 
-**Nur lesen.** Angefragt werden ausschliesslich die Leserechte
-`gmail.readonly` und `calendar.readonly`. Damit ist technisch ausgeschlossen,
-dass hier je eine Mail verschickt, geloescht oder ein Termin veraendert wird
--- Google laesst es schlicht nicht zu. Das ist Absicht: der Agent liest mit,
-er handelt nicht im Namen des Nutzers.
+**Lesen als Standard.** Erst mit ausdruecklicher Erlaubnis kommen Rechte fuer
+Termine und Mail-Entwuerfe hinzu. Aquaticy bietet weder Senden noch Loeschen
+an. Googles `gmail.compose` erlaubt technisch auch Senden; die Beschraenkung
+auf Entwuerfe wird deshalb zusaetzlich durch die festen API-Pfade erzwungen.
 
 **Aus, bis jemand es einschaltet.** Ohne `AQUATICY_GOOGLE=true` und ohne
 hinterlegtes Konto existieren die Werkzeuge fuer das Modell gar nicht.
@@ -30,9 +29,14 @@ from __future__ import annotations
 import base64
 import contextlib
 import json
+import math
+import os
 import re
+import tempfile
+import threading
 import time
-from dataclasses import asdict, dataclass, field
+import weakref
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -57,9 +61,8 @@ SCOPES = (
 #:
 #: * `calendar.events` legt Termine an und aendert sie. Der Kalender selbst
 #:   (Freigaben, Loeschen des Kalenders) bleibt aussen vor.
-#: * `gmail.compose` schreibt Entwuerfe. Es ist bewusst nicht `gmail.send`:
-#:   ein Entwurf kann man noch lesen, bevor er hinausgeht, eine verschickte
-#:   Mail nicht mehr zurueckholen. Aquaticy verschickt nichts.
+#: * `gmail.compose` wird fuer Entwuerfe gebraucht, erlaubt bei Google aber
+#:   auch Senden. Aquaticy verwendet ausschliesslich den Entwurfs-Endpunkt.
 WRITE_SCOPES = (
     *SCOPES,
     "https://www.googleapis.com/auth/calendar.events",
@@ -81,6 +84,20 @@ MAX_RESULTS = 20
 MAX_BODY_CHARS = 6000
 
 REQUEST_TIMEOUT = 20
+MAX_TOKEN_BYTES = 64 * 1024
+
+_STORE_LOCKS: weakref.WeakValueDictionary[str, Any] = weakref.WeakValueDictionary()
+_STORE_LOCKS_LOCK = threading.Lock()
+
+
+def _store_lock(path: Path) -> Any:
+    with _STORE_LOCKS_LOCK:
+        key = str(path.resolve())
+        lock = _STORE_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _STORE_LOCKS[key] = lock
+        return lock
 
 
 class GoogleError(RuntimeError):
@@ -116,44 +133,75 @@ class TokenStore:
         self.path = Path(data_dir) / TOKEN_FILE
         self._key_path = Path(data_dir) / "memory.key"
         self._passphrase = passphrase
+        self._lock = _store_lock(self.path)
+        self._cipher_value: Any = None
 
     def _cipher(self) -> Any:
         from aquaticy.memory import Cipher
 
-        return Cipher(self._key_path, self._passphrase)
+        with self._lock:
+            if self._cipher_value is None:
+                self._cipher_value = Cipher(self._key_path, self._passphrase)
+            return self._cipher_value
 
     def load(self) -> Tokens:
-        if not self.path.is_file():
-            return Tokens()
-        try:
-            raw = self._cipher().decrypt(self.path.read_text(encoding="utf-8").strip())
-            data = json.loads(raw) if raw else {}
-        except (OSError, ValueError, json.JSONDecodeError):
-            # Unlesbar heisst "nicht verbunden", nicht "Absturz". Der Nutzer
-            # meldet sich dann eben neu an.
-            return Tokens()
-        if not isinstance(data, dict):
-            return Tokens()
-        return Tokens(
-            access_token=str(data.get("access_token", "")),
-            refresh_token=str(data.get("refresh_token", "")),
-            expires_at=float(data.get("expires_at", 0) or 0),
-            email=str(data.get("email", "")),
-            scopes=list(data.get("scopes") or []),
-        )
+        from aquaticy.jsonutil import loads
+
+        with self._lock:
+            try:
+                with self.path.open("rb") as handle:
+                    encrypted = handle.read(MAX_TOKEN_BYTES + 1)
+                if len(encrypted) > MAX_TOKEN_BYTES:
+                    return Tokens()
+                raw = self._cipher().decrypt(encrypted.decode("utf-8").strip())
+                data = loads(raw) if raw else {}
+                if not isinstance(data, dict):
+                    return Tokens()
+                if any(not isinstance(data.get(k, ""), str)
+                       for k in ("access_token", "refresh_token", "email")):
+                    return Tokens()
+                expiry_raw = data.get("expires_at", 0)
+                if not isinstance(expiry_raw, (str, int, float)):
+                    return Tokens()
+                expiry = float(expiry_raw or 0)
+                scopes = data.get("scopes") or []
+                if (not math.isfinite(expiry) or expiry < 0 or not isinstance(scopes, list)
+                        or any(not isinstance(scope, str) for scope in scopes)):
+                    return Tokens()
+                return Tokens(access_token=data.get("access_token", ""),
+                              refresh_token=data.get("refresh_token", ""), expires_at=expiry,
+                              email=data.get("email", ""), scopes=scopes)
+            except (OSError, ValueError, TypeError, OverflowError):
+                # Unlesbar heisst "nicht verbunden", nicht "Absturz".
+                return Tokens()
 
     def save(self, tokens: Tokens) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            self._cipher().encrypt(json.dumps(asdict(tokens), ensure_ascii=False)),
-            encoding="utf-8",
-        )
         from aquaticy.memory import secure_file
 
-        secure_file(self.path)
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            encrypted = self._cipher().encrypt(json.dumps(asdict(tokens), ensure_ascii=False))
+            fd, temporary = tempfile.mkstemp(prefix=".google-", dir=self.path.parent)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    # Keep explicit Windows ACL protection as well as POSIX mode 0600.
+                    secure_file(Path(temporary))
+                    handle.write(encrypted)
+                os.replace(temporary, self.path)
+            finally:
+                with contextlib.suppress(FileNotFoundError):
+                    os.unlink(temporary)
+
+    def replace_if_current(self, expected: Tokens, updated: Tokens) -> bool:
+        """Eine spaete Providerantwort darf Trennen/Neuverbinden nicht rueckgaengig machen."""
+        with self._lock:
+            if not expected.refresh_token or self.load() != expected:
+                return False
+            self.save(updated)
+            return True
 
     def clear(self) -> None:
-        with contextlib.suppress(OSError):
+        with self._lock, contextlib.suppress(FileNotFoundError):
             self.path.unlink()
 
 
@@ -302,13 +350,12 @@ class Google:
         self.client_secret = client_secret
         self.store = store
         self._http = client or httpx.Client(timeout=REQUEST_TIMEOUT)
-        self._tokens: Tokens | None = None
 
     # -- Verbindung ------------------------------------------------------
     def tokens(self) -> Tokens:
-        if self._tokens is None:
-            self._tokens = self.store.load()
-        return self._tokens
+        # Andere Clients koennen das Konto trennen oder wechseln. Keine alte
+        # Berechtigung im langlebigen Agenten weiterbenutzen.
+        return self.store.load()
 
     def connected(self) -> bool:
         return bool(self.tokens().refresh_token)
@@ -319,14 +366,14 @@ class Google:
 
     def disconnect(self) -> None:
         self.store.clear()
-        self._tokens = None
 
     def remember(self, tokens: Tokens) -> None:
         """Neue Token uebernehmen und die Kontoadresse dazu holen."""
-        self._tokens = tokens
+        self.store.save(tokens)
+        previous = replace(tokens, scopes=list(tokens.scopes))
         with contextlib.suppress(GoogleError):
             tokens.email = self._email()
-        self.store.save(tokens)
+        self.store.replace_if_current(previous, tokens)
 
     def _email(self) -> str:
         data = self._get("https://www.googleapis.com/oauth2/v2/userinfo", {})
@@ -340,8 +387,14 @@ class Google:
                 "'Gmail & Kalender' verbinden."
             )
         if tokens.stale:
+            previous = replace(tokens, scopes=list(tokens.scopes))
             refresh_tokens(self.client_id, self.client_secret, tokens)
-            self.store.save(tokens)
+            if not self.store.replace_if_current(previous, tokens):
+                current = self.tokens()
+                if current.refresh_token == previous.refresh_token and not current.stale:
+                    return current.access_token  # Ein anderer Client hat bereits erneuert.
+                raise NotConnected(
+                    "Die Google-Verbindung hat sich geändert. Bitte erneut versuchen.")
         return tokens.access_token
 
     def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -395,6 +448,7 @@ class Google:
 
     def _headers(self, message_id: str) -> dict[str, Any]:
         """Absender, Betreff, Datum -- ohne den Text zu laden."""
+        message_id = _resource_id(message_id)
         data = self._get(
             f"{GMAIL_API}/messages/{message_id}",
             {
@@ -418,9 +472,10 @@ class Google:
 
     def read_mail(self, message_id: str) -> dict[str, Any]:
         """Holt den Text einer Mail."""
-        message_id = (message_id or "").strip()
-        if not message_id:
+        message_id = message_id or ""
+        if not message_id.strip():
             raise GoogleError("Ohne Kennung laesst sich keine Mail lesen.")
+        message_id = _resource_id(message_id)
         data = self._get(f"{GMAIL_API}/messages/{message_id}", {"format": "full"})
         headers = {
             str(item.get("name", "")).lower(): str(item.get("value", ""))
@@ -519,9 +574,10 @@ class Google:
         Geaendert wird nur, was mitgegeben wird (PATCH): wer den Titel
         korrigiert, soll nicht versehentlich die Uhrzeit loeschen.
         """
-        event_id = str(event_id).strip()
-        if not event_id:
+        event_id = str(event_id)
+        if not event_id.strip():
             raise GoogleError("Ohne Kennung des Termins geht es nicht.")
+        event_id = _resource_id(event_id)
         payload: dict[str, Any] = {}
         if summary:
             payload["summary"] = " ".join(str(summary).split())[:300]
@@ -551,7 +607,7 @@ class Google:
         """Legt einen Mail-Entwurf an -- verschickt wird nichts.
 
         Der Entwurf steht danach in Gmail unter "Entwürfe". Ob er hinausgeht,
-        entscheidet ein Mensch; Aquaticy hat dafuer gar nicht die Rechte.
+        entscheidet ein Mensch. Dieses Werkzeug verwendet nur den Entwurfs-Endpunkt.
         """
         from email.message import EmailMessage
 
@@ -589,6 +645,14 @@ class Google:
 # ---------------------------------------------------------------------------
 # Aufbereiten
 # ---------------------------------------------------------------------------
+def _resource_id(value: str) -> str:
+    """Nur eine opake Mail-/Termin-Kennung, nie Pfade, Query oder Escape-Sequenzen."""
+    value = value.strip(" ")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,1024}", value):
+        raise GoogleError("Ungültige Kennung für Mail oder Termin.")
+    return value
+
+
 #: Eine Mailadresse, wie sie in einen Entwurf darf -- ohne Anzeigenamen-Tricks.
 _ADRESSE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$")
 #: So viele Empfaenger hat ein Entwurf hoechstens.
