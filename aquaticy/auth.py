@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import re
 import secrets
@@ -391,6 +392,15 @@ class RateLimiter:
             while events and now - events[0] >= self.window:
                 events.popleft()
             return len(events) >= self.attempts
+
+    def retry_after(self, key: str) -> int:
+        """Nach wie vielen Sekunden *key* wieder darf (fuer ``Retry-After``, 11.4.0 Luna)."""
+        now = time.monotonic()
+        with self._lock:
+            events = self._events.get(key)
+            if not events or len(events) < self.attempts:
+                return 0
+            return max(1, math.ceil(events[0] + self.window - now))
 
     def _sweep(self, now: float) -> None:
         """Wirft alle Eintraege weg, deren letzte Anfrage aus dem Fenster ist."""

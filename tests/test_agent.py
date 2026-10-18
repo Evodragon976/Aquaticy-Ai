@@ -2941,8 +2941,11 @@ def test_the_second_round_searches_before_it_asks_the_model(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     toolbox.stats.sources.append({"url": "https://alt.example/x", "domain": "alt.example"})
 
-    result = agent.ask("Was kostet ein Lastenrad?", stream=False, structured=False, recheck=True)
-    assert gesucht == ["Was kostet ein Lastenrad?"], "die Gegenprobe sucht selbst"
+    # Keine Frage nach einer bestimmten Angabe (Preis): die schickt seit 11.4.0 Luna
+    # eine Antwort ohne gelesene Seite einmal zurueck -- hier geht es um die Gegenprobe.
+    result = agent.ask("Wie schwer ist ein Lastenrad?", stream=False, structured=False,
+                       recheck=True)
+    assert gesucht == ["Wie schwer ist ein Lastenrad?"], "die Gegenprobe sucht selbst"
     angeboten = [
         message["content"]
         for message in agent.messages

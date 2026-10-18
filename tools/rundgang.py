@@ -716,6 +716,8 @@ def zweite_seite(browser: Any, quelle: Any, **optionen: Any) -> Any:
     """
     kontext = browser.new_context(**optionen)
     kontext.add_cookies(quelle.context.cookies())
+    # Wer fertig ist, schliesst den ganzen Kontext, nicht nur die Seite (11.4.0 Luna):
+    # offen gebliebene Kontexte hielten Verbindungen und Speicher bis zum Schluss.
     return kontext.new_page()
 
 
@@ -2454,7 +2456,7 @@ def main() -> int:
                 )
                 seite2.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
                 geraet(seite2, log, name, nummer, bilder)
-                seite2.close()
+                seite2.context.close()
 
         if not nur or "handy" in nur:
             klein = zweite_seite(
@@ -2464,7 +2466,7 @@ def main() -> int:
             klein.on("pageerror", lambda e: fehler.append(f"Skriptfehler (Handy): {e}"))
             klein.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
             handy(klein, log, bilder)
-            klein.close()
+            klein.context.close()
 
         if not nur or "ruhig" in nur:
             ruhig = zweite_seite(
@@ -2474,7 +2476,7 @@ def main() -> int:
             ruhig.on("pageerror", lambda e: fehler.append(f"Skriptfehler (ruhig): {e}"))
             ruhig.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
             ohne_bewegung(ruhig, log)
-            ruhig.close()
+            ruhig.context.close()
 
         if not nur or "normal" in nur:
             normales_konto(browser, port, log, fehler)

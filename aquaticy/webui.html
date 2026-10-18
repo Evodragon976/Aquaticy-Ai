@@ -2888,7 +2888,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.2 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.4.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -3222,16 +3222,31 @@ function api(path, options = {}, versuch = 0){
   const lesen = !options.method || options.method.toUpperCase() === "GET";
   const nochmal = () => lesen && versuch < 2 && !options.signal?.aborted;
   return fetch(path, Object.assign({credentials:"same-origin"}, requestOptions, { headers }))
-    .then((res) => {
+    .then(async (res) => {
       if ([502, 503, 504].includes(res.status) && nochmal()){
         res.body?.cancel?.();
         return pause(500 * (versuch + 1)).then(() => api(path, options, versuch + 1));
+      }
+      // Zu viele Anfragen (11.4.0 Luna): Lesen wartet, so lange der Server sagt, und
+      // fragt noch einmal. Bis dahin kam die Seite ins Stolpern -- Einstellungen
+      // gingen mit einem Skriptfehler nicht auf, Startmeldungen blieben haengen.
+      if (res.status === 429 && lesen && versuch < 3 && !options.signal?.aborted){
+        const sekunden = Math.min(10, Number(res.headers.get("Retry-After")) || 2 * (versuch + 1));
+        res.body?.cancel?.();
+        return pause(sekunden * 1000).then(() => api(path, options, versuch + 1));
       }
       // Ein Fehler des Servers (5xx) bekommt das Fehlerfenster; was die Seite
       // selbst erklaert (Limit, Anmeldung, Eingabe), nicht.
       if (res.status >= 500 && !quietErrors) zeigeFehler();
       // Der Server antwortet wieder: ein Hinweis von vorhin verschwindet.
       if (navigator.onLine) $("#offline-hinweis").hidden = true;
+      if (!res.ok){
+        // Eine Fehlerantwort gleich ganz abholen (11.4.0 Luna): Wer sie nicht liest
+        // ("if (!res.ok) return"), liess sie im Browser als offene Anfrage stehen.
+        const text = await res.text().catch(() => "");
+        return new Response(text, { status: res.status, statusText: res.statusText,
+                                    headers: res.headers });
+      }
       return res;
     }, (err) => {
       if (err && err.name !== "AbortError" && nochmal())
@@ -4191,8 +4206,13 @@ async function verfolge(hole, steps, bubble, text){
   // Die neue Laufanzeige (9.6.0): Phasen mit animiertem Logo statt Schrittliste.
   const ablauf = new Ablauf(steps, mode);
 
+  // Wer abbricht, zaehlt (11.4.0 Luna): nur Stopp und Chatwechsel brechen ab. Kappt
+  // der Browser die Leitung (App im Hintergrund, Handy gesperrt), ist das kein
+  // Abbruch -- die Anfrage laeuft auf dem Server weiter, die Seite haengt sich an.
+  let meins = null;
   try {
     const res = await hole();
+    meins = running;
     if (view !== chatView){ await res.body?.cancel(); return; }
     if (!res.ok){
       let message = FEHLER_ALLGEMEIN, daten = null;
@@ -4248,14 +4268,14 @@ async function verfolge(hole, steps, bubble, text){
     // Ein abgerissener Strom ist etwas anderes als ein Programmfehler: die
     // Recherche laeuft auf dem Rechner weiter, nur die Leitung ist weg.
     // "TypeError: network error" waere hier eine nutzlose Auskunft.
-    if (err && err.name === "AbortError"){
+    if (err && err.name === "AbortError" && (meins || running)?.signal?.aborted){
       step(steps, "[Abgebrochen]", answer ? "Oben steht, was bis dahin da war." : "");
       if (answer) bubble.innerHTML = md(answer);
       ablauf.ende();
       setBusy(false); input.focus();
       return;
     }
-    const broken = err instanceof TypeError
+    const broken = err instanceof TypeError || (err && err.name === "AbortError")
       || /network|fetch|load failed|abgebrochen/i.test(String(err.message || err));
     if (err && err.gezeigt){
       // Schon dargestellt (Limit erreicht) -- keine zweite Fehlerzeile.
@@ -4519,6 +4539,13 @@ async function verfolge(hole, steps, bubble, text){
       case "waiting": step(steps, "[Warte]", sp(ev.reason, ev.reason_en || ev.reason)); break;
       case "upload": step(steps, "[Datei]", `${ev.name} (${prettySize(ev.bytes)})`); break;
       case "ask": openAsk(bubble, ev.question, ev.options || []); break;
+      // Beantwortet (hier, auf einem anderen Geraet oder beim Abspielen eines
+      // fertigen Laufs): das Fenster geht zu, die Antwort bleibt stehen. Bis
+      // 11.3.2 blieb es beim Abspielen offen -- vor einer Frage, auf die niemand
+      // mehr wartete (11.4.0 Luna).
+      case "ask_done":
+        if (asking && asking.bubble === bubble) finishAsk(ev.answer || "", true);
+        break;
       case "image": step(steps, "[Bild]", ev.path); break;
       case "image_done": step(steps, "[Bild]", "beschrieben"); break;
       case "memory_read": step(steps, "[Speicher]", ev.query); break;
@@ -4630,6 +4657,8 @@ async function verfolge(hole, steps, bubble, text){
         bubble.innerHTML = '<span class="cursor"></span>';
         break;
       case "done":
+        // Der Lauf ist vorbei: eine Rueckfrage daraus wartet auf niemanden mehr.
+        if (asking && asking.bubble === bubble) finishAsk("", true);
         ablauf.ende();
         renderer.flush();
         completed = true;
@@ -4656,7 +4685,12 @@ async function verfolge(hole, steps, bubble, text){
 // Aussetzer, Server-Neustart), haengt sich die Seite selbst wieder an den Lauf
 // an -- er laeuft auf dem Server weiter (9.6.8 Sol). Hoechstens dreimal.
 async function wiederAnhaengen(steps, bubble, text, hole){
-  const versuch = hole._versuch || 0;
+  // Lag die Seite im Hintergrund, zaehlt das nicht als Fehlversuch (11.4.0 Luna):
+  // dort kappen Browser die Leitung absichtlich. Gewartet wird, bis man wieder da
+  // ist -- ob nach einer Minute oder nach zwei Stunden.
+  const versteckt = document.hidden;
+  if (versteckt) await sichtbarWieder();
+  const versuch = versteckt ? 0 : (hole._versuch || 0);
   if (versuch >= 3) return false;
   const view = chatView;
   if (!navigator.onLine){
@@ -4685,6 +4719,17 @@ async function wiederAnhaengen(steps, bubble, text, hole){
   await verfolge(neu, steps, bubble, text);
   return true;
 }
+function sichtbarWieder(){
+  return new Promise((da) => {
+    if (!document.hidden){ da(); return; }
+    const warte = () => {
+      if (document.hidden) return;
+      document.removeEventListener("visibilitychange", warte);
+      da();
+    };
+    document.addEventListener("visibilitychange", warte);
+  });
+}
 
 // Offline-Hinweis: dezent oben, verschwindet von selbst wieder.
 function zeigeOffline(){ $("#offline-hinweis").hidden = navigator.onLine; }
@@ -4694,6 +4739,9 @@ addEventListener("online", () => {
   if (!busy){ refreshHeader?.(); loadRecents?.(); }
 });
 
+// Die Fragen des zuletzt geoeffneten Chats -- steht die fertige Antwort schon im
+// Verlauf, muss sie nicht noch einmal ablaufen (11.4.0 Luna).
+let offeneFragen = [];
 async function wiederAufnehmen(){
   const view = chatView;
   let stand;
@@ -4706,6 +4754,22 @@ async function wiederAufnehmen(){
     stand = await res.json();
   } catch { return; }
   if (view !== chatView || !stand || !stand.resume || busy) return;
+  // Die Anfrage gehoert zu einem Chat (11.4.0 Luna): erst ihn mit seinem Verlauf
+  // oeffnen. openChat ruft danach wieder hierher -- dann ist es der richtige.
+  if (stand.chat && stand.chat !== currentChat){
+    await openChat(stand.chat);
+    return;
+  }
+  if (!stand.running && stand.question
+      && (offeneFragen.at(-1) || "").trim() === String(stand.question).trim()){
+    // Fertig und schon im Verlauf: nur als gesehen vermerken (das Abholen bis
+    // zum Ende tut genau das) und kurz sagen, was passiert ist.
+    api("/api/run?since=" + encodeURIComponent(stand.events || 0) + "&id="
+        + encodeURIComponent(stand.id || "")).then((r) => r.text()).catch(() => "");
+    toast(sp("Die Antwort ist fertig geworden, während du weg warst.",
+             "The answer finished while you were away."));
+    return;
+  }
 
   addUser(stand.question || "…", []);
   const { steps, bubble } = addBot();
@@ -6631,6 +6695,7 @@ async function openChat(sessionId){
     renderResultMedia(bubble, turn.products, turn.visuals);
     answerTools(bubble, turn.answer || "", turn.question);
   });
+  offeneFragen = (data.turns || []).map((turn) => String(turn.question || ""));
   stagger(thread.querySelectorAll(".msg"), 30, 8);
   setTimeout(() => thread.classList.remove("fresh"), 900);
   loadRecents();
@@ -7031,6 +7096,10 @@ $("#btn-settings").addEventListener("click", async () => {
   let cfg;
   try { cfg = await (await api("/api/config")).json(); }
   catch { hinweis("Aquaticy antwortet gerade nicht. Versuch es gleich noch einmal."); return; }
+  if (!cfg || typeof cfg.values !== "object" || cfg.values === null){
+    hinweis(nutzerFehler(cfg?.error, "Aquaticy antwortet gerade nicht. Versuch es gleich noch einmal."));
+    return;
+  }
   fill(cfg.values);
   fillProviders(cfg.providers);
   eigeneModelle = Array.isArray(cfg.own_models) ? cfg.own_models : [];
@@ -9490,6 +9559,7 @@ $("#save-model").addEventListener("click", async () => {
   note.className = "note ok";
   // Der Server ergaenzt ein fehlendes Anbieter-Praefix -- das soll man sehen.
   const fresh = await (await api("/api/config")).json();
+  if (!fresh?.values){ note.textContent = nutzerFehler(fresh?.error); return; }
   const saved = fresh.values.AQUATICY_MODEL;
   const vision = fresh.values.AQUATICY_VISION_MODEL || saved;
   form.elements["AQUATICY_MODEL"].value = saved;

@@ -95,8 +95,11 @@ MAX_RUN_EVENTS = 20_000
 PAST_THE_LIMIT = frozenset({"done"})
 
 #: So lange kann man einen fertigen Lauf noch abholen, den niemand zu Ende
-#: gesehen hat. Danach steht die Antwort ohnehin in den letzten Chats.
-RESUME_WINDOW = 15 * 60
+#: gesehen hat. Bis 11.3.2 waren es 15 Minuten: Wer die App verliess und nach
+#: zwei Stunden wiederkam, stand vor der leeren Startseite, obwohl die Antwort
+#: fertig war (11.4.0 Luna). Jetzt eine Woche -- die Oberflaeche oeffnet dann
+#: den Chat, in dem die Antwort steht.
+RESUME_WINDOW = 7 * 24 * 3600
 
 
 class Run:
@@ -117,6 +120,9 @@ class Run:
     def __init__(self, run_id: str, question: str) -> None:
         self.id = run_id
         self.question = question
+        #: Der Chat, zu dem der Lauf gehoert -- die Oberflaeche oeffnet ihn beim
+        #: Zurueckkommen (11.4.0 Luna).
+        self.chat = ""
         self.started = time.time()
         self.finished = 0.0
         self.events: list[dict[str, Any]] = []
@@ -173,6 +179,7 @@ class Run:
         return {
             "id": self.id,
             "question": self.question,
+            "chat": self.chat,
             "events": len(self.events),
             "running": not self.done,
             "resume": self.resumable,
@@ -1065,6 +1072,14 @@ def _resume(agent: Any, session_id: str, entries: list[Any], untrusted: bool) ->
         if toolbox is not None and untrusted:
             with contextlib.suppress(Exception):
                 toolbox.untrusted_seen = True
+    # Was im Rueckfrage-Fenster geklaert wurde (Ort, Zeitraum ...), gilt nach dem
+    # Wiederoeffnen weiter (11.4.0 Luna).
+    merken = getattr(agent, "remember_clarified", None)
+    if callable(merken):
+        for entry in entries:
+            meta = getattr(entry, "meta", None) or {}
+            if isinstance(meta.get("clarified"), list):
+                merken(meta["clarified"])
 
 
 def account_vault(profile: Path, account: Account | None = None) -> Any:
@@ -3827,6 +3842,8 @@ class Handler(BaseHTTPRequestHandler):
 
     server_version = "Aquaticy"
     sys_version = ""
+    #: Sekunden fuer ``Retry-After`` bei 429 (11.4.0 Luna) -- 0 heisst: keine Angabe.
+    _retry_after: int = 0
 
     def setup(self) -> None:
         super().setup()
@@ -3902,13 +3919,13 @@ class Handler(BaseHTTPRequestHandler):
         # Im Verbund weitergereichte Anfragen hat der Eingang schon gezaehlt.
         gezaehlt = route not in STATIC_FILES and not weitergereicht
         if gezaehlt and not ADDRESS_LIMIT.allow(client):
-            self._json({"error": "Zu viele Anfragen. Bitte warte kurz."}, 429)
+            self._zu_viele(ADDRESS_LIMIT.retry_after(client))
             return
         account = self._account()
         # Je Konto, wenn angemeldet; sonst je Adresse (9.6.8 Sol).
-        if gezaehlt and not REQUEST_LIMIT.allow(
-                f"konto:{account.id}" if account is not None else f"ip:{client}"):
-            self._json({"error": "Zu viele Anfragen. Bitte warte kurz."}, 429)
+        schluessel = f"konto:{account.id}" if account is not None else f"ip:{client}"
+        if gezaehlt and not REQUEST_LIMIT.allow(schluessel):
+            self._zu_viele(REQUEST_LIMIT.retry_after(schluessel))
             return
         public = route in {
             "/",
@@ -4177,9 +4194,16 @@ class Handler(BaseHTTPRequestHandler):
         for name, wert in self.__dict__.pop("_pending_headers", None) or ():
             self.send_header(name, wert)
 
+    def _zu_viele(self, sekunden: int) -> None:
+        """429 mit ``Retry-After``: die Seite wartet so lange und fragt dann noch einmal."""
+        self._retry_after = max(1, min(int(sekunden or 1), 60))
+        self._json({"error": "Zu viele Anfragen. Bitte warte kurz."}, 429)
+
     def _send(self, status: int, body: bytes, content_type: str) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
+        if status == 429 and self._retry_after:
+            self.send_header("Retry-After", str(self._retry_after))
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self._flush_headers()
@@ -6105,6 +6129,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         session.chat_id()
         lauf = current_runs().start(message)
         if session.chat_id():
+            lauf.chat = session.chat_id()
             lauf.add({"type": "chat", "session_id": session.chat_id()})
         if vm_switch:
             # Steht vor der Antwort: der Chat erklaert, warum in den Normal-Modus

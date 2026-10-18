@@ -123,6 +123,15 @@ unabhaengigen Seiten, ist sie belastbar -- das ist eine Bestaetigung wert.
 4. Fasse zusammen, bewerte gegen die Kriterien des Nutzers und nenne zu jeder Angabe die \
 Quelle (Domain, bei Bedarf mit Link).
 
+Gezielte Angaben (11.4.0): Fragt der Nutzer nach einer BESTIMMTEN Information -- welche \
+Filme laufen, die Speisekarte, Oeffnungszeiten, Preise, Abfahrtszeiten, Termine, das \
+Programm einer Veranstaltung --, dann ist GENAU DAS die Antwort. Namen, Adressen oder \
+Bewertungen der Orte allein beantworten die Frage nicht: "Was laeuft heute im Kino?" \
+will die Filme mit Uhrzeiten, keine Liste von Kinos. Finde die Orte, oeffne dann deren \
+Seiten mit genau dieser Angabe (Programm-, Speisekarten-, Fahrplanseite) mit \
+`fetch_page` und nenne sie konkret. Steht sie nirgends lesbar, sag das ehrlich und \
+verlinke die Seite, auf der sie steht.
+
 Harte Regeln:
 - Rate nie. Was du nicht gefunden hast, kennzeichnest du als "nicht gefunden".
 - Erfinde keine Adressen, Preise, Oeffnungszeiten, Bewertungen oder technischen Daten. \
@@ -888,6 +897,49 @@ kannst oder weil sie fuer die Antwort gar nicht noetig ist --, dann antworte \
 stattdessen und nenne in einem Halbsatz, wovon du ausgehst. Beides ist recht; nur \
 die Frage im Text ist es nicht."""
 
+#: Woran eine Frage nach einer BESTIMMTEN Angabe zu erkennen ist (11.4.0 Luna) --
+#: und wie die Angabe in der Nachfass-Nachricht heisst. Gemeldet war: "Was laeuft
+#: im Kino?" bekam nur Namen und Bewertungen der Kinos, keinen einzigen Film.
+DETAIL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(was|welche\w*)\s+(läuft|laeuft|laufen|gibt es)\b.*\b(kino|film|theater)"
+                r"|\b(kino|film)\w*\s*(programm|zeiten)|\bspiel(plan|zeiten)\b"
+                r"|\bvorstellungen\b|\bwelche filme\b|\bshowtimes?\b|\bwhat'?s on\b"
+                r"|\bmovies? (playing|showing)\b", re.I),
+     "welche Filme oder Stücke laufen, mit Uhrzeiten"),
+    (re.compile(r"\b(speisekarte|menü|menue|tageskarte|mittagstisch|gerichte)\b|\bmenu\b",
+                re.I), "die Speisekarte mit Gerichten und Preisen"),
+    (re.compile(r"\b(öffnungszeiten|oeffnungszeiten|geöffnet|geoeffnet|opening hours)\b"
+                r"|\bwann (hat|haben|ist|sind)\b.*\b(offen|auf|geöffnet)", re.I),
+     "die Öffnungszeiten"),
+    (re.compile(r"\b(fahrplan|abfahrt\w*|nächste[rn]? (bus|zug|bahn|fähre)|departures?)\b",
+                re.I), "die Abfahrtszeiten"),
+    # Nicht "event" allein: "Event-Loop in JavaScript" ist keine Veranstaltung.
+    (re.compile(r"\b(veranstaltungen|konzerte|line-?up|was ist los)\b", re.I),
+     "welche Veranstaltungen wann stattfinden"),
+    (re.compile(r"\b(was kostet|wie ?viel kostet|preise?|eintritt\w*|tarife?)\b"
+                r"|\bhow much (does|is|are)\b.*\b(cost|price)", re.I), "die Preise"),
+)
+
+FORCE_DETAIL_PROMPT = """\
+Die Frage will eine bestimmte Angabe: %s. Deine Antwort nennt sie nicht -- Orte, \
+Namen oder Bewertungen allein beantworten die Frage nicht, und du hast noch keine \
+einzige Seite gelesen.
+
+Oeffne jetzt mit `fetch_page` die Seiten, auf denen genau diese Angabe steht (die \
+Programm-, Speisekarten- oder Fahrplanseite der gefundenen Orte; ihre Website steht in \
+den Treffern oder in `local_places`). Dann antworte mit der Angabe selbst, mit Quelle. \
+Steht sie nirgends lesbar, sag das ehrlich und verlinke die Seite, auf der sie steht."""
+
+
+def wanted_detail(question: str) -> str:
+    """Welche bestimmte Angabe die Frage will -- "" fuer alles andere."""
+    text = own_words(question)
+    for muster, angabe in DETAIL_PATTERNS:
+        if muster.search(text):
+            return angabe
+    return ""
+
+
 #: Was der Agent zu hoeren bekommt, wenn er mit eingeschalteten Bildquellen
 #: ohne ein einziges Bild fertig geworden ist. Der Schalter ist eine Ansage:
 #: wer ihn umlegt, will sehen und nicht lesen. Eine Liste von Webcam-Adressen
@@ -1012,6 +1064,11 @@ _EIGENE_ANFAENGE = (
 
 #: Platzhalter fuer aeltere Werkzeug-Ergebnisse, die aus dem Verlauf fliegen.
 TRIMMED_NOTE = "[gekuerzt -- aeltere Werkzeug-Ausgabe, die Fakten stehen in der Antwort]"
+#: Was der Nutzer im Rueckfrage-Fenster beantwortet hat, gilt fuer den ganzen Chat
+#: (11.4.0 Luna). Hoechstens so viele, je so lang.
+MAX_CLARIFIED = 12
+CLARIFIED_CHARS = 200
+_OHNE_KLAMMERN = str.maketrans({"[": "(", "]": ")"})
 
 #: Platzhalter fuer aeltere Vorrecherche-Bloecke.
 TRIMMED_RESEARCH = "[gekuerzt -- Vorrecherche eines frueheren Turns, das Ergebnis steht unten]"
@@ -1439,6 +1496,17 @@ class Agent:
     def _planner_context(self) -> str:
         """Gespraechskontext plus Ortsfilter fuer die Planung."""
         context = self._recent_context()
+        geklaert = self._clarified_note()
+        if geklaert:
+            context = f"{geklaert}\n{context}".strip()
+        # Die neue Frage steht schon im Verlauf. Will sie eine bestimmte Angabe,
+        # sollen die Teilfragen genau die suchen -- nicht nur die Orte (11.4.0 Luna).
+        frage = next((own_words(m.get("content")) for m in reversed(self.messages)
+                      if m.get("role") == "user"), "")
+        angabe = wanted_detail(frage)
+        if angabe:
+            context = (f"[Gesucht ist eine bestimmte Angabe: {angabe}. Die Teilfragen "
+                       f"sollen genau sie finden, nicht nur die Orte.]\n{context}").strip()
         if self.settings.location:
             context = f"[Ortsfilter: {self.settings.location}]\n{context}".strip()
         return context
@@ -1887,6 +1955,8 @@ class Agent:
         # Ein neuer Chat beginnt ohne fremden Text (seit 9.5.16 -- vorher
         # blieb der Vermerk fuer immer stehen).
         self.toolbox.untrusted_seen = False
+        # ... und ohne geklaerte Angaben eines anderen Chats (11.4.0 Luna).
+        self.clarified: list[tuple[str, str]] = []
         if new_chat:
             self.session_id = new_session_id()
 
@@ -1910,6 +1980,40 @@ class Agent:
                 self.messages.append({"role": "user", "content": question})
             if answer:
                 self.messages.append({"role": "assistant", "content": answer})
+
+    def remember_clarified(self, pairs: Any) -> None:
+        """Nimmt geklaerte Angaben auf: (Rueckfrage, Antwort des Nutzers) (11.4.0 Luna).
+
+        Aus dem Rueckfrage-Fenster dieses Turns oder beim Wiederoeffnen aus dem
+        Verlauf. Bis 11.3.2 standen sie nur als Werkzeug-Ausgabe im Verlauf -- und
+        die wird als Erstes gekuerzt. Die naechste Frage fragte deshalb wieder
+        nach dem Ort, obwohl er im selben Chat schon genannt war.
+        """
+        if not isinstance(getattr(self, "clarified", None), list):
+            self.clarified = []
+        for paar in pairs if isinstance(pairs, list) else []:
+            if not isinstance(paar, (list, tuple)) or len(paar) != 2:
+                continue
+            # Ohne eckige Klammern: der Text steht spaeter in einem [ ... ]-Hinweis
+            # und darf ihn nicht schliessen. Die Rueckfrage formuliert das Modell --
+            # nach gelesenen Seiten koennte darin fremder Text stecken.
+            frage, antwort = (" ".join(str(teil or "").translate(_OHNE_KLAMMERN).split())
+                              [:CLARIFIED_CHARS] for teil in paar)
+            if not antwort:
+                continue
+            # Dieselbe Frage noch einmal: die neue Antwort gilt.
+            self.clarified = [p for p in self.clarified if p[0] != frage] + [(frage, antwort)]
+        del self.clarified[:-MAX_CLARIFIED]
+
+    def _clarified_note(self) -> str:
+        """Die geklaerten Angaben als ein Satz fuer Modell und Planer."""
+        if not getattr(self, "clarified", None):
+            return ""
+        teile = "; ".join(f"{frage} → {antwort}" if frage else antwort
+                          for frage, antwort in self.clarified)
+        return (f"[Im Gespräch schon geklärt: {teile}. Diese Angaben gelten für den ganzen "
+                "Chat -- nutze sie und frag nicht noch einmal danach, außer der Nutzer nennt "
+                "jetzt etwas anderes.]")
 
     def _home_prompt(self) -> str:
         """Die Absaetze zu Heimnetz und Zuhause -- nur, was freigegeben ist."""
@@ -2930,6 +3034,8 @@ class Agent:
         # Nachricht mit Tool-Calls ohne Antworten) macht den Verlauf fuer
         # jede weitere Frage unbrauchbar, die API lehnt ihn dann ab.
         turn_start = len(self.messages)
+        #: Was der Nutzer in diesem Turn im Rueckfrage-Fenster beantwortet.
+        self._turn_clarified: list[tuple[str, str]] = []
         self.messages.append({"role": "user", "content": self._with_context(question)})
 
         budget = max(1, self.settings.max_tool_calls)
@@ -2940,6 +3046,8 @@ class Agent:
         genudged = False
         #: Dasselbe fuer das fehlende Bild -- ebenfalls hoechstens einmal.
         gebildert = False
+        #: Und fuer die gezielte Angabe, die nicht in der Antwort steht (11.4.0 Luna).
+        detailliert = False
         #: Und fuer Code, der nie in der virtual machine lief (11.2.2 Sol).
         vm_angestossen = False
 
@@ -3038,6 +3146,15 @@ class Agent:
                 # kein Ergebnis, sondern ein uebersehener Schalter. Einmal
                 # zurueckschicken, mit den Adressen, die schon dastehen --
                 # danach greift die Notloesung nach der Schleife.
+                # Gezielte Angabe gefragt, aber keine Seite gelesen (11.4.0 Luna):
+                # einmal zurueck, mit genau dieser Angabe als Auftrag.
+                angabe = "" if detailliert else self._should_force_detail(question)
+                if angabe:
+                    detailliert = True
+                    self._emit("answer_reset", reason="gezielte Angabe")
+                    self.messages.append(
+                        {"role": "user", "content": FORCE_DETAIL_PROMPT % angabe})
+                    continue
                 if not gebildert and self._should_force_visual():
                     gebildert = True
                     self._emit("answer_reset", reason="bildquelle")
@@ -3294,7 +3411,9 @@ class Agent:
         tool_indexes = [
             index
             for index, message in enumerate(self.messages)
-            if message.get("role") == "tool"
+            # Die Antwort aus dem Rueckfrage-Fenster ist das Wort des Nutzers,
+            # kein Recherchematerial: sie bleibt (11.4.0 Luna).
+            if message.get("role") == "tool" and message.get("name") != "ask_user"
         ]
         for index in tool_indexes[:-keep]:
             message = self.messages[index]
@@ -3344,7 +3463,7 @@ class Agent:
             if self._history_chars() <= budget:
                 return True
             message = self.messages[index]
-            if message.get("role") != role:
+            if message.get("role") != role or message.get("name") == "ask_user":
                 continue
             content = str(message.get("content") or "")
             if len(content) > SHRUNK_LENGTH:
@@ -3441,6 +3560,11 @@ class Agent:
             payload = {"error": f"{type(exc).__name__}: {exc}"}
             self._emit("error", message=f"Werkzeug {name}: {exc}")
 
+        if name == "ask_user" and isinstance(payload, dict) and payload.get("answered"):
+            paar = (payload.get("question", ""), payload.get("answer", ""))
+            self.remember_clarified([paar])
+            if isinstance(getattr(self, "_turn_clarified", None), list):
+                self._turn_clarified.append(paar)
         blob = json.dumps(payload, ensure_ascii=False)[: self.blob_limit()]
         self._emit("action_done", tool=name, result=blob[:TRACE_CHARS])
         return {
@@ -3540,6 +3664,21 @@ class Agent:
             and self.mode != "code"
             and is_only_a_question(answer)
         )
+
+    def _should_force_detail(self, question: str) -> str:
+        """Welche Angabe noch fehlt -- "" wenn die Antwort so bleiben darf.
+
+        Nur wenn die Frage eine bestimmte Angabe will (:func:`wanted_detail`), das
+        Web an ist und in diesem Turn keine einzige Seite gelesen wurde -- weder
+        selbst noch von den Agenten. Wer Seiten gelesen hat, hat nachgesehen; ob
+        die Angabe dort stand, kann der Text dann selbst sagen.
+        """
+        if not self.online or clean_mode(self.mode) == "code":
+            return ""
+        stats = self.toolbox.stats
+        if stats.fetched or stats.sources:
+            return ""
+        return wanted_detail(question)
 
     def _visual_candidates(self, answer: str) -> list[str]:
         """Adressen, hinter denen ein Bild stecken koennte -- beste zuerst.
@@ -3752,6 +3891,8 @@ class Agent:
             meta = result.meta()
             if getattr(self.toolbox, "untrusted_seen", False):
                 meta["untrusted"] = True
+            if getattr(self, "_turn_clarified", None):
+                meta["clarified"] = [list(p) for p in self._turn_clarified]
             try:
                 self.cache.add_history(
                     session_id=self.session_id,
@@ -3781,6 +3922,9 @@ class Agent:
             )
         if self._vm_ready():
             question = f"{question}\n\n{VM_TURN_HINT}"
+        geklaert = self._clarified_note()
+        if geklaert:
+            question = f"{question}\n\n{geklaert}"
         location = (self.settings.location or "").strip()
         if not location:
             return question
