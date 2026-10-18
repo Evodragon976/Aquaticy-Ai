@@ -188,11 +188,11 @@ def provider_view() -> list[dict[str, str]]:
     liste = []
     for kennung, name, schluessel, beispiel, form in PROVIDERS:
         if schluessel:
-            hinweis = (f"{name} braucht einen Schlüssel ({schluessel}"
-                       + (f", beginnt mit {form}" if form else "")
-                       + "). Hast du einen eigenen, trag ihn gleich darunter bei "
-                       "„Eigene Modelle“ ein — sonst gilt der gestellte, falls der "
-                       "Betreiber einen hat.")
+            # Seit 12.0.0 Luna nur noch ueber das Add-on des Anbieters.
+            hinweis = (f"{name} braucht einen Schlüssel"
+                       + (f" (beginnt mit {form})" if form else "")
+                       + f". Den verknüpfst du unter Add-ons → {name} — sonst gilt der "
+                       "gestellte, falls der Betreiber einen hat.")
         else:
             hinweis = f"{name} läuft auf deinem Rechner. Kein Schlüssel nötig."
         liste.append({
@@ -203,13 +203,6 @@ def provider_view() -> list[dict[str, str]]:
             "note": hinweis,
         })
     return liste
-
-
-def search_key_hints(keys: dict[str, str]) -> dict[str, str]:
-    """Welcher Suchdienst welchen Schluessel braucht -- als fertiger Hinweis."""
-    mit = [name.title() for name, key in keys.items() if key]
-    ohne = "nur bei " + " und ".join(mit) + " nötig" if mit else "nicht nötig"
-    return {name: (f"({key})" if key else ohne) for name, key in keys.items()} | {"": ohne}
 
 
 # -- Kopfzeile -------------------------------------------------------------------

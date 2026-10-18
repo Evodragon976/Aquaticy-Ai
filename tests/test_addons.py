@@ -54,7 +54,8 @@ def test_the_catalogue_has_what_was_asked_for_plus_suggestions() -> None:
     vorschlaege = [a for a in addons.CATALOG.values() if a.vorschlag]
     assert len(vorschlaege) >= 2
     for addon in addons.CATALOG.values():
-        assert addon.login in {"token", "qr", "keine", "feeds"}, addon.id
+        # "apikey" seit 12.0.0 Luna: NVIDIA NIM und Mistral, die Modell-Anbieter.
+        assert addon.login in {"token", "qr", "keine", "feeds", "apikey"}, addon.id
         assert addon.summary and addon.anmelden, addon.id
         if addon.programm == "webapp":
             assert addon.adresse.startswith("https://")

@@ -293,14 +293,17 @@ def test_an_unknown_provider_keeps_the_main_model(
 ) -> None:
     """Kennt Aquaticy zum Anbieter kein kleines Modell, bleibt es beim großen."""
     settings.subagent_model = ""
-    settings.model = "fremd/riesenmodell"
+    # Seit 12.0.0 Luna laeuft ein "fremder" Anbieter nur auf dem Server selbst --
+    # hier ein vLLM ohne bekanntes kleines Modell.
+    settings.model = "hosted_vllm/riesenmodell"
+    settings.api_base = "http://127.0.0.1:8000/v1"
     used: list[str] = []
     monkeypatch.setattr(
         "litellm.completion",
         lambda **kwargs: used.append(kwargs["model"]) or _reply(content="fertig"),
     )
     run_subagents(["Teilfrage"], settings, parallel=1)
-    assert used == ["fremd/riesenmodell"]
+    assert used == ["hosted_vllm/riesenmodell"]
 
 
 def test_overflowing_subagent_calls_still_get_answers(

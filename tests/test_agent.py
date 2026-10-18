@@ -2844,13 +2844,19 @@ def test_a_hand_picked_code_model_wins(monkeypatch: pytest.MonkeyPatch, tmp_path
     from aquaticy.system import strongest_model
 
     monkeypatch.setenv("MISTRAL_API_KEY", "sk-mist-test")
-    monkeypatch.setenv("AQUATICY_API_KEY", "sk-allgemein")
-    settings = Settings(model="ollama_chat/llama3.1", code_model="fremd/eigenes-modell")
-    assert strongest_model(settings) == "fremd/eigenes-modell"
+    monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test")
+    eigenes = "nvidia_nim/qwen/qwen3-coder-480b-a35b-instruct"
+    settings = Settings(model="ollama_chat/llama3.1", code_model=eigenes)
+    assert strongest_model(settings) == eigenes
     # Seit 11.3.0 Luna nur, wenn es auch antwortet: ohne jeden Schluessel
     # fuer das eingetragene Modell gilt wieder die Rangliste.
-    monkeypatch.delenv("AQUATICY_API_KEY")
+    monkeypatch.delenv("NVIDIA_NIM_API_KEY")
     assert strongest_model(settings) == "mistral/mistral-large-latest"
+    # Seit 12.0.0 Luna gewinnt ein Modell eines anderen Anbieters nie -- auch
+    # nicht mit dem allgemeinen Schluessel (bis 11.4.1 war das hier der Fall).
+    monkeypatch.setenv("AQUATICY_API_KEY", "sk-allgemein")
+    fremd = Settings(model="ollama_chat/llama3.1", code_model="fremd/eigenes-modell")
+    assert strongest_model(fremd) == "mistral/mistral-large-latest"
 
 
 def test_code_mode_takes_the_coding_model_and_pro_the_workhorse(

@@ -61,7 +61,7 @@ def _voll(settings: Settings, bis_auf: int = 0) -> None:
 
 def test_every_metered_call_is_counted(knapp: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("litellm.completion", lambda **kw: _antwort("x" * 300))
-    metering.completion(knapp, model="m", messages=[{"role": "user", "content": "y" * 300}])
+    metering.completion(knapp, model="mistral/m", messages=[{"role": "user", "content": "y" * 300}])
     assert UsageLog(knapp.db_path).total_tokens() >= 150
 
 
@@ -70,7 +70,7 @@ def test_provider_numbers_win_over_the_estimate(knapp: Settings,
     antwort = _antwort("x")
     antwort.usage = SimpleNamespace(prompt_tokens=400, completion_tokens=50)
     monkeypatch.setattr("litellm.completion", lambda **kw: antwort)
-    metering.completion(knapp, model="m", messages=[])
+    metering.completion(knapp, model="mistral/m", messages=[])
     assert UsageLog(knapp.db_path).total_tokens() == 450
 
 
@@ -81,11 +81,11 @@ def test_an_exhausted_quota_stops_the_call_before_it_costs(
     gerufen: list[bool] = []
     monkeypatch.setattr("litellm.completion", lambda **kw: gerufen.append(True) or _antwort())
     with pytest.raises(metering.QuotaExceeded, match="Kontingent"):
-        metering.completion(knapp, model="m", messages=[])
+        metering.completion(knapp, model="mistral/m", messages=[])
     assert gerufen == []
     # Der Rechtspruefer zaehlt mit, prueft aber nicht vorher -- er soll im
     # Zweifel ablehnen, nicht ausfallen.
-    metering.completion(knapp, enforce=False, model="m", messages=[])
+    metering.completion(knapp, enforce=False, model="mistral/m", messages=[])
     assert gerufen == [True]
 
 
@@ -93,7 +93,7 @@ def test_pro_and_local_have_no_quota(tmp_path: Path, monkeypatch: pytest.MonkeyP
     settings = Settings(data_dir=tmp_path)
     UsageLog(settings.db_path).record("m", 10_000_000, 0)
     monkeypatch.setattr("litellm.completion", lambda **kw: _antwort())
-    metering.completion(settings, model="m", messages=[])
+    metering.completion(settings, model="mistral/m", messages=[])
     assert metering.remaining(settings) is None
 
 
@@ -246,11 +246,15 @@ def test_the_probe_never_hands_the_servers_key_to_a_typed_address(
     # Eigene Adressen gibt es seit 9.5.17 nur mit Ultra -- auch Pro testet
     # gegen die des Betreibers.
     assert gesehen[1][2] != "https://fremd.example/v1", "pro: die eingetippte Adresse zaehlt nicht"
-    # Wer (mit Ultra) eine fremde Adresse testen will, tippt den Schluessel dafuer selbst.
+    # Seit 12.0.0 Luna nimmt der Test keinen eingetippten Schluessel mehr an (die gibt
+    # es nur ueber Add-ons) -- und der des Servers geht auch mit Ultra nicht an die
+    # eingetippte Adresse.
     _sitzung(tmp_path, monkeypatch, "ultra")
     handler._probe({"AQUATICY_MODEL": "mistral/mistral-large-latest",
                     "AQUATICY_API_BASE": "https://fremd.example/v1", "__API_KEY__": "eigener"})
-    assert gesehen[-1][1:] == ("eigener", "https://fremd.example/v1")
+    _, schluessel, adresse = gesehen[-1]
+    assert schluessel != "eigener"
+    assert schluessel != "server-geheim" or adresse != "https://fremd.example/v1"
 
 
 def test_a_chat_setting_stays_in_the_account(tmp_path: Path,

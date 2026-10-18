@@ -11,6 +11,9 @@ Was hier festgehalten wird:
 * Modelle mit eigenem Schluessel zaehlen nicht ins Kontingent. Was auf dem
   Server arbeitet -- virtual machine, Seitenabrufe, Suchen --, zaehlt immer.
 * Die Modelle eines eigenen Schluessels sieht nur dieses Konto.
+* Seit 12.0.0 Luna kommt ein Schluessel nur noch ueber die Add-ons NVIDIA NIM
+  und Mistral in den Schluesselbund -- nach dem Installieren, und erst, wenn
+  der Anbieter ihn annimmt.
 """
 
 from __future__ import annotations
@@ -28,9 +31,9 @@ from typing import Any
 
 import pytest
 
-from aquaticy import guardrails, keyvault, metering, web
+from aquaticy import guardrails, keyvault, linked, metering, web
 from aquaticy.config import NO_KEY, Settings
-from aquaticy.keyvault import KeyVault, VaultError, load_secret, masked, scrub, summary
+from aquaticy.keyvault import KeyVault, VaultError, load_secret, masked, scrub
 from aquaticy.quota import SESSION_TOKENS, Quota, QuotaExceeded
 from tests import fake_llm
 from tests.test_version import NAME
@@ -97,13 +100,15 @@ def test_only_known_slots_and_real_looking_keys_are_taken(tmp_path: Path) -> Non
         KeyVault(tmp_path / "k.sqlite3", "", GEHEIM)
 
 
-def test_the_summary_says_none_one_or_several() -> None:
-    assert summary([]) == "Du hast keinen API-Schlüssel hinzugefügt."
-    assert summary(["TAVILY_API_KEY"]) == "Du hast einen API-Schlüssel hinzugefügt: Tavily."
-    assert summary(["TAVILY_API_KEY", "NVIDIA_NIM_API_KEY", "MISTRAL_API_KEY"]) == (
-        "Du hast 3 API-Schlüssel hinzugefügt: NVIDIA NIM, Mistral, Tavily."
-    )
-    assert summary(["GIBT_ES_NICHT"]) == "Du hast keinen API-Schlüssel hinzugefügt."
+def test_only_nvidia_and_mistral_have_a_slot(tmp_path: Path) -> None:
+    """12.0.0 Luna: ersetzt den Test der Zusammenfassung, die es mit dem Bereich
+    "API-Schluessel" in den Einstellungen nicht mehr gibt."""
+    assert {slot.name for slot in keyvault.SLOTS} == {"NVIDIA_NIM_API_KEY", "MISTRAL_API_KEY"}
+    tresor = _tresor(tmp_path)
+    for name in ("AQUATICY_API_KEY", "TAVILY_API_KEY", "BRAVE_API_KEY", "ANTHROPIC_API_KEY",
+                 "OPENAI_API_KEY", "GEMINI_API_KEY"):
+        with pytest.raises(VaultError):
+            tresor.set(name, "abcdefgh12345678")
 
 
 def test_masking_and_scrubbing() -> None:
@@ -366,6 +371,9 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv(key, raising=False)
     config.reset_settings_cache()
     monkeypatch.setattr(guardrails, "_ask_model", ECHTER_PRUEFER)
+    # Das Add-on fragt beim Verknuepfen den Anbieter -- hier ohne Netz.
+    monkeypatch.setattr(linked, "inspect", lambda provider, key, client=None: {
+        "models": [], "tier": "", "tokens": None})
     monkeypatch.setattr(web, "AUTH", AuthStore(tmp_path / "konten", "PROKEY234"))
     monkeypatch.setattr(web, "SESSIONS", web.SessionRegistry())
     monkeypatch.setattr(web, "SESSION", web.SessionProxy())
@@ -431,40 +439,46 @@ def _anfragen() -> list[dict[str, Any]]:
     return [json.loads(zeile) for zeile in fake_llm.ANFRAGEN]
 
 
+def _eigener_schluessel(port: int, cookie: str, provider: str, wert: str) -> Any:
+    """Seit 12.0.0 Luna der einzige Weg: Add-on installieren, dann verknuepfen."""
+    _json(port, "POST", "/api/addons", cookie, {"action": "install", "id": provider})
+    return _json(port, "POST", "/api/linked", cookie,
+                 {"action": "link", "provider": provider, "key": wert})
+
+
 def _modell_waehlen(port: int, cookie: str, modell: str) -> None:
     antwort = _json(port, "POST", "/api/config", cookie, {"AQUATICY_MODEL": modell})
     assert antwort.get("ok") is not False, antwort
 
 
-def test_the_key_area_says_what_is_stored_and_never_the_key(server: dict[str, Any]) -> None:
+def test_the_addon_says_what_is_stored_and_never_the_key(server: dict[str, Any]) -> None:
     port = server["port"]
     anna = _konto(port)
-    leer = _json(port, "GET", "/api/keys", anna)
-    assert leer["count"] == 0 and leer["account"] is True
-    assert leer["summary"] == "Du hast keinen API-Schlüssel hinzugefügt."
-    assert {s["name"] for s in leer["slots"]} == {s.name for s in keyvault.SLOTS}
-    assert "nur zu deinem Konto" in leer["privacy"] and "Limit" in leer["quota_note"]
-
-    antwort = _json(port, "POST", "/api/keys", anna,
-                    {"action": "set", "name": "NVIDIA_NIM_API_KEY", "value": EIGEN_NVIDIA})
-    assert antwort["ok"] and antwort["count"] == 1
-    assert antwort["summary"] == "Du hast einen API-Schlüssel hinzugefügt: NVIDIA NIM."
-    platz = next(s for s in antwort["slots"] if s["name"] == "NVIDIA_NIM_API_KEY")
-    assert platz["set"] and platz["status"].startswith("Hinterlegt ••••2222")
-    antwort = _json(port, "POST", "/api/keys", anna, {
-        "action": "set", "name": "TAVILY_API_KEY", "value": "tvly-eigen-geheim-5555"})
-    assert antwort["summary"] == (
-        "Du hast 2 API-Schlüssel hinzugefügt: NVIDIA NIM, Tavily.")
+    # Den Bereich "API-Schluessel" in den Einstellungen gibt es nicht mehr (12.0.0 Luna).
+    assert _req(port, "GET", "/api/keys", cookie=anna)[0] == 404
+    assert _req(port, "POST", "/api/keys", {"action": "set", "name": "NVIDIA_NIM_API_KEY",
+                                            "value": EIGEN_NVIDIA}, anna)[0] == 404
+    karten = {a["id"]: a for a in _json(port, "GET", "/api/addons", anna)["addons"]}
+    assert not karten["nvidia_nim"]["installed"]
+    assert not karten["nvidia_nim"]["konto"]["linked"]
+    # Erst installieren -- vorher nimmt Aquaticy keinen Schluessel.
+    status, daten = _req(port, "POST", "/api/linked", {
+        "action": "link", "provider": "nvidia_nim", "key": EIGEN_NVIDIA}, anna)
+    assert status == 400 and "Installiere zuerst" in json.loads(daten)["error"]
+    antwort = _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
+    assert next(k for k in antwort["accounts"] if k["provider"] == "nvidia_nim")["linked"]
 
     # Was nicht passt, wird nicht angenommen -- mit einem Satz dazu.
-    for falsch in ({"action": "set", "name": "GROQ_API_KEY", "value": "gsk-abcdefgh1234"},
-                   {"action": "set", "name": "MISTRAL_API_KEY", "value": "zu kurz"},
-                   {"action": "loeschen", "name": "MISTRAL_API_KEY"}):
-        status, daten = _req(port, "POST", "/api/keys", falsch, anna)
+    _json(port, "POST", "/api/addons", anna, {"action": "install", "id": "mistral"})
+    for falsch in ({"action": "link", "provider": "mistral", "key": "zu kurz"},
+                   {"action": "link", "provider": "mistral", "key": EIGEN_NVIDIA},
+                   {"action": "loeschen", "provider": "mistral"},
+                   {"action": "link", "provider": "anthropic", "key": "sk-ant-abcdefgh1234"}):
+        status, daten = _req(port, "POST", "/api/linked", falsch, anna)
         assert status == 400 and json.loads(daten)["error"]
 
     # Kein Endpunkt gibt den Schluessel heraus -- auch nicht dem Besitzer.
-    for pfad in ("/api/keys", "/api/config", "/api/account", "/api/usage",
+    for pfad in ("/api/addons", "/api/linked", "/api/config", "/api/account", "/api/usage",
                  "/api/models?mode=code", "/api/header", "/"):
         status, daten = _req(port, "GET", pfad, cookie=anna)
         assert status == 200, pfad
@@ -475,20 +489,20 @@ def test_the_key_area_says_what_is_stored_and_never_the_key(server: dict[str, An
             assert b"eigen-geheim" not in datei.read_bytes(), datei
     assert not any("eigen-geheim" in wert for wert in os.environ.values())
 
-    antwort = _json(port, "POST", "/api/keys", anna,
-                    {"action": "remove", "name": "TAVILY_API_KEY"})
-    assert antwort["count"] == 1 and "entfernt" in antwort["message"]
+    # Deinstallieren loescht den Schluessel mit.
+    _json(port, "POST", "/api/addons", anna, {"action": "uninstall", "id": "nvidia_nim"})
+    karte = {a["id"]: a for a in _json(port, "GET", "/api/addons", anna)["addons"]}["nvidia_nim"]
+    assert not karte["installed"] and not karte["konto"]["linked"]
 
 
 def test_keys_and_their_models_belong_to_one_account(server: dict[str, Any]) -> None:
     port = server["port"]
     anna, bernd = _konto(port), _konto(port)
-    _json(port, "POST", "/api/keys", anna,
-          {"action": "set", "name": "NVIDIA_NIM_API_KEY", "value": EIGEN_NVIDIA})
+    _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
 
     # Bernd sieht Annas Schluessel nicht -- und nicht die Modelle dazu.
-    bei_bernd = _json(port, "GET", "/api/keys", bernd)
-    assert bei_bernd["count"] == 0 and not any(s["set"] for s in bei_bernd["slots"])
+    bei_bernd = _json(port, "GET", "/api/linked", bernd)
+    assert not any(k["linked"] for k in bei_bernd["accounts"])
     modelle_bernd = _json(port, "GET", "/api/models?mode=chat", bernd)
     assert not any(m["id"].startswith("nvidia_nim/") for m in modelle_bernd["models"])
     assert all(m.get("source") != "own" for m in modelle_bernd["models"])
@@ -517,8 +531,7 @@ def test_an_own_key_model_runs_at_the_provider_and_does_not_count(
 ) -> None:
     port = server["port"]
     anna, bernd = _konto(port), _konto(port)
-    _json(port, "POST", "/api/keys", anna,
-          {"action": "set", "name": "NVIDIA_NIM_API_KEY", "value": EIGEN_NVIDIA})
+    _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
     _modell_waehlen(port, anna, NVIDIA)
 
     fake_llm.ANFRAGEN.clear()
@@ -551,8 +564,7 @@ def test_at_the_limit_an_own_key_still_answers_but_server_tools_stop(
         server["wurzel"] / "konten" / "users").exists() else set()
     anna = _konto(port)
     profil = (set((server["wurzel"] / "konten" / "users").iterdir()) - vorher).pop()
-    _json(port, "POST", "/api/keys", anna,
-          {"action": "set", "name": "NVIDIA_NIM_API_KEY", "value": EIGEN_NVIDIA})
+    _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
     _modell_waehlen(port, anna, NVIDIA)
     web.AUTH.quota(web.AUTH.account(profil.name)).record(SESSION_TOKENS, "gestellt")
 
@@ -576,26 +588,28 @@ def test_a_provider_that_quotes_the_key_never_gets_it_to_the_browser(
     port = server["port"]
     anna = _konto(port)
     zitiert = "nvapi-leak-geheim-7777"   # der Testserver zitiert Schluessel mit "leak"
-    _json(port, "POST", "/api/keys", anna,
-          {"action": "set", "name": "NVIDIA_NIM_API_KEY", "value": zitiert})
+    _eigener_schluessel(port, anna, "nvidia_nim", zitiert)
     _modell_waehlen(port, anna, NVIDIA)
 
-    test = _json(port, "POST", "/api/keys", anna,
-                 {"action": "test", "name": "NVIDIA_NIM_API_KEY"})
-    assert test["ok"] is False and zitiert not in json.dumps(test)
-    assert "Incorrect API key" in test["message"] or "401" in test["message"], test
+    # Der Anbieter zitiert den Schluessel in seiner Ablehnung (Add-on: Aktualisieren).
+    def zitiert_ihn(provider: str, key: str, client: Any = None) -> dict[str, Any]:
+        raise linked.LinkError(f"Incorrect API key provided: {key}")
+
+    monkeypatch.setattr(linked, "inspect", zitiert_ihn)
+    status, daten = _req(port, "POST", "/api/linked",
+                         {"action": "refresh", "provider": "nvidia_nim"}, anna)
+    assert status == 400 and zitiert.encode() not in daten
+    assert "Incorrect API key" in json.loads(daten)["error"]
     probe = _json(port, "POST", "/api/probe", anna, {})
     assert probe["llm"]["ok"] is False and zitiert not in json.dumps(probe)
     _, daten = _req(port, "POST", "/api/chat", {"message": "Und der Chat?"}, anna)
     assert zitiert.encode() not in daten and b"leak-geheim" not in daten
 
 
-def test_a_key_typed_into_the_settings_form_goes_into_the_vault(
-    server: dict[str, Any],
-) -> None:
-    # Die alte Form (Schluesselfeld neben dem Modell) gibt es in der
-    # Oberflaeche nicht mehr -- kommt sie trotzdem an, landet der Schluessel
-    # im Schluesselbund, nie in der .env des Profils.
+def test_the_settings_form_takes_no_key_anymore(server: dict[str, Any]) -> None:
+    # Bis 11.4.1 landete ein Schluessel aus dem Formular im Schluesselbund. Seit
+    # 12.0.0 Luna gibt es Schluessel nur noch ueber die Add-ons NVIDIA NIM und
+    # Mistral -- das alte Feld wird nicht mehr angenommen.
     port = server["port"]
     konten = server["wurzel"] / "konten" / "users"
     vorher = set(konten.iterdir()) if konten.exists() else set()
@@ -603,14 +617,12 @@ def test_a_key_typed_into_the_settings_form_goes_into_the_vault(
     profil = (set(konten.iterdir()) - vorher).pop()
     _json(port, "POST", "/api/config", anna, {
         "AQUATICY_MODEL": "mistral/mistral-large-latest",
-        web.API_KEY_FIELD: "form-mistral-geheim-8888",
+        "__API_KEY__": "form-mistral-geheim-8888",
+        "__SEARCH_KEY__": "tvly-form-geheim-8888",
     })
     tresor = web.AUTH.vault(web.AUTH.account(profil.name))
-    assert tresor.keys() == {"MISTRAL_API_KEY": "form-mistral-geheim-8888"}
-    assert "form-mistral" not in (profil / ".env").read_text(encoding="utf-8")
-    status, daten = _req(port, "POST", "/api/config", {
-        web.API_KEY_FIELD: "kein schluessel"}, anna)
-    assert status == 400 and "API-Schlüssel" in json.loads(daten)["error"]
+    assert tresor.keys() == {}
+    assert "form-" not in (profil / ".env").read_text(encoding="utf-8")
 
 
 def test_keys_from_an_old_profile_env_move_into_the_vault(
@@ -669,7 +681,7 @@ def test_the_version_carries_its_name(tmp_path: Path, monkeypatch: pytest.Monkey
         store = AuthStore(tmp_path, pro_code_for(tmp_path))
         konto = store.register("liste@example.org", "ein langes Passwort", "normal",
                                username="Liste", terms_accepted=True, terms_version="1")
-        store.vault(konto).set("TAVILY_API_KEY", "tvly-liste-geheim-9999")
+        store.vault(konto).set("NVIDIA_NIM_API_KEY", "nvapi-liste-geheim-9999")
         ausgabe = runner.invoke(cli.app, ["list"], env={"COLUMNS": "200"}).output
         assert "Schlüss" in ausgabe  # Spalte "Eigene Schlüssel" (ggf. gekürzt)
         zeile = next(z for z in ausgabe.splitlines() if z.startswith("Liste"))
@@ -679,40 +691,21 @@ def test_the_version_carries_its_name(tmp_path: Path, monkeypatch: pytest.Monkey
         config.reset_settings_cache()
 
 
-def test_the_general_key_is_never_tested_against_the_operators_model(
-    server: dict[str, Any],
-) -> None:
-    # Das Hauptmodell ist gestellt (openai/fake-modell auf dem Server des
-    # Betreibers). Den allgemeinen Schluessel bekaeme es im Betrieb nie -- also
-    # wird er auch nicht dorthin oder an dessen Anbieter "getestet".
-    port = server["port"]
-    anna = _konto(port)
-    _json(port, "POST", "/api/keys", anna,
-          {"action": "set", "name": "AQUATICY_API_KEY", "value": "allg-eigen-geheim-1717"})
-    fake_llm.ANFRAGEN.clear()
-    test = _json(port, "POST", "/api/keys", anna, {"action": "test", "name": "AQUATICY_API_KEY"})
-    assert test["ok"] is False and "Hauptmodell" in test["message"]
-    assert fake_llm.ANFRAGEN == [], "der Schluessel ging nirgendwohin"
-    # Und das gestellte Modell laeuft weiter mit dem Schluessel des Betreibers.
-    assert "42" in _antwort(_chat(port, anna, "Gestellt trotz allgemeinem Schluessel: rechne"))
-    assert all(a["auth"] == "Bearer sk-be" and a["port"] == server["betreiber"]
-               for a in _anfragen())
-
-
-def test_key_tests_are_limited_per_account(
+def test_key_checks_are_limited_per_account(
     server: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Seit 12.0.0 Luna prueft das Add-on ("Aktualisieren") -- gezaehlt wie vorher.
     from aquaticy.auth import RateLimiter
 
     monkeypatch.setattr(web, "KEY_TEST_LIMIT", RateLimiter(attempts=2, window_seconds=60))
     port = server["port"]
     anna, bernd = _konto(port), _konto(port)
-    frage = {"action": "test", "name": "TAVILY_API_KEY"}
+    frage = {"action": "refresh", "provider": "mistral"}
     for _ in range(2):
-        assert _req(port, "POST", "/api/keys", frage, anna)[0] == 200
-    status, daten = _req(port, "POST", "/api/keys", frage, anna)
+        assert _req(port, "POST", "/api/linked", frage, anna)[0] != 429
+    status, daten = _req(port, "POST", "/api/linked", frage, anna)
     assert status == 429 and "in einer Minute" in json.loads(daten)["error"]
-    assert _req(port, "POST", "/api/keys", frage, bernd)[0] == 200, "je Konto gezaehlt"
+    assert _req(port, "POST", "/api/linked", frage, bernd)[0] != 429, "je Konto gezaehlt"
 
 
 def test_the_picker_puts_own_models_in_their_own_group() -> None:

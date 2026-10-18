@@ -104,6 +104,10 @@ FIELDS: dict[str, tuple[Any, Any]] = {
     "load": (False, bool),
     "agents": (12, AGENT_COUNTS),
     "visual_sources": (False, bool),
+    # Seit 12.0.0 Luna: beim Schreiben mitscrollen (an wie bisher) und ob der
+    # Hinweis zur Spracheingabe schon bestaetigt ist.
+    "autoscroll": (True, bool),
+    "voice_ok": (False, bool),
 }
 
 #: Was aus dem Browser als "ja" durchgeht. Alles andere ist nein -- und

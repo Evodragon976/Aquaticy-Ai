@@ -203,11 +203,14 @@ def test_what_counts_as_usable(monkeypatch, tmp_path) -> None:
                  data_dir=tmp_path / "d")
     assert model_usable(s, "openai/lokal")                    # eingetragene Adresse
     assert not model_usable(s, "anthropic/claude-x")          # kein Schluessel
+    # Seit 12.0.0 Luna auch mit Schluessel nicht: nur Mistral, NVIDIA NIM oder lokal.
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant")
-    assert model_usable(s, "anthropic/claude-x")              # LiteLLM liest ihn selbst
+    assert not model_usable(s, "anthropic/claude-x")
     assert not model_usable(s, "fremd/eigenes")
     monkeypatch.setenv("AQUATICY_API_KEY", "allgemein")
-    assert model_usable(s, "fremd/eigenes")                   # allgemeiner Schluessel
+    assert not model_usable(s, "fremd/eigenes")
+    monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test")
+    assert model_usable(s, "nvidia_nim/meta/llama-3.3-70b-instruct")
     assert not model_usable(s, SPLIT_MODEL_ID)                # zeigt web.py nur, wenn er laeuft
     assert not model_usable(s, "")
     # Lokal zaehlt nur, was installiert ist -- `name` und `name:latest` sind dasselbe.

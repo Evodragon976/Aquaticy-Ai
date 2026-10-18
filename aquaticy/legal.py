@@ -65,6 +65,12 @@ schicken nur das Nötige an den jeweiligen Dienst: den Ort, den Suchbegriff, die
 Land und Jahr.
 Die Einstellungsseite zeigt die aktive Auswahl. Für externe Anbieter gelten zusätzlich deren
 eigene Datenschutzhinweise.</p>
+<p><strong>Spracheingabe:</strong> Tippst du auf das Mikrofon, erkennt dein Browser das
+Gesprochene, nicht Aquaticy. Die meisten Browser schicken die Aufnahme dafür an ihren
+Hersteller (Chrome: Google, Edge: Microsoft, Safari: Apple); kann der Browser es auf dem
+Gerät, nutzt Aquaticy das. Aquaticy bekommt nur den erkannten Text und behandelt ihn wie eine
+getippte Frage. Eine Aufnahme erreicht den Server nie. Vor der ersten Nutzung erscheint dieser
+Hinweis; dass du ihn bestätigt hast, merkt sich dein Konto.</p>
 <p>Aquaticy enthält keine Werbe-, Analyse- oder Tracking-SDKs und verkauft keine Nutzerdaten.</p>
 <h2>Speicherdauer und Kontrolle</h2>
 <h3>Freiwilliges gemeinsames Lernen</h3>

@@ -265,7 +265,6 @@ def model_origin(settings: Any, model_id: str, fallback: str = "operator") -> st
 _ZUGANG_AUS_UMGEBUNG: dict[str, tuple[str, ...]] = {
     "bedrock": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"),
     "sagemaker": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"),
-    "vertex_ai": ("GOOGLE_APPLICATION_CREDENTIALS", "VERTEXAI_PROJECT"),
     "lm_studio": ("LM_STUDIO_API_BASE",),
 }
 
@@ -298,8 +297,9 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
 
     Die Modellauswahl zeigt nur noch, was beim Anklicken auch laeuft: ein
     lokales Modell, das in Ollama installiert ist, sonst eines mit Schluessel
-    (eigener, gestellter, allgemeiner, der eines verknuepften Kontos) oder mit
-    eingetragener Adresse (LM Studio, Proxy). Das voreingestellte Modell eines
+    (eigener, gestellter, allgemeiner) oder mit eingetragener Adresse (LM
+    Studio, Proxy). Seit 12.0.0 Luna nur Mistral, NVIDIA NIM oder lokal
+    (``config.model_allowed``). Das voreingestellte Modell eines
     frischen Servers zaehlt nicht von selbst -- bis dahin stand zum Beispiel
     Mistral in der Liste, obwohl es keinen Mistral-Schluessel gab.
 
@@ -307,7 +307,7 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
         installed: die Liste von Ollama, wenn sie schon da ist. Sonst wird
             jetzt gefragt -- ein eben installiertes Modell zaehlt sofort.
     """
-    from aquaticy.config import SPLIT_MODEL_ID, provider_of
+    from aquaticy.config import SPLIT_MODEL_ID, model_allowed, provider_of
     from aquaticy.local_model import is_installed, local_name
 
     model_id = str(model_id or "").strip()
@@ -322,11 +322,11 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
     if not provider:
         return False
     try:
-        verknuepft = getattr(settings, "is_linked", None)
-        if callable(verknuepft) and verknuepft(model_id):
-            return True
         weg = getattr(settings, "route", None)
-        if callable(weg) and weg(model_id)[0]:
+        adresse = weg(model_id)[0] if callable(weg) else ""
+        if not model_allowed(model_id, adresse):
+            return False
+        if adresse:
             return True
         if PROVIDER_KEYS.get(provider):
             return bool(key_origin(settings, provider))

@@ -23,7 +23,6 @@ Beanstandungen -- damit laesst er sich in eine Pruefkette haengen.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import os
 import secrets
 import shutil
@@ -299,8 +298,14 @@ def starte_server(agent: FakeAgent) -> int:
     """Startet die Oberflaeche mit dem gestellten Agenten."""
     os.environ.setdefault("AQUATICY_DATA_DIR", tempfile.mkdtemp(prefix="rundgang-"))
     os.environ.setdefault("AQUATICY_MODEL", "mistral/mistral-large-latest")
-    os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-rundgang")
-    from aquaticy import web
+    from aquaticy import linked, web
+
+    # Das Add-on Mistral fragt beim Verknuepfen den Anbieter -- im Rundgang ohne Netz.
+    def _gestellter_anbieter(provider: str, key: str, client: Any = None) -> dict[str, Any]:
+        return {"models": [{"id": "mistral/mistral-small-latest", "label": "Mistral Small"}],
+                "tier": "", "tokens": None}
+
+    linked.inspect = _gestellter_anbieter                # type: ignore[assignment]
 
     # Am Bauplan, nicht am einzelnen Objekt: seit der Mehrbenutzer-Version
     # bekommt jedes Konto seine eigene Sitzung, und die baut sich ihren Agenten
@@ -477,50 +482,57 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.evaluate("zeigeSperre({banned: false})")
     status = pg.evaluate("async () => (await fetch('/api/system')).status")
     log.pruefe(status == 403, f"und am Fenster vorbei gibt der Server sie nicht her ({status})")
-    # 9.5.17: "Eigene Modelle" -- erst da, wenn man oben selbst etwas hinzufuegt.
-    # Die Schluessel bleiben dabei nur bei diesem Konto und nie im Browser.
+    # 9.5.17: "Eigene Modelle" -- erst da, wenn man oben selbst etwas eintraegt.
     log.pruefe(pg.is_hidden("#sec-schluessel"),
                "Eigene Modelle ist nicht da, solange nichts Eigenes eingetragen ist")
     log.pruefe(pg.locator('#secnav button[data-section="sec-schluessel"]').is_hidden(),
                "und hat oben auch keine Sprungmarke")
     pg.click('#secnav button:has-text("Modell")')
     pg.wait_for_timeout(500)
-    pg.select_option("#provider", "mistral")
-    # Unter Last braucht die Schluesselliste laenger als 600 ms (9.5.32) -- also
-    # warten, bis sie da ist, statt eine feste Zeit.
-    with contextlib.suppress(Exception):
-        pg.wait_for_selector("#sec-schluessel", state="visible", timeout=8_000)
-        pg.wait_for_selector('#keys .key-row[data-name="MISTRAL_API_KEY"]:not([hidden])',
-                             timeout=8_000)
-    log.pruefe(pg.is_visible("#sec-schluessel"),
-               "nach der Wahl eines Anbieters erscheint „Eigene Modelle“")
-    sichtbar = pg.eval_on_selector_all(
-        "#keys .key-row", "es => es.filter(e => !e.hidden).map(e => e.dataset.name)")
-    log.pruefe(sichtbar == ["MISTRAL_API_KEY"], f"nur der passende Schlüssel steht da: {sichtbar}")
-    pg.locator("#sec-schluessel").scroll_into_view_if_needed()
-    log.pruefe(pg.inner_text("#keys-summary") == "Du hast keinen API-Schlüssel hinzugefügt.",
-               "darunter steht, dass noch keiner hinterlegt ist")
-    log.pruefe("nicht in dein Limit" in pg.inner_text("#keys-quota"),
-               "und dass eigene Schlüssel nicht ins Limit zählen")
-    zeile = pg.locator('#keys .key-row[data-name="MISTRAL_API_KEY"]')
-    zeile.locator("input").fill("rundgang-mistral-4711x")
-    zeile.locator("button", has_text="Speichern").click()
-    satz = warte_auf_text(pg, "#keys-summary", "hinzugefügt: Mistral.")
-    log.pruefe(satz == "Du hast einen API-Schlüssel hinzugefügt: Mistral.",
-               f"nach dem Speichern: {satz!r}")
-    status = pg.locator('#keys .key-row[data-name="MISTRAL_API_KEY"] .key-name span').inner_text()
-    log.pruefe(status.startswith("Hinterlegt ••••711x"),
-               f"nur die letzten vier Zeichen: {status!r}")
-    log.pruefe("rundgang-mistral" not in pg.content(), "der Schlüssel steht nirgends auf der Seite")
-    # Seit 9.5.32 ein eigenes Fenster statt confirm() des Browsers.
-    pg.locator('#keys .key-row[data-name="MISTRAL_API_KEY"] button',
-               has_text="Entfernen").click()
+    # Seit 12.0.0 Luna: Schluessel gibt es nur noch ueber die Add-ons NVIDIA NIM und Mistral.
+    log.pruefe(pg.locator("#keys").count() == 0 and pg.locator("#linked-quick-key").count() == 0,
+               "kein Schlüsselfeld in den Einstellungen und kein Sammelfeld")
+    pg.click("#btn-addons-modell")
+    pg.wait_for_selector('#addon-list .addon[data-id="mistral"]', timeout=10_000)
+    pg.wait_for_timeout(400)
+    reihe = pg.eval_on_selector_all("#addon-list .addon", "es => es.map(e => e.dataset.id)")
+    log.pruefe(reihe[:2] == ["nvidia_nim", "mistral"],
+               f"NVIDIA NIM und darunter Mistral stehen oben: {reihe[:3]}")
+    karte = pg.locator('.addon[data-id="mistral"]')
+    log.pruefe(karte.locator("input[type=password]").count() == 0,
+               "vor dem Installieren gibt es kein Schlüsselfeld")
+    karte.locator("button", has_text="Installieren").click()
+    pg.wait_for_selector('.addon[data-id="mistral"] .addon-konto input[type=password]',
+                         timeout=10_000)
+    karte = pg.locator('.addon[data-id="mistral"]')
+    wege = karte.locator(".anmelden a").all_inner_texts()
+    log.pruefe({"Mit Google", "Mit Apple", "Mit E-Mail"} <= set(wege),
+               f"nach dem Installieren: anmelden beim Anbieter ({wege})")
+    log.pruefe(karte.locator(".schalter").count() == 0, "kein Schalter: installiert heißt an")
+    karte.locator("input[type=password]").fill("rundgang" + "x" * 24)
+    karte.locator("button", has_text="Verknüpfen").click()
+    pg.wait_for_selector(
+        '.addon[data-id="mistral"] .addon-konto button:has-text("Schlüssel entfernen")',
+        timeout=10_000)
+    stand = pg.inner_text('.addon[data-id="mistral"] .addon-konto')
+    log.pruefe(stand.startswith("Verknüpft") and "Mistral Small" in stand,
+               f"verknüpft, mit den Modellen: {stand[:60]!r}")
+    log.pruefe("rundgangxxxx" not in pg.content(), "der Schlüssel steht nirgends auf der Seite")
+    pg.locator('.addon[data-id="mistral"] button', has_text="Schlüssel entfernen").click()
     pg.wait_for_selector("#guardbox.open", state="visible")
     log.pruefe("bitte bestätigen" in pg.inner_text("#guard-head").lower(),
                "Entfernen fragt im eigenen Fenster nach")
     pg.click("#guard-ok")
-    satz = warte_auf_text(pg, "#keys-summary", "keinen")
-    log.pruefe(satz == "Du hast keinen API-Schlüssel hinzugefügt.", "und wieder entfernt")
+    pg.wait_for_selector('.addon[data-id="mistral"] .addon-konto input[type=password]',
+                         timeout=10_000)
+    log.pruefe(True, "und der Schlüssel ist wieder weg")
+    pg.locator('.addon[data-id="mistral"] button', has_text="Deinstallieren").click()
+    pg.wait_for_selector("#guardbox.open", state="visible")
+    pg.click("#guard-ok")
+    pg.wait_for_selector('.addon[data-id="mistral"] button:has-text("Installieren")',
+                         timeout=10_000)
+    pg.click("#addon-close")
+    pg.wait_for_selector("#addonbox", state="hidden")
     log.pruefe(
         pg.is_checked("#legalguard") and pg.is_enabled("#legalguard"),
         "der Schalter ist an und nicht ausgegraut",

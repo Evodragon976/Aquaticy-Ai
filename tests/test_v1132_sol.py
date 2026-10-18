@@ -30,15 +30,15 @@ def test_a_missing_mcp_package_no_longer_breaks_every_question(monkeypatch) -> N
 
     aufrufe: list[dict] = []
     monkeypatch.setattr(litellm, "completion", _wie_litellm_1106(aufrufe))
-    assert llmcall.completion(model="m", messages=[], tools=WERKZEUG) == "antwort"
+    assert llmcall.completion(model="mistral/m", messages=[], tools=WERKZEUG) == "antwort"
     assert [a.get("_skip_mcp_handler") for a in aufrufe] == [None, True]
     # Gemerkt: der naechste Aufruf geht gleich am Gateway vorbei.
     aufrufe.clear()
-    assert llmcall.completion(model="m", messages=[], tools=WERKZEUG) == "antwort"
+    assert llmcall.completion(model="mistral/m", messages=[], tools=WERKZEUG) == "antwort"
     assert [a.get("_skip_mcp_handler") for a in aufrufe] == [True]
     # Ohne Werkzeuge bleibt der Aufruf, wie er war.
     aufrufe.clear()
-    llmcall.completion(model="m", messages=[])
+    llmcall.completion(model="mistral/m", messages=[])
     assert "_skip_mcp_handler" not in aufrufe[0]
 
 
@@ -51,7 +51,7 @@ def test_other_errors_are_not_hidden(monkeypatch, fehler) -> None:
         raise fehler
     monkeypatch.setattr(litellm, "completion", completion)
     with pytest.raises(type(fehler)):
-        llmcall.completion(model="m", messages=[], tools=WERKZEUG)
+        llmcall.completion(model="mistral/m", messages=[], tools=WERKZEUG)
     assert llmcall._OHNE_MCP is False
 
 

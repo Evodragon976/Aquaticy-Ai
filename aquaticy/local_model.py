@@ -946,8 +946,10 @@ def verify_vision(model_id: str, api_base: str = DEFAULT_OLLAMA_URL) -> tuple[bo
     try:
         import litellm
 
+        from aquaticy import llmcall
+
         litellm.suppress_debug_info = True
-        response = litellm.completion(
+        response = llmcall.completion(
             model=model_id,
             messages=[
                 {

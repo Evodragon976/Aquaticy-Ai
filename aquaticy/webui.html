@@ -269,7 +269,7 @@ body.hat-neues #btn-side::after{content:"";position:absolute;top:5px;right:5px;
   white-space:nowrap;min-width:0}
 .topbar .spacer{flex:1}
 
-/* ---------- Modellauswahl unten, links neben dem Senden-Knopf (9.5.34) ---------- */
+/* ---------- Modellauswahl unten, gleich nach dem Anhaengen (seit 12.0.0 Luna) ---------- */
 .modelpick{display:flex;align-items:center;gap:6px;background:var(--surface);
   border:1px solid var(--line);border-radius:999px;padding:5px 12px;cursor:pointer;
   font-size:calc(13px * var(--fs));max-width:min(40vw,260px);min-width:0;color:var(--text-2)}
@@ -611,14 +611,28 @@ body.start .slash-liste{top:calc(100% + 8px);bottom:auto}
    endet die Knopfzeile, und nichts soll ueber sie hinausragen. */
 .send::after{content:"";position:absolute;inset:-7px 0 -7px -6px}
 .send:disabled{background:var(--surface-2);color:var(--text-3);cursor:default}
+/* Spracheingabe (12.0.0 Luna): links neben Senden, gleich gross, nur umrandet.
+   Waehrend sie zuhoert, ist sie rot und pulsiert. */
+.mic{background:transparent;color:var(--text-3);border:1px solid var(--line);border-radius:50%;
+  width:30px;height:30px;padding:0;cursor:pointer;flex:0 0 auto;display:grid;place-items:center;
+  position:relative}
+.mic::after{content:"";position:absolute;inset:-7px -3px}
+@media (hover:hover){.mic:hover{border-color:var(--accent);color:var(--accent-text)}}
+.mic:disabled{opacity:.45;cursor:default}
+.mic.hoert{background:var(--err);border-color:var(--err);color:var(--bg)}
+/* Der Puls ist ein Ring, der waechst und verblasst -- nur transform und opacity. */
+.mic.hoert::before{content:"";position:absolute;inset:-1px;border-radius:50%;
+  border:2px solid var(--err);animation:mic-puls 1.4s ease-out infinite;pointer-events:none}
+@keyframes mic-puls{from{transform:scale(1);opacity:.7}to{transform:scale(1.55);opacity:0}}
+@media (prefers-reduced-motion:reduce){.mic.hoert::before{animation:none;opacity:0}}
 /* Der Abbruch steht an der Stelle des Anhaengens -- waehrend eine Anfrage
    laeuft, ist das der Knopf, den man sucht. */
-/* Die Arbeitsweise steht neben dem Anhaengen: beides gehoert zur Frage, die
-   man gerade schreibt, nicht in die Einstellungen. */
+/* Die Arbeitsweise steht seit 12.0.0 Luna in der Seitenleiste, unter dem Logo
+   und ueber den letzten Chats -- ueber die ganze Breite der Leiste. */
 .modes{display:flex;gap:2px;background:var(--surface);border:1px solid var(--line);
-  border-radius:999px;padding:2px}
-.mode{background:transparent;border:0;border-radius:999px;padding:4px 11px;
-  cursor:pointer;font-size:calc(12.5px * var(--fs));color:var(--text-3);line-height:1.5}
+  border-radius:999px;padding:2px;margin:2px 12px 10px;width:calc(100% - 24px)}
+.mode{flex:1 1 0;background:transparent;border:0;border-radius:999px;padding:5px 8px;
+  cursor:pointer;font-size:calc(13px * var(--fs));color:var(--text-3);line-height:1.5}
 @media (hover:hover){.mode:hover{color:var(--text)}}
 .mode.on{background:var(--bg);color:var(--accent-text);font-weight:600;
   box-shadow:0 1px 2px rgba(0,0,0,.06)}
@@ -874,24 +888,6 @@ body.dragging::after{animation:fade-in var(--t-fast) var(--ease-out)}
 
 /* API-Schluessel (9.5.14 Seashell): eine Zeile je Platz, darunter der Satz,
    wie viele hinterlegt sind. Den Schluessel selbst zeigt die Seite nie. */
-.keys{display:grid;gap:10px;margin-top:10px}
-.key-row{display:grid;grid-template-columns:minmax(130px,1fr) minmax(160px,2fr) auto;
-  gap:6px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line-2);
-  border-radius:12px;background:var(--surface)}
-.key-row .key-name strong{display:block;font-size:calc(13.5px * var(--fs))}
-.key-row .key-name span{display:block;font-size:calc(12px * var(--fs));color:var(--text-3);margin-top:2px}
-.key-row.gesetzt .key-name span{color:var(--accent-text)}
-.key-row input{width:100%}
-.key-row .key-knoepfe{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.key-row .key-note{grid-column:1/-1;font-size:calc(11.5px * var(--fs));color:var(--text-3)}
-.key-row .key-meldung{grid-column:1/-1;font-size:calc(12px * var(--fs))}
-.key-row .key-meldung.ok{color:var(--accent-text)}
-.key-row .key-meldung.bad{color:var(--err)}
-.keys-summary{margin-top:12px;padding:9px 12px;border-radius:10px;background:var(--accent-soft);
-  color:var(--accent-text);font-size:calc(13px * var(--fs));font-weight:600}
-.search-key-note{margin:6px 0 0}
-@media (max-width:560px){.key-row{grid-template-columns:1fr}
-  .key-row .key-knoepfe{justify-content:flex-start}}
 /* Modellauswahl: Gruppen fuer eigene und gestellte Modelle. */
 .pick-group{font-size:calc(11px * var(--fs));letter-spacing:.04em;text-transform:uppercase;color:var(--text-3);
   margin:10px 12px 4px;display:flex;gap:8px;align-items:baseline}
@@ -940,6 +936,11 @@ body.dragging::after{animation:fade-in var(--t-fast) var(--ease-out)}
    Aufbau wie die Seite -- Leiste, Flaeche, Akzent -- damit man vor dem
    Klicken sieht, worauf man sich einlaesst. */
 .theme-sheet{max-width:34rem}
+/* 12.0.0 Luna: die Erklaerung zum Mitscrollen und der Hinweis zur Spracheingabe
+   fliessen als ein Absatz -- `.note` bricht sonst an jeder Zeile im Quelltext um. */
+.design-note,.voice-sheet .note{white-space:normal}
+.design-note{margin-top:8px;color:var(--text-3)}
+.voice-sheet{max-width:30rem}
 .group{font-size:calc(11px * var(--fs));letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);
   margin:18px 0 8px}
 .tmodes{display:flex;gap:8px}
@@ -1159,7 +1160,7 @@ input:focus,select:focus{border-color:var(--accent)}
      eine zweite Zeile. Der Modellname kuerzt sich dafuer mit "…". */
   .crow{flex-wrap:nowrap;gap:4px}
   .modelpick{max-width:30vw;padding:5px 8px;flex:0 1 auto}
-  .modes,.send,.crow .tool{flex:0 0 auto}
+  .mic,.send,.crow .tool{flex:0 0 auto}
   .hello h1{font-size:calc(22px * var(--fs))}
   .thread{padding:4px 12px 180px}
   /* Die Kopfzeile ist hier zweizeilig -- die Modellauswahl muss tiefer
@@ -1167,13 +1168,11 @@ input:focus,select:focus{border-color:var(--accent)}
      wie ein Fehler beim Zeichnen. Und sie hat entsprechend weniger Hoehe. */
   .picker{max-height:calc(100vh - 150px)}
   .picker-list{max-height:min(26vh,220px)}
-  /* Drei Arbeitsweisen brauchen Platz. Also bleibt vom Anhaengen und vom
-     Abbrechen hier nur das Sinnbild: es sagt dasselbe wie das Wort, und der
-     Titel sagt es noch einmal fuer den, der lange draufhaelt. Ohne das
-     wandert die Zeile bei 360px in die zweite Reihe -- oder darueber hinaus. */
+  /* Vom Anhaengen und vom Abbrechen bleibt hier nur das Sinnbild: es sagt
+     dasselbe wie das Wort, und der Titel sagt es noch einmal fuer den, der
+     lange draufhaelt. So hat der Modellname mehr Platz. */
   .crow .tool .wort{display:none}
   .crow .tool{padding:5px 9px}
-  .mode{padding:4px 8px;font-size:calc(12px * var(--fs))}
 }
 
 /* Randlose Bildschirme: unten liegt sonst die Wischleiste auf der Eingabe. */
@@ -1237,7 +1236,6 @@ input:focus,select:focus{border-color:var(--accent)}
 #addonbox{z-index:90}#screenbox{z-index:95}
 .addon-sheet{max-width:44rem}
 .addon-list{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-/* KI-Konten (9.6.1) */
 .error-dot{background:var(--err)}
 /* Offline (9.6.8 Sol): ein schmaler Streifen statt eines Fehlers. */
 .offline-hinweis{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:90;
@@ -1245,26 +1243,14 @@ input:focus,select:focus{border-color:var(--accent)}
   border:1px solid var(--line-2);border-radius:999px;padding:6px 14px;
   font-size:calc(12.5px * var(--fs));box-shadow:0 2px 10px rgba(0,0,0,.08)}
 .offline-hinweis[hidden]{display:none}
-.linked-title{font-size:calc(14px * var(--fs));margin:18px 0 0}
-.linked-lead{margin-top:6px}
-.linked-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
-.linked{background:var(--surface);border:1px solid var(--line-2);border-radius:13px;padding:12px 14px}
-.linked .kopf{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.linked .kopf strong{font-size:calc(14px * var(--fs))}
-.linked .kopf .stufe{font-size:calc(12px * var(--fs));color:var(--accent-text);font-weight:600}
-.linked .info{font-size:calc(12.5px * var(--fs));color:var(--text-2);margin-top:6px;white-space:pre-line}
-.linked .reihe{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
-.linked .reihe input{flex:1 1 220px;min-width:0}
-.linked .meldung{font-size:calc(12px * var(--fs));margin-top:6px}
-.linked .meldung.bad{color:var(--err)}
-.linked .anmelden{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.linked.wartet{border-color:var(--accent)}
-.linked-quick{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin-top:10px}
-.linked-quick .meldung{grid-column:1/-1;font-size:calc(12px * var(--fs))}
-.linked-quick .meldung.bad{color:var(--err)}
-.linked-quick .meldung.ok{color:var(--accent-text)}
-@media (max-width:560px){.linked-quick{grid-template-columns:1fr 1fr}
-  .linked-quick input{grid-column:1/-1}}
+/* NVIDIA NIM und Mistral unter Add-ons (12.0.0 Luna): Stand, Anmeldung, Schluessel. */
+.addon-konto .info{white-space:pre-line}
+.addon-konto .anmelden{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.addon-konto .addon-row input{flex:1 1 220px;min-width:0}
+.addon-konto .meldung{font-size:calc(12px * var(--fs));margin-top:6px}
+.addon-konto .meldung.ok{color:var(--accent-text)}
+.addon-konto .meldung.bad{color:var(--err)}
+.addon-konto.wartet{outline:2px solid var(--accent);outline-offset:4px;border-radius:10px}
 .addon-group{font-size:calc(11px * var(--fs));letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);
   margin:10px 0 0}
 .addon{background:var(--surface);border:1px solid var(--line-2);border-radius:13px;
@@ -1443,6 +1429,8 @@ input:focus-visible,select:focus-visible,.side-search input:focus-visible,
    neben dem Eingabefeld wuchtig. */
 @media (max-width:560px){
   .send{width:34px;height:34px;font-size:calc(15px * var(--fs))}
+  .mic{width:34px;height:34px}
+  .mic::after{inset:-5px -2px}
   .send::after{inset:-5px 0 -5px -5px}
   .tool.stop{min-height:34px;min-width:34px;position:relative}
   .tool.stop::after{content:"";position:absolute;inset:-5px}
@@ -1541,7 +1529,6 @@ button{touch-action:manipulation}
   .modelpick::before{content:"✦";color:var(--accent);font-size:calc(13px * var(--fs))}
   .modelpick{padding:5px 9px;max-width:none;flex:0 0 auto}
   .modelpick .caret{display:none}
-  .mode{padding:4px 6px}
   .hello h1{font-size:calc(20px * var(--fs))}
 }
 
@@ -1587,19 +1574,15 @@ html.vv,html.vv body{height:var(--app-h)}
   body.start .chips{order:-1;margin:0 0 10px}
   .hello{padding:0 20px 12px}
   .hello p{margin-bottom:0}
-  /* Eine Zeile fuer alles: Anhaengen, Arbeitsweise, Modell, Senden. Das
-     Modell nimmt sich den Rest der Breite statt fester 30 %. */
+  /* Eine Zeile fuer alles: Anhaengen, Modell, Mikrofon, Senden. Das Modell
+     nimmt sich den Rest der Breite statt fester 30 %. */
   .crow{gap:5px}
   .crow .spacer{display:none}
   .modelpick{flex:1 1 auto;max-width:none;justify-content:space-between}
   .crow .tool{width:34px;height:34px;padding:0;justify-content:center}
   .crow .tool .wort{display:none}
-  .mode{padding:4px 9px}
   .composer{padding:8px 9px 7px}
   .hint{margin-top:6px}
-}
-@media (max-width:360px){
-  .mode{padding:4px 7px}
 }
 @media (max-width:339px){
   .modelpick{flex:0 0 auto;justify-content:center}
@@ -1752,6 +1735,15 @@ html.vv,html.vv body{height:var(--app-h)}
       <button type="button" class="ban-info" id="ban-info" hidden
               aria-haspopup="dialog">Info</button>
     </span>
+  </div>
+  <!-- Seit 12.0.0 Luna in der Seitenleiste statt in der Eingabezeile. -->
+  <div class="modes" id="modes" role="group" aria-label="Arbeitsweise">
+    <button class="mode on" data-mode="normal"
+      title="Ganz normal fragen — gesucht wird, wenn es nötig ist">Normal</button>
+    <button class="mode" data-mode="pro"
+      title="Für große Fragen: das stärkste Modell und bis zu 50 Helfer">Pro</button>
+    <button class="mode" data-mode="code"
+      title="Zum Programmieren: Aquaticy schreibt Code statt langer Texte">Code</button>
   </div>
   <button class="newchat" id="btn-new"><span class="plus">+</span> Neuer Chat</button>
   <div class="side-title">Letzte Chats</div>
@@ -1933,18 +1925,15 @@ html.vv,html.vv body{height:var(--app-h)}
       <div class="crow">
         <button class="tool" id="clip" title="Bild oder PDF anhängen">📎 <span class="wort">Anhängen</span></button>
         <button class="tool stop" id="stop" title="Anfrage abbrechen" hidden>◼ <span class="wort">Abbrechen</span></button>
-          <div class="modes" id="modes" role="group" aria-label="Arbeitsweise">
-          <button class="mode on" data-mode="normal"
-            title="Ganz normal fragen — gesucht wird, wenn es nötig ist">Normal</button>
-          <button class="mode" data-mode="pro"
-            title="Für große Fragen: das stärkste Modell und bis zu 50 Helfer">Pro</button>
-          <button class="mode" data-mode="code"
-            title="Zum Programmieren: Aquaticy schreibt Code statt langer Texte">Code</button>
-        </div>
-        <span class="spacer"></span>
         <button class="modelpick" id="btn-model" title="Modell wechseln" aria-haspopup="true" aria-expanded="false" aria-controls="picker-models">
           <span id="model-name">Modell</span><span class="caret">▴</span>
         </button>
+        <span class="spacer"></span>
+        <button class="mic" id="mic" type="button" title="Sprechen statt tippen"
+                aria-label="Spracheingabe" aria-pressed="false"><svg viewBox="0 0 24 24"
+          width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3"
+          width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
         <button class="send" id="send" title="Senden (Enter)" aria-label="Nachricht senden">↑</button>
       </div>
     </div>
@@ -2080,27 +2069,12 @@ html.vv,html.vv body{height:var(--app-h)}
 <div class="overlay" id="addonbox">
   <div class="sheet addon-sheet" role="dialog" aria-modal="true" aria-labelledby="addon-title">
     <h2 id="addon-title">Add-ons</h2>
-    <p class="lead">Dienste, Konten und Programme für Aquaticy: installieren, an- und
-      ausschalten, entfernen. Anmelden musst du dich selbst, deine Passwörter kennt Aquaticy
-      nie. Aus dem Chat lässt sich hier nichts ändern.</p>
+    <p class="lead">KI-Modelle, Dienste, Konten und Programme für Aquaticy: installieren,
+      an- und ausschalten, entfernen. Anmelden musst du dich selbst, deine Passwörter kennt
+      Aquaticy nie. Aus dem Chat lässt sich hier nichts ändern.</p>
     <div class="note" id="addon-note" role="status" aria-live="polite"></div>
-    <!-- KI-Konten (9.6.1): Claude, ChatGPT, Gemini mit dem eigenen API-Schluessel. -->
-    <h3 class="linked-title">KI-Konten</h3>
-    <p class="note linked-lead">Verknüpfe dein Claude-, ChatGPT- oder Gemini-Konto: Die Knöpfe
-      öffnen den Anbieter. Melde dich an, erstelle einen Schlüssel und füge ihn hier ein. Dann
-      stehen deine Modelle in der Auswahl. Der Schlüssel liegt verschlüsselt bei deinem Konto,
-      dein Passwort sieht Aquaticy nie.</p>
-    <div class="linked-quick">
-      <input type="password" id="linked-quick-key" autocomplete="off" spellcheck="false"
-             data-lpignore="true" data-1p-ignore="true" data-bwignore="true"
-             placeholder="Schlüssel einfügen (sk-ant-…, sk-…, AIza…)"
-             aria-label="API-Schlüssel von Claude, ChatGPT oder Gemini">
-      <button type="button" class="btn" id="linked-paste" hidden>Einfügen</button>
-      <button type="button" class="btn primary" id="linked-quick-go">Verknüpfen</button>
-      <div class="meldung" id="linked-quick-note" role="status"></div>
-    </div>
-    <div class="linked-list" id="linked-list"></div>
-    <h3 class="linked-title">Programme und Dienste</h3>
+    <!-- Seit 12.0.0 Luna stehen NVIDIA NIM und Mistral als Add-ons in der Liste: der
+         einzige Ort fuer einen API-Schluessel. -->
     <div class="addon-list" id="addon-list"></div>
     <div class="actions">
       <button type="button" class="btn primary" id="addon-close">Fertig</button>
@@ -2219,6 +2193,15 @@ html.vv,html.vv body{height:var(--app-h)}
       <button type="button" class="tmode" data-fsize="large">
         <span class="glyph fs-glyph-l">A</span>Groß</button>
     </div>
+    <div class="group">Auto-Scroll beim Schreiben</div>
+    <div class="tmodes" id="autoscroll" role="group" aria-label="Auto-Scroll beim Schreiben">
+      <button type="button" class="tmode" data-scroll="on">
+        <span class="glyph">↓</span>An</button>
+      <button type="button" class="tmode" data-scroll="off">
+        <span class="glyph">‖</span>Aus</button>
+    </div>
+    <p class="note design-note">An: Der Chat läuft mit, während Aquaticy schreibt. Aus: Er bleibt
+      stehen, wo du gerade liest.</p>
     <div class="group">Design</div>
     <div class="palettes" id="palettes"></div>
     <div class="designer" id="designer" hidden>
@@ -2245,6 +2228,22 @@ html.vv,html.vv body{height:var(--app-h)}
       <span class="note" id="theme-note">Gilt sofort und wird an deinem Konto gespeichert.</span>
       <button type="button" class="btn" id="theme-reset">Standard</button>
       <button type="button" class="btn primary" id="theme-close">Fertig</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="voicebox">
+  <div class="sheet voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-title">
+    <h2 id="voice-title">Spracheingabe</h2>
+    <p class="lead">Tipp aufs Mikrofon und sprich. Sobald du aufhörst, schickt Aquaticy das
+      Gesagte ab. Nochmal tippen beendet das Zuhören, Esc bricht ab.</p>
+    <p class="note">Die Sprache erkennt dein Browser, nicht Aquaticy. Die meisten Browser
+      schicken die Aufnahme dafür an ihren Hersteller (Chrome: Google, Edge: Microsoft,
+      Safari: Apple). Kann dein Browser es auf dem Gerät, nutzt Aquaticy das. Aquaticy selbst
+      bekommt nur den erkannten Text, wie eine getippte Frage, nie die Aufnahme.</p>
+    <div class="actions">
+      <button type="button" class="btn" id="voice-no">Abbrechen</button>
+      <button type="button" class="btn primary" id="voice-yes">Verstanden, zuhören</button>
     </div>
   </div>
 </div>
@@ -2340,8 +2339,13 @@ html.vv,html.vv body{height:var(--app-h)}
               <option value="">— automatisch erkennen —</option>
             </select></label>
         </div>
-        <div class="note" id="provider-note">Trägst du hier ein eigenes Modell mit Schlüssel ein,
-          erscheint es unten unter <b>Eigene Modelle</b>.</div>
+        <div class="note" id="provider-note">Mistral und NVIDIA NIM brauchen einen Schlüssel. Den
+          verknüpfst du unter Add-ons. Alles andere muss auf dem Server laufen (Ollama, LM
+          Studio, vLLM).</div>
+        <div class="inline">
+          <button type="button" class="btn" id="btn-addons-modell">🧩 Add-ons: NVIDIA NIM und
+            Mistral</button>
+        </div>
         <div class="actions section">
           <span class="note" id="model-note"></span>
           <button type="button" class="btn primary" id="save-model">Modell speichern</button>
@@ -2349,12 +2353,8 @@ html.vv,html.vv body{height:var(--app-h)}
       </fieldset>
 
       <fieldset id="sec-schluessel" hidden><legend>Eigene Modelle</legend>
-        <p class="lead" id="keys-privacy">Hier stehen nur die Modelle und Schlüssel, die du oben
-          selbst hinzugefügt hast.</p>
+        <p class="lead">Hier stehen die Modelle, die du oben selbst eingetragen hast.</p>
         <ul class="own-models" id="own-models"></ul>
-        <div class="keys" id="keys"></div>
-        <div class="keys-summary" id="keys-summary" role="status"></div>
-        <div class="note" id="keys-quota"></div>
       </fieldset>
 
       <fieldset id="workshop-settings"><legend>virtual machine</legend>
@@ -2379,7 +2379,7 @@ html.vv,html.vv body{height:var(--app-h)}
               nur nach deinem Ja. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“
               fasst Aquaticy nie an.</span></label>
           <button type="button" class="btn addon-btn" id="btn-addons"
-                  title="Add-ons: GitHub, WhatsApp Web, Signal, Blender …">🧩 Add-ons</button>
+                  title="Add-ons: NVIDIA NIM, Mistral, GitHub, WhatsApp Web, Blender …">🧩 Add-ons</button>
         </div>
         <div class="check usermode-row">
           <input type="checkbox" role="switch" class="schalter" id="vminternet"
@@ -2658,8 +2658,8 @@ html.vv,html.vv body{height:var(--app-h)}
             <select name="AQUATICY_SEARCH_BACKEND">
               <option value="duckduckgo">Offene Suche (kostenlos, ohne Schlüssel)</option>
               <option value="searxng">SearXNG (dein eigener Suchserver)</option>
-              <option value="brave">Brave Search (braucht Schlüssel)</option>
-              <option value="tavily">Tavily (braucht Schlüssel)</option>
+              <option value="brave">Brave Search (Schlüssel vom Betreiber)</option>
+              <option value="tavily">Tavily (Schlüssel vom Betreiber)</option>
             </select></label>
           <label><span class="lbl">Suchdienste <span class="why">Leer lassen nutzt alle</span></span>
             <input type="text" name="AQUATICY_SEARCH_ENGINES" placeholder="duckduckgo,mojeek"></label>
@@ -2667,9 +2667,8 @@ html.vv,html.vv body{height:var(--app-h)}
         <label><span class="lbl">SearXNG-Adresse</span>
           <input type="text" name="AQUATICY_SEARXNG_URL" placeholder="http://localhost:8080"></label>
         <div class="row">
-          <div class="note search-key-note"><b>Schlüssel der Suchmaschine</b>
-            <span id="search-keyname">nur bei Brave und Tavily nötig</span> — den trägst du
-            oben beim Modell ein, dann steht er unter <b>Eigene Modelle</b>.</div>
+          <div class="note search-key-note">Brave und Tavily gehen nur, wenn der Betreiber auf
+            dem Server einen Schlüssel hinterlegt hat.</div>
           <label><span class="lbl">Formulierungen je Suche
             <span class="why">Aquaticy stellt dieselbe Frage auf verschiedene Arten —
               das findet mehr. 2 bis 3 ist gut, 1 schaltet es ab.</span></span>
@@ -2752,7 +2751,7 @@ html.vv,html.vv body{height:var(--app-h)}
           <input type="checkbox" role="switch" class="schalter" id="council"
                  name="AQUATICY_COUNCIL">
           <label for="council" style="margin:0">AI Council
-            <span class="why">Zwei verknüpfte Modelle lösen die Aufgabe, eines prüft auf Fehler.
+            <span class="why">NVIDIA NIM löst die Aufgabe mit Mistral, eines prüft auf Fehler.
               Aquaticy nimmt die Lösung an oder schickt sie zurück. Dauert länger und kostet auf
               allen Konten Tokens.</span></label>
         </div>
@@ -2888,7 +2887,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.4.1 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.0.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -2971,8 +2970,10 @@ function setMode(wanted, { merken = true } = {}){
   agentsByMode[mode] = agents;
   mode = MODI.includes(wanted) ? wanted : "normal";
   agents = agentsByMode[mode];
-  document.querySelectorAll("#modes .mode").forEach(button =>
-    button.classList.toggle("on", button.dataset.mode === mode));
+  document.querySelectorAll("#modes .mode").forEach(button => {
+    button.classList.toggle("on", button.dataset.mode === mode);
+    button.setAttribute("aria-pressed", button.dataset.mode === mode ? "true" : "false");
+  });
   document.body.classList.toggle("code-mode", mode === "code");
   document.body.classList.toggle("pro-mode", mode === "pro");
   $("#input").placeholder = PLATZHALTER[mode] || PLATZHALTER.normal;
@@ -3140,6 +3141,9 @@ document.querySelectorAll("#modes .mode").forEach(button =>
     setMode(button.dataset.mode);
     greet();
     if (anders && thread.children.length) neuerChat({ leiste: false });
+    // Seit 12.0.0 steht die Wahl in der Seitenleiste. Auf dem Handy liegt die
+    // ueber dem Chat -- nach der Wahl geht sie zu, damit man gleich schreiben kann.
+    if (narrow()) document.body.classList.add("collapsed");
   }));
 document.querySelectorAll("#efforts .eff").forEach(button =>
   button.addEventListener("click", () => setEffort(button.dataset.effort)));
@@ -3175,6 +3179,7 @@ let chatView = 0;
 let chatOpening = 0;
 const chatDrafts = new Map();
 function detachChat(){
+  hoerenStoppen(false);     // was gerade gesagt wird, gehoert in keinen anderen Chat
   chatDrafts.set(currentChat, {text: input.value, files: pending});
   chatView++;
   if (running) running.abort();
@@ -3192,6 +3197,8 @@ function restoreDraft(){
 // setBusy() greift darauf zu und laeuft frueher -- eine spaetere let-Zeile
 // gaebe sonst einen ReferenceError.
 let asking = null;          // {bubble, question, sent}
+// Die laufende Spracheingabe (12.0.0 Luna). Aus demselben Grund hier oben.
+let hoeren = null;          // {rec, basis, fertig, vorlaeufig, senden, fehler}
 
 function setBusy(on){
   busy = on;
@@ -3200,6 +3207,9 @@ function setBusy(on){
   // man antwortet, und die Antwort geht ins Leere.
   if (!on && asking) finishAsk("", true);
   $("#send").disabled = on;
+  // Waehrend Aquaticy antwortet, nimmt auch das Mikrofon nichts an.
+  $("#mic").disabled = on;
+  if (on) hoerenStoppen(false);
   // Waehrend eine Anfrage laeuft, steht an der Stelle des Anhaengens der
   // Abbruch: das ist der Knopf, den man dann sucht.
   $("#clip").hidden = on;
@@ -3472,14 +3482,14 @@ function addUser(text, files = []){
     });
     bubble.appendChild(box);
   }
-  thread.appendChild(el); scroll();
+  thread.appendChild(el); scroll(true);
 }
 function addBot(){
   leaveStart();
   const el = document.createElement("div");
   el.className = "msg bot";
   el.innerHTML = `<div class="steps"></div><div class="bubble"></div>`;
-  thread.appendChild(el); scroll();
+  thread.appendChild(el); scroll(true);
   return { steps: el.querySelector(".steps"), bubble: el.querySelector(".bubble") };
 }
 // Ein Vermerk unter der Antwort. Anders als ein Zwischenschritt bleibt er
@@ -3856,8 +3866,13 @@ function trace(box, tag, text, kind){
 }
 // Verhindert, dass unsichtbare Zeilen den Chat springen lassen.
 let scrollLock = false;
-const scroll = () => {
+// Mitscrollen beim Schreiben (12.0.0 Luna, Design -> Auto-Scroll). Aus heisst:
+// Eine neue Frage und der Anfang ihrer Antwort kommen noch ins Bild (`immer`),
+// was danach geschrieben wird, zieht die Ansicht nicht mehr mit.
+let autoScroll = true;
+const scroll = (immer = false) => {
   if (scrollLock){ scrollLock = false; return; }
+  if (!immer && !autoScroll) return;
   main.scrollTop = main.scrollHeight;
 };
 
@@ -4955,6 +4970,132 @@ document.querySelectorAll(".chip").forEach(c =>
     input.dispatchEvent(new Event("input"));
   }));
 
+/* ---------- Spracheingabe (12.0.0 Luna) ----------
+   Erkannt wird im Browser (Web Speech API). Aquaticy bekommt nur den Text,
+   den der Browser daraus macht, und schickt ihn ab, sobald man aufhoert zu
+   sprechen -- eine Aufnahme kommt nie beim Server an. Was schon im Feld
+   steht, bleibt davor stehen und geht mit. */
+const micKnopf = $("#mic"), voiceBox = $("#voicebox");
+const Erkenner = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let stimmeOk = START.voice_ok === true;
+const KEIN_MIKRO = "Kein Zugriff aufs Mikrofon. Erlaube es in den Seiteneinstellungen des Browsers.";
+const STIMME_FEHLER = {
+  "no-speech": "Ich habe nichts gehört. Tipp aufs Mikrofon und sprich gleich los.",
+  "audio-capture": "Kein Mikrofon gefunden.",
+  "not-allowed": KEIN_MIKRO,
+  "service-not-allowed": KEIN_MIKRO,
+  "network": "Die Spracherkennung des Browsers ist gerade nicht erreichbar.",
+  "language-not-supported": "Diese Sprache erkennt dein Browser nicht.",
+};
+// Die Sprache der Oberflaeche, genauer, wenn der Browser dieselbe nennt (de-AT, en-GB).
+function stimmeSprache(){
+  const kurz = sprache === "en" ? "en" : "de";
+  const browser = String(navigator.language || "");
+  if (/^[a-z]{2}-[A-Za-z]{2}$/.test(browser) && browser.toLowerCase().startsWith(kurz + "-"))
+    return browser;
+  return kurz === "en" ? "en-US" : "de-DE";
+}
+function zeigeHoeren(an){
+  micKnopf.classList.toggle("hoert", an);
+  micKnopf.setAttribute("aria-pressed", an ? "true" : "false");
+  micKnopf.title = an ? "Zuhören beenden" : "Sprechen statt tippen";
+  input.placeholder = an ? "Ich höre zu …" : (PLATZHALTER[mode] || PLATZHALTER.normal);
+}
+// senden=true: aufhoeren und abschicken, was erkannt ist. false: verwerfen.
+function hoerenStoppen(senden){
+  if (!hoeren) return;
+  hoeren.senden = senden;
+  try { if (senden) hoeren.rec.stop(); else hoeren.rec.abort(); } catch {}
+}
+// Neuere Browser erkennen manche Sprachen auf dem Geraet. Dann bleibt die
+// Aufnahme dort -- das nehmen wir, wo es geht.
+async function aufDemGeraet(lang){
+  try {
+    if (typeof Erkenner.available !== "function") return false;
+    return await Erkenner.available({ langs: [lang], processLocally: true }) === "available";
+  } catch { return false; }
+}
+async function hoerenStarten(){
+  if (busy || hoeren) return;
+  if (!Erkenner){
+    toast("Dein Browser kann keine Spracheingabe. Sie geht in Chrome, Edge und Safari.");
+    return;
+  }
+  if (!window.isSecureContext){
+    toast("Spracheingabe geht nur über https oder direkt auf diesem Rechner (localhost).");
+    return;
+  }
+  if (!stimmeOk){ openOverlay(voiceBox); $("#voice-yes").focus({ preventScroll: true }); return; }
+  let rec;
+  try { rec = new Erkenner(); } catch {
+    toast("Die Spracheingabe ließ sich nicht starten.");
+    return;
+  }
+  rec.lang = stimmeSprache();
+  rec.interimResults = true;
+  rec.continuous = false;
+  rec.maxAlternatives = 1;
+  const stand = { rec, basis: input.value.trim(), fertig: "", vorlaeufig: "",
+                  senden: true, fehler: "" };
+  hoeren = stand;
+  zeigeHoeren(true);
+  if ("processLocally" in rec && await aufDemGeraet(rec.lang)) rec.processLocally = true;
+  if (hoeren !== stand) return;            // in der Zwischenzeit abgebrochen
+  rec.onresult = (e) => {
+    if (hoeren !== stand) return;
+    let fertig = "", vorlaeufig = "";
+    for (let i = 0; i < e.results.length; i++){
+      const teil = e.results[i][0]?.transcript || "";
+      if (e.results[i].isFinal) fertig += teil; else vorlaeufig += teil;
+    }
+    stand.fertig = fertig.trim();
+    stand.vorlaeufig = vorlaeufig.trim();
+    // Mitlesen, was erkannt wird -- es landet so auch im Feld, wie es abgeschickt wird.
+    input.value = [stand.basis, (fertig + vorlaeufig).trim()].filter(Boolean).join(" ");
+    input.dispatchEvent(new Event("input"));
+  };
+  rec.onerror = (e) => { if (hoeren === stand) stand.fehler = String(e.error || "x"); };
+  rec.onend = () => {
+    if (hoeren !== stand) return;
+    hoeren = null;
+    zeigeHoeren(false);
+    // Manche Browser markieren am Ende nichts als fertig -- dann gilt das Vorlaeufige.
+    const gesagt = stand.fertig || stand.vorlaeufig;
+    const ok = stand.senden && (!stand.fehler || stand.fehler === "no-speech") && gesagt;
+    if (!ok){
+      input.value = stand.basis;
+      input.dispatchEvent(new Event("input"));
+      if (stand.senden && stand.fehler !== "aborted"){
+        toast(STIMME_FEHLER[stand.fehler] || STIMME_FEHLER["no-speech"]);
+      }
+      return;
+    }
+    input.value = [stand.basis, gesagt].filter(Boolean).join(" ");
+    input.dispatchEvent(new Event("input"));
+    if (!busy) send.click();
+  };
+  try { rec.start(); } catch {
+    hoeren = null;
+    zeigeHoeren(false);
+    toast("Die Spracheingabe ließ sich nicht starten.");
+  }
+}
+micKnopf.addEventListener("click", () => {
+  if (hoeren) hoerenStoppen(true); else hoerenStarten();
+});
+$("#voice-yes").addEventListener("click", () => {
+  stimmeOk = true;
+  merkeZustand({ voice_ok: true });
+  closeOverlay(voiceBox);
+  hoerenStarten();
+});
+$("#voice-no").addEventListener("click", () => closeOverlay(voiceBox));
+voiceBox.addEventListener("click", (e) => { if (e.target === voiceBox) closeOverlay(voiceBox); });
+// Wer die Seite verlaesst, spricht nicht mehr mit ihr.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hoerenStoppen(false);
+});
+
 /* ---------- Seitenleiste ---------- */
 const narrow = () => window.matchMedia("(max-width:900px)").matches;
 // Auf dem Handy liegt die Leiste ueber dem Chat -- offen waere sie im Weg.
@@ -5173,7 +5314,7 @@ $("#theme-reset").addEventListener("click", () => {
   // Auch die eigenen Farben auf dem Server leeren -- sonst kaemen sie nach
   // dem Neuladen im Designer wieder (Fund 9.5.18).
   merkeZustand({ design });
-  setTheme("system"); setPalette(""); setSchrift("normal");
+  setTheme("system"); setPalette(""); setSchrift("normal"); setAutoScroll(true);
 });
 const themeBox = $("#themebox");
 function closeTheme(){ closeOverlay(themeBox); }
@@ -5207,6 +5348,19 @@ function setSchrift(wert, { merken = true } = {}){
 document.querySelectorAll("#fsizes .tmode").forEach(button =>
   button.addEventListener("click", () => setSchrift(button.dataset.fsize)));
 setSchrift(schrift, { merken: false });
+// Auto-Scroll (12.0.0 Luna): an wie bisher, aus bleibt der Chat beim Schreiben stehen.
+function setAutoScroll(an, { merken = true } = {}){
+  autoScroll = an !== false;
+  document.querySelectorAll("#autoscroll .tmode").forEach(button => {
+    const gewaehlt = (button.dataset.scroll === "on") === autoScroll;
+    button.classList.toggle("on", gewaehlt);
+    button.setAttribute("aria-pressed", gewaehlt ? "true" : "false");
+  });
+  if (merken) merkeZustand({ autoscroll: autoScroll });
+}
+document.querySelectorAll("#autoscroll .tmode").forEach(button =>
+  button.addEventListener("click", () => setAutoScroll(button.dataset.scroll === "on")));
+setAutoScroll(START.autoscroll !== false, { merken: false });
 palette = typeof START.palette === "string" ? START.palette : "";
 if (!gueltig(palette)) palette = "";
 if (START.design && typeof START.design === "object"){
@@ -5256,8 +5410,70 @@ const EN = {
 "Speichern fehlgeschlagen.": "Saving failed.",
 "Die Sicherheitsangaben lassen sich gerade nicht laden.": "Your security details cannot be loaded right now.",
 "Schriftgröße": "Font size",
+"KI-Modelle, Dienste, Konten und Programme für Aquaticy: installieren, an- und ausschalten, entfernen. Anmelden musst du dich selbst, deine Passwörter kennt Aquaticy nie. Aus dem Chat lässt sich hier nichts ändern.": "AI models, services, accounts and programs for Aquaticy: install, turn on and off, remove. You sign in yourself; Aquaticy never knows your passwords. Nothing here can be changed from the chat.",
+"Mistral und NVIDIA NIM brauchen einen Schlüssel. Den verknüpfst du unter Add-ons. Alles andere muss auf dem Server laufen (Ollama, LM Studio, vLLM).": "Mistral and NVIDIA NIM need a key. You link it under Add-ons. Everything else has to run on the server (Ollama, LM Studio, vLLM).",
+"🧩 Add-ons: NVIDIA NIM und Mistral": "🧩 Add-ons: NVIDIA NIM and Mistral",
+"Hier stehen die Modelle, die du oben selbst eingetragen hast.": "These are the models you entered above yourself.",
+"Brave Search (Schlüssel vom Betreiber)": "Brave Search (key from the operator)",
+"Tavily (Schlüssel vom Betreiber)": "Tavily (key from the operator)",
+"Brave und Tavily gehen nur, wenn der Betreiber auf dem Server einen Schlüssel hinterlegt hat.": "Brave and Tavily only work if the operator has stored a key on the server.",
+"KI-Modelle": "AI models",
+"Offene Modelle bei NVIDIA, zum Beispiel Llama 3.3 70B und Qwen-Coder. Großzügiges Freikontingent: 40 Anfragen je Minute.": "Open models at NVIDIA, for example Llama 3.3 70B and Qwen-Coder. Generous free tier: 40 requests per minute.",
+"Melde dich bei NVIDIA an, erstelle unter „API Keys“ einen Schlüssel (beginnt mit nvapi-) und füge ihn hier ein.": "Sign in with NVIDIA, create a key under “API Keys” (it starts with nvapi-) and paste it here.",
+"Deine Fragen gehen an NVIDIA. Der Schlüssel liegt verschlüsselt bei deinem Konto und geht nur an NVIDIA.": "Your questions go to NVIDIA. The key is stored encrypted with your account and only goes to NVIDIA.",
+"Europäischer Anbieter mit Servern in der EU: Mistral Large, Mistral Small und Codestral.": "European provider with servers in the EU: Mistral Large, Mistral Small and Codestral.",
+"Melde dich bei Mistral an, erstelle unter „API Keys“ einen Schlüssel und füge ihn hier ein.": "Sign in with Mistral, create a key under “API Keys” and paste it here.",
+"Deine Fragen gehen an Mistral. Der Schlüssel liegt verschlüsselt bei deinem Konto und geht nur an Mistral.": "Your questions go to Mistral. The key is stored encrypted with your account and only goes to Mistral.",
+"Mit Microsoft": "With Microsoft",
+"Verknüpft": "Linked",
+"Schlüssel entfernen": "Remove key",
+"Schlüssel entfernt.": "Key removed.",
+"Aktualisiert.": "Refreshed.",
+"Verknüpft — die Modelle stehen jetzt in der Auswahl.": "Linked — the models are now in the picker.",
+"Die Modelle verschwinden aus der Auswahl. Das Add-on bleibt installiert.": "The models disappear from the picker. The add-on stays installed.",
+"Der Betreiber stellt einen Schlüssel. Mit deinem eigenen läuft es auf deine Rechnung.": "The operator provides a key. With your own, it runs on your bill.",
+"Der Schlüssel wird gelöscht, die Modelle verschwinden aus der Auswahl.": "The key is deleted and the models disappear from the picker.",
+"API-Schlüssel einfügen": "Paste API key",
+"Schlüssel kopiert? Dann hier einfügen und „Verknüpfen“ klicken.": "Copied the key? Then paste it here and click “Link”.",
+"Dafür braucht es NVIDIA NIM und Mistral, beide mit Schlüssel (unter Add-ons).": "This needs NVIDIA NIM and Mistral, both with a key (under Add-ons).",
+"Keine Verbindung zu Aquaticy.": "No connection to Aquaticy.",
+"Aquaticy nimmt nur Mistral und NVIDIA NIM (beide unter Add-ons) oder Modelle, die auf dem Server laufen: Ollama, LM Studio, vLLM, llama.cpp.": "Aquaticy only uses Mistral and NVIDIA NIM (both under Add-ons) or models that run on the server: Ollama, LM Studio, vLLM, llama.cpp.",
+"Diesen Schlüssel erkenne ich nicht. Ein Schlüssel von NVIDIA beginnt mit „nvapi-“, einer von Mistral hat 32 Buchstaben und Ziffern.": "I don't recognise this key. A key from NVIDIA starts with “nvapi-”, one from Mistral has 32 letters and digits.",
+"Hier ist noch kein Schlüssel hinterlegt.": "No key is stored here yet.",
+"Deinstalliert — der Schlüssel ist gelöscht.": "Uninstalled — the key is deleted.",
+"Mistral nennt das Restkontingent hier nicht — zu sehen in der Konsole unter „Limits“.": "Mistral doesn't report the remaining quota here — you can see it in the console under “Limits”.",
+"NVIDIA nennt das Restkontingent hier nicht. Im Freikontingent gelten 40 Anfragen je Minute.": "NVIDIA doesn't report the remaining quota here. The free tier allows 40 requests per minute.",
+"Kein Guthaben mehr auf dem Mistral-Konto.": "No credit left on the Mistral account.",
+"Das Limit ist gerade erreicht — in einer Minute geht es weiter.": "The limit has just been reached — it continues in a minute.",
+"Das waren viele Versuche in kurzer Zeit — bitte in einer Minute noch einmal.": "That was a lot of attempts in a short time — please try again in a minute.",
+"Diesen Anbieter gibt es hier nicht.": "This provider doesn't exist here.",
 "Klein": "Small",
 "Groß": "Large",
+"Auto-Scroll beim Schreiben": "Auto-scroll while writing",
+"An: Der Chat läuft mit, während Aquaticy schreibt. Aus: Er bleibt stehen, wo du gerade liest.":
+  "On: the chat follows along while Aquaticy writes. Off: it stays where you are reading.",
+"Spracheingabe": "Voice input",
+"Sprechen statt tippen": "Speak instead of typing",
+"Zuhören beenden": "Stop listening",
+"Ich höre zu …": "Listening …",
+"Verstanden, zuhören": "Got it, start listening",
+"Tipp aufs Mikrofon und sprich. Sobald du aufhörst, schickt Aquaticy das Gesagte ab. Nochmal tippen beendet das Zuhören, Esc bricht ab.":
+  "Tap the microphone and speak. As soon as you stop, Aquaticy sends what you said. Tap again to stop listening, Esc cancels.",
+"Die Sprache erkennt dein Browser, nicht Aquaticy. Die meisten Browser schicken die Aufnahme dafür an ihren Hersteller (Chrome: Google, Edge: Microsoft, Safari: Apple). Kann dein Browser es auf dem Gerät, nutzt Aquaticy das. Aquaticy selbst bekommt nur den erkannten Text, wie eine getippte Frage, nie die Aufnahme.":
+  "Your browser recognises your speech, not Aquaticy. Most browsers send the recording to their maker for this (Chrome: Google, Edge: Microsoft, Safari: Apple). If your browser can do it on the device, Aquaticy uses that. Aquaticy itself only gets the recognised text, like a typed question, never the recording.",
+"Kein Zugriff aufs Mikrofon. Erlaube es in den Seiteneinstellungen des Browsers.":
+  "No access to the microphone. Allow it in the browser's site settings.",
+"Ich habe nichts gehört. Tipp aufs Mikrofon und sprich gleich los.":
+  "I didn't hear anything. Tap the microphone and start speaking right away.",
+"Kein Mikrofon gefunden.": "No microphone found.",
+"Die Spracherkennung des Browsers ist gerade nicht erreichbar.":
+  "The browser's speech recognition is not reachable right now.",
+"Diese Sprache erkennt dein Browser nicht.": "Your browser doesn't recognise this language.",
+"Dein Browser kann keine Spracheingabe. Sie geht in Chrome, Edge und Safari.":
+  "Your browser has no voice input. It works in Chrome, Edge and Safari.",
+"Spracheingabe geht nur über https oder direkt auf diesem Rechner (localhost).":
+  "Voice input only works over https or directly on this computer (localhost).",
+"Die Spracheingabe ließ sich nicht starten.": "Voice input could not be started.",
 "Sicherheit": "Security",
 "Deine Geräte und deine Adresse liegen verschlüsselt. Sehen kannst nur du sie hier — der Betreiber nicht.": "Your devices and your address are stored encrypted. Only you can see them here — the operator cannot.",
 "Passwort ändern": "Change password",
@@ -5435,19 +5651,14 @@ const EN = {
 "‹ Zurück": "‹ Back",
 "Interne Testversion — nicht für den Alltag gedacht, hier kann noch etwas haken.": "Internal test version — not meant for everyday use, things may still break.",
 "Pro sucht gründlicher und braucht dafür länger.": "Pro searches more thoroughly and takes longer for it.",
-"Verknüpfe dein Claude-, ChatGPT- oder Gemini-Konto: Die Knöpfe öffnen den Anbieter. Melde dich an, erstelle einen Schlüssel und füge ihn hier ein. Dann stehen deine Modelle in der Auswahl. Der Schlüssel liegt verschlüsselt bei deinem Konto, dein Passwort sieht Aquaticy nie.": "Link your Claude, ChatGPT or Gemini account: the buttons open the provider. Sign in, create a key and paste it here. Your models then appear in the picker. The key is stored encrypted with your account; Aquaticy never sees your password.",
 "KI-Konten": "AI accounts",
-"Programme und Dienste": "Programs and services",
-"Nicht verknüpft. Anmelden beim Anbieter, Schlüssel erstellen, kopieren — dann hier einfügen.": "Not linked. Sign in with the provider, create a key, copy it — then paste it here.",
 "Mit Google": "With Google",
 "Mit Apple": "With Apple",
 "Mit E-Mail": "With email",
 "Einfügen": "Paste",
 "Verknüpfen": "Link",
 "Aktualisieren": "Refresh",
-"Schlüssel einfügen (sk-ant-…, sk-…, AIza…)": "Paste key (sk-ant-…, sk-…, AIza…)",
-"Zwei verknüpfte Modelle lösen die Aufgabe, eines prüft auf Fehler. Aquaticy nimmt die Lösung an oder schickt sie zurück. Dauert länger und kostet auf allen Konten Tokens.": "Two linked models solve the task, one checks for mistakes. Aquaticy accepts the solution or sends it back. Takes longer and uses tokens on all accounts.",
-"Dafür braucht es mindestens zwei verknüpfte KI-Konten (Add-ons → KI-Konten).": "This needs at least two linked AI accounts (Add-ons → AI accounts).",
+"NVIDIA NIM löst die Aufgabe mit Mistral, eines prüft auf Fehler. Aquaticy nimmt die Lösung an oder schickt sie zurück. Dauert länger und kostet auf allen Konten Tokens.": "NVIDIA NIM solves the task with Mistral, one of them checks for mistakes. Aquaticy accepts the solution or sends it back. Takes longer and uses tokens on all accounts.",
 "Server-Verbund": "Server cluster",
 "Serverlast aufteilen": "Split server load",
 "Alle Server rechnen gemeinsam an einem Modell, auch an einem, das in keinen Server allein passt. Alle Konten bedient dann der Master. llama.cpp installiert Aquaticy selbst.": "All servers compute one model together, even one that fits into no single server. The master then serves all accounts. Aquaticy installs llama.cpp by itself.",
@@ -5528,10 +5739,8 @@ const EN = {
 "Nur nötig, wenn das Modell bei dir selbst läuft, z. B. mit Ollama": "Only needed if the model runs on your own machine, e.g. with Ollama",
 "Anbieter": "Provider",
 "— automatisch erkennen —": "— detect automatically —",
-"Trägst du hier ein eigenes Modell mit Schlüssel ein, erscheint es unten unter": "If you enter your own model with a key here, it appears below under",
 "Eigene Modelle": "Own models",
 "Modell speichern": "Save model",
-"Hier stehen nur die Modelle und Schlüssel, die du oben selbst hinzugefügt hast.": "Only the models and keys you added yourself above are listed here.",
 "🔒 „Plus“ gibt es nur mit Ultra. Die Größe „Normal“ kannst du trotzdem nutzen.": "🔒 “Plus” is only available with Ultra. You can still use the “Normal” size.",
 "Größe": "Size",
 "Gilt ab der nächsten virtual machine — eine laufende bleibt, wie sie ist": "Applies from the next virtual machine — a running one stays as it is",
@@ -5656,14 +5865,9 @@ const EN = {
 "Suchmaschine": "Search engine",
 "Offene Suche (kostenlos, ohne Schlüssel)": "Open search (free, no key)",
 "SearXNG (dein eigener Suchserver)": "SearXNG (your own search server)",
-"Brave Search (braucht Schlüssel)": "Brave Search (needs a key)",
-"Tavily (braucht Schlüssel)": "Tavily (needs a key)",
 "Suchdienste": "Search services",
 "Leer lassen nutzt alle": "Leave empty to use all",
 "SearXNG-Adresse": "SearXNG address",
-"Schlüssel der Suchmaschine": "Search engine key",
-"nur bei Brave und Tavily nötig": "only needed for Brave and Tavily",
-"— den trägst du oben beim Modell ein, dann steht er unter": "— you enter it above with the model, then it's listed under",
 "Formulierungen je Suche": "Phrasings per search",
 "Aquaticy stellt dieselbe Frage auf verschiedene Arten — das findet mehr. 2 bis 3 ist gut, 1 schaltet es ab.": "Aquaticy asks the same question in different ways — that finds more. 2 to 3 is good, 1 switches it off.",
 "Verbindung testen": "Test connection",
@@ -5720,7 +5924,6 @@ const EN = {
 "Die Adresse muss vollständig sein — oder leer bleiben.": "The address must be complete — or stay empty.",
 "Die Aufträge ließen sich nicht laden.": "The jobs couldn't be loaded.",
 "Die Datei kam nicht durch.": "The file didn't get through.",
-"Die Schlüssel ließen sich nicht laden.": "The keys couldn't be loaded.",
 "Die virtual machine antwortet nicht.": "The virtual machine isn't answering.",
 "Die virtual machine läuft, es liegt aber noch nichts darin.": "The virtual machine is running, but there's nothing in it yet.",
 "Die virtual machine öffnet die Seite …": "The virtual machine is opening the page …",
@@ -5856,7 +6059,6 @@ const EN = {
 "Da ist etwas schiefgelaufen.": "Something went wrong.",
 "Bitte versuch es gleich noch einmal. Wenn es so bleibt, lade die Seite neu.": "Please try again in a moment. If it keeps happening, reload the page.",
 "Seite neu laden": "Reload page",
-"API-Schlüssel von Claude, ChatGPT oder Gemini": "API key from Claude, ChatGPT or Gemini",
 "Bild des Coworkers": "Coworker picture",
 "Bei aktivem Auto-Upgrading können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte eingehen (dort unverschlüsselt). Abgelaufenes oder nicht mehr bestätigtes Wissen zieht betroffene Fassungen zurück; die Löschung wird wiederholt, bis der Ollama-Dienst erreichbar ist. Einzelheiten:": "With Auto-Upgrading active, excerpts confirmed several times can also go into local Ollama model texts (unencrypted there). Expired or no longer confirmed knowledge withdraws the affected versions; the deletion is retried until the Ollama service is reachable. Details:",
 "Im Code-Modus darf die virtual machine dann ins Internet — etwa für pip install oder um eine Seite abzurufen; dein Heimnetz bleibt dabei gesperrt. Bei Normal- und Pro-Konten hat sie gar kein Netz.": "In Code mode the virtual machine may then go online — for example for pip install or to fetch a page; your home network stays blocked. With Normal and Pro accounts it has no network at all.",
@@ -5929,7 +6131,6 @@ const EN = {
 "Einen Moment — frage beim Anbieter nach …": "One moment — asking the provider …",
 "In der Zwischenablage ist kein Schlüssel — bitte selbst einfügen.": "There's no key in the clipboard — please paste it yourself.",
 "Schlüssel kopiert? Dann auf „Einfügen“ klicken.": "Key copied? Then click “Paste”.",
-"Schlüssel kopiert? Dann oben einfügen und „Verknüpfen“ klicken.": "Key copied? Then paste it above and click “Link”.",
 "verknüpft": "linked",
 "Der Schlüssel wird gelöscht, die Modelle verschwinden aus der Auswahl.": "The key is deleted and the models disappear from the picker.",
 "Die virtual machine läuft gerade nicht. Öffne oben eine Adresse — oder starte eine Login-App über 🧩 Add-ons → Anmelden.": "The virtual machine isn't running right now. Open an address above — or start a login app via 🧩 Add-ons → Sign in.",
@@ -6192,6 +6393,17 @@ const EN_MUSTER = [
   [/^Aufgabe von (.+)$/, "Task of $1"],
   [/^(.+) ist verknüpft\.$/, "$1 is linked."],
   [/^verknüpft · (.+)$/, "linked · $1"],
+  [/^Verknüpft · (.+)$/, "Linked · $1"],
+  [/^Schlüssel von (.+) entfernen\?$/, "Remove the key for $1?"],
+  [/^Installiere zuerst das Add-on (.+)\.$/, "Install the add-on $1 first."],
+  [/^Das ist ein Schlüssel von (.+) — füg ihn beim Add-on (.+) ein\.$/,
+   "That's a key from $1 — paste it into the add-on $2."],
+  [/^(.+) hat keinen Schalter\. Zum Abschalten deinstallieren — dann ist auch der Schlüssel weg\.$/,
+   "$1 has no switch. Uninstall it to turn it off — the key goes with it."],
+  [/^(.+) lehnt den Schlüssel ab — bitte prüfen\.$/, "$1 rejects the key — please check it."],
+  [/^(.+): Limit gerade erreicht oder kein Guthaben\.$/, "$1: limit reached or no credit left."],
+  [/^(.+) ist nicht erreichbar \((.+)\)\.$/, "$1 can't be reached ($2)."],
+  [/^(.+) antwortet mit Fehler (\d+)\.$/, "$1 answers with error $2."],
   [/^Tokens frei: (.+) von (.+) je (.+)$/, "Tokens free: $1 of $2 per $3"],
   [/^Modelle: (.+)$/s, "Models: $1"],
   [/^(.+) trennen\?$/, "Disconnect $1?"],
@@ -6731,15 +6943,16 @@ function closePicker(zurueck){
   }, CLOSE_MS);
 }
 
-// Das Menue steht ueber der Eingabe, rechts buendig mit dem Senden-Knopf
-// (seit 9.5.34; vorher hing es unter der Kopfzeile). Die Masse kommen aus dem
-// Bild, nicht aus geratenen Zahlen: die Eingabe ist auf dem Handy hoeher, am
-// Anfang steht sie in der Mitte, und beim Schreiben waechst sie.
+// Das Menue steht ueber der Eingabe, links buendig mit dem Modell-Knopf (seit
+// 12.0.0 Luna steht der gleich nach dem Anhaengen; vorher rechts neben Senden).
+// Die Masse kommen aus dem Bild, nicht aus geratenen Zahlen: die Eingabe ist
+// auf dem Handy hoeher, am Anfang steht sie in der Mitte, und beim Schreiben
+// waechst sie.
 function setzePickerHoehe(){
   const eingabe = document.querySelector(".composer");
   const flaeche = document.querySelector(".pane");
   const leiste = document.querySelector(".topbar");
-  const senden = document.querySelector("#send");
+  const knopf = document.querySelector("#btn-model");
   if (!eingabe || !flaeche) return;
   const e = eingabe.getBoundingClientRect(), f = flaeche.getBoundingClientRect();
   modelBox.style.bottom = Math.round(f.bottom - e.top + 8) + "px";
@@ -6750,9 +6963,14 @@ function setzePickerHoehe(){
   let platz = e.top - oben - 16;
   if (platz < 180) platz = e.top - 16;
   modelBox.style.maxHeight = Math.max(60, Math.round(platz)) + "px";
-  if (senden && innerWidth > 640){
-    modelBox.style.right = Math.max(10, Math.round(f.right - senden.getBoundingClientRect().right)) + "px";
+  if (knopf && innerWidth > 640){
+    // Nie ueber den rechten Rand hinaus: dann ruecken wir so weit nach links wie noetig.
+    const breite = modelBox.getBoundingClientRect().width;
+    const links = Math.min(knopf.getBoundingClientRect().left - f.left, f.width - breite - 10);
+    modelBox.style.left = Math.max(10, Math.round(links)) + "px";
+    modelBox.style.right = "auto";
   } else {
+    modelBox.style.left = "";
     modelBox.style.right = "10px";
   }
 }
@@ -7018,6 +7236,8 @@ $("#picker-settings").addEventListener("click", () => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (asking) return;              // die Rueckfrage liegt obenauf
+  if (voiceBox.classList.contains("open")) { closeOverlay(voiceBox); return; }
+  if (hoeren) { hoerenStoppen(false); return; }
   if (guardBox.classList.contains("open")) { guardSchliessen(false); return; }
   if (screenBox.classList.contains("open")) { bildschirmSchliessen(); return; }
   if (addonBox.classList.contains("open")) { addonsSchliessen(); return; }
@@ -7082,7 +7302,7 @@ new IntersectionObserver((eintraege) => {
   // Nur abfragen, was dieses Konto sehen kann: der Verbund gehoert zu Ultra.
   if (kontoUltra) verbundLaden(); else verbundZeigen({});
   upgradeLaden();
-  kontenLaden(true);
+  kontenLaden();
 }, { root: form.closest(".sheet") }).observe($("#dev-settings"));
 function fill(values){
   for (const [k, v] of Object.entries(values)){
@@ -7106,7 +7326,6 @@ $("#btn-settings").addEventListener("click", async () => {
   fillProviders(cfg.providers);
   eigeneModelle = Array.isArray(cfg.own_models) ? cfg.own_models : [];
   modellStart = (form.elements["AQUATICY_MODEL"]?.value || "").trim();
-  suchHinweise = cfg.search_key_hints || {};
   $("#provider").value = "";
   $("#provider-note").textContent = "";
   $("#model-note").textContent = "";
@@ -7122,15 +7341,14 @@ $("#btn-settings").addEventListener("click", async () => {
   const wanted = START.load === true && kontoUltra;   // kontoUltra = Ultra
   $("#showload").checked = wanted;
   if (wanted) $("#showload").dispatchEvent(new Event("change"));
-  searchKeyHint();
-  loadKeys();
+  eigeneModelleZeigen();
   $("#probe-note").textContent = ""; $("#probe-note").className = "note";
   $("#google-step").hidden = true;
   showGoogle(cfg.google);
   $("#lager-note").textContent = ""; $("#lager-note").className = "note";
   $("#ha-hint").textContent = cfg.ha_connected ? "(gesetzt)" : "";
   showLegalRules(cfg.legal_rules || []);
-  // Verbund und KI-Konten erst, wenn "Dev settings" ins Bild kommt (9.6.2.5).
+  // Verbund und AI Council erst, wenn "Dev settings" ins Bild kommt (9.6.2.5).
   devGeladen = false;
   $("#savenote").textContent = ""; $("#savenote").className = "note";
   $("#ha-note").textContent = ""; $("#ha-note").className = "note";
@@ -7567,7 +7785,8 @@ function addonKarte(a){
     kopf.querySelector(".addon-name").parentNode.appendChild(badge);
   }
   kopf.querySelector(".addon-summary").textContent = a.summary;
-  if (a.installed){
+  // NVIDIA NIM und Mistral haben keinen Schalter: installiert heisst an (12.0.0 Luna).
+  if (a.installed && a.login_kind !== "apikey"){
     const schalter = document.createElement("input");
     schalter.type = "checkbox"; schalter.className = "schalter"; schalter.role = "switch";
     schalter.checked = a.enabled;
@@ -7607,7 +7826,9 @@ function addonKarte(a){
         title: `${a.name} wirklich deinstallieren?`,
         text: a.werkstatt
           ? "Programm und Anmeldung werden gelöscht. Eine laufende virtual machine startet dafür neu."
-          : "Die Einrichtung und die Anmeldung werden gelöscht.",
+          : a.login_kind === "apikey"
+            ? "Der Schlüssel wird gelöscht, die Modelle verschwinden aus der Auswahl."
+            : "Die Einrichtung und die Anmeldung werden gelöscht.",
         ok: "Deinstallieren", cancel: "Abbrechen",
       });
       if (weiter) addonTun({ action: "uninstall", id: a.id }, b);
@@ -7675,6 +7896,7 @@ function addonAnmeldung(a){
   const zeile = document.createElement("div");
   zeile.className = "addon-row";
   const angemeldet = a.login.state === "angemeldet";
+  if (a.login_kind === "apikey") return addonKonto(a);
   if (a.login_kind === "keine"){
     wie.textContent = a.anmelden || "Keine Anmeldung nötig.";
     return box;
@@ -7796,12 +8018,14 @@ function zeigeAddons(){
 }
 
 function addonsSchliessen(){ clearTimeout(addonTakt); closeOverlay(addonBox); }
-$("#btn-addons").addEventListener("click", () => {
+function addonsOeffnen(){
   $("#addon-note").textContent = "";
   openOverlay(addonBox);
   addonsLaden();
-  kontenLaden();
-});
+}
+$("#btn-addons").addEventListener("click", addonsOeffnen);
+// Aus Einstellungen -> Modell (12.0.0 Luna): dort sucht man den Schluessel.
+$("#btn-addons-modell").addEventListener("click", addonsOeffnen);
 
 /* ---------- Coworker (11.0.0 Luna) ---------- */
 // Ein Coworker arbeitet die ganze Zeit an einer Aufgabe (aquaticy/coworker.py):
@@ -8143,7 +8367,11 @@ $("#cw-create").addEventListener("click", async (e) => {
   }
 });
 
-/* ---------- KI-Konten (9.6.1) ---------- */
+/* ---------- NVIDIA NIM und Mistral (12.0.0 Luna) ----------
+   Die beiden Modell-Add-ons sind der einzige Ort, an dem sich ein API-Schluessel
+   eintragen laesst. Die Knoepfe "Mit Google" ... oeffnen nur die Anmeldeseite
+   des Anbieters -- anmelden tut man sich selbst. Der Schluessel geht einmal zum
+   Server und wird dann geleert; zurueck kommt nur, ob einer da ist. */
 // Bei welchem Anbieter gerade angemeldet wird -- seine Karte leuchtet, wenn
 // man zurueckkommt (9.6.2).
 let kontoWartet = "";
@@ -8153,151 +8381,132 @@ async function ausZwischenablage(){
   try { return (await navigator.clipboard.readText() || "").trim().split(/\s+/)[0] || ""; }
   catch { return ""; }
 }
-async function schnellVerknuepfen(wert){
-  const note = $("#linked-quick-note");
-  if (!wert){ $("#linked-quick-key").focus(); return; }
-  note.className = "meldung"; note.textContent = "Einen Moment — frage beim Anbieter nach …";
-  try {
-    const res = await api("/api/linked", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ action: "link", key: wert }),
-    });
-    const daten = await res.json();
-    if (!daten.ok){ note.className = "meldung bad"; note.textContent = daten.error || "Das hat nicht geklappt."; return; }
-    const konto = (daten.accounts || []).find(k => k.provider === daten.provider);
-    note.className = "meldung ok";
-    note.textContent = `${konto ? konto.label : "Konto"} ist verknüpft.`;
-    kontoWartet = "";
-    kontenZeigen(daten);
-  } catch { note.className = "meldung bad"; note.textContent = "Keine Verbindung zu Aquaticy."; }
-}
-$("#linked-paste").hidden = !zwischenablageGeht();
-$("#linked-paste").addEventListener("click", async () => {
-  const wert = await ausZwischenablage();
-  if (!wert){
-    $("#linked-quick-note").className = "meldung bad";
-    $("#linked-quick-note").textContent = "In der Zwischenablage ist kein Schlüssel — bitte selbst einfügen.";
-    return;
-  }
-  await schnellVerknuepfen(wert);
-});
-$("#linked-quick-go").addEventListener("click", async () => {
-  const feld = $("#linked-quick-key");
-  const wert = feld.value.trim();
-  feld.value = "";
-  await schnellVerknuepfen(wert);
-});
-$("#linked-quick-key").addEventListener("keydown", (e) => {
-  if (e.key === "Enter"){ e.preventDefault(); $("#linked-quick-go").click(); }
-});
 // Zurueck vom Anbieter: der Hinweis, dass jetzt eingefuegt werden kann.
 window.addEventListener("focus", () => {
   if (!kontoWartet || !addonBox.classList.contains("open")) return;
-  const note = $("#linked-quick-note");
-  note.className = "meldung ok";
-  note.textContent = zwischenablageGeht()
+  const meldung = document.querySelector(`.addon[data-id="${kontoWartet}"] .addon-konto .meldung`);
+  if (!meldung) return;
+  meldung.className = "meldung ok";
+  meldung.textContent = zwischenablageGeht()
     ? "Schlüssel kopiert? Dann auf „Einfügen“ klicken."
-    : "Schlüssel kopiert? Dann oben einfügen und „Verknüpfen“ klicken.";
+    : "Schlüssel kopiert? Dann hier einfügen und „Verknüpfen“ klicken.";
 });
-let kontenStand = 0;
-async function kontenLaden(nurWennAlt = false){
-  if (nurWennAlt && Date.now() - kontenStand < 60_000) return;
+// Nur noch fuer den Hinweis beim AI Council (Dev settings).
+async function kontenLaden(){
   try {
     const daten = await (await api("/api/linked")).json();
-    if (daten.error) return;   // z. B. kurz zu viele Anfragen -- spaeter noch einmal
-    kontenStand = Date.now();
-    kontenZeigen(daten);
+    if (!daten.error) zeigeRat(daten);
   } catch {}
 }
-async function kontoTun(body, karte){
-  const meldung = karte.querySelector(".meldung");
+function zeigeRat(daten){
+  const rat = daten.council || {};
+  const hinweis = $("#council-note");
+  if (hinweis) hinweis.textContent = rat.possible
+    ? `Bearbeiter: ${(rat.workers || []).join(", ")} · Prüfer: ${rat.checker} · Richter: ${rat.judge}`
+    : "Dafür braucht es NVIDIA NIM und Mistral, beide mit Schlüssel (unter Add-ons).";
+}
+async function kontoTun(body, box, b){
+  const meldung = box.querySelector(".meldung");
+  if (b) b.disabled = true;
   meldung.className = "meldung"; meldung.textContent = "Einen Moment — frage beim Anbieter nach …";
   try {
     const res = await api("/api/linked", {
       method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
     });
     const daten = await res.json();
-    if (!daten.ok){ meldung.className = "meldung bad"; meldung.textContent = daten.error || "Das hat nicht geklappt."; return; }
-    kontenZeigen(daten);
-  } catch { meldung.className = "meldung bad"; meldung.textContent = "Keine Verbindung zu Aquaticy."; }
+    if (!daten.ok){
+      meldung.className = "meldung bad";
+      meldung.textContent = daten.error || "Das hat nicht geklappt.";
+      return;
+    }
+    kontoWartet = "";
+    zeigeRat(daten);
+    await addonsLaden();
+    const note = $("#addon-note");
+    note.className = "note ok";
+    note.textContent = body.action === "unlink" ? "Schlüssel entfernt."
+      : body.action === "refresh" ? "Aktualisiert."
+      : "Verknüpft — die Modelle stehen jetzt in der Auswahl.";
+    refreshHeader();
+  } catch {
+    meldung.className = "meldung bad"; meldung.textContent = "Keine Verbindung zu Aquaticy.";
+  } finally { if (b) b.disabled = false; }
 }
 function zahl(n){ return typeof n === "number" ? n.toLocaleString("de-DE") : "?"; }
-function kontenZeigen(daten){
-  const liste = $("#linked-list");
-  liste.innerHTML = "";
-  for (const k of daten.accounts || []){
-    const karte = document.createElement("div");
-    karte.className = "linked";
-    karte.innerHTML = '<div class="kopf"><strong></strong><span class="stufe"></span></div>'
-      + '<div class="info"></div><div class="reihe"></div><div class="meldung" role="status"></div>';
-    karte.querySelector("strong").textContent = `${k.label} (${k.company})`;
-    karte.querySelector(".stufe").textContent = k.linked ? (k.tier ? `verknüpft · ${k.tier}` : "verknüpft") : "";
-    const info = karte.querySelector(".info");
-    const reihe = karte.querySelector(".reihe");
-    const knopf = (text, klasse, tun) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "btn" + (klasse ? " " + klasse : ""); b.textContent = text;
-      b.addEventListener("click", async () => { b.disabled = true; await tun(); b.disabled = false; });
-      reihe.appendChild(b);
-    };
-    if (k.linked){
-      const zeilen = [];
-      if (k.tokens) zeilen.push(`Tokens frei: ${zahl(k.tokens.remaining)} von ${zahl(k.tokens.limit)} je ${k.tokens.per}`);
-      if (k.models.length) zeilen.push(`Modelle: ${k.models.join(", ")}`);
-      if (k.note) zeilen.push(k.note);
-      if (k.warning) zeilen.push("⚠ " + k.warning);
-      if (k.checked) zeilen.push(`Stand: ${k.checked}`);
-      info.textContent = zeilen.join("\n");
-      knopf("Aktualisieren", "", () => kontoTun({ action: "refresh", provider: k.provider }, karte));
-      knopf("Trennen", "", async () => {
-        if (await frage(`${k.label} trennen?`, "Der Schlüssel wird gelöscht, die Modelle verschwinden aus der Auswahl.", "Trennen"))
-          await kontoTun({ action: "unlink", provider: k.provider }, karte);
-      });
-    } else {
-      info.textContent = "Nicht verknüpft. Anmelden beim Anbieter, Schlüssel erstellen, "
-        + "kopieren — dann hier einfügen.";
-      // Anmelden beim Anbieter (9.6.2): so, wie der Anbieter es anbietet.
-      const anmelden = document.createElement("div");
-      anmelden.className = "anmelden";
-      for (const weg of k.sign_in || []){
-        const a = document.createElement("a");
-        a.className = "btn"; a.href = k.get_key; a.target = "_blank"; a.rel = "noopener";
-        a.textContent = weg.label;
-        a.addEventListener("click", () => { kontoWartet = k.provider; });
-        anmelden.appendChild(a);
-      }
-      karte.insertBefore(anmelden, reihe);
-      if (kontoWartet === k.provider) karte.classList.add("wartet");
-      const feld = document.createElement("input");
-      feld.type = "password"; feld.autocomplete = "off"; feld.spellcheck = false;
-      feld.placeholder = `${k.form}  API-Schlüssel einfügen`;
-      feld.setAttribute("aria-label", `${k.label}: API-Schlüssel`);
-      for (const a of ["data-lpignore", "data-1p-ignore", "data-bwignore"]) feld.setAttribute(a, "true");
-      reihe.appendChild(feld);
-      if (zwischenablageGeht()){
-        knopf("Einfügen", "", async () => {
-          const wert = await ausZwischenablage();
-          if (wert){ feld.value = ""; await kontoTun({ action: "link", provider: k.provider, key: wert }, karte); }
-          else { const m = karte.querySelector(".meldung"); m.className = "meldung bad";
-                 m.textContent = "In der Zwischenablage ist kein Schlüssel — bitte selbst einfügen."; }
-        });
-      }
-      const verknuepfen = async () => {
-        const wert = feld.value.trim();
-        if (!wert){ feld.focus(); return; }
-        feld.value = "";
-        await kontoTun({ action: "link", provider: k.provider, key: wert }, karte);
-      };
-      knopf("Verknüpfen", "primary", verknuepfen);
-      feld.addEventListener("keydown", (e) => { if (e.key === "Enter"){ e.preventDefault(); verknuepfen(); } });
-    }
-    liste.appendChild(karte);
+// Unter einem installierten Modell-Add-on: verknuepft (mit Modellen und Tokens)
+// oder die Anmeldung beim Anbieter und das Feld fuer den Schluessel.
+function addonKonto(a){
+  const k = a.konto || {};
+  const box = document.createElement("div");
+  box.className = "addon-login addon-konto" + (kontoWartet === a.id ? " wartet" : "");
+  const info = document.createElement("div");
+  info.className = "how info";
+  const reihe = document.createElement("div");
+  reihe.className = "addon-row";
+  const meldung = document.createElement("div");
+  meldung.className = "meldung"; meldung.setAttribute("role", "status");
+  if (k.linked){
+    const zeilen = [k.tier ? `Verknüpft · ${k.tier}` : "Verknüpft"];
+    if (k.tokens) zeilen.push(`Tokens frei: ${zahl(k.tokens.remaining)} von ${zahl(k.tokens.limit)} je ${k.tokens.per}`);
+    if ((k.models || []).length) zeilen.push(`Modelle: ${k.models.join(", ")}`);
+    if (k.note) zeilen.push(k.note);
+    if (k.warning) zeilen.push("⚠ " + k.warning);
+    if (k.checked) zeilen.push(`Stand: ${k.checked}`);
+    info.textContent = zeilen.join("\n");
+    reihe.appendChild(knopf("Aktualisieren", "", (b) =>
+      kontoTun({ action: "refresh", provider: a.id }, box, b)));
+    reihe.appendChild(knopf("Schlüssel entfernen", "", async (b) => {
+      if (await frage(`Schlüssel von ${a.name} entfernen?`,
+                      "Die Modelle verschwinden aus der Auswahl. Das Add-on bleibt installiert.",
+                      "Entfernen"))
+        await kontoTun({ action: "unlink", provider: a.id }, box, b);
+    }));
+    box.append(info, reihe, meldung);
+    return box;
   }
-  const rat = daten.council || {};
-  const hinweis = $("#council-note");
-  if (hinweis) hinweis.textContent = rat.possible
-    ? `Bearbeiter: ${(rat.workers || []).join(", ")} · Prüfer: ${rat.checker} · Richter: ${rat.judge}`
-    : "Dafür braucht es mindestens zwei verknüpfte KI-Konten (Add-ons → KI-Konten).";
+  info.textContent = a.anmelden || "";
+  if (k.provided){
+    const gestellt = document.createElement("div");
+    gestellt.className = "how";
+    gestellt.textContent = "Der Betreiber stellt einen Schlüssel. Mit deinem eigenen läuft es "
+      + "auf deine Rechnung.";
+    box.appendChild(gestellt);
+  }
+  const anmelden = document.createElement("div");
+  anmelden.className = "anmelden";
+  for (const weg of k.sign_in || []){
+    const link = document.createElement("a");
+    link.className = "btn"; link.href = k.get_key; link.target = "_blank"; link.rel = "noopener";
+    link.textContent = weg.label;
+    link.addEventListener("click", () => { kontoWartet = a.id; box.classList.add("wartet"); });
+    anmelden.appendChild(link);
+  }
+  const feld = document.createElement("input");
+  feld.type = "password"; feld.autocomplete = "off"; feld.spellcheck = false;
+  feld.placeholder = (k.form ? k.form + "  " : "") + "API-Schlüssel einfügen";
+  feld.setAttribute("aria-label", `${a.name}: API-Schlüssel`);
+  for (const attr of ["data-lpignore", "data-1p-ignore", "data-bwignore"]) feld.setAttribute(attr, "true");
+  reihe.appendChild(feld);
+  const verknuepfen = async (b, wert) => {
+    if (!wert){ feld.focus(); return; }
+    feld.value = "";                         // nicht im Formular stehen lassen
+    await kontoTun({ action: "link", provider: a.id, key: wert }, box, b);
+  };
+  if (zwischenablageGeht()){
+    reihe.appendChild(knopf("Einfügen", "", async (b) => {
+      const wert = await ausZwischenablage();
+      if (wert) await verknuepfen(b, wert);
+      else { meldung.className = "meldung bad";
+             meldung.textContent = "In der Zwischenablage ist kein Schlüssel — bitte selbst einfügen."; }
+    }));
+  }
+  const los = knopf("Verknüpfen", "primary", (b) => verknuepfen(b, feld.value.trim()));
+  reihe.appendChild(los);
+  feld.addEventListener("keydown", (e) => {
+    if (e.key === "Enter"){ e.preventDefault(); verknuepfen(los, feld.value.trim()); }
+  });
+  box.append(info, anmelden, reihe, meldung);
+  return box;
 }
 $("#addon-close").addEventListener("click", addonsSchliessen);
 addonBox.addEventListener("click", (e) => { if (e.target === addonBox) addonsSchliessen(); });
@@ -8891,124 +9100,15 @@ $("#cluster-add").addEventListener("click", async () => {
 $("#cancel").addEventListener("click", closeSettings);
 overlay.addEventListener("click", (e) => { if (e.target === overlay) closeSettings(); });
 
-/* ---------- API-Schluessel (9.5.14 Seashell) ---------- */
-// Was hinterlegt ist, sagt der Server -- den Schluessel selbst bekommt die
-// Seite nie zu sehen, nur Anbieter, die letzten vier Zeichen und das Datum.
-// Getippte Schluessel gehen einmal zum Server und werden dann geleert.
-async function keysTun(body, zeile){
-  const meldung = zeile ? zeile.querySelector(".key-meldung") : null;
-  if (meldung){ meldung.className = "key-meldung"; meldung.textContent = "Moment …"; }
-  let data;
-  try {
-    const res = await api("/api/keys", {
-      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
-    });
-    data = await res.json();
-  } catch { data = { ok: false, error: "Keine Verbindung zu Aquaticy. Versuch es gleich noch einmal." }; }
-  if (data.slots) zeichneKeys(data);
-  // Nach dem Neuzeichnen die Meldung an dieselbe Stelle schreiben.
-  const neu = document.querySelector(`.key-row[data-name="${body.name}"] .key-meldung`);
-  if (neu){
-    neu.className = "key-meldung " + (data.ok ? "ok" : "bad");
-    neu.textContent = data.message || data.error || "";
-  }
-  if (data.ok && body.action !== "test") refreshHeader();
-  return data;
-}
-
-function zeichneKeys(data){
-  const box = $("#keys");
-  box.innerHTML = "";
-  $("#keys-privacy").textContent = data.privacy || "";
-  for (const slot of data.slots || []){
-    const zeile = document.createElement("div");
-    zeile.className = "key-row" + (slot.set ? " gesetzt" : "");
-    zeile.dataset.name = slot.name;
-    zeile.innerHTML = '<div class="key-name"><strong></strong><span></span></div>'
-      // Kein Name: das Feld gehoert nicht zum Einstellungsformular. Die
-      // data-Attribute bitten Passwortmanager, es nicht als Passwort der
-      // Seite zu speichern -- ein API-Schluessel ist keins.
-      + '<input type="password" autocomplete="off" spellcheck="false" data-lpignore="true"'
-      + ' data-1p-ignore="true" data-bwignore="true" data-form-type="other">'
-      + '<div class="key-knoepfe"></div><div class="key-note"></div>'
-      + '<div class="key-meldung" role="status"></div>';
-    zeile.querySelector("strong").textContent = slot.label;
-    zeile.querySelector(".key-name span").textContent = slot.status;
-    const feld = zeile.querySelector("input");
-    feld.placeholder = slot.placeholder || "Schlüssel einfügen";
-    feld.setAttribute("aria-label", `${slot.label}: Schlüssel`);
-    zeile.querySelector(".key-note").textContent = slot.note || "";
-    const knoepfe = zeile.querySelector(".key-knoepfe");
-    const knopf = (text, klasse, tun) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "btn" + (klasse ? " " + klasse : ""); b.textContent = text;
-      b.addEventListener("click", async () => { b.disabled = true; await tun(); b.disabled = false; });
-      knoepfe.appendChild(b);
-    };
-    knopf(slot.set ? "Ersetzen" : "Speichern", "primary", async () => {
-      const wert = feld.value.trim();
-      if (!wert){ feld.focus(); return; }
-      feld.value = "";
-      await keysTun({ action: "set", name: slot.name, value: wert }, zeile);
-    });
-    // Enter speichert diesen Schluessel -- nicht das ganze Formular drumherum.
-    feld.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter") return;
-      e.preventDefault();
-      knoepfe.querySelector(".btn.primary").click();
-    });
-    knopf("Testen", "", async () => {
-      const wert = feld.value.trim();
-      await keysTun({ action: "test", name: slot.name, value: wert }, zeile);
-    });
-    if (slot.set){
-      knopf("Entfernen", "", async () => {
-        if (!await frage(`Deinen ${slot.label}-Schlüssel entfernen?`, "", "Entfernen")) return;
-        await keysTun({ action: "remove", name: slot.name }, zeile);
-      });
-    }
-    box.appendChild(zeile);
-  }
-  // Der Satz unter dem Bereich: keiner, einer oder mehrere (vom Server).
-  $("#keys-summary").textContent = data.summary || "";
-  $("#keys-quota").textContent = data.quota_note || "";
-  eigeneModelleZeigen();
-}
-
-// "Eigene Modelle" erscheint nur, wenn du oben selbst etwas hinzugefügt hast:
-// ein anderes Modell oder einen Anbieter gewählt, eine eigene Adresse
-// eingetragen oder schon einen eigenen Schlüssel hinterlegt. Dann stehen dort
-// genau diese Modelle und nur die Schlüssel, die dazu gehören.
+// "Eigene Modelle" erscheint nur, wenn du oben selbst etwas eingetragen hast:
+// ein anderes Modell oder eine eigene Adresse. Schluessel stehen hier seit
+// 12.0.0 Luna nicht mehr -- die gibt es nur unter Add-ons.
 let eigeneModelle = [];      // vom Server: was das Konto selbst eingetragen hat
 let modellStart = "";        // das Hauptmodell beim Öffnen der Einstellungen
-const SUCH_SCHLUESSEL = { brave: "BRAVE_API_KEY", tavily: "TAVILY_API_KEY" };
-function passendeSchluessel(){
-  const namen = new Set();
-  const modell = (form.elements["AQUATICY_MODEL"]?.value || "").trim();
-  const modelle = [modell, ...eigeneModelle.map(e => e.model)];
-  const gewaehlt = $("#provider")?.value || "";
-  for (const eintrag of anbieter){
-    if (!eintrag.key) continue;
-    const passt = gewaehlt === eintrag.id || modelle.some((m, i) =>
-      m.startsWith(eintrag.id + "/") && (i > 0 || modell !== modellStart));
-    if (passt) namen.add(eintrag.key);
-  }
-  const suche = SUCH_SCHLUESSEL[form.elements["AQUATICY_SEARCH_BACKEND"]?.value || ""];
-  if (suche) namen.add(suche);
-  return namen;
-}
 function eigeneModelleZeigen(){
   const sec = $("#sec-schluessel");
   if (!sec) return;
   const modell = (form.elements["AQUATICY_MODEL"]?.value || "").trim();
-  const passend = passendeSchluessel();
-  let zeilen = 0;
-  document.querySelectorAll("#keys .key-row").forEach(zeile => {
-    const zeigen = zeile.classList.contains("gesetzt") || passend.has(zeile.dataset.name);
-    zeile.hidden = !zeigen;
-    if (zeigen) zeilen++;
-  });
-  // Die eigenen Modelle -- gespeicherte und ein gerade neu eingetipptes.
   const liste = $("#own-models");
   liste.innerHTML = "";
   const eintraege = [...eigeneModelle];
@@ -9023,15 +9123,10 @@ function eigeneModelleZeigen(){
     liste.appendChild(li);
   }
   const adresse = (form.elements["AQUATICY_API_BASE"]?.value || "").trim();
-  sec.hidden = !(zeilen || eintraege.length || adresse);
+  sec.hidden = !(eintraege.length || adresse);
   // Auch die Sprungmarke oben verschwindet, solange der Abschnitt weg ist.
   const marke = document.querySelector('#secnav button[data-section="sec-schluessel"]');
   if (marke) marke.hidden = sec.hidden;
-}
-
-async function loadKeys(){
-  try { zeichneKeys(await (await api("/api/keys")).json()); }
-  catch { $("#keys-summary").textContent = "Die Schlüssel ließen sich nicht laden."; }
 }
 
 /* ---------- Nutzung ---------- */
@@ -9527,9 +9622,8 @@ const MODEL_FIELDS = ["AQUATICY_MODEL", "AQUATICY_VISION_MODEL", "AQUATICY_SUBAG
   "AQUATICY_CODE_MODEL",
                       "AQUATICY_API_BASE"];
 
-// Tippt man ein eigenes Modell oder eine eigene Adresse, wählt einen Anbieter
-// oder eine Suche mit Schlüssel, taucht "Eigene Modelle" auf.
-["AQUATICY_MODEL", "AQUATICY_API_BASE", "AQUATICY_SEARCH_BACKEND"].forEach(name => {
+// Tippt man ein eigenes Modell oder eine eigene Adresse, taucht "Eigene Modelle" auf.
+["AQUATICY_MODEL", "AQUATICY_API_BASE"].forEach(name => {
   const f = document.querySelector(`[name="${name}"]`);
   if (f){
     f.addEventListener("input", eigeneModelleZeigen);
@@ -9845,14 +9939,6 @@ $("#probe").addEventListener("click", async () => {
 Suche (${data.search.backend}): ${mark(data.search)}`;
 });
 
-// Der Hinweis am Schluesselfeld richtet sich nach der gewaehlten Suchmaschine.
-// Welcher Suchdienst welchen Schluessel braucht, sagt der Server.
-let suchHinweise = {};
-function searchKeyHint(){
-  const dienst = form.elements["AQUATICY_SEARCH_BACKEND"].value;
-  $("#search-keyname").textContent = suchHinweise[dienst] ?? suchHinweise[""] ?? "";
-}
-form.elements["AQUATICY_SEARCH_BACKEND"].addEventListener("change", searchKeyHint);
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();

@@ -10,6 +10,10 @@ Aquaticy nutzt kein MCP-Gateway von LiteLLM. Fehlt ``mcp``, wird derselbe Aufruf
 deshalb ohne diesen Umweg wiederholt (``_skip_mcp_handler``) und das fuer den
 Rest des Laufs gemerkt. Der Fehler kommt vor jeder Anfrage ans Netz: nichts wird
 doppelt geschickt oder gezaehlt. ``pyproject.toml`` schliesst 1.106.0 zusaetzlich aus.
+
+Seit 12.0.0 Luna ist das hier auch die Sperre (``config.check_allowed``): Jeder
+Modellaufruf von Aquaticy laeuft hier durch, und durch kommen nur Mistral,
+NVIDIA NIM und Modelle auf dem Server selbst.
 """
 
 from __future__ import annotations
@@ -28,6 +32,9 @@ def _fehlt_mcp(exc: BaseException) -> bool:
 def completion(**kwargs: Any) -> Any:
     """Wie ``litellm.completion`` -- nur ohne den MCP-Umweg, wenn `mcp` fehlt."""
     global _OHNE_MCP
+    from aquaticy.config import check_allowed
+
+    check_allowed(str(kwargs.get("model") or ""), str(kwargs.get("api_base") or ""))
     import litellm
 
     if _OHNE_MCP and kwargs.get("tools"):

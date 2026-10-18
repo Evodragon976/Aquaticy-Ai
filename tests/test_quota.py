@@ -204,7 +204,7 @@ def test_metering_records_into_statistics_and_quota(tmp_path: Path,
     antwort = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="x"))],
                               usage=SimpleNamespace(prompt_tokens=60_000, completion_tokens=0))
     monkeypatch.setattr("litellm.completion", lambda **kw: antwort)
-    metering.completion(settings, model="m", messages=[])
+    metering.completion(settings, model="mistral/m", messages=[])
     assert UsageLog(settings.db_path).total_tokens() == 60_000
     assert kontingent.status()["session"]["percent"] == 20
     metering.charge_image(settings, "bild")

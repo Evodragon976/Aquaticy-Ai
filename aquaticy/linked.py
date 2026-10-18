@@ -1,34 +1,34 @@
 """Verknuepfte KI-Konten und AI Council (seit 9.6.1).
 
-**Verknuepfen.** Claude (Anthropic), ChatGPT (OpenAI) und Gemini (Google)
-werden mit dem API-Schluessel des eigenen Kontos verbunden. Der Schluessel
-liegt verschluesselt im Schluesselbund des Aquaticy-Kontos (aquaticy/
-keyvault.py) und geht nur an den Anbieter selbst. Danach liest Aquaticy aus,
-was das Konto kann:
+**Verknuepfen.** Seit 12.0.0 Luna sind es Mistral und NVIDIA NIM -- und nur
+bei ihren Add-ons (aquaticy/addons.py) laesst sich ueberhaupt ein
+API-Schluessel hinterlegen, nachdem das Add-on installiert ist. Andere
+Anbieter in der Cloud ruft Aquaticy gar nicht auf (``config.model_allowed``).
+Der Schluessel liegt verschluesselt im
+Schluesselbund des Aquaticy-Kontos (aquaticy/keyvault.py) und geht nur an den
+Anbieter selbst. Danach liest Aquaticy aus, was das Konto kann:
 
-* **Modelle:** die Liste, die der Anbieter fuer genau diesen Schluessel
-  freigibt. Sie stehen danach in der Modellauswahl -- im Normal-, Pro- und
-  Code-Modus wie alle anderen.
-* **Stufe und Tokens:** Anthropic und OpenAI nennen bei jeder Antwort die
-  Grenzen des Schluessels und was davon im laufenden Zeitfenster noch frei
-  ist. Daraus ergibt sich auch die Stufe (Tier). Dafuer geht eine winzige
-  Anfrage mit einem einzigen Token raus. Google gibt beides ueber die
-  Schnittstelle nicht heraus -- dann steht das so da.
+* **Modelle:** die Liste, die der Anbieter fuer diesen Schluessel nennt. Sie
+  stehen danach in der Modellauswahl -- im Normal-, Pro- und Code-Modus.
+* **Tokens:** Schickt der Anbieter bei einer Antwort seine Grenzen mit, steht
+  hier, was davon im laufenden Zeitfenster noch frei ist. Dafuer geht eine
+  winzige Anfrage mit einem einzigen Token raus. Nennt er sie nicht, steht das
+  so da.
 
-**Warum kein Passwort?** Die Abos auf claude.ai, chatgpt.com und gemini.google
-haben keine Schnittstelle fuer andere Programme. Sich dort mit E-Mail und
-Passwort maschinell anzumelden, verbieten alle drei Anbieter, es scheitert an
-Zwei-Faktor und Captchas, und Aquaticy haette das Passwort des ganzen Kontos.
-Der API-Schluessel ist der vorgesehene Weg: er laesst sich jederzeit beim
-Anbieter widerrufen und kann nichts ausser Modelle aufrufen. Wer bei Google
-angemeldet ist, holt sich den Gemini-Schluessel mit einem Klick im AI Studio.
+**Warum kein Passwort?** Sich bei Mistral oder NVIDIA maschinell mit E-Mail
+und Passwort anzumelden, scheitert an Zwei-Faktor und Captchas, und Aquaticy
+haette das Passwort des ganzen Kontos. Die Knoepfe "Mit Google", "Mit Apple",
+"Mit E-Mail" oeffnen deshalb nur die Anmeldeseite des Anbieters; dort meldet
+man sich selbst an, erstellt einen Schluessel und fuegt ihn hier ein. Der
+Schluessel laesst sich jederzeit beim Anbieter widerrufen und kann nichts
+ausser Modelle aufrufen.
 
 **AI Council.** Statt eines Modells arbeiten mehrere: die verknuepften Modelle
-bearbeiten die Frage, eines prueft auf Fehler (Gemini, wenn verknuepft), und
-das Hauptmodell von Aquaticy ist der Richter. Er entscheidet, ob die Loesung
-traegt -- wenn nicht, gehen seine Einwaende und die Antworten der anderen
-zurueck an die Bearbeiter, die sich daran abarbeiten (bis zu drei Runden).
-Am Ende schreibt der Richter die Antwort. Agenten laufen in diesem Modus nicht.
+bearbeiten die Frage, eines prueft auf Fehler, und das Hauptmodell von
+Aquaticy ist der Richter. Er entscheidet, ob die Loesung traegt -- wenn nicht,
+gehen seine Einwaende und die Antworten der anderen zurueck an die
+Bearbeiter, die sich daran abarbeiten (bis zu drei Runden). Am Ende schreibt
+der Richter die Antwort. Agenten laufen in diesem Modus nicht.
 """
 
 from __future__ import annotations
@@ -48,15 +48,12 @@ from aquaticy.jsonutil import loads
 
 #: Die Anbieter: Name im Schluesselbund, Praefix fuer LiteLLM, wo es den Schluessel gibt.
 PROVIDERS: dict[str, dict[str, str]] = {
-    "anthropic": {"label": "Claude", "company": "Anthropic", "key": "ANTHROPIC_API_KEY",
-                  "prefix": "anthropic/", "get_key": "https://console.anthropic.com/settings/keys",
-                  "form": "sk-ant-…"},
-    "openai": {"label": "ChatGPT", "company": "OpenAI", "key": "OPENAI_API_KEY",
-               "prefix": "openai/", "get_key": "https://platform.openai.com/api-keys",
-               "form": "sk-…"},
-    "gemini": {"label": "Gemini", "company": "Google", "key": "GEMINI_API_KEY",
-               "prefix": "gemini/", "get_key": "https://aistudio.google.com/apikey",
-               "form": "AIza…"},
+    "mistral": {"label": "Mistral", "company": "Mistral AI", "key": "MISTRAL_API_KEY",
+                "prefix": "mistral/", "get_key": "https://console.mistral.ai/api-keys",
+                "form": ""},
+    "nvidia_nim": {"label": "NVIDIA NIM", "company": "NVIDIA", "key": "NVIDIA_NIM_API_KEY",
+                   "prefix": "nvidia_nim/",
+                   "get_key": "https://build.nvidia.com/settings/api-keys", "form": "nvapi-…"},
 }
 KEY_NAMES = frozenset(p["key"] for p in PROVIDERS.values())
 
@@ -64,27 +61,35 @@ KEY_NAMES = frozenset(p["key"] for p in PROVIDERS.values())
 #: holen (9.6.2). Nur, was der Anbieter selbst anbietet -- Aquaticy meldet
 #: niemanden an, es oeffnet nur die richtige Seite.
 SIGN_IN: dict[str, tuple[str, ...]] = {
-    "anthropic": ("google", "email"),
-    "openai": ("google", "apple", "email"),
-    "gemini": ("google",),
+    "mistral": ("google", "apple", "microsoft", "email"),
+    "nvidia_nim": ("google", "email"),
 }
-SIGN_IN_LABELS = {"google": "Mit Google", "apple": "Mit Apple", "email": "Mit E-Mail"}
+SIGN_IN_LABELS = {"google": "Mit Google", "apple": "Mit Apple", "microsoft": "Mit Microsoft",
+                  "email": "Mit E-Mail"}
 
-#: Woran sich ein Schluessel erkennen laesst -- die laengste Vorsilbe zuerst.
-_KEY_FORMS: tuple[tuple[str, str], ...] = (
-    ("sk-ant-", "anthropic"), ("AIza", "gemini"), ("sk-", "openai"))
+#: Ein Mistral-Schluessel: 32 Buchstaben und Ziffern, ohne Vorsilbe.
+_MISTRAL_FORM = re.compile(r"[A-Za-z0-9]{32}")
 
 
 def detect_provider(key: str) -> str:
     """Zu welchem Anbieter gehoert dieser Schluessel? "" = nicht zu erkennen."""
     wert = str(key or "").strip()
-    return next((anbieter for vorsilbe, anbieter in _KEY_FORMS if wert.startswith(vorsilbe)), "")
+    if wert.startswith("nvapi-"):
+        return "nvidia_nim"
+    if _MISTRAL_FORM.fullmatch(wert):
+        return "mistral"
+    return ""
+
+
 STATE_FILE = "linked.json"
 TIMEOUT = 15.0
 #: Hoechstens so viele Modelle je Anbieter in der Auswahl.
 MAX_MODELS = 12
 #: Runden im Council, bevor der Richter in jedem Fall entscheidet.
 COUNCIL_ROUNDS = 3
+
+MISTRAL_API = "https://api.mistral.ai/v1"
+NVIDIA_API = "https://integrate.api.nvidia.com/v1"
 
 _LOCK = threading.Lock()
 
@@ -113,39 +118,40 @@ def _int(wert: Any) -> int | None:
         return None
 
 
-def anthropic_tier(requests_per_minute: int | None) -> str:
-    """Stufe aus dem Anfragelimit (Anthropic: Tier 1 = 50/min, 2 = 1000, 3 = 2000, 4 = 4000)."""
-    if not requests_per_minute:
-        return ""
-    for grenze, name in ((50, "Tier 1"), (1000, "Tier 2"), (2000, "Tier 3"), (4000, "Tier 4")):
-        if requests_per_minute <= grenze:
-            return name
-    return "Tier 4+ / individuell"
+#: Wie Anbieter ihre Token-Grenzen mitschicken: (Grenze, Rest, Zeitraum).
+_TOKEN_HEADERS: tuple[tuple[str, str, str], ...] = (
+    ("x-ratelimit-limit-tokens-minute", "x-ratelimit-remaining-tokens-minute", "Minute"),
+    ("ratelimitbysize-limit", "ratelimitbysize-remaining", "Minute"),
+    ("x-ratelimit-limit-tokens", "x-ratelimit-remaining-tokens", "Minute"),
+    ("x-ratelimit-limit-tokens-month", "x-ratelimit-remaining-tokens-month", "Monat"),
+)
 
 
-def openai_tier(tokens_per_minute: int | None) -> str:
-    """Stufe aus dem Token-Limit von gpt-4o-mini (OpenAI-Tabelle der Stufen)."""
-    if not tokens_per_minute:
-        return ""
-    for grenze, name in ((40_000, "Free"), (200_000, "Tier 1"), (2_000_000, "Tier 2"),
-                         (4_000_000, "Tier 3"), (10_000_000, "Tier 4")):
-        if tokens_per_minute <= grenze:
-            return name
-    return "Tier 5"
+def _tokens(headers: httpx.Headers) -> dict[str, Any] | None:
+    """Die Token-Grenze aus den Kopfzeilen -- None, wenn der Anbieter keine nennt."""
+    for grenze, rest, zeitraum in _TOKEN_HEADERS:
+        limit, frei = _int(headers.get(grenze)), _int(headers.get(rest))
+        if limit is not None or frei is not None:
+            return {"limit": limit, "remaining": frei, "per": zeitraum, "reset": ""}
+    return None
 
 
-_OPENAI_CHAT = re.compile(r"^(gpt-|o\d|chatgpt-)")
-_OPENAI_SKIP = re.compile(r"audio|realtime|transcribe|tts|image|search|embedding|moderation|"
-                          r"instruct|codex|computer-use|-\d{4}-\d{2}-\d{2}$")
+def _probe(http: httpx.Client, url: str, key: str, model: str) -> httpx.Response:
+    """Eine Antwort mit genau einem Token -- sie bringt die Grenzen mit."""
+    return http.post(url, headers={"Authorization": f"Bearer {key}"}, json={
+        "model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "."}]})
+
+
+_MISTRAL_SKIP = re.compile(r"embed|moderation|ocr|transcri", re.IGNORECASE)
 
 
 def _sort_models(models: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Neueste und groesste zuerst -- grob, aber ohne Netz."""
-    return sorted(models, key=lambda m: m["id"], reverse=True)[:MAX_MODELS]
+    """Die "-latest"-Namen zuerst, dann der Rest -- grob, aber ohne Netz."""
+    return sorted(models, key=lambda m: (not m["id"].endswith("-latest"), m["id"]))[:MAX_MODELS]
 
 
 def inspect(provider: str, key: str, client: httpx.Client | None = None) -> dict[str, Any]:
-    """Liest Modelle, Stufe und freie Tokens fuer einen Schluessel aus.
+    """Prueft den Schluessel beim Anbieter und liest Modelle und freie Tokens aus.
 
     Raises:
         LinkError: Schluessel abgelehnt, Anbieter nicht erreichbar.
@@ -154,11 +160,9 @@ def inspect(provider: str, key: str, client: httpx.Client | None = None) -> dict
         raise LinkError("Diesen Anbieter gibt es hier nicht.")
     http = _http(client)
     try:
-        if provider == "anthropic":
-            return _inspect_anthropic(http, key)
-        if provider == "openai":
-            return _inspect_openai(http, key)
-        return _inspect_gemini(http, key)
+        if provider == "mistral":
+            return _inspect_mistral(http, key)
+        return _inspect_nvidia(http, key)
     except httpx.HTTPError as exc:
         raise LinkError(f"{PROVIDERS[provider]['label']} ist nicht erreichbar "
                         f"({type(exc).__name__}).") from exc
@@ -167,76 +171,75 @@ def inspect(provider: str, key: str, client: httpx.Client | None = None) -> dict
             http.close()
 
 
-def _inspect_anthropic(http: httpx.Client, key: str) -> dict[str, Any]:
-    kopf = {"x-api-key": key, "anthropic-version": "2023-06-01"}
-    antwort = http.get("https://api.anthropic.com/v1/models", params={"limit": 100},
-                       headers=kopf)
+def _inspect_mistral(http: httpx.Client, key: str) -> dict[str, Any]:
+    antwort = http.get(f"{MISTRAL_API}/models", headers={"Authorization": f"Bearer {key}"})
     if antwort.status_code != 200:
-        raise _fehler(antwort, "Claude")
-    modelle = _sort_models([
-        {"id": "anthropic/" + str(m.get("id")), "label": str(m.get("display_name") or m.get("id"))}
-        for m in antwort.json().get("data", []) if str(m.get("id", "")).startswith("claude")])
+        raise _fehler(antwort, "Mistral")
+    gesehen: set[str] = set()
+    modelle: list[dict[str, str]] = []
+    for m in antwort.json().get("data", []) or []:
+        mid = str(m.get("id") or "")
+        faehig = m.get("capabilities") or {}
+        if (not mid or mid in gesehen or _MISTRAL_SKIP.search(mid)
+                or faehig.get("completion_chat") is False or m.get("deprecation")):
+            continue
+        gesehen.add(mid)
+        modelle.append({"id": "mistral/" + mid, "label": str(m.get("name") or mid)})
+    modelle = _sort_models(modelle)
     info: dict[str, Any] = {"models": modelle, "tier": "", "tokens": None}
-    klein = next((m["id"] for m in modelle if "haiku" in m["id"]),
+    klein = next((m["id"] for m in modelle if "small" in m["id"]),
                  modelle[-1]["id"] if modelle else "")
     if klein:
-        probe = http.post("https://api.anthropic.com/v1/messages", headers=kopf, json={
-            "model": klein.split("/", 1)[1], "max_tokens": 1,
-            "messages": [{"role": "user", "content": "."}]})
-        h = probe.headers
-        info["tier"] = anthropic_tier(_int(h.get("anthropic-ratelimit-requests-limit")))
-        limit = _int(h.get("anthropic-ratelimit-tokens-limit")
-                     or h.get("anthropic-ratelimit-input-tokens-limit"))
-        frei = _int(h.get("anthropic-ratelimit-tokens-remaining")
-                    or h.get("anthropic-ratelimit-input-tokens-remaining"))
-        if limit is not None or frei is not None:
-            info["tokens"] = {"limit": limit, "remaining": frei, "per": "Minute",
-                              "reset": h.get("anthropic-ratelimit-tokens-reset", "")}
-        if probe.status_code in (400, 402) and "credit" in probe.text.lower():
-            info["warning"] = "Kein Guthaben mehr auf dem Anthropic-Konto."
+        probe = _probe(http, f"{MISTRAL_API}/chat/completions", key, klein.split("/", 1)[1])
+        info["tokens"] = _tokens(probe.headers)
+        if probe.status_code in (402, 429) and any(
+                wort in probe.text.lower() for wort in ("quota", "credit", "payment")):
+            info["warning"] = "Kein Guthaben mehr auf dem Mistral-Konto."
+    if info["tokens"] is None:
+        info["note"] = ("Mistral nennt das Restkontingent hier nicht — zu sehen in der "
+                        "Konsole unter „Limits“.")
     return info
 
 
-def _inspect_openai(http: httpx.Client, key: str) -> dict[str, Any]:
-    kopf = {"Authorization": f"Bearer {key}"}
-    antwort = http.get("https://api.openai.com/v1/models", headers=kopf)
-    if antwort.status_code != 200:
-        raise _fehler(antwort, "ChatGPT")
-    ids = [str(m.get("id", "")) for m in antwort.json().get("data", [])]
-    modelle = _sort_models([{"id": "openai/" + i, "label": i} for i in ids
-                            if _OPENAI_CHAT.match(i) and not _OPENAI_SKIP.search(i)])
-    info: dict[str, Any] = {"models": modelle, "tier": "", "tokens": None}
-    if "gpt-4o-mini" in ids:
-        probe = http.post("https://api.openai.com/v1/chat/completions", headers=kopf, json={
-            "model": "gpt-4o-mini", "max_tokens": 1,
-            "messages": [{"role": "user", "content": "."}]})
-        h = probe.headers
-        limit = _int(h.get("x-ratelimit-limit-tokens"))
-        info["tier"] = openai_tier(limit)
-        if limit is not None:
-            info["tokens"] = {"limit": limit,
-                              "remaining": _int(h.get("x-ratelimit-remaining-tokens")),
-                              "per": "Minute", "reset": h.get("x-ratelimit-reset-tokens", "")}
-        if probe.status_code == 429 and "quota" in probe.text.lower():
-            info["warning"] = "Kein Guthaben mehr auf dem OpenAI-Konto."
+#: Chat-Modelle im Katalog von NVIDIA erkennt man am Namen -- Bild-, Sprach-,
+#: Such- und Pruefmodelle bleiben draussen.
+_NVIDIA_CHAT = re.compile(r"instruct|chat|nemotron|deepseek|qwen|kimi|glm|gpt-oss|mixtral",
+                          re.IGNORECASE)
+_NVIDIA_SKIP = re.compile(
+    r"embed|rerank|retriev|guard|safety|reward|clip|vila|neva|vision|-vl|vl-|parakeet|"
+    r"whisper|flux|diffusion|ocr|deplot|kosmos|fuyu|detect|pii|riva|audio|tts|asr|"
+    r"translate|cosmos|-base\b", re.IGNORECASE)
+#: Diese zuerst: das Arbeitspferd, das schnelle, das fuers Programmieren.
+_NVIDIA_FIRST = ("meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct",
+                 "qwen/qwen2.5-coder-32b-instruct")
+
+
+def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
+    # Die Modellliste bei NVIDIA ist oeffentlich -- ob der Schluessel stimmt,
+    # zeigt erst eine Antwort.
+    probe = _probe(http, f"{NVIDIA_API}/chat/completions", key, _NVIDIA_FIRST[1])
+    if probe.status_code in (401, 403):
+        raise _fehler(probe, "NVIDIA NIM")
+    info: dict[str, Any] = {"models": [], "tier": "", "tokens": _tokens(probe.headers)}
+    if probe.status_code == 429:
+        info["warning"] = "Das Limit ist gerade erreicht — in einer Minute geht es weiter."
+    elif probe.status_code >= 500:
+        raise _fehler(probe, "NVIDIA NIM")
+    # Ein anderes 4xx sagt nur etwas ueber das Probemodell, nicht ueber den Schluessel.
+    ids: list[str] = []
+    antwort = http.get(f"{NVIDIA_API}/models", headers={"Authorization": f"Bearer {key}"})
+    if antwort.status_code == 200:
+        ids = [str(m.get("id") or "") for m in antwort.json().get("data", []) or []]
+    ids = [i for i in dict.fromkeys(ids) if i and _NVIDIA_CHAT.search(i)
+           and not _NVIDIA_SKIP.search(i)]
+    vorne = [i for i in _NVIDIA_FIRST if i in ids or not ids]
+    rest = sorted(i for i in ids if i not in vorne)
+    info["models"] = [{"id": "nvidia_nim/" + i, "label": i.split("/", 1)[-1]}
+                      for i in (vorne + rest)[:MAX_MODELS]]
+    if info["tokens"] is None:
+        info["note"] = ("NVIDIA nennt das Restkontingent hier nicht. Im Freikontingent "
+                        "gelten 40 Anfragen je Minute.")
     return info
-
-
-def _inspect_gemini(http: httpx.Client, key: str) -> dict[str, Any]:
-    # Der Schluessel im Kopf, nicht in der Adresse -- Adressen landen in Protokollen.
-    antwort = http.get("https://generativelanguage.googleapis.com/v1beta/models",
-                       params={"pageSize": 200}, headers={"x-goog-api-key": key})
-    if antwort.status_code != 200:
-        raise _fehler(antwort, "Gemini")
-    modelle = _sort_models([
-        {"id": "gemini/" + str(m.get("name", "")).removeprefix("models/"),
-         "label": str(m.get("displayName") or m.get("name"))}
-        for m in antwort.json().get("models", [])
-        if "generateContent" in (m.get("supportedGenerationMethods") or [])
-        and "gemini" in str(m.get("name", "")) and "embedding" not in str(m.get("name", ""))])
-    return {"models": modelle, "tier": "", "tokens": None,
-            "note": "Google nennt Stufe und Restkontingent nicht über die Schnittstelle — "
-                    "zu sehen im AI Studio unter „Usage“."}
 
 
 # -- Gespeicherter Stand (kein Geheimnis: nur Modelle und Grenzen) -----------
@@ -267,21 +270,20 @@ def save(data_dir: Path | str, provider: str, info: dict[str, Any] | None) -> No
 
 
 def linked_providers(settings: Any) -> list[str]:
-    """Verknuepfte Anbieter: Schluessel da UND unter Add-ons ausgelesen.
+    """Verknuepfte Anbieter: der Schluessel ist da.
 
     Mit Konto zaehlt nur der EIGENE Schluessel -- einer, den der Betreiber in
-    seiner Umgebung hat, macht noch kein verknuepftes Konto.
+    seiner Umgebung hat, macht noch kein verknuepftes Konto. Ein Schluessel aus
+    der Zeit vor 12.0.0 (damals in den Einstellungen) zaehlt auch ohne
+    Auslesen; seine Modelle kommen mit "Aktualisieren".
     """
     import os
 
-    stand = load(settings.data_dir)
     eigene: frozenset[str] = getattr(settings, "own_key_names", frozenset()) or frozenset()
     keys = getattr(settings, "api_keys", {}) or {}
     mit_konto = bool(getattr(settings, "account_email", ""))
     out = []
     for p, d in PROVIDERS.items():
-        if p not in stand:
-            continue
         if mit_konto:
             da = d["key"] in eigene and bool(keys.get(d["key"]))
         else:
@@ -308,10 +310,8 @@ def picker_models(settings: Any) -> list[dict[str, str]]:
 
 
 _BEST = {
-    "anthropic": (r"opus", r"sonnet", r"haiku"),
-    "openai": (r"^openai/gpt-5(?!.*(mini|nano))", r"^openai/o3(?!-mini)", r"^openai/gpt-4\.1(?!-)",
-               r"^openai/gpt-4o$", r"gpt"),
-    "gemini": (r"pro", r"flash"),
+    "mistral": (r"large", r"medium", r"magistral", r"small"),
+    "nvidia_nim": (r"nemotron-ultra", r"405b", r"deepseek", r"llama-3\.3-70b", r"70b", r"qwen"),
 }
 
 
@@ -328,13 +328,12 @@ def best_model(settings: Any, provider: str) -> str:
 
 # -- AI Council ---------------------------------------------------------------
 def council_roles(settings: Any) -> tuple[list[tuple[str, str]], tuple[str, str] | None]:
-    """(Bearbeiter, Pruefer) als (Anbieter, Modell). Gemini prueft, wenn es dabei ist."""
+    """(Bearbeiter, Pruefer) als (Anbieter, Modell). Der letzte verknuepfte prueft."""
     dabei = [(p, best_model(settings, p)) for p in linked_providers(settings)]
     dabei = [(p, m) for p, m in dabei if m]
     if len(dabei) < 2:
         return dabei, None
-    pruefer = next((x for x in dabei if x[0] == "gemini"), dabei[-1])
-    return [x for x in dabei if x != pruefer], pruefer
+    return dabei[:-1], dabei[-1]
 
 
 WORKER_PROMPT = (

@@ -36,12 +36,13 @@ def check_llm(
             kwargs["api_key"] = api_key
         if api_base:
             kwargs["api_base"] = api_base
-        from aquaticy.pace import paced
-
         # Ein Test mit eigenem Schluessel laeuft in dessen eigenem Takt, einer
         # mit dem gestellten in dem des Betreibers.
+        from aquaticy import llmcall
+        from aquaticy.pace import paced
+
         with paced(model, pace_key):
-            response = litellm.completion(
+            response = llmcall.completion(
                 model=model,
                 messages=[{"role": "user", "content": PROBE_QUESTION}],
                 max_tokens=PROBE_TOKENS,

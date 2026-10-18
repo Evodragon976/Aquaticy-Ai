@@ -37,7 +37,10 @@ def _an(konto: Settings, *ids: str) -> None:
 
 # -- Katalog und Speicher ----------------------------------------------------------
 def test_every_addon_has_simple_rights() -> None:
-    for addon_id in addons.CATALOG:
+    # NVIDIA NIM und Mistral (12.0.0 Luna) liefern Modelle, keine Werkzeuge --
+    # es gibt nichts, was Aquaticy dort in deinem Namen tun koennte.
+    assert not any(addon_id in addons.RIGHTS for addon_id in addons.MODEL_ADDONS)
+    for addon_id in set(addons.CATALOG) - addons.MODEL_ADDONS:
         rechte = addons.RIGHTS[addon_id]
         assert 1 <= len(rechte) <= 2, "einfach: ein, zwei Fragen je Add-on"
         for recht in rechte:

@@ -1,4 +1,4 @@
-# Aquaticy AI 11.4.1 Luna
+# Aquaticy AI 12.0.0 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -71,7 +71,7 @@ $ aquaticy
   sein kann.
 - „Hallo“, „Danke“ oder „Wer bist du?“ beantwortet Aquaticy sofort, ohne Modell.
 
-**Arbeitsweisen**
+**Arbeitsweisen** (links in der Seitenleiste, unter dem Logo)
 - **Normal:** ein Gespräch. Gesucht wird, wenn es nötig ist.
 - **Pro:** für große Fragen. Das stärkste Modell, bis zu 50 Helfer. Dauert länger, ist genauer.
 - **Code:** schreibt Code und probiert ihn in einer abgeschotteten **virtual machine** aus.
@@ -81,16 +81,18 @@ $ aquaticy
 - **Eigene Website:** mit deiner Domain über Cloudflare, mit Zertifikat. Am Router musst du
   nichts freigeben.
 - **Design:** Hell, Dunkel oder wie das System. Standard (grün), Schlicht oder eigene Farben.
+  Auto-Scroll beim Schreiben an oder aus.
+- **Spracheingabe:** 🎤 neben dem Senden-Knopf. Sprechen, und das Gesagte geht als Frage los.
 - **Sprache:** Deutsch oder Englisch.
 - Chats durchsuchen, umbenennen und exportieren (HTML, Markdown, CSV).
 
 **Extras**
 - **Coworker** (Pro und Ultra): arbeiten dauerhaft an einer Aufgabe. Sie lesen Gmail, Kalender
   und GitHub, melden Ergebnisse und fragen, bevor sie etwas ändern.
-- **Add-ons:** KI-Konten (Claude, ChatGPT, Gemini), GitHub, Wetter, RSS-Feeds, Tagesschau,
-  Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal, Telegram Web, Blender. Dazu die
-  Plugins **Code-Review** und **Security-Review**. Jedes Add-on hat im Chat einen Befehl:
-  `/code-review`, `/github`, `/wetter` …
+- **Add-ons:** **NVIDIA NIM** und **Mistral** (die einzigen Modelle mit API-Schlüssel), GitHub,
+  Wetter, RSS-Feeds, Tagesschau, Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal,
+  Telegram Web, Blender. Dazu die Plugins **Code-Review** und **Security-Review**. Die Dienste
+  und Plugins haben im Chat einen Befehl: `/code-review`, `/github`, `/wetter` …
 - **Speicher:** merkt sich, was länger gilt. Verschlüsselt und jederzeit einsehbar.
 - **Aufträge:** regelmäßig recherchieren, Preise oder Webcams beobachten.
 - **Gmail und Kalender:** lesen, Termine anlegen, Entwürfe schreiben. Verschickt wird nichts.
@@ -115,9 +117,9 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.4.1 Luna
+aquaticy --version            # 12.0.0 Luna
 
-# 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
+# 2. Einrichten: Modell, Suche, auf Wunsch eine eigene Domain
 aquaticy setup
 
 # 3. Loslegen – im Terminal …
@@ -133,7 +135,7 @@ aquaticy web
 
 | Betrieb | CPU | RAM | Speicher |
 |---|---|---|---|
-| Modell in der Cloud (Mistral, NVIDIA, verknüpfte Konten) | 1 Kern | 1 GB | 1 GB |
+| Modell in der Cloud (Mistral, NVIDIA NIM) | 1 Kern | 1 GB | 1 GB |
 | + Seiten mit echtem Browser | 2 Kerne | 2 GB | 2 GB |
 | + virtual machine (Code-Modus, Add-ons) | 2 Kerne | 4 GB | 10 GB |
 | Lokales Modell mit Ollama | 4 Kerne | 8 GB (GPU empfohlen) | 10 GB |
@@ -143,7 +145,7 @@ aquaticy web
 
 | Was | Woher | Pflicht? |
 |---|---|---|
-| KI-Anbieter und Schlüssel | [Mistral](https://console.mistral.ai/api-keys/) · [NVIDIA NIM](https://build.nvidia.com/) · oder lokal mit [Ollama](https://ollama.com), ohne Schlüssel | ja |
+| KI-Anbieter | Mistral oder NVIDIA NIM (den Schlüssel verknüpfst du danach in der Weboberfläche unter Add-ons) · oder lokal mit [Ollama](https://ollama.com), ohne Schlüssel | ja |
 | Suchmaschine | nichts – die offene Suche braucht keinen Schlüssel | nein |
 | Eigene Domain | eine Domain bei Cloudflare und ein API-Token ([so geht's](#eigene-website-mit-domain)) | nein |
 
@@ -331,10 +333,18 @@ Wo Aquaticy erreichbar ist, hängt davon ab, ob du eine eigene Domain eingericht
 
 Beim Start stehen alle Adressen im Terminal.
 
-**Chat.** Links die letzten Chats (durchsuchbar), in der Mitte das Gespräch, unten die Eingabe
-mit Normal, Pro und Code. Dateien hängst du mit 📎 an. Während einer Recherche kannst du in
-einen anderen Chat wechseln. Die Recherche läuft weiter. Auf dem Handy füllen Fenster den
+**Chat.** Links unter dem Logo Normal, Pro und Code, darunter die letzten Chats
+(durchsuchbar). In der Mitte das Gespräch, unten die Eingabe: 📎 Anhängen, die Modellauswahl,
+🎤 Mikrofon und Senden. Während einer Recherche kannst du in einen anderen Chat wechseln. Die
+Recherche läuft weiter. Auf dem Handy liegt die Seitenleiste hinter ☰, Fenster füllen den
 ganzen Bildschirm.
+
+**Spracheingabe.** Tipp auf 🎤 und sprich. Sobald du aufhörst, geht das Gesagte als Frage los;
+nochmal tippen beendet das Zuhören, Esc bricht ab. Die Sprache erkennt dein Browser, nicht
+Aquaticy: Die meisten Browser schicken die Aufnahme dafür an ihren Hersteller (Chrome: Google,
+Edge: Microsoft, Safari: Apple); kann er es auf dem Gerät, nutzt Aquaticy das. Aquaticy bekommt
+nur den erkannten Text. Vor der ersten Nutzung steht dieser Hinweis da. Geht nur über https oder
+auf dem eigenen Rechner (localhost), nicht in Firefox.
 
 **Weg und wieder da.** Eine Anfrage läuft auf dem Server, nicht im Browser. Du kannst die App
 verlassen, das Handy sperren oder den Tab schließen. Kommst du zurück, hängt sich die Seite
@@ -360,8 +370,8 @@ Fehlt die Angabe und wurde keine Seite gelesen, geht die Antwort einmal zurück.
 zeigt, was darin passiert ist. Fehler und Sperren bleiben sichtbar. „↻ Erneut versuchen“ stellt
 die Frage noch einmal.
 
-**Modellauswahl** (links neben dem Senden-Knopf):
-- **Modelle:** Cloud, lokal, verknüpfte KI-Konten, verbesserte Fassungen aus dem Auto-Upgrading
+**Modellauswahl** (gleich nach 📎 Anhängen):
+- **Modelle:** Mistral und NVIDIA NIM, lokal, verbesserte Fassungen aus dem Auto-Upgrading
   und das **Verbund-Modell**. Es steht nur da, was wirklich antwortet: ein Cloud-Modell nur mit
   Schlüssel, ein lokales nur, wenn es in Ollama installiert ist. Die Liste fragt Ollama bei jedem
   Öffnen neu; `aquaticy web` zeigt beim Start, welche Modelle Ollama hat, und startet Ollama,
@@ -389,7 +399,8 @@ Ultra darf, trägt ein 🔒.
   Ort & Sprache, Helfer & Grenzen, **Dev settings** (Ultra).
 
 **Design** (links unten): Hell, Dunkel oder wie das System. Standard, Schlicht oder eigene
-Farben. Dazu Schriftgröße und Sprache. Das gilt auf jedem Gerät.
+Farben. Dazu Schriftgröße, **Auto-Scroll** (an: der Chat läuft beim Schreiben mit, aus: er
+bleibt stehen, wo du liest) und Sprache. Das gilt auf jedem Gerät.
 
 **Merkzettel:** was Aquaticy über dich weiß. Jede Zeile lässt sich löschen.
 
@@ -505,26 +516,32 @@ ist gegen gestohlene Datenbanken und Sicherungen und gegen andere Konten.
 
 ## Add-ons
 
-*Einstellungen → virtual machine → 🧩 Add-ons.* Jedes Add-on lässt sich installieren, an- und
-ausschalten und entfernen. Aus dem Chat heraus geht das nicht. Anmelden musst du dich selbst –
+*Einstellungen → Modell oder virtual machine → 🧩 Add-ons.* Jedes Add-on lässt sich
+installieren, an- und ausschalten und entfernen. Aus dem Chat heraus geht das nicht. Anmelden musst du dich selbst –
 Aquaticy kennt keine Passwörter. Unter **Rechte** stellst du ein, was Aquaticy damit darf.
 
-### KI-Konten: Claude, ChatGPT, Gemini
+### KI-Modelle: NVIDIA NIM und Mistral
 
-*Add-ons → KI-Konten.* In drei Schritten:
+Die beiden stehen ganz oben unter Add-ons. Sie sind der **einzige Ort** in Aquaticy, an dem
+sich ein API-Schlüssel eintragen lässt. In vier Schritten:
 
-1. **„Mit Google“, „Mit Apple“ oder „Mit E-Mail“** öffnet die Seite des Anbieters. Dort meldest
-   du dich an.
-2. Einen **API-Schlüssel erstellen** und kopieren.
-3. In Aquaticy auf **„Einfügen“**. Aquaticy erkennt selbst, von wem der Schlüssel ist.
+1. **„Installieren“** beim Add-on NVIDIA NIM oder Mistral.
+2. **„Mit Google“, „Mit E-Mail“** (bei Mistral auch Apple und Microsoft) öffnet die Seite des
+   Anbieters. Dort meldest du dich selbst an.
+3. Einen **API-Schlüssel erstellen** und kopieren.
+4. In Aquaticy **„Einfügen“** oder einfügen und **„Verknüpfen“**.
 
-Danach liest Aquaticy aus, welche **Modelle** dein Konto hat. Sie stehen in der Modellauswahl.
-Dazu kommen **Stufe** und **freie Tokens** (Claude und ChatGPT; Google nennt beides nicht). Der
-Schlüssel liegt verschlüsselt in deinem Konto und geht nur an den Anbieter.
+Aquaticy fragt den Anbieter, ob der Schlüssel stimmt, und speichert ihn erst dann. Danach liest
+es aus, welche **Modelle** dein Konto hat; sie stehen in der Modellauswahl. Nennt der Anbieter
+seine Grenzen, stehen die **freien Tokens** dabei. Der Schlüssel liegt verschlüsselt in deinem
+Konto, geht nur an den Anbieter und nie zurück an den Browser. **Deinstallieren** löscht ihn.
 
-**AI Council** (*Dev settings*): Ab zwei verknüpften Konten arbeiten die Modelle zusammen. Zwei
-lösen die Aufgabe, eines prüft auf Fehler. Aquaticy ist der **Richter**: Es nimmt die Lösung an
-oder schickt sie zurück, bis zu drei Runden.
+Claude, ChatGPT, Gemini und andere Anbieter in der Cloud ruft Aquaticy nicht auf. Alles
+andere läuft auf dem Server: Ollama, LM Studio, vLLM oder llama.cpp.
+
+**AI Council** (*Dev settings*): Sind NVIDIA NIM und Mistral verknüpft, arbeiten die Modelle
+zusammen. Eines löst die Aufgabe, das andere prüft auf Fehler. Aquaticy ist der **Richter**: Es
+nimmt die Lösung an oder schickt sie zurück, bis zu drei Runden.
 
 ### Programme und Dienste
 
@@ -887,14 +904,17 @@ aquaticy aiguard --konto "name"  # die letzten Vorfälle eines Kontos
 
 ## Modelle und Anbieter
 
-Aquaticy ist auf **Mistral**, **NVIDIA NIM** und lokale Modelle mit **Ollama** eingerichtet.
-Dazu kommen verknüpfte KI-Konten und das Verbund-Modell.
+Aquaticy nimmt **Mistral** und **NVIDIA NIM** in der Cloud und sonst nur, was **auf dem
+Server** läuft: Ollama, LM Studio, vLLM, llama.cpp und das Verbund-Modell. Andere Anbieter
+(Claude, ChatGPT, Gemini, Groq, OpenRouter …) ruft es nicht auf, auch nicht über eine
+eingetragene Modell-ID.
 
 | Anbieter | Kürzel | Schlüssel |
 |---|---|---|
-| [Mistral](https://console.mistral.ai/api-keys/) | `mistral/` | `MISTRAL_API_KEY` |
-| [NVIDIA NIM](https://build.nvidia.com/) | `nvidia_nim/` | `NVIDIA_NIM_API_KEY` |
+| [Mistral](https://console.mistral.ai/api-keys/) | `mistral/` | Add-on Mistral |
+| [NVIDIA NIM](https://build.nvidia.com/) | `nvidia_nim/` | Add-on NVIDIA NIM |
 | Ollama (lokal) | `ollama_chat/` | – |
+| LM Studio, vLLM, llama.cpp auf dem Server | `lm_studio/`, `hosted_vllm/`, `openai/` + lokale Adresse | – |
 
 Je Anbieter wählt Aquaticy das passende Modell:
 
@@ -912,11 +932,12 @@ aquaticy --model ollama_chat/qwen2.5:7b
 
 - Das Modell muss **Werkzeuge aufrufen** können, sonst kann es nicht suchen.
 - Fehlt das Kürzel, ergänzt Aquaticy es.
-- Andere LiteLLM-Anbieter gehen über `AQUATICY_MODEL=anbieter/modell` und `AQUATICY_API_KEY`.
+- Ein Server mit OpenAI-Schnittstelle zählt nur unter einer lokalen Adresse (localhost,
+  Heimnetz, `.local`/`.lan`). Ohne Adresse ginge `openai/…` zu OpenAI und ist gesperrt.
 - Aquaticy hält die Grenzen der Anbieter ein (NVIDIA 40/Minute, Mistral 240/Minute). Anpassbar
   mit `AQUATICY_RPM` und `AQUATICY_PARALLEL_CALLS`.
-- In der Weboberfläche trägt jedes Konto eigene Modelle und Schlüssel ein. Sie zählen nicht
-  gegen das Limit.
+- Den Schlüssel für Mistral oder NVIDIA NIM verknüpft jedes Konto selbst unter Add-ons. Modelle
+  mit eigenem Schlüssel zählen nicht gegen das Limit.
 
 ---
 
@@ -929,8 +950,8 @@ wird auf mehrere Arten gestellt (`AQUATICY_SEARCH_VARIANTS`).
 |---|---|---|
 | Offene Suche | `duckduckgo` | – |
 | Eigener [SearXNG](https://docs.searxng.org/)-Server | `searxng` + `AQUATICY_SEARXNG_URL` | – |
-| [Brave Search](https://brave.com/search/api/) | `brave` | `BRAVE_API_KEY` |
-| [Tavily](https://tavily.com/) | `tavily` | `TAVILY_API_KEY` |
+| [Brave Search](https://brave.com/search/api/) | `brave` | `BRAVE_API_KEY` (nur vom Betreiber in der `.env`) |
+| [Tavily](https://tavily.com/) | `tavily` | `TAVILY_API_KEY` (nur vom Betreiber in der `.env`) |
 
 **Seiten lesen.** Aquaticy liest Seiten selbst, mit ehrlicher Kennung und mit Rücksicht auf
 `robots.txt`. Klappt ein Abruf nur kurz nicht (DNS, Zeitüberschreitung, Serverfehler), merkt
@@ -989,7 +1010,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_SUBAGENT_MODEL` | Modell der Helfer | das kleine des Anbieters |
 | `AQUATICY_CODE_MODEL` | Modell für den Code-Modus | das stärkste erreichbare |
 | `AQUATICY_API_BASE` | eigene Adresse (Ollama, eigene NIM, Proxy) | – |
-| `AQUATICY_API_KEY` | Schlüssel für andere Anbieter | – |
+| `AQUATICY_API_KEY` | Zugangsschlüssel eines lokalen Servers (vLLM, Proxy), falls er einen verlangt | – |
 | `AQUATICY_AUTO_MODEL` | Modell je Nachricht automatisch wählen | `false` |
 | `AQUATICY_SEARCH_BACKEND` | `duckduckgo`, `searxng`, `brave`, `tavily` | `duckduckgo` |
 | `AQUATICY_SEARCH_ENGINES` | Suchdienste der offenen Suche einschränken | alle |
@@ -1037,7 +1058,8 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_LLAMA_DIR` | Ordner mit einer mitgelieferten Fassung | `/opt/aquaticy/llama.cpp` |
 | `AQUATICY_PRO_CODE` | Code für neue Pro-Konten | zufällig |
 | `AQUATICY_ULTRA_CODE` | Code für neue Ultra-Konten (14 Zeichen) | zufällig |
-| `MISTRAL_API_KEY`, `NVIDIA_NIM_API_KEY`, `BRAVE_API_KEY`, `TAVILY_API_KEY` | Schlüssel der Anbieter | – |
+| `MISTRAL_API_KEY`, `NVIDIA_NIM_API_KEY` | schreibt das Add-on (ohne Konten); mit Konten gilt ein Eintrag hier als gestellt | – |
+| `BRAVE_API_KEY`, `TAVILY_API_KEY` | Schlüssel der Suchmaschine, nur vom Betreiber | – |
 
 Daten liegen unter `~/.aquaticy/` (Konten in `accounts.sqlite3`, je Konto ein Ordner unter
 `users/`, die Website unter `website/`). Die Einstellungen liegen in `~/.config/aquaticy/.env`.
@@ -1075,7 +1097,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.4.1-Luna.md).
+[Prüfbericht](TESTREPORT-12.0.0-Luna.md).
 
 ---
 

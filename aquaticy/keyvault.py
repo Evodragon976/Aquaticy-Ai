@@ -1,7 +1,8 @@
 """Der Schluesselbund eines Kontos: eigene API-Schluessel, nur fuer dieses Konto.
 
 Seit 9.5.14 Seashell kann jedes Konto -- normal oder Pro -- eigene
-API-Schluessel hinterlegen. Was dafuer gilt:
+API-Schluessel hinterlegen. Seit 12.0.0 Luna nur noch zwei, und nur ueber
+die Add-ons NVIDIA NIM und Mistral. Was dafuer gilt:
 
 * **Nur dieses Konto.** Ein Schluessel haengt an der Kennung des Kontos. Er
   steht nicht in der ``.env`` des Servers, nicht in der Prozessumgebung
@@ -54,27 +55,15 @@ class Slot:
     note: str
 
 
-#: Welche Schluessel es gibt -- und nur diese.
+#: Welche Schluessel es gibt -- und nur diese (seit 12.0.0 Luna zwei, beide
+#: ueber ihr Add-on). Claude, ChatGPT, Gemini, der allgemeine Platz
+#: und die Suchschluessel sind weg; was davon noch gespeichert ist, loescht
+#: :meth:`KeyVault._setup` beim naechsten Oeffnen.
 SLOTS: tuple[Slot, ...] = (
     Slot("NVIDIA_NIM_API_KEY", "NVIDIA NIM", "modell", "nvapi-…",
          "Für die NVIDIA-Modelle (nvidia_nim/…), zum Beispiel Llama 3.3 70B."),
     Slot("MISTRAL_API_KEY", "Mistral", "modell", "",
          "Für die Mistral-Modelle (mistral/…), zum Beispiel Mistral Large und Codestral."),
-    # Verknuepfte KI-Konten (seit 9.6.1): bequemer unter Add-ons → KI-Konten,
-    # dort mit Modellen, Stufe und freien Tokens.
-    Slot("ANTHROPIC_API_KEY", "Claude (Anthropic)", "modell", "sk-ant-…",
-         "Für die Claude-Modelle deines Anthropic-Kontos (anthropic/…)."),
-    Slot("OPENAI_API_KEY", "ChatGPT (OpenAI)", "modell", "sk-…",
-         "Für die GPT-Modelle deines OpenAI-Kontos (openai/…)."),
-    Slot("GEMINI_API_KEY", "Gemini (Google)", "modell", "AIza…",
-         "Für die Gemini-Modelle deines Google-Kontos (gemini/…)."),
-    Slot("AQUATICY_API_KEY", "Anderer Anbieter", "modell", "",
-         "Für ein Modell eines anderen Anbieters, den LiteLLM kennt (zum Beispiel "
-         "openai/…, anthropic/…, groq/…) — trag die Modell-ID oben unter Hauptmodell ein."),
-    Slot("BRAVE_API_KEY", "Brave Search", "suche", "",
-         "Für die Suchmaschine Brave (Abschnitt Suche)."),
-    Slot("TAVILY_API_KEY", "Tavily", "suche", "tvly-…",
-         "Für die Suchmaschine Tavily (Abschnitt Suche)."),
 )
 SLOT_BY_NAME: dict[str, Slot] = {slot.name: slot for slot in SLOTS}
 
@@ -179,6 +168,14 @@ class KeyVault:
                 )
                 """
             )
+            # Was es nicht mehr gibt (12.0.0 Luna: Claude, ChatGPT, Gemini, der
+            # allgemeine Platz, Brave, Tavily), bleibt nicht liegen.
+            bekannt = set(SLOT_BY_NAME) | INTERNAL_SECRETS
+            for zeile in conn.execute("SELECT name FROM api_keys WHERE account_id = ?",
+                                      (self.account_id,)).fetchall():
+                if zeile["name"] not in bekannt:
+                    conn.execute("DELETE FROM api_keys WHERE account_id = ? AND name = ?",
+                                 (self.account_id, zeile["name"]))
 
     # -- Schreiben ------------------------------------------------------------
     def set(self, name: str, value: str) -> None:
@@ -286,20 +283,6 @@ class KeyVault:
              "added_at": float(zeile["added_at"] or 0.0)}
             for zeile in self._rows() if zeile["name"] in lesbar
         ]
-
-
-def summary(names: list[str] | set[str] | frozenset[str]) -> str:
-    """"Du hast keinen / einen / 3 API-Schluessel hinzugefuegt" -- mit Namen."""
-    liste = [SLOT_BY_NAME[n].label for n in sorted(names, key=_ordnung) if n in SLOT_BY_NAME]
-    if not liste:
-        return "Du hast keinen API-Schlüssel hinzugefügt."
-    if len(liste) == 1:
-        return f"Du hast einen API-Schlüssel hinzugefügt: {liste[0]}."
-    return f"Du hast {len(liste)} API-Schlüssel hinzugefügt: {', '.join(liste)}."
-
-
-def _ordnung(name: str) -> int:
-    return next((i for i, slot in enumerate(SLOTS) if slot.name == name), 99)
 
 
 def scrub(text: str, secrets_: list[str] | set[str]) -> str:

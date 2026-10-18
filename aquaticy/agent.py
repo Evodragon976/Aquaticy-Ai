@@ -2245,10 +2245,10 @@ class Agent:
 
         arbeiter, pruefer = linked.council_roles(self.settings)
         if not arbeiter or pruefer is None:
-            self._emit("note", text="AI Council: dafür braucht es mindestens zwei verknüpfte "
-                                    "KI-Konten (Add-ons → KI-Konten). Die Frage läuft normal.",
-                       text_en="AI Council needs at least two linked AI accounts "
-                               "(Add-ons → AI accounts). The question runs normally.")
+            self._emit("note", text="AI Council: dafür braucht es NVIDIA NIM und Mistral, "
+                                    "beide mit Schlüssel (unter Add-ons). Die Frage läuft normal.",
+                       text_en="AI Council needs NVIDIA NIM and Mistral, both with a key "
+                               "(under Add-ons). The question runs normally.")
             return None
         self._emit("triage", decision="council", source="einstellung")
         try:
@@ -3660,7 +3660,7 @@ class Agent:
             with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
                 if self.settings.model_access is not None:
                     self.settings.model_access(self.active_model)
-                response = litellm.completion(
+                response = llmcall.completion(
                     model=self.active_model,
                     messages=messages,
                     stream=stream,

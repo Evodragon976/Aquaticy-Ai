@@ -215,12 +215,14 @@ def test_save_values_writes_env_and_reloads(
 ) -> None:
     target = tmp_path / ".env"
     monkeypatch.setattr(web, "find_env_file", lambda: target)
+    # Seit 12.0.0 Luna ein erlaubtes Modell (bis 11.4.1 stand hier eins von Claude).
     written = web.save_values(
-        {"AQUATICY_MODEL": "anthropic/claude-sonnet-4", "AQUATICY_LOCATION": "Hamburg"}
+        {"AQUATICY_MODEL": "nvidia_nim/meta/llama-3.3-70b-instruct",
+         "AQUATICY_LOCATION": "Hamburg"}
     )
     assert written == target
     text = target.read_text()
-    assert "AQUATICY_MODEL=anthropic/claude-sonnet-4" in text
+    assert "AQUATICY_MODEL=nvidia_nim/meta/llama-3.3-70b-instruct" in text
     assert "AQUATICY_LOCATION=Hamburg" in text
     # reload() wirft Agent und Einstellungen weg, damit die neuen greifen.
     assert session._settings is None
@@ -245,16 +247,18 @@ def test_a_users_saved_vision_model_is_active_immediately(
     assert session.settings().vision_model == "ollama_chat/llava:7b"
 
 
-def test_api_key_is_stored_under_the_provider_name(
+def test_the_form_stores_no_api_key_anymore(
     session: web.ChatSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Bis 11.4.1 landete der Schluessel aus dem Formular unter dem Namen des
+    # Anbieters. Seit 12.0.0 Luna gibt es ihn nur ueber die Add-ons.
     target = tmp_path / ".env"
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     web.save_values(
         {"AQUATICY_MODEL": "nvidia_nim/meta/llama-3.3-70b-instruct",
-         web.API_KEY_FIELD: "nvapi-neu"}
+         "__API_KEY__": "nvapi-neu"}
     )
-    assert "NVIDIA_NIM_API_KEY=nvapi-neu" in target.read_text()
+    assert "nvapi-neu" not in target.read_text()
 
 
 def test_empty_api_key_never_deletes_the_stored_one(
@@ -264,7 +268,7 @@ def test_empty_api_key_never_deletes_the_stored_one(
     target.write_text("MISTRAL_API_KEY=sk-alt\n")
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     web.save_values(
-        {"AQUATICY_MODEL": "mistral/mistral-large-latest", web.API_KEY_FIELD: "   "}
+        {"AQUATICY_MODEL": "mistral/mistral-large-latest", "__API_KEY__": "   "}
     )
     assert "MISTRAL_API_KEY=sk-alt" in target.read_text()
 
@@ -436,14 +440,13 @@ def test_ui_file_offers_every_setting() -> None:
         if key == "AQUATICY_MAX_SUBAGENTS":
             continue  # Der Turn-Regler steht jetzt direkt in der Modellauswahl.
         assert f'name="{key}"' in html, f"{key} fehlt im Formular"
-    # Schluessel stehen seit 9.5.14 Seashell im eigenen Abschnitt -- ohne
-    # Formularnamen, damit sie nie mit dem allgemeinen Speichern mitgehen.
-    assert 'id="sec-schluessel"' in html and 'id="keys-summary"' in html
-    # 9.5.17: heisst jetzt "Eigene Modelle" und ist zunaechst verborgen -- er
-    # taucht erst auf, wenn oben ein eigenes Modell oder ein Schluessel steht.
+    # 9.5.17: "Eigene Modelle", zunaechst verborgen -- es taucht erst auf, wenn oben
+    # ein eigenes Modell steht. Schluessel stehen seit 12.0.0 Luna nicht mehr darin
+    # (nur noch unter Add-ons -> NVIDIA NIM und Mistral).
+    assert 'id="sec-schluessel"' in html and 'id="keys-summary"' not in html
     assert "Eigene Modelle" in html
     assert '<fieldset id="sec-schluessel" hidden>' in html
-    assert f'name="{web.API_KEY_FIELD}"' not in html
+    assert 'name="__API_KEY__"' not in html
 
 
 def test_ui_exposes_legal_links_and_keyboard_controls() -> None:
@@ -1879,16 +1882,19 @@ def test_saving_corrects_the_model_id(
 def test_the_key_lands_under_the_corrected_provider(
     session: web.ChatSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sonst waere der Schluessel unter dem falschen Namen abgelegt."""
+    """Das Kuerzel wird ergaenzt -- und seit 12.0.0 Luna nimmt das Formular den
+    Schluessel nicht mehr an (bis 11.4.1 landete er unter dem ergaenzten Namen)."""
     target = tmp_path / ".env"
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     web.save_values(
         {
             "AQUATICY_MODEL": "nvidia/nemotron-3-ultra-550b-a55b",
-            web.API_KEY_FIELD: "nvapi-Spf8beispiel",
+            "__API_KEY__": "nvapi-Spf8beispiel",
         }
     )
-    assert "NVIDIA_NIM_API_KEY=nvapi-Spf8beispiel" in target.read_text()
+    text = target.read_text()
+    assert "AQUATICY_MODEL=nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b" in text
+    assert "nvapi-Spf8beispiel" not in text
 
 
 def test_vision_and_helper_models_are_corrected_too(
@@ -1915,7 +1921,8 @@ def test_the_ui_shows_what_a_key_looks_like() -> None:
     nvidia = next(p for p in provider_view() if p["id"] == "nvidia_nim")
     assert nvidia["placeholder"].startswith("nvapi-")
     assert nvidia["example"] == "nvidia_nim/meta/llama-3.3-70b-instruct"
-    assert "NVIDIA_NIM_API_KEY" in nvidia["note"] and "nvapi-" in nvidia["note"]
+    # Seit 12.0.0 Luna steht im Satz, wo der Schluessel hingehoert: beim Add-on.
+    assert "Add-ons → NVIDIA NIM" in nvidia["note"] and "nvapi-" in nvidia["note"]
     lokal = next(p for p in provider_view() if p["id"] == "ollama_chat")
     assert lokal["key_label"] == "(nicht nötig)" and "Kein Schlüssel" in lokal["note"]
 
@@ -2096,12 +2103,17 @@ def test_everything_setup_asks_for_is_in_the_web_form() -> None:
         assert f'name="{key}"' in html, f"{key} wird im Terminal gefragt, fehlt aber im Formular"
 
 
-def test_the_search_engine_key_can_be_set_in_the_browser(client) -> None:
-    """Brave und Tavily brauchen einen Schluessel -- er hat seinen Platz unter API-Schluessel."""
-    plaetze = {slot["name"] for slot in json.loads(client("GET", "/api/keys")[1])["slots"]}
-    assert {"BRAVE_API_KEY", "TAVILY_API_KEY"} <= plaetze
+def test_the_search_engine_key_comes_only_from_the_operator(client) -> None:
+    """Brave und Tavily brauchen einen Schluessel. Bis 11.4.1 trug man ihn im Browser
+    ein; seit 12.0.0 Luna gibt es dort nur noch die Schluessel fuer NVIDIA NIM und
+    Mistral (Add-ons) -- den der Suchmaschine hinterlegt der Betreiber."""
+    from aquaticy.keyvault import SLOT_BY_NAME
+
+    assert client("GET", "/api/keys")[0] == 404
+    assert not {"BRAVE_API_KEY", "TAVILY_API_KEY"} & set(SLOT_BY_NAME)
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert 'id="search-keyname"' in html and "Eigene Modelle" in html
+    assert 'id="search-keyname"' not in html
+    assert "Brave und Tavily gehen nur, wenn der Betreiber" in " ".join(html.split())
 
 
 def test_saving_stores_the_search_key_under_the_right_name(
@@ -2112,8 +2124,10 @@ def test_saving_stores_the_search_key_under_the_right_name(
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     monkeypatch.setattr(web.SESSION, "reload", lambda: None)
 
-    web.save_values({"AQUATICY_SEARCH_BACKEND": "brave", web.SEARCH_KEY_FIELD: "bsa-xyz123456"})
-    assert "BRAVE_API_KEY=bsa-xyz123456" in target.read_text(encoding="utf-8")
+    # Seit 12.0.0 Luna nimmt das Formular keinen Schluessel der Suchmaschine mehr an.
+    web.save_values({"AQUATICY_SEARCH_BACKEND": "brave", "__SEARCH_KEY__": "bsa-xyz123456"})
+    text = target.read_text(encoding="utf-8")
+    assert "AQUATICY_SEARCH_BACKEND=brave" in text and "bsa-xyz123456" not in text
 
 
 def test_an_empty_search_key_means_unchanged(
@@ -2124,7 +2138,7 @@ def test_an_empty_search_key_means_unchanged(
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     monkeypatch.setattr(web.SESSION, "reload", lambda: None)
 
-    web.save_values({"AQUATICY_SEARCH_BACKEND": "brave", web.SEARCH_KEY_FIELD: "   "})
+    web.save_values({"AQUATICY_SEARCH_BACKEND": "brave", "__SEARCH_KEY__": "   "})
     assert "BRAVE_API_KEY=alt" in target.read_text(encoding="utf-8")
 
 
@@ -2137,7 +2151,7 @@ def test_the_open_metasearch_needs_no_key(
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     monkeypatch.setattr(web.SESSION, "reload", lambda: None)
 
-    web.save_values({"AQUATICY_SEARCH_BACKEND": "duckduckgo", web.SEARCH_KEY_FIELD: "egal"})
+    web.save_values({"AQUATICY_SEARCH_BACKEND": "duckduckgo", "__SEARCH_KEY__": "egal"})
     content = target.read_text(encoding="utf-8")
     assert "egal" not in content
 
@@ -2164,13 +2178,15 @@ def test_the_probe_endpoint_tests_the_form_values(client, monkeypatch: pytest.Mo
         {
             "AQUATICY_MODEL": "mistral/mistral-large-latest",
             "AQUATICY_SEARCH_BACKEND": "brave",
-            web.API_KEY_FIELD: "sk-neu",
+            "__API_KEY__": "sk-neu",
         },
     )
     assert status == 200
     data = json.loads(body)
     assert data["ok"] is True
-    assert seen == {"model": "mistral/mistral-large-latest", "key": "sk-neu", "backend": "brave"}
+    assert seen["model"] == "mistral/mistral-large-latest" and seen["backend"] == "brave"
+    # Ein eingetippter Schluessel zaehlt seit 12.0.0 Luna nicht mehr (nur Add-ons).
+    assert seen["key"] != "sk-neu"
 
 
 def test_the_probe_reports_a_failure_without_crashing(
@@ -2833,11 +2849,16 @@ def test_the_composer_offers_all_three_modes() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     for modus in ("normal", "pro", "code"):
         assert f'data-mode="{modus}"' in html
-    # Neben Anhaengen und Abbrechen -- beides gehoert zur Frage, die man
-    # gerade schreibt.
+    # Seit 12.0.0 Luna in der Seitenleiste: unter dem Logo, ueber den letzten
+    # Chats. Unten bleiben Anhaengen, Modell, Mikrofon und Senden.
+    leiste = html[html.index("<aside>") : html.index("</aside>")]
+    assert leiste.index('class="brand"') < leiste.index('id="modes"') \
+        < leiste.index("Letzte Chats")
     row = html[html.index('<div class="crow">') :]
     row = row[: row.index("</div>")]
-    assert 'id="clip"' in row and 'id="modes"' in row
+    assert 'id="modes"' not in row
+    reihe = [row.index(f'id="{teil}"') for teil in ("clip", "btn-model", "mic", "send")]
+    assert reihe == sorted(reihe)
 
 
 def test_the_picker_offers_the_structure_switch_and_the_effort() -> None:

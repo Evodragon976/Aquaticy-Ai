@@ -138,11 +138,13 @@ def setup_command(
     if local_api_base:
         console.print("  [dim]Läuft lokal – kein API-Key nötig.[/dim]")
     elif key_name:
+        # Seit 12.0.0 Luna gibt es API-Schluessel nur ueber Add-ons (NVIDIA NIM, Mistral).
         current = os.environ.get(key_name, "")
-        hint = f" [dim](aktuell gesetzt: ...{current[-4:]})[/dim]" if current else ""
-        console.print(f"  Benötigter Key: [bold]{key_name}[/bold]{hint}")
-        console.print(f"  [dim]Wo bekomme ich den? {_key_hint(key_name)}[/dim]")
-        api_key = typer.prompt(f"{key_name}", default=current, hide_input=not current).strip()
+        api_key = current
+        console.print("  [dim]Den Schlüssel verknüpfst du in der Weboberfläche "
+                      "(aquaticy web) unter Add-ons → "
+                      f"{'Mistral' if key_name == 'MISTRAL_API_KEY' else 'NVIDIA NIM'}."
+                      + (" Einer ist schon da." if current else "") + "[/dim]")
     else:
         console.print("  [dim]Dieses Modell braucht keinen API-Key.[/dim]")
         default_base = "http://localhost:11434" if model.startswith("ollama") else ""
@@ -229,9 +231,15 @@ def setup_command(
         if backend_key:
             os.environ[backend_key_name] = backend_key
 
-        with console.status("  Teste LLM ..."):
-            llm_ok, llm_msg = _probe_llm(model, api_key, api_base)
-        console.print(f"  {'[green]OK[/green]' if llm_ok else '[red]FEHLER[/red]'}  LLM: {llm_msg}")
+        if key_name and not api_key:
+            # Ohne verknuepften Schluessel gibt es noch nichts zu testen.
+            llm_ok, llm_msg = True, "noch kein Schlüssel — erst unter Add-ons verknüpfen"
+            console.print(f"  [yellow]--[/yellow]  LLM: {llm_msg}")
+        else:
+            with console.status("  Teste LLM ..."):
+                llm_ok, llm_msg = _probe_llm(model, api_key, api_base)
+            console.print(f"  {'[green]OK[/green]' if llm_ok else '[red]FEHLER[/red]'}  "
+                          f"LLM: {llm_msg}")
 
         with console.status("  Teste Suche ..."):
             search_ok, search_msg = _probe_search(backend, backend_key, engines, searxng_url)
@@ -254,8 +262,6 @@ def setup_command(
         "AQUATICY_COUNTRY": country,
         "AQUATICY_SUBAGENTS_AUTO": "true" if subagents_on else "false",
     }
-    if key_name and api_key:
-        values[key_name] = api_key
     if backend_key_name and backend_key:
         values[backend_key_name] = backend_key
     if engines:
@@ -354,8 +360,6 @@ def _set_up_website(config: object) -> bool:
 
 def _key_hint(key_name: str) -> str:
     return {
-        "MISTRAL_API_KEY": "https://console.mistral.ai/api-keys/",
-        "NVIDIA_NIM_API_KEY": "https://build.nvidia.com/ – Modell wählen, dann 'Get API Key'",
         "BRAVE_API_KEY": "https://brave.com/search/api/",
         "TAVILY_API_KEY": "https://app.tavily.com/home",
     }.get(key_name, "siehe Doku des Anbieters")
@@ -2463,7 +2467,7 @@ def _handle_slash(
             # Fehlt nur das Anbieter-Kuerzel, ergaenzen wir es, statt den
             # Nutzer mit einer Fehlermeldung stehenzulassen.
             fixed = fix_model_id(argument)
-            problem = model_problem(fixed)
+            problem = model_problem(fixed, settings.route(fixed)[0])
             if problem:
                 console.print(f"[yellow]{problem}[/yellow]")
                 console.print(f"[dim]Weiter mit {settings.model}.[/dim]")

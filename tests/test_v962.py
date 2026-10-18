@@ -24,7 +24,9 @@ def test_version_is_public_962() -> None:
 
 def test_sign_in_buttons_and_quick_link() -> None:
     html = _ui()
-    assert 'id="linked-quick-key"' in html and 'id="linked-paste"' in html
+    # Seit 12.0.0 Luna gibt es kein Sammelfeld mehr: Schluessel nur in der Karte des
+    # Add-ons NVIDIA NIM oder Mistral, mit den Anmelde-Knoepfen darueber.
+    assert 'id="linked-quick-key"' not in html and 'id="linked-paste"' not in html
     assert "for (const weg of k.sign_in || [])" in html
     # Die Zwischenablage nur, wo der Browser sie erlaubt (HTTPS, eigener Rechner).
     assert "window.isSecureContext && navigator.clipboard?.readText" in html
@@ -56,7 +58,7 @@ def test_new_texts_have_english() -> None:
     html = _ui()
     en = html[html.index("const EN = {"):]
     for text in ("KI-Konten", "Server-Verbund", "Mit Apple", "Server im lokalen Netz",
-                 "Dafür braucht es mindestens zwei verknüpfte KI-Konten (Add-ons → KI-Konten)."):
+                 "Dafür braucht es NVIDIA NIM und Mistral, beide mit Schlüssel (unter Add-ons)."):
         assert f'"{text}":' in en, text
 
 

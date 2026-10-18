@@ -149,12 +149,15 @@ def test_generic_key_does_not_override_known_providers(
 # ---------------------------------------------------------------------------
 def test_valid_models_pass() -> None:
     for model in (
-        "anthropic/claude-sonnet-4-6",
-        "openai/gpt-4o",
+        "mistral/mistral-large-latest",
+        "ollama_chat/qwen2.5:7b",
         "nvidia_nim/meta/llama-3.3-70b-instruct",
         "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b",
     ):
         assert config.model_problem(model) == "", model
+    # Seit 12.0.0 Luna bekannt, aber nicht erlaubt (bis 11.4.1 standen sie oben).
+    for model in ("anthropic/claude-sonnet-4-6", "openai/gpt-4o"):
+        assert config.model_problem(model) == config.MODEL_RULE_TEXT, model
 
 
 def test_missing_provider_prefix_is_caught_with_a_suggestion() -> None:

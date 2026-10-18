@@ -345,7 +345,7 @@ def test_wipe_keeps_the_account_but_removes_the_data(store: AuthStore) -> None:
                            username="wipe", device=clean_device(PC, user_agent=PC_UA), **TERMS)
     profil = store.profile_dir(konto.id)
     Cache(profil / "aquaticy.sqlite3").add_history("c", "frage", "antwort")
-    store.vault(konto).set("TAVILY_API_KEY", "tvly-geheim-1234")
+    store.vault(konto).set("NVIDIA_NIM_API_KEY", "nvapi-geheim-1234")
     store.wipe_data(konto)
     assert store.account(konto.id) is not None
     assert not (profil / "aquaticy.sqlite3").exists() and profil.is_dir()

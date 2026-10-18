@@ -379,15 +379,8 @@ CHOICES: dict[str, tuple[str, ...]] = {
 #: Textdatei; was laenger ist, ist ein Versehen oder ein Versuch.
 MAX_VALUE_CHARS = 2_000
 
-#: Platzhalter im Formular -- ein leeres Key-Feld darf den Key nicht loeschen.
-API_KEY_FIELD = "__API_KEY__"
-
 #: Dasselbe fuer das Home-Assistant-Token.
 HA_TOKEN_FIELD = "__HA_TOKEN__"
-
-#: Schluessel der Suchmaschine (Brave, Tavily). Dasselbe Spiel wie beim
-#: Modell-Key: leer heisst "unveraendert", nicht "loeschen".
-SEARCH_KEY_FIELD = "__SEARCH_KEY__"
 
 #: Zugangsdaten der Google-Anwendung. Die ID darf zurueck in den Browser
 #: (sie steht ohnehin in jeder Zustimmungsadresse), das Secret nie.
@@ -913,20 +906,6 @@ def account_quota(profile: Path, account: Account | None = None) -> Any:
     return Quota(profile / "quota.sqlite3", getattr(account, "id", "") or profile.name, erstellt)
 
 
-def key_slot_for(model: str) -> str:
-    """In welchen Platz des Schluesselbunds ein Schluessel fuer *model* gehoert.
-
-    Ein Anbieter, den Aquaticy kennt, hat seinen eigenen Platz; lokale Modelle
-    brauchen keinen; alles andere kommt in den allgemeinen Platz.
-    """
-    from aquaticy.config import GENERIC_KEY_NAME, PROVIDER_KEYS, provider_of
-
-    anbieter = provider_of(model or "")
-    if anbieter in PROVIDER_KEYS:
-        return PROVIDER_KEYS[anbieter]
-    return GENERIC_KEY_NAME if model else ""
-
-
 #: Bilder, die ``/api/media?url=`` schon geholt hat: (Datenordner, Adresse) ->
 #: (Zeitpunkt, Bytes, Typ). Die Oberflaeche fragt dasselbe Bild beim
 #: Neuzeichnen und Wiederoeffnen eines Chats oft mehrmals an.
@@ -1206,9 +1185,6 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
     for name, wert in eigene.items():
         (settings.search_keys if name in SEARCH_KEY_NAMES else settings.api_keys)[name] = wert
     settings.own_key_names = frozenset(eigene)
-    # Verknuepfte KI-Konten (9.6.1) gehoeren zum Profil, nicht zum Server.
-    settings.linked_models = None
-    settings.linked_stamp = -1.0
     # Das GitHub-Token des Kontos liegt verschluesselt im Schluesselbund (seit
     # 9.5.16) -- ein altes aus der .env wandert einmal hinein. Das Token des
     # Betreibers bekommt ein Konto nie: es koennte dessen private Repos lesen.
@@ -2077,7 +2053,7 @@ class ChatSession:
                 settings = self.settings()
                 if not argument:
                     return {"text": f"Aktuelles Modell: **{settings.model}**"}
-                problem = model_problem(argument)
+                problem = model_problem(argument, settings.route(argument)[0])
                 if problem:
                     return {"text": f"{problem}\n\nWeiter mit `{settings.model}`."}
                 self.agent().set_model(argument)
@@ -2858,6 +2834,12 @@ def save_values(payload: dict[str, Any]) -> Path:
     ):
         if values.get(key):
             values[key] = fix_model_id(values[key])
+            # Seit 12.0.0 Luna: Mistral, NVIDIA NIM oder auf dem Server -- sonst nichts.
+            from aquaticy.config import MODEL_RULE_TEXT, model_allowed
+
+            basis = values.get("AQUATICY_API_BASE", session.settings().api_base) or ""
+            if not model_allowed(values[key], basis):
+                raise ValueError(MODEL_RULE_TEXT)
     if UPGRADE_DIR is not None:
         # Auto-Upgrading (10.0 Luna): aeltere Fassungen und Kandidaten nur fuer
         # die, die sie sehen duerfen -- und eine bewusste Wahl bleibt stehen.
@@ -2880,16 +2862,8 @@ def save_values(payload: dict[str, Any]) -> Path:
                                  or session.settings().ha_url))
         if ziel:
             geheim["HA_TOKEN_URL"] = ziel
-    # Eigene API-Schluessel eines Kontos gehen in seinen Schluesselbund
-    # (aquaticy/keyvault.py) -- nie in eine .env, nie in die Umgebung.
-    schluessel: dict[str, str] = {}
-    api_key = str(payload.get(API_KEY_FIELD, "")).strip()
-    if api_key:
-        # Nur setzen, wenn wirklich etwas eingetippt wurde -- ein leeres Feld
-        # bedeutet "unveraendert", nicht "loeschen".
-        key_name = key_slot_for(values.get("AQUATICY_MODEL", "") or session.settings().model)
-        if key_name:
-            schluessel[key_name] = api_key
+    # API-Schluessel kommen seit 12.0.0 Luna nur noch ueber Add-ons (NVIDIA NIM,
+    # Mistral) -- das Formular nimmt keinen mehr an.
     google_id = str(payload.get(GOOGLE_ID_FIELD, "")).strip()
     if google_id:
         values["GOOGLE_CLIENT_ID"] = google_id
@@ -2901,33 +2875,12 @@ def save_values(payload: dict[str, Any]) -> Path:
         geheim.pop("HA_TOKEN_URL", None)
         values.update(geheim)
         geheim = {}
-    search_key = str(payload.get(SEARCH_KEY_FIELD, "")).strip()
-    if search_key:
-        backend = values.get("AQUATICY_SEARCH_BACKEND", "") or session.settings().search_backend
-        backend_key_name = SEARCH_BACKEND_KEYS.get(backend, "")
-        if backend_key_name:
-            schluessel[backend_key_name] = search_key
-    if schluessel:
-        from aquaticy.keyvault import VaultError, check_key
-
-        try:
-            schluessel = {name: check_key(name, wert) for name, wert in schluessel.items()}
-        except VaultError as exc:
-            raise ValueError(str(exc)) from exc
-        if session.profile is None:
-            # Lokal ohne Konten: der Betreiber sitzt selbst davor, seine
-            # Schluessel stehen wie immer in seiner .env.
-            values.update(schluessel)
     target = (
         session.settings().env_path
         if session.profile is not None
         else find_env_file() or DEFAULT_ENV_PATH
     )
     written = write_env_file(values, target)
-    if schluessel and session.profile is not None:
-        tresor = account_vault(session.profile, session.account)
-        for name, wert in schluessel.items():
-            tresor.set(name, wert)
     if geheim and session.profile is not None:
         from aquaticy.keyvault import VaultError
 
@@ -2990,62 +2943,12 @@ def scrub_error(text: str, geheim: list[str] | None = None) -> str:
         lambda m: (m.group(1) or m.group(2) or "") + "••••", ergebnis)
 
 
-def keys_view(session: Any) -> dict[str, Any]:
-    """Der Bereich "API-Schluessel": was hinterlegt ist -- nie der Schluessel selbst.
-
-    Fuer ein Konto kommt alles aus seinem Schluesselbund. Lokal ohne Konten
-    sitzt der Betreiber selbst davor; seine Schluessel stehen in der .env.
-    """
-    from aquaticy.keyvault import SLOTS, masked, summary
-
-    eigene: dict[str, dict[str, Any]] = {}
-    if session.profile is not None:
-        for eintrag in account_vault(session.profile, session.account).public():
-            eigene[eintrag["name"]] = eintrag
-    else:
-        for slot in SLOTS:
-            wert = os.environ.get(slot.name, "").strip()
-            if wert:
-                eigene[slot.name] = {"name": slot.name, "hint": masked(wert), "added_at": 0.0}
-    plaetze = []
-    for slot in SLOTS:
-        eintrag = eigene.get(slot.name)
-        gestellt = session.profile is not None and bool(os.environ.get(slot.name, "").strip())
-        if eintrag:
-            seit = webview.moment_text(eintrag["added_at"]) if eintrag["added_at"] else ""
-            status = f"Hinterlegt {eintrag['hint']}" + (f" · seit {seit}" if seit else "")
-        else:
-            status = "Nicht hinterlegt" + (" — der Betreiber stellt einen" if gestellt else "")
-        plaetze.append({
-            "name": slot.name, "label": slot.label, "art": slot.art, "note": slot.note,
-            "placeholder": (slot.form + "  " if slot.form else "") + "Schlüssel einfügen",
-            "set": bool(eintrag), "status": status,
-        })
-    return {
-        "slots": plaetze,
-        "count": len(eigene),
-        "summary": summary(set(eigene)),
-        "account": session.profile is not None,
-        "privacy": (
-            "Deine Schlüssel gehören nur zu deinem Konto: verschlüsselt gespeichert, nie "
-            "im Browser angezeigt — auch dir nicht, nur die letzten vier Zeichen — und für "
-            "kein anderes Konto sichtbar oder benutzbar. Sie gehen nur an den Anbieter selbst"
-            + (" oder an eine Modell-Adresse, die du selbst eingetragen hast."
-               if getattr(session, "ultra", False) else ".")
-            if session.profile is not None else
-            "Lokal ohne Konten stehen die Schlüssel in deiner .env auf diesem Rechner."
-        ),
-        "quota_note": (
-            "Modelle mit deinem eigenen Schlüssel zählen nicht in dein Limit — dort zählt "
-            "nur, was auf dem Server passiert: virtual machine, Seitenabrufe, Suchen."
-            if getattr(session.settings(), "quota", None) is not None else ""
-        ),
-    }
-
-
 def linked_view(session: Any) -> dict[str, Any]:
-    """Add-ons → KI-Konten (9.6.1): was verknuepft ist, mit Modellen, Stufe, Tokens."""
-    from aquaticy import linked
+    """Die Add-ons NVIDIA NIM und Mistral (12.0.0 Luna): Schluessel, Modelle, Tokens.
+
+    Den Schluessel selbst bekommt der Browser nie -- nur, ob einer da ist.
+    """
+    from aquaticy import addons, linked
 
     settings = session.settings()
     stand = linked.load(settings.data_dir)
@@ -3053,17 +2956,24 @@ def linked_view(session: Any) -> dict[str, Any]:
     konten = []
     for provider, d in linked.PROVIDERS.items():
         info = stand.get(provider) or {}
+        verknuepft = provider in aktiv
         konten.append({
             "provider": provider, "label": d["label"], "company": d["company"],
-            "get_key": d["get_key"], "form": d["form"], "linked": provider in aktiv,
+            "get_key": d["get_key"], "form": d["form"], "linked": verknuepft,
+            "installed": addons.installed(settings, provider),
+            # Ein Schluessel des Betreibers gilt fuer alle -- solange keiner eigen ist.
+            "provided": (not verknuepft and session.profile is not None
+                         and bool(os.environ.get(d["key"], "").strip())),
             "sign_in": [{"id": art, "label": linked.SIGN_IN_LABELS[art]}
                         for art in linked.SIGN_IN.get(provider, ())],
-            "tier": info.get("tier", "") if provider in aktiv else "",
-            "tokens": info.get("tokens") if provider in aktiv else None,
+            "tier": info.get("tier", "") if verknuepft else "",
+            "tokens": info.get("tokens") if verknuepft else None,
             "models": [m.get("label") or m.get("id") for m in info.get("models", [])]
-            if provider in aktiv else [],
-            "note": info.get("note", ""), "warning": info.get("warning", ""),
-            "checked": webview.moment_text(info["checked"]) if info.get("checked") else "",
+            if verknuepft else [],
+            "note": info.get("note", "") if verknuepft else "",
+            "warning": info.get("warning", "") if verknuepft else "",
+            "checked": webview.moment_text(info["checked"])
+            if verknuepft and info.get("checked") else "",
         })
     arbeiter, pruefer = linked.council_roles(settings)
     return {"accounts": konten, "council": {
@@ -3073,24 +2983,49 @@ def linked_view(session: Any) -> dict[str, Any]:
         "judge": settings.model}}
 
 
-def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
-    """Verknuepfen, aktualisieren, trennen. Der Schluessel geht in den Schluesselbund."""
+def _forget_model_key(session: Any, provider: str) -> None:
+    """Loescht den Schluessel eines Modell-Add-ons samt ausgelesenem Stand."""
     from aquaticy import linked
+
+    name = linked.PROVIDERS[provider]["key"]
+    if session.profile is not None:
+        account_vault(session.profile, session.account).remove(name)
+    else:
+        os.environ.pop(name, None)
+        write_env_file({name: ""}, find_env_file() or DEFAULT_ENV_PATH)
+    linked.save(session.settings().data_dir, provider, None)
+
+
+def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """Schluessel eines Modell-Add-ons: verknuepfen, aktualisieren, entfernen.
+
+    Seit 12.0.0 Luna der einzige Weg, in Aquaticy einen API-Schluessel
+    einzutragen -- und nur fuer NVIDIA NIM und Mistral, nachdem das Add-on
+    installiert ist. Gespeichert wird erst, wenn der Anbieter ihn annimmt.
+    """
+    from aquaticy import addons, linked
     from aquaticy.keyvault import VaultError, check_key
 
     session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
     aktion = str(payload.get("action") or "")
     provider = str(payload.get("provider") or "")
+    erkannt = linked.detect_provider(str(payload.get("key") or ""))
     if aktion == "link" and not provider:
-        # Ein Feld fuer alle (9.6.2): der Schluessel verraet seinen Anbieter.
-        provider = linked.detect_provider(str(payload.get("key") or ""))
+        provider = erkannt
         if not provider:
-            return {"ok": False, "error": "Diesen Schlüssel erkenne ich nicht. Er beginnt bei "
-                                          "Claude mit „sk-ant-“, bei ChatGPT mit „sk-“ und bei "
-                                          "Gemini mit „AIza“."}, 400
+            return {"ok": False, "error": "Diesen Schlüssel erkenne ich nicht. Ein Schlüssel "
+                                          "von NVIDIA beginnt mit „nvapi-“, einer von Mistral "
+                                          "hat 32 Buchstaben und Ziffern."}, 400
     if provider not in linked.PROVIDERS:
         return {"ok": False, "error": "Diesen Anbieter gibt es hier nicht."}, 400
-    name = linked.PROVIDERS[provider]["key"]
+    d = linked.PROVIDERS[provider]
+    name = d["key"]
+    if aktion == "link" and not addons.installed(session.settings(), provider):
+        return {"ok": False, "error": f"Installiere zuerst das Add-on {d['label']}."}, 400
+    if aktion == "link" and erkannt and erkannt != provider:
+        anders = linked.PROVIDERS[erkannt]["label"]
+        return {"ok": False, "error": f"Das ist ein Schlüssel von {anders} — füg ihn beim "
+                                      f"Add-on {anders} ein."}, 400
     wer = getattr(session.account, "id", "") or "lokal"
     try:
         if aktion in ("link", "refresh"):
@@ -3106,10 +3041,9 @@ def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                 wert = wert or (os.environ.get(name, "").strip() if session.profile is None
                                 else "")
                 if not wert:
-                    return {"ok": False, "error": "Dieses Konto ist nicht verknüpft."}, 400
+                    return {"ok": False, "error": "Hier ist noch kein Schlüssel hinterlegt."}, 400
             info = linked.inspect(provider, wert)
             if aktion == "link":
-                # Gespeichert wird erst, wenn der Anbieter den Schluessel angenommen hat.
                 if session.profile is not None:
                     account_vault(session.profile, session.account).set(name, wert)
                 else:
@@ -3117,12 +3051,7 @@ def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                     load_env(ziel, override=True)
             linked.save(session.settings().data_dir, provider, info)
         elif aktion == "unlink":
-            if session.profile is not None:
-                account_vault(session.profile, session.account).remove(name)
-            else:
-                os.environ.pop(name, None)
-                write_env_file({name: ""}, find_env_file() or DEFAULT_ENV_PATH)
-            linked.save(session.settings().data_dir, provider, None)
+            _forget_model_key(session, provider)
         else:
             return {"ok": False, "error": "Unbekannte Aktion."}, 400
     except (VaultError, linked.LinkError) as exc:
@@ -3132,116 +3061,21 @@ def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     return {"ok": True, "provider": provider, **linked_view(session)}, 200
 
 
-def keys_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
-    """Schluessel hinzufuegen, entfernen oder testen -- nur im eigenen Konto.
-
-    Returns: (Antwort, HTTP-Status).
-    """
-    from aquaticy.keyvault import SLOT_BY_NAME, VaultError, check_key
-
-    session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
-    aktion = str(payload.get("action") or "").strip().lower()
-    name = str(payload.get("name") or "").strip()
-    if name not in SLOT_BY_NAME:
-        return {"ok": False, "error": "Diesen Schlüssel gibt es hier nicht."}, 400
-    try:
-        if aktion == "set":
-            wert = check_key(name, str(payload.get("value") or ""))
-            if session.profile is not None:
-                account_vault(session.profile, session.account).set(name, wert)
-            else:
-                ziel = write_env_file({name: wert}, find_env_file() or DEFAULT_ENV_PATH)
-                load_env(ziel, override=True)
-            hinweis = f"{SLOT_BY_NAME[name].label}: gespeichert."
-        elif aktion == "remove":
-            if session.profile is not None:
-                weg = account_vault(session.profile, session.account).remove(name)
-            else:
-                weg = bool(os.environ.pop(name, "").strip())
-                write_env_file({name: ""}, find_env_file() or DEFAULT_ENV_PATH)
-            hinweis = f"{SLOT_BY_NAME[name].label}: entfernt." if weg else "Da war keiner."
-        elif aktion == "test":
-            wer = getattr(session.account, "id", "") or "lokal"
-            if not KEY_TEST_LIMIT.allow(wer):
-                return {"ok": False, "error": (
-                    "Das waren viele Tests in kurzer Zeit — bitte in einer Minute noch einmal."
-                )}, 429
-            ok, meldung = _test_key(session, name, str(payload.get("value") or "").strip())
-            view = keys_view(session)
-            return {"ok": ok, "message": meldung, **view}, 200
-        else:
-            return {"ok": False, "error": "Unbekannte Aktion."}, 400
-    except VaultError as exc:
-        return {"ok": False, "error": str(exc)}, 400
-    session.reload()
-    forget_strong_models(session.settings().data_dir)
-    return {"ok": True, "message": hinweis, **keys_view(session)}, 200
-
-
-def _test_key(session: Any, name: str, getippt: str) -> tuple[bool, str]:
-    """Prueft einen Schluessel beim Anbieter -- den getippten oder den hinterlegten.
-
-    Eigene Schluessel gehen dabei nur an den Anbieter selbst, nie an eine
-    Adresse des Betreibers. Die Antwort wird von Schluesseln gesaeubert.
-    """
-    from aquaticy.config import PROVIDER_KEYS, provider_of
-    from aquaticy.keyvault import SLOT_BY_NAME, check_key, scrub
-    from aquaticy.probe import check_llm, check_search
-    from aquaticy.system import FAST_MODELS
+def addons_view(session: Any) -> dict[str, Any]:
+    """Das Add-on-Fenster: der Katalog, bei NVIDIA NIM und Mistral mit dem Schluesselstand."""
+    from aquaticy import addons, linked
 
     settings = session.settings()
-    slot = SLOT_BY_NAME[name]
-    fehlt = "Es ist noch kein eigener Schlüssel hinterlegt — füg ihn ein und teste dann."
-    if getippt:
-        wert = check_key(name, getippt)
-    elif session.profile is not None:
-        # Getestet wird nur der EIGENE -- nie einer, den der Betreiber stellt.
-        if name not in settings.own_key_names:
-            return False, fehlt
-        wert = (settings.search_keys if slot.art == "suche" else settings.api_keys).get(name, "")
-    else:
-        wert = os.environ.get(name, "").strip()
-    if not wert:
-        return False, fehlt
-    from aquaticy import linked
-
-    if name in linked.KEY_NAMES:
-        anbieter = next(p for p, d in linked.PROVIDERS.items() if d["key"] == name)
-        try:
-            info = linked.inspect(anbieter, wert)
-            ok, meldung = True, (f"Funktioniert — {len(info['models'])} Modelle"
-                                 + (f", {info['tier']}" if info.get("tier") else "") + ".")
-        except linked.LinkError as exc:
-            ok, meldung = False, str(exc)
-    elif slot.art == "suche":
-        dienst = "brave" if name == "BRAVE_API_KEY" else "tavily"
-        ok, meldung = check_search(dienst, wert, "", "")
-    else:
-        anbieter = next((a for a, n in PROVIDER_KEYS.items() if n == name), "")
-        adresse = ""
-        if anbieter:
-            modell = FAST_MODELS.get(anbieter, "")
-        else:
-            # Der allgemeine Platz gilt fuer das Hauptmodell -- aber nur, wenn es
-            # im Betrieb auch damit liefe. Ein gestelltes Modell auf einem
-            # Server des Betreibers bekaeme den Schluessel nie; ihn dann beim
-            # Anbieter dieses Modells zu "testen", schickte ihn womoeglich an
-            # den falschen Anbieter.
-            modell = settings.model if provider_of(settings.model) not in PROVIDER_KEYS else ""
-            weg, des_kontos = settings.route(modell) if modell else ("", False)
-            if session.profile is not None and weg and not des_kontos:
-                modell = ""
-            adresse = weg if (des_kontos or session.profile is None) else ""
-        if not modell:
-            return False, ("Der allgemeine Schlüssel gilt für das Modell eines anderen Anbieters — "
-                           "trag zuerst unter Hauptmodell dessen Modell-ID ein (zum Beispiel "
-                           "groq/llama-3.3-70b-versatile), dann kann ich testen.")
-        from aquaticy.pace import own_gate
-
-        ok, meldung = check_llm(modell, wert, adresse,
-                                pace_key=own_gate(wert) if session.profile is not None else "")
-        meldung = f"{modell}: {meldung}"
-    return ok, scrub(meldung, [wert, *settings.secrets()])
+    # Ein Schluessel von vor 12.0.0 (damals in den Einstellungen) steht jetzt beim
+    # Add-on -- das ist dafuer einmal als installiert eingetragen.
+    for provider in linked.linked_providers(settings):
+        addons.mark_installed(settings, provider)
+    view = addons.public_view(settings, session.ultra)
+    konten = {k["provider"]: k for k in linked_view(session)["accounts"]}
+    for eintrag in view["addons"]:
+        if eintrag["id"] in konten:
+            eintrag["konto"] = konten[eintrag["id"]]
+    return view
 
 
 #: Was es im Add-on-Fenster zu tun gibt.
@@ -3285,9 +3119,15 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         elif action == "uninstall":
             if addon.programm:
                 session.reload(workshop=True)   # die virtual machine laesst den Datentraeger los
+            if addon.id in addons.MODEL_ADDONS:
+                # Modell-Add-on: der Schluessel geht mit (12.0.0 Luna).
+                _forget_model_key(session, addon.id)
+                forget_strong_models(session.settings().data_dir)
             addons.uninstall(session.settings(), addon.id)
             session.reload(workshop=True)
-            hinweis = "Deinstalliert — Programm und Anmeldung sind gelöscht."
+            hinweis = ("Deinstalliert — der Schlüssel ist gelöscht."
+                       if addon.id in addons.MODEL_ADDONS
+                       else "Deinstalliert — Programm und Anmeldung sind gelöscht.")
         elif action in ("enable", "disable"):
             addons.set_enabled(settings, addon.id, action == "enable", session.ultra)
             session.reload(workshop=True)
@@ -3326,8 +3166,7 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         return {"ok": False, "error": str(exc)}, 400
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500
-    view = addons.public_view(session.settings(), session.ultra)
-    return {"ok": True, "message": hinweis, **view}, 200
+    return {"ok": True, "message": hinweis, **addons_view(session)}, 200
 
 
 # ---------------------------------------------------------------------------
@@ -3909,7 +3748,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # Das Mikrofon nur fuer die eigene Seite (12.0.0 Luna, Spracheingabe) -- nie fuer
+        # eingebettete fremde Seiten; Kamera und Standort bleiben ganz gesperrt.
+        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         if self._https():
             # Einmal verschluesselt, immer verschluesselt (9.5.22).
@@ -4921,7 +4762,6 @@ class Handler(BaseHTTPRequestHandler):
                     # Seit 9.5.14 fertig vom Server (aquaticy/webview.py):
                     "header": header_for(settings),
                     "providers": webview.provider_view(),
-                    "search_key_hints": webview.search_key_hints(SEARCH_BACKEND_KEYS),
                     # "Eigene Modelle" zeigt nur, was das Konto selbst eingetragen hat.
                     "own_models": own_models(settings),
                 }
@@ -4998,9 +4838,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/werkstatt/datei":
             self._workshop_file()
         elif route == "/api/addons":
-            from aquaticy import addons
-
-            self._json(addons.public_view(SESSION.settings(), SESSION.ultra))
+            self._json(addons_view(SESSION.current() if isinstance(SESSION, SessionProxy)
+                                   else SESSION))
         elif route == "/api/context":
             # Der Regler unter der Modellauswahl (11.3.0 Luna).
             einstellungen = SESSION.settings()
@@ -5037,10 +4876,6 @@ class Handler(BaseHTTPRequestHandler):
             nur = (parse_qs(urlsplit(self.path).query).get("badge") or [""])[0] == "1"
             sitzung = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
             self._json(coworkers_view(sitzung, badge_only=nur))
-        elif route == "/api/keys":
-            # Nur, was hinterlegt ist -- nie ein Schluessel selbst.
-            self._json(keys_view(SESSION.current() if isinstance(SESSION, SessionProxy)
-                                 else SESSION))
         elif route == "/api/werkstatt/bildschirm":
             self._workshop_screen()
         elif route == "/api/jobs":
@@ -5068,7 +4903,7 @@ class Handler(BaseHTTPRequestHandler):
             from aquaticy.linked import picker_models
 
             alle = available_models(SESSION.settings())
-            # Verknuepfte KI-Konten (9.6.1) stehen in jedem Modus mit zur Wahl.
+            # Die Modelle der Add-ons NVIDIA NIM und Mistral stehen in jedem Modus zur Wahl.
             verknuepft = []
             with contextlib.suppress(Exception):
                 verknuepft = picker_models(SESSION.settings())
@@ -5396,9 +5231,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(self._storage_probe(self._read_json()))
         elif route == "/api/addons":
             antwort, status = addon_action(self._read_json())
-            self._json(antwort, status)
-        elif route == "/api/keys":
-            antwort, status = keys_action(self._read_json())
             self._json(antwort, status)
         elif route == "/api/werkstatt/eingabe":
             antwort, status = workshop_input(self._read_json())
@@ -5760,10 +5592,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
     def _probe(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Testet Modell und Suchmaschine -- dasselbe, was `aquaticy setup` macht.
 
-        Geprueft werden die Werte aus dem Formular, nicht die gespeicherten:
-        so sieht man VOR dem Speichern, ob ein Schluessel stimmt. Ein leeres
-        Schluesselfeld heisst weiterhin "unveraendert", also greift dann der
-        gespeicherte.
+        Geprueft werden Modell und Adresse aus dem Formular, mit dem
+        Schluessel, der dafuer hinterlegt ist. Schluessel selbst nimmt das
+        Formular seit 12.0.0 Luna nicht mehr an -- die kommen ueber Add-ons.
         """
         from aquaticy.config import NO_KEY
         from aquaticy.keyvault import scrub
@@ -5772,7 +5603,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         settings = SESSION.settings()
         konto = SESSION.account is not None
         model = fix_model_id(str(payload.get("AQUATICY_MODEL", "")).strip()) or settings.model
-        getippt = str(payload.get(API_KEY_FIELD, "")).strip()
         api_base = str(payload.get("AQUATICY_API_BASE", settings.api_base) or "").strip()
         if not SESSION.ultra:
             # Normale und Pro-Konten testen gegen die Adressen des Betreibers --
@@ -5783,41 +5613,31 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             # als spaeter laeuft, und der Test luegt.
             api_base = ""
         des_betreibers = get_settings().api_base or ""
-        if getippt:
-            # Ein eingetippter Schluessel gehoert dem, der ihn eintippt.
-            api_key, quelle = getippt, ("own" if konto else "operator")
-            if konto and api_base and api_base == des_betreibers:
-                # Ein eigener Schluessel geht nie an eine Adresse des
-                # Betreibers -- getestet wird beim Anbieter selbst.
-                api_base = ""
-        else:
-            # So, wie es nach dem Speichern liefe: dasselbe Modell, dieselbe
-            # Adresse -- also dieselben Regeln fuer Schluessel und Rechnung
-            # (Settings.key_source und llm_kwargs_for). Sonst testet man
-            # etwas anderes, als spaeter laeuft.
-            vorschau = replace(
-                settings, model=model, api_base=api_base,
-                own_api_base=(api_base if konto and SESSION.ultra and api_base
-                              and api_base != des_betreibers else ""),
-            )
-            quelle = vorschau.key_source(model)
-            weg = vorschau.llm_kwargs_for(model)
-            api_key = str(weg.get("api_key") or "")
-            api_base = str(weg.get("api_base") or "")
-            if not konto and api_base and api_base not in {settings.api_base or "",
-                                                           des_betreibers}:
-                # Ohne Konten ist man selbst der Betreiber -- trotzdem geht ein
-                # gespeicherter Schluessel nie an eine frisch eingetippte
-                # Adresse. Nicht bloss leer lassen: dann holte sich LiteLLM
-                # ihn selbst aus der Umgebung (bis 9.5.14 so passiert).
-                api_key = NO_KEY
+        # So, wie es nach dem Speichern liefe: dasselbe Modell, dieselbe
+        # Adresse -- also dieselben Regeln fuer Schluessel und Rechnung
+        # (Settings.key_source und llm_kwargs_for). Sonst testet man
+        # etwas anderes, als spaeter laeuft.
+        vorschau = replace(
+            settings, model=model, api_base=api_base,
+            own_api_base=(api_base if konto and SESSION.ultra and api_base
+                          and api_base != des_betreibers else ""),
+        )
+        quelle = vorschau.key_source(model)
+        weg = vorschau.llm_kwargs_for(model)
+        api_key = str(weg.get("api_key") or "")
+        api_base = str(weg.get("api_base") or "")
+        if not konto and api_base and api_base not in {settings.api_base or "",
+                                                       des_betreibers}:
+            # Ohne Konten ist man selbst der Betreiber -- trotzdem geht ein
+            # gespeicherter Schluessel nie an eine frisch eingetippte
+            # Adresse. Nicht bloss leer lassen: dann holte sich LiteLLM
+            # ihn selbst aus der Umgebung (bis 9.5.14 so passiert).
+            api_key = NO_KEY
 
         backend = str(payload.get("AQUATICY_SEARCH_BACKEND", "")).strip() or settings.search_backend
-        search_key = str(payload.get(SEARCH_KEY_FIELD, "")).strip()
-        if not search_key:
-            # Wie im Betrieb (Settings.search_key_for): der eigene, sonst der
-            # des Betreibers nur, wenn er fuer dieses Konto gilt.
-            search_key = settings.search_key_for(backend)
+        # Wie im Betrieb (Settings.search_key_for): der des Betreibers nur, wenn
+        # er fuer dieses Konto gilt.
+        search_key = settings.search_key_for(backend)
         engines = str(payload.get("AQUATICY_SEARCH_ENGINES", settings.search_engines) or "").strip()
         instance = str(payload.get("AQUATICY_SEARXNG_URL", settings.searxng_url) or "").strip()
         if not SESSION.ultra:
@@ -5843,7 +5663,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             llm_ok, llm_msg = False, str(exc)
         search_ok, search_msg = check_search(backend, search_key, engines, instance)
         # Fehlermeldungen der Anbieter zitieren gern den Schluessel -- nie weitergeben.
-        geheim = [api_key, search_key, getippt, *settings.secrets()]
+        geheim = [api_key, search_key, *settings.secrets()]
         return {
             "ok": llm_ok and search_ok,
             "llm": {"ok": llm_ok, "message": scrub(llm_msg, geheim), "model": model},

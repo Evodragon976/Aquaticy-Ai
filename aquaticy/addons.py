@@ -5,6 +5,11 @@ Jedes Add-on laesst sich **installieren**, **ein- und ausschalten** und wieder
 Beispiel): "Installieren" heisst dann, dass es fuer dieses Konto eingerichtet
 wird. Nach dem Installieren meldet man sich an, so wie es der Dienst vorsieht:
 
+* **NVIDIA NIM** und **Mistral** (seit 12.0.0 Luna) -- mit dem API-Schluessel
+  des eigenen Kontos beim Anbieter. Das ist die einzige Stelle in Aquaticy, an
+  der sich ein API-Schluessel eintragen laesst (aquaticy/linked.py). Sie sind
+  keine Werkzeuge: kein Befehl im Chat, kein Schalter; Deinstallieren loescht
+  den Schluessel.
 * **GitHub** -- mit einem persoenlichen Zugangs-Token. Aquaticy liest damit nur
   (Repos, Issues, Pull Requests, Dateien); geschrieben wird nie, auch wenn das
   Token es erlauben wuerde.
@@ -75,7 +80,7 @@ class AddOn:
     icon: str
     group: str
     summary: str
-    #: Wie man sich anmeldet: token | qr | keine | feeds
+    #: Wie man sich anmeldet: token | qr | keine | feeds | apikey (Modell-Anbieter)
     login: str
     #: Braucht die virtual machine im User mode (und damit Ultra)?
     werkstatt: bool = False
@@ -94,6 +99,27 @@ class AddOn:
 CATALOG: dict[str, AddOn] = {
     addon.id: addon
     for addon in (
+        # -- KI-Modelle (12.0.0 Luna): die einzigen Anbieter mit API-Schluessel --
+        AddOn(
+            "nvidia_nim", "NVIDIA NIM", "🟩", "KI-Modelle",
+            "Offene Modelle bei NVIDIA, zum Beispiel Llama 3.3 70B und Qwen-Coder. "
+            "Großzügiges Freikontingent: 40 Anfragen je Minute.",
+            login="apikey",
+            anmelden="Melde dich bei NVIDIA an, erstelle unter „API Keys“ einen Schlüssel "
+            "(beginnt mit nvapi-) und füge ihn hier ein.",
+            hinweis="Deine Fragen gehen an NVIDIA. Der Schlüssel liegt verschlüsselt bei "
+            "deinem Konto und geht nur an NVIDIA.",
+        ),
+        AddOn(
+            "mistral", "Mistral", "🟧", "KI-Modelle",
+            "Europäischer Anbieter mit Servern in der EU: Mistral Large, Mistral Small "
+            "und Codestral.",
+            login="apikey",
+            anmelden="Melde dich bei Mistral an, erstelle unter „API Keys“ einen Schlüssel "
+            "und füge ihn hier ein.",
+            hinweis="Deine Fragen gehen an Mistral. Der Schlüssel liegt verschlüsselt bei "
+            "deinem Konto und geht nur an Mistral.",
+        ),
         AddOn(
             "github", "GitHub", "🐙", "Konten",
             "Deine Repos, Issues, Pull Requests und Dateien — Aquaticy liest sie, "
@@ -226,6 +252,9 @@ CATALOG: dict[str, AddOn] = {
         ),
     )
 }
+
+#: Die Modell-Anbieter unter den Add-ons. Sie liefern Modelle, keine Werkzeuge.
+MODEL_ADDONS = frozenset(a.id for a in CATALOG.values() if a.login == "apikey")
 
 #: Was die beiden Pruef-Plugins abdecken -- fuer das Add-on-Fenster.
 PLUGIN_CONTENT: dict[str, tuple[str, ...]] = {
@@ -527,10 +556,16 @@ def usable(addon: AddOn, settings: Any, pro: bool) -> tuple[bool, str]:
 
 
 def active_ids(settings: Any, pro: bool = True) -> list[str]:
-    """Installiert, eingeschaltet und nutzbar -- nur diese sieht das Modell."""
+    """Installiert, eingeschaltet und nutzbar -- nur diese sieht das Modell.
+
+    Die Modell-Anbieter (NVIDIA NIM, Mistral) gehoeren nicht dazu: sie sind
+    kein Werkzeug und kein Befehl im Chat.
+    """
     state = load_state(settings)
     aktiv = []
     for addon in CATALOG.values():
+        if addon.id in MODEL_ADDONS:
+            continue
         eintrag = state.get(addon.id) or {}
         if eintrag.get("installed") and eintrag.get("enabled") and usable(addon, settings, pro)[0]:
             aktiv.append(addon.id)
@@ -622,7 +657,7 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
             },
             "feeds": feeds_of(settings) if addon.id == "feeds" else [],
             # Im Chat: /<kennung> (11.0.0 Luna) -- und was ein Pruef-Plugin abdeckt.
-            "command": f"/{addon.id}",
+            "command": "" if addon.id in MODEL_ADDONS else f"/{addon.id}",
             "inhalt": list(PLUGIN_CONTENT.get(addon.id, ())),
             "rechte": rights_of(settings, addon.id),
             "rechte_katalog": [
@@ -784,6 +819,9 @@ def set_enabled(settings: Any, addon_id: str, on: bool, pro: bool) -> dict[str, 
     eintrag = load_state(settings).get(addon.id) or {}
     if not eintrag.get("installed"):
         raise AddOnError(f"{addon.name} ist nicht installiert.")
+    if addon.id in MODEL_ADDONS:
+        raise AddOnError(f"{addon.name} hat keinen Schalter. Zum Abschalten deinstallieren — "
+                         "dann ist auch der Schlüssel weg.")
     if on:
         _check_allowed(addon, settings, pro)
     return _update(settings, addon.id, enabled=bool(on))
@@ -823,6 +861,18 @@ def uninstall(settings: Any, addon_id: str, pro: bool = True) -> dict[str, Any]:
         forget_github_token(settings)
     _drop(settings, addon.id)
     return {"removed": addon.id, "volumes": entfernt}
+
+
+def installed(settings: Any, addon_id: str) -> bool:
+    """Ist das Add-on fuer dieses Konto installiert (egal, ob an oder aus)?"""
+    return bool((load_state(settings).get(addon_id) or {}).get("installed"))
+
+
+def mark_installed(settings: Any, addon_id: str) -> None:
+    """Traegt ein Add-on als installiert ein -- fuer Schluessel von vor 12.0.0 Luna."""
+    if not installed(settings, addon_id):
+        _update(settings, get(addon_id).id, installed=True, enabled=True, status="bereit",
+                message="", installed_at=int(time.time()))
 
 
 def active_or_installed(settings: Any) -> list[str]:

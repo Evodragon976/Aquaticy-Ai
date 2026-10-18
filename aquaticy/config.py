@@ -48,15 +48,120 @@ PROVIDER_KEYS: dict[str, str] = {
     "lm_studio": "",
 }
 
-#: Verknuepfte KI-Konten (seit 9.6.1, aquaticy/linked.py). Bewusst NICHT in
-#: PROVIDER_KEYS: "openai/..." steht auch fuer lokale Server (LM Studio) und
-#: fuer den allgemeinen Schluessel. Diese Namen gelten nur fuer Modelle, die
-#: unter Add-ons → KI-Konten wirklich ausgelesen wurden.
-LINKED_KEYS: dict[str, str] = {
-    "anthropic": "ANTHROPIC_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "gemini": "GEMINI_API_KEY",
+#: Seit 12.0.0 Luna gibt es Modelle nur noch auf zwei Wegen:
+#:
+#: * **Mistral und NVIDIA NIM** in der Cloud -- mit einem Schluessel, der beim
+#:   Add-on des Anbieters verknuepft ist (aquaticy/linked.py).
+#: * **Auf dem Server selbst** oder im Netz dahinter: Ollama, LM Studio, vLLM,
+#:   llama.cpp/llamafile oder ein anderer Server, der die OpenAI-Schnittstelle
+#:   spricht -- aber nur unter einer lokalen Adresse (:func:`local_address`).
+#:
+#: Alles andere -- Claude, ChatGPT, Gemini, Groq, OpenRouter, Bedrock ... --
+#: ruft Aquaticy nicht auf. Geprueft wird beim Speichern, beim Wechseln und vor
+#: jedem Aufruf (aquaticy/llmcall.py).
+CLOUD_PROVIDERS: frozenset[str] = frozenset({"mistral", "nvidia_nim"})
+#: Die lokalen Wege -- mit der Adresse, die LiteLLM ohne eigene Angabe nimmt:
+#: (Umgebungsvariablen, Standard). Leer = ohne Adresse geht es in die Cloud.
+LOCAL_PROVIDERS: dict[str, tuple[tuple[str, ...], str]] = {
+    "ollama": (("OLLAMA_API_BASE",), "http://localhost:11434"),
+    "ollama_chat": (("OLLAMA_API_BASE",), "http://localhost:11434"),
+    "lm_studio": (("LM_STUDIO_API_BASE",), "http://localhost:1234/v1"),
+    "llamafile": (("LLAMAFILE_API_BASE",), "http://127.0.0.1:8080/v1"),
+    "hosted_vllm": (("HOSTED_VLLM_API_BASE",), ""),
+    "openai": (("OPENAI_API_BASE", "OPENAI_BASE_URL"), ""),
+    "text-completion-openai": (("OPENAI_API_BASE", "OPENAI_BASE_URL"), ""),
 }
+#: Ollama reicht Modelle mit "-cloud" an ollama.com weiter -- das ist nicht lokal.
+_OLLAMA_CLOUD = re.compile(r"[:-]cloud$", re.IGNORECASE)
+MODEL_RULE_TEXT = ("Aquaticy nimmt nur Mistral und NVIDIA NIM (beide unter Add-ons) oder "
+                   "Modelle, die auf dem Server laufen: Ollama, LM Studio, vLLM, llama.cpp.")
+#: Namen, die immer zum Server gehoeren -- auch ohne Nachschlagen.
+_LOKALE_NAMEN = (".local", ".lan", ".internal", ".home.arpa", ".localhost")
+#: Nachgeschlagene Namen: (Zeitpunkt, lokal?) -- fuenf Minuten lang.
+_LOKAL_MERK: dict[str, tuple[float, bool]] = {}
+_LOKAL_DAUER = 300.0
+
+
+class ModelNotAllowed(ValueError):
+    """Ein Modell, das weder Mistral, NVIDIA NIM noch lokal ist (seit 12.0.0 Luna)."""
+
+    def __init__(self) -> None:
+        super().__init__(MODEL_RULE_TEXT)
+
+
+def local_address(url: str) -> bool:
+    """Zeigt *url* auf den Server selbst oder ins Netz dahinter -- nie ins Internet?
+
+    Ein Name gilt als lokal, wenn er auf ".local", ".lan" ... endet oder jede
+    seiner Adressen nicht oeffentlich ist (aquaticy/netguard.py). So geht auch
+    ein Docker-Dienst ("ollama") oder ein Rechner im Heimnetz.
+    """
+    import ipaddress
+    import time
+    from urllib.parse import urlparse
+
+    from aquaticy import netguard
+
+    adresse = str(url or "").strip()
+    if not adresse:
+        return False
+    try:
+        teile = urlparse(adresse if "://" in adresse else f"http://{adresse}")
+        host = (teile.hostname or "").lower().rstrip(".")
+        port = teile.port
+    except ValueError:
+        return False
+    if not host:
+        return False
+    with contextlib.suppress(ValueError):
+        return not netguard.ip_allowed(str(ipaddress.ip_address(host)))
+    if host == "localhost" or host.endswith(_LOKALE_NAMEN):
+        return True
+    jetzt = time.monotonic()
+    gemerkt = _LOKAL_MERK.get(host)
+    if gemerkt and jetzt - gemerkt[0] < _LOKAL_DAUER:
+        return gemerkt[1]
+    try:
+        adressen = netguard.resolve(host, port)
+    except OSError:
+        adressen = []
+    lokal = bool(adressen) and not any(netguard.ip_allowed(a) for a in adressen)
+    if len(_LOKAL_MERK) > 64:
+        _LOKAL_MERK.clear()
+    _LOKAL_MERK[host] = (jetzt, lokal)
+    return lokal
+
+
+def model_allowed(model: str, api_base: str = "") -> bool:
+    """Darf Aquaticy *model* aufrufen? Mistral, NVIDIA NIM oder lokal -- sonst nicht.
+
+    Args:
+        api_base: die Adresse, an die der Aufruf ginge. Leer heisst: die, die
+            LiteLLM ohne Angabe nimmt (fuer ``openai/…`` waere das OpenAI).
+    """
+    modell = str(model or "").strip()
+    if not modell:
+        return True
+    if modell == SPLIT_MODEL_ID:
+        return True     # llama-server des Server-Verbunds, nur ueber 127.0.0.1
+    if "/" not in modell:
+        return False    # "gpt-4o", "claude-…": LiteLLM schickte das in die Cloud
+    anbieter = provider_of(modell)
+    if anbieter in CLOUD_PROVIDERS:
+        return True
+    if anbieter not in LOCAL_PROVIDERS or _OLLAMA_CLOUD.search(modell):
+        return False
+    namen, standard = LOCAL_PROVIDERS[anbieter]
+    basis = str(api_base or "").strip() or next(
+        (_env_str(n) for n in namen if _env_str(n)), standard)
+    return local_address(basis)
+
+
+def check_allowed(model: str, api_base: str = "") -> None:
+    """Wie :func:`model_allowed`, nur als Sperre. Raises: :class:`ModelNotAllowed`."""
+    if not model_allowed(model, api_base):
+        raise ModelNotAllowed()
+
 
 SEARCH_BACKEND_KEYS: dict[str, str] = {
     "duckduckgo": "",  # offene Metasuche, kein Key noetig
@@ -180,8 +285,11 @@ def api_key_name_for(model: str) -> str:
 #: Anbieter, deren Praefix LiteLLM unveraendert als Anbieter nimmt (11.2.1).
 #: Fuer sie braucht :func:`resolve_model` LiteLLM nicht zu laden -- das kostet
 #: rund 190 MB und drei Sekunden. Ein Test gleicht die Liste mit LiteLLM ab.
+#: Darunter auch Anbieter, die Aquaticy seit 12.0.0 Luna nicht mehr aufruft --
+#: LiteLLM kennt sie trotzdem, und so sagt :func:`model_problem` "nicht erlaubt"
+#: statt "unbekannt".
 KNOWN_PREFIXES: frozenset[str] = frozenset({
-    *PROVIDER_KEYS, *LINKED_KEYS,
+    *PROVIDER_KEYS, "anthropic", "openai", "gemini",
     "azure", "bedrock", "cerebras", "cohere", "deepseek", "fireworks_ai",
     "groq", "hosted_vllm", "huggingface", "openrouter", "perplexity",
     "sambanova", "together_ai", "vertex_ai", "xai",
@@ -277,10 +385,14 @@ def base_fits(url: str, model: str) -> bool:
     return not is_ollama_base(url)
 
 
-def model_problem(model: str) -> str:
-    """Menschenlesbare Meldung, wenn *model* so nicht benutzbar ist."""
+def model_problem(model: str, api_base: str = "") -> str:
+    """Menschenlesbare Meldung, wenn *model* so nicht benutzbar ist.
+
+    Erst, ob es den Anbieter gibt (ein Tippfehler bekommt seinen Vorschlag),
+    dann, ob Aquaticy ihn aufruft (seit 12.0.0 Luna, :func:`model_allowed`).
+    """
     if resolve_model(model):
-        return ""
+        return "" if model_allowed(model, api_base) else MODEL_RULE_TEXT
     message = (
         f"Modell '{model}' lässt sich keinem Anbieter zuordnen. "
         "Die Modell-ID braucht ein Anbieter-Praefix."
@@ -425,10 +537,6 @@ class Settings:
     #: AI Council (seit 9.6.1, aquaticy/linked.py): die verknuepften Modelle
     #: arbeiten und pruefen, das Hauptmodell richtet. Ohne Agenten.
     council: bool = False
-    #: Modelle aus verknuepften KI-Konten -- beim ersten Gebrauch gelesen.
-    linked_models: frozenset[str] | None = None
-    #: Stand von linked.json, aus dem linked_models gelesen wurde (9.6.2.5).
-    linked_stamp: float = -1.0
     #: Das Kontingent des Kontos (aquaticy/quota.py: 5-Stunden-Sitzung und
     #: Woche) -- nur normale Konten haben eins. Gesetzt vom Webserver, nie aus
     #: der .env. None = unbegrenzt. Siehe aquaticy/metering.py.
@@ -556,46 +664,12 @@ class Settings:
     def api_key(self) -> str:
         return self.key_for(self.model)
 
-    def is_linked(self, model: str) -> bool:
-        """Laeuft *model* ueber ein verknuepftes KI-Konto (9.6.1)?
-
-        Nur, wenn es unter Add-ons ausgelesen wurde UND der Schluessel da ist --
-        mit Konto nur der eigene, nie einer aus der Umgebung des Betreibers.
-        """
-        name = LINKED_KEYS.get(provider_of(model), "")
-        if not name:
-            return False
-        # Neu lesen, wenn sich linked.json geaendert hat (9.6.2.5): lokal lebt
-        # dasselbe Settings-Objekt lange, und ein frisch verknuepftes Modell
-        # muss trotzdem sofort direkt zum Anbieter gehen.
-        try:
-            stempel = (Path(self.data_dir) / "linked.json").stat().st_mtime
-        except OSError:
-            stempel = 0.0
-        if stempel != self.linked_stamp:
-            self.linked_models, self.linked_stamp = None, stempel
-        if self.linked_models is None:
-            ids: set[str] = set()
-            with contextlib.suppress(Exception):
-                from aquaticy.linked import load
-
-                for info in load(self.data_dir).values():
-                    ids |= {str(m.get("id", "")) for m in (info or {}).get("models", [])}
-            self.linked_models = frozenset(ids)
-        if model not in self.linked_models:
-            return False
-        if self.account_email:
-            return name in self.own_key_names and bool(self.api_keys.get(name))
-        return bool(self.api_keys.get(name) or _env_str(name))
-
     def key_name_for(self, model: str) -> str:
         """Unter welchem Namen der Schluessel fuer *model* gesucht wird.
 
         Wie :func:`api_key_name_for` -- nur dass auch ein allgemeiner Schluessel
         des KONTOS zaehlt, nicht bloss einer in der Umgebung des Servers.
         """
-        if self.is_linked(model):
-            return LINKED_KEYS[provider_of(model)]
         provider = provider_of(model)
         if provider in PROVIDER_KEYS:
             return PROVIDER_KEYS[provider]
@@ -630,8 +704,7 @@ class Settings:
         Betreiber (in der Umgebung des Servers) oder -- nur Ultra -- das Konto
         selbst (``own_api_base``).
         """
-        if not self.api_base or self.is_linked(model):
-            # Verknuepfte Konten gehen immer direkt zum Anbieter (9.6.1).
+        if not self.api_base:
             return "", False
         des_kontos = self.api_base == self.own_api_base
         # Die Adresse des Betreibers gehoert zu SEINEM Modell -- nicht zu dem,
@@ -680,7 +753,7 @@ class Settings:
     def secrets(self) -> list[str]:
         """Alle Schluessel, die in keiner Meldung auftauchen duerfen -- eigene und gestellte."""
         namen = (set(PROVIDER_KEYS.values()) | set(SEARCH_BACKEND_KEYS.values())
-                 | set(LINKED_KEYS.values()) | {GENERIC_KEY_NAME})
+                 | {GENERIC_KEY_NAME})
         werte = {self.api_keys.get(n, "") for n in namen} | {self.search_keys.get(n, "")
                                                              for n in namen}
         werte |= {_env_str(n) for n in namen if n}
@@ -874,7 +947,7 @@ class Settings:
     def missing_requirements(self) -> list[str]:
         """Liste menschenlesbarer Hinweise auf fehlende Pflichtangaben."""
         problems: list[str] = []
-        model_issue = model_problem(self.model)
+        model_issue = model_problem(self.model, self.api_base)
         if model_issue:
             problems.append(model_issue)
         key_name = self.api_key_name
