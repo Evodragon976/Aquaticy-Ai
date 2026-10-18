@@ -623,7 +623,9 @@ def verify_tool_calling(model_id: str, api_base: str = DEFAULT_OLLAMA_URL) -> tu
         import litellm
 
         litellm.suppress_debug_info = True
-        response = litellm.completion(
+        from aquaticy import llmcall
+
+        response = llmcall.completion(
             model=model_id,
             messages=[{"role": "user", "content": PROBE_MESSAGE}],
             tools=[PROBE_TOOL],

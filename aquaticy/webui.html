@@ -1616,6 +1616,14 @@ html.vv,html.vv body{height:var(--app-h)}
 .vm-status{margin:2px 16px 8px 34px}
 .vm-status.bad{color:var(--err)}
 
+/* Auslastung je Server im Verbund (11.3.2 Sol) */
+.vl{margin-top:14px;display:flex;flex-direction:column;gap:12px}
+.vl-titel{font-weight:600;color:var(--text)}
+.vl-server{border-top:1px solid var(--line);padding-top:10px}
+.vl-kopf{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;color:var(--text)}
+.vl-marke,.vl-rolle{color:var(--text-3);font-size:calc(12px * var(--fs))}
+.vl-rolle{margin:2px 0 6px}
+.vl-rolle.bad{color:var(--bad, #c0392b)}
 /* Kontextfenster unter der Modellauswahl (11.3.0 Luna) */
 .picker-ctx{display:flex;flex-direction:column;gap:4px;padding:10px 16px;
   border-top:1px solid var(--line)}
@@ -2880,7 +2888,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.2 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.2 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6056,7 +6064,13 @@ const EN = {
 "von dir eingetragen": "entered by you",
 "Neueste Version": "Latest version",
 "Ältere Version · nur Ultra": "Older version · Ultra only",
-"eigenes": "own"
+"eigenes": "own",
+"Nur Website": "Website only",
+"Modelle und etwas Website": "Models and some website",
+"Prozessor": "Processor",
+"Arbeitsspeicher": "Memory (RAM)",
+"Festplatte": "Disk",
+"Grafikkarte": "Graphics card"
 };
 const SPRACHEN = ["de", "en"];
 const ATTRIBUTE = ["placeholder", "title", "aria-label"];
@@ -6083,6 +6097,12 @@ const EN_MUSTER = [
   [/^Verteilt auf (\d+) Server$/, "Spread across $1 servers"],
   [/^Neueste Version · (.+) stärker$/, "Latest version · $1 stronger"],
   [/^Auto · Modell wählen$/, "Auto · Choose model"],
+  [/^(\d+) Kerne · Last (.+)$/, "$1 cores · load $2"],
+  [/^(\d+) Kerne$/, "$1 cores"],
+  [/^von ([\d.]+) GB$/, "of $1 GB"],
+  [/^([\d.]+) GB frei$/, "$1 GB free"],
+  [/^von ([\d.]+) MB · (\d+) Notizen$/, "of $1 MB · $2 notes"],
+  [/^(.+) · ([\d.]+) von ([\d.]+) GB$/, "$1 · $2 of $3 GB"],
   [/^Vorherige Version · wählbar bis (.+)$/, "Previous version · selectable until $1"],
   [/^(.+) · noch nicht freigegeben · nur Ultra$/, "$1 · not released yet · Ultra only"],
   [new RegExp("^(.+): PHP- und JSP-Dateien lassen sich nicht hochladen\\. "
@@ -8593,6 +8613,10 @@ function verbundZeigen(d){
     const rolle = (m.master ? "Master" : "Mitglied") + (m.self ? " · dieser Server" : "");
     const last = m.alive ? ` · ${m.accounts} Konten · ${m.runs} laufende Antworten`
       + (typeof m.cpu === "number" ? ` · CPU ${Math.round(m.cpu * 100)} %` : "")
+      // Was der Master diesem Server zuteilt (11.3.2 Sol).
+      + (m.role && !d.split_on ? " · " + (m.role === "modelle"
+        ? sp("Modelle und etwas Website", "models and some website")
+        : sp("nur Website", "website only")) : "")
       + (d.split_on ? splitAnteil(m, d) : "") : " · nicht erreichbar";
     let knopf = "", tun = null;
     if (d.master && !m.self && !m.alive && m.accounts > 0){
@@ -9530,8 +9554,30 @@ async function showLoad(){
   note.className = "note";
   note.innerHTML = `<div class="gauges">${parts.join("")}</div>`
     + `<div style="margin-top:8px">${esc(String(data.system))} · Python ${
-      esc(String(data.python))}</div>`;
+      esc(String(data.python))}</div>` + verbundLast(data.cluster);
   showStorage(data.storage);
+}
+
+// Server-Verbund (11.3.2 Sol): jeder Rechner mit Last und Rolle. Alles kommt
+// fertig vom Server und geht maskiert hinein -- ein Name ist Text, kein HTML.
+function verbundLast(server){
+  if (!Array.isArray(server) || !server.length) return "";
+  const bloecke = server.map(s => {
+    const marken = [s.self ? sp("dieser Server", "this server") : "", s.master ? "Master" : ""]
+      .filter(Boolean).join(" · ");
+    const kopf = `<div class="vl-kopf"><b>${esc(String(s.name))}</b>${
+      marken ? ` <span class="vl-marke">${esc(marken)}</span>` : ""}</div>`;
+    const konten = Number(s.accounts) || 0;
+    const rolle = s.alive
+      ? `<div class="vl-rolle"><span>${esc(String(s.role_label || ""))}</span>${konten
+          ? ` · ${esc(sp(`${konten} ${konten === 1 ? "Konto" : "Konten"}`,
+                         `${konten} ${konten === 1 ? "account" : "accounts"}`))}` : ""}</div>`
+      : `<div class="vl-rolle bad">${esc(sp("nicht erreichbar", "not reachable"))}</div>`;
+    const anzeigen = (s.gauges || []).map(g => gauge(g.name, g.value, g.sub, g.percent));
+    return `<div class="vl-server">${kopf}${rolle}${
+      anzeigen.length ? `<div class="gauges">${anzeigen.join("")}</div>` : ""}</div>`;
+  });
+  return `<div class="vl"><div class="vl-titel">Server-Verbund</div>${bloecke.join("")}</div>`;
 }
 
 function showStorage(storage){

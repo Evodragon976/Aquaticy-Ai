@@ -94,6 +94,15 @@ LOG_BATCH = 500
 LOG_KEEP_SECONDS = 3 * 86400.0
 #: Falsche Codes, bevor eine Einladung verfaellt.
 CODE_TRIES = 3
+#: So lange gilt die gemessene Hardware eines Servers (Sekunden) -- nvidia-smi
+#: und die Modellliste von Ollama kosten, das Lebenszeichen kommt alle 3 s.
+HW_SECONDS = 10.0
+#: Ab diesem Anteil der staerksten Modell-Leistung im Verbund ist ein Server ein
+#: Modell-Server (11.3.2 Sol). Alle anderen bedienen nur die Website.
+MODEL_ROLE_SHARE = 0.4
+#: Ein Modell-Server uebernimmt hoechstens so viel Website-Arbeit wie dieser
+#: Anteil des besten reinen Website-Servers -- "ein bisschen was die Website".
+WEB_ON_MODEL_SHARE = 0.5
 _TAILSCALE_V4 = ipaddress.ip_network("100.64.0.0/10")
 _TAILSCALE_V6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")
 
@@ -752,6 +761,11 @@ class Hooks:
     restart: Callable[[], None] = lambda: None
     #: Eine neue Anfrage zum Verbinden (Terminal).
     ask: Callable[[dict[str, Any]], None] | None = None
+    #: Hardware und Auslastung dieses Rechners (11.3.2 Sol): Kerne, RAM, Grafikkarte,
+    #: installierte Ollama-Modelle. Siehe :func:`hardware`.
+    hardware: Callable[[], dict[str, Any]] = lambda: {}
+    #: Braucht dieses Konto lokale Modelle (Ollama, verteiltes Modell)?
+    wants_models: Callable[[str], bool] = lambda user: False
 
 
 @dataclass
@@ -815,6 +829,7 @@ class Cluster:
         self.discovered: dict[str, dict[str, Any]] = {}
         self.last_ok: dict[str, float] = {}
         self.loads: dict[str, dict[str, Any]] = {}
+        self._hw: tuple[float, dict[str, Any]] = (0.0, {})
         self.invites_out: dict[str, Invite] = {}
         self.invites_in: dict[str, Invite] = {}
         self._nonces: dict[str, float] = {}
@@ -1182,7 +1197,49 @@ class Cluster:
             last = {}
         with contextlib.suppress(OSError, AttributeError):
             last["cpu"] = round(os.getloadavg()[0] / max(1, os.cpu_count() or 1), 3)
+        last["hw"] = self.my_hardware()
         return last
+
+    def my_hardware(self) -> dict[str, Any]:
+        """Die Hardware dieses Rechners -- gemerkt fuer HW_SECONDS."""
+        gemessen, hw = self._hw
+        if _now() - gemessen < HW_SECONDS:
+            return hw
+        try:
+            hw = hardware(self.hooks.hardware() or {})
+        except Exception:
+            hw = hardware({})
+        self._hw = (_now(), hw)
+        return hw
+
+    def hw_of(self, node: str) -> dict[str, Any]:
+        """Die gepruefte Hardware von *node* -- leer gilt als "unbekannt"."""
+        if node == self.node_id:
+            return self.my_hardware()
+        return hardware((self.loads.get(node) or {}).get("hw"))
+
+    def roles(self) -> dict[str, str]:
+        """Wer was macht (11.3.2 Sol): "modelle" oder "website", je lebendem Server.
+
+        Modell-Server sind die, die lokale Modelle gut koennen: eine Grafikkarte
+        mit genug Speicher oder viel Arbeitsspeicher, und Ollama mit mindestens
+        einem Modell. Wer weniger als MODEL_ROLE_SHARE der staerksten Leistung
+        bringt, bedient nur die Website -- ein schwacher Rechner bekommt keine
+        Konten mit lokalen Modellen. Kann keiner Modelle, sind alle "website".
+        """
+        lebendig = [m["node"] for m in self.members() if self.alive(m["node"])]
+        macht = {n: model_power(self.hw_of(n)) for n in lebendig}
+        beste = max(macht.values(), default=0.0)
+        return {n: "modelle" if beste > 0 and macht[n] >= beste * MODEL_ROLE_SHARE
+                else "website" for n in lebendig}
+
+    def _wants_models(self, user: str) -> bool:
+        if not user:
+            return False
+        try:
+            return bool(self.hooks.wants_models(user))
+        except Exception:
+            return False
 
     def score(self, node: str) -> float:
         """Je kleiner, desto freier. Laufende Antworten zaehlen am meisten."""
@@ -1193,12 +1250,43 @@ class Cluster:
         return (2.0 * float(last.get("runs", 0) or 0) + aktiv
                 + 2.0 * float(last.get("cpu", 0) or 0))
 
-    def least_loaded(self) -> str:
+    def least_loaded(self, user: str = "") -> str:
+        """Der Server, der ein Konto jetzt am besten bedient (11.3.2 Sol nach Staerke).
+
+        Ein Konto mit lokalen Modellen geht nur auf Modell-Server, dorthin, wo
+        die Last im Verhaeltnis zur Modell-Leistung am kleinsten ist. Alle
+        anderen Konten sind Website-Arbeit: vor allem die Website-Server, nach
+        ihrer Staerke; ein Modell-Server zaehlt dafuer hoechstens halb so stark
+        wie der beste Website-Server. So bleibt seine Kraft fuer die Modelle.
+        """
         lebendig = [m["node"] for m in self.members() if self.alive(m["node"])]
         if not lebendig:
             return self.node_id
+        rollen = self.roles()
+        if self._wants_models(user):
+            kandidaten = [n for n in lebendig if rollen.get(n) == "modelle"] or lebendig
+            kraft = {n: model_power(self.hw_of(n)) for n in kandidaten}
+        else:
+            kandidaten = lebendig
+            kraft = {n: web_power(self.hw_of(n)) for n in kandidaten}
+            web = [kraft[n] for n in kandidaten if rollen.get(n) != "modelle"]
+            if web:
+                deckel = max(web) * WEB_ON_MODEL_SHARE
+                for n in kandidaten:
+                    if rollen.get(n) == "modelle":
+                        kraft[n] = min(kraft[n], deckel)
+        # Unbekannte Hardware (aeltere Fassung) zaehlt wie der Durchschnitt.
+        bekannt = [k for k in kraft.values() if k > 0]
+        mittel = sum(bekannt) / len(bekannt) if bekannt else 1.0
         # Bei Gleichstand der Master -- dort liegen die Daten ohnehin schon.
-        return min(lebendig, key=lambda n: (self.score(n), n != self.master_node(), n))
+        return min(kandidaten, key=lambda n: ((self.score(n) + 1.0) / (kraft[n] or mittel),
+                                              n != self.master_node(), n))
+
+    def misplaced(self, user: str, node: str) -> bool:
+        """Braucht das Konto Modelle, sitzt aber auf einem reinen Website-Server?"""
+        rollen = self.roles()
+        return (self._wants_models(user) and rollen.get(node) == "website"
+                and "modelle" in rollen.values())
 
     def assign(self, user: str) -> str:
         """Der Heimserver eines Kontos (nur der Master entscheidet)."""
@@ -1222,17 +1310,21 @@ class Cluster:
                 self._set_home(user, self.node_id)
                 return self.node_id
             if jetzt_heim and self.alive(jetzt_heim):
-                if jetzt - zuletzt < IDLE_SECONDS:
+                # Lokale Modelle auf einem schwachen Server: sobald dort nichts
+                # mehr laeuft, auf einen Modell-Server (_move prueft das).
+                falsch = self.misplaced(user, jetzt_heim)
+                if jetzt - zuletzt < IDLE_SECONDS and not falsch:
                     return jetzt_heim
-                bester = self.least_loaded()
-                if bester == jetzt_heim or self.score(jetzt_heim) - self.score(bester) < 1.0:
+                bester = self.least_loaded(user)
+                if bester == jetzt_heim or (
+                        not falsch and self.score(jetzt_heim) - self.score(bester) < 1.0):
                     return jetzt_heim
                 return self._move(user, jetzt_heim, bester)
             if jetzt_heim:
                 # Die letzte Profilkopie kann hinter dem ausgefallenen Server
                 # zurueckliegen. Ohne Abgabe und Nachziehen nicht neu zuteilen.
                 return jetzt_heim
-            bester = self.least_loaded()
+            bester = self.least_loaded(user)
             # Ohne Heimserver liegen die Daten beim Master (dort war das Konto,
             # bevor es den Verbund gab).
             quelle = jetzt_heim or self.master_node()
@@ -2275,9 +2367,11 @@ class Cluster:
     def view(self) -> dict[str, Any]:
         self.poll_answers()
         mitglieder = []
+        rollen = self.roles()
         for m in self.members():
             last = self.my_load() if m["node"] == self.node_id else self.loads.get(m["node"], {})
             mitglieder.append({
+                "role": rollen.get(m["node"], ""), "hw": self.hw_of(m["node"]),
                 "node": m["node"], "name": m.get("name", ""), "address": m.get("address", ""),
                 "port": m.get("port"), "self": m["node"] == self.node_id,
                 "master": m["node"] == self.master_node(), "alive": self.alive(m["node"]),
@@ -2296,6 +2390,58 @@ class Cluster:
                 "lan": self.lan_ready(), "max": MAX_NODES, "members": mitglieder,
                 "found": self.found() if self.enabled else [], "invites": einladungen,
                 "notice": self.notice}
+
+
+def _zahl(roh: Any, hoechstens: float) -> float:
+    """Eine Zahl aus der Meldung eines anderen Servers -- sonst 0 (auch NaN, Unendlich)."""
+    # Nur echte Zahlen: Text wie "16" kommt so von keinem Aquaticy.
+    if isinstance(roh, bool) or not isinstance(roh, (int, float)):
+        return 0.0
+    try:
+        wert = float(roh)
+    except OverflowError:
+        return 0.0
+    return wert if 0.0 <= wert <= hoechstens else 0.0
+
+
+def hardware(roh: Any) -> dict[str, Any]:
+    """Hardware und Auslastung eines Servers -- geprueft, wie bei _split_status.
+
+    Kommt von einem anderen Mitglied: nur bekannte Felder, nur Zahlen in
+    sinnvollen Grenzen, Text gekuerzt.
+    """
+    roh = roh if isinstance(roh, dict) else {}
+    return {
+        "cores": int(_zahl(roh.get("cores"), 4096)),
+        "cpu_pct": round(_zahl(roh.get("cpu_pct"), 100)),
+        "ram_gb": round(_zahl(roh.get("ram_gb"), 65_536), 1),
+        "ram_used_gb": round(_zahl(roh.get("ram_used_gb"), 65_536), 1),
+        "ram_pct": round(_zahl(roh.get("ram_pct"), 100)),
+        "gpu": str(roh.get("gpu") or "")[:80],
+        "vram_gb": round(_zahl(roh.get("vram_gb"), 4096), 1),
+        "vram_used_gb": round(_zahl(roh.get("vram_used_gb"), 4096), 1),
+        "gpu_pct": round(_zahl(roh.get("gpu_pct"), 100)),
+        "ollama_models": int(_zahl(roh.get("ollama_models"), 10_000)),
+    }
+
+
+def model_power(hw: dict[str, Any]) -> float:
+    """Wie gut ein Server lokale Modelle kann -- 0 ohne Ollama-Modell oder zu schwach.
+
+    Eine Grafikkarte zaehlt je GB Speicher am meisten. Ohne (brauchbare) Karte
+    rechnet der Prozessor, aber erst ab 16 GB Arbeitsspeicher.
+    """
+    if hw.get("ollama_models", 0) <= 0:
+        return 0.0
+    karte = 4.0 * hw.get("vram_gb", 0) if hw.get("vram_gb", 0) >= 4 else 0.0
+    prozessor = (hw.get("ram_gb", 0) * 0.5 + hw.get("cores", 0)
+                 if hw.get("ram_gb", 0) >= 16 else 0.0)
+    return karte + prozessor
+
+
+def web_power(hw: dict[str, Any]) -> float:
+    """Wie viel Website-Arbeit ein Server schafft: Kerne und Arbeitsspeicher."""
+    return hw.get("cores", 0) + hw.get("ram_gb", 0) / 4
 
 
 def _split_status(roh: Any) -> dict[str, Any]:

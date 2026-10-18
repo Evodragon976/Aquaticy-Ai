@@ -16,6 +16,25 @@ from tests.test_cluster import _Handler, _konto, _paar, _store, _warte, verbund 
 from tests.test_sharding import Echo, Rpc, _empfangen, paar  # noqa: F401
 
 
+def _ipv6_da() -> bool:
+    """Kann dieser Rechner ueberhaupt auf ::1 lauschen? (11.3.2 Sol)
+
+    Manche Container und Dienste haben IPv6 ganz abgeschaltet; dort scheitert
+    schon das Anlegen des Sockets ("Address family not supported"). Das ist
+    eine Bedingung der Umgebung wie Chromium fuer den Rundgang, kein Fehler.
+    """
+    try:
+        with socket.socket(socket.AF_INET6, socket.SOCK_STREAM) as probe:
+            probe.bind(("::1", 0))
+        return True
+    except OSError:
+        return False
+
+
+IPV6 = _ipv6_da()
+OHNE_IPV6 = "Dieser Rechner hat kein IPv6 (::1 laesst sich nicht binden)."
+
+
 def _dns(addresses):
     return [(socket.AF_INET6 if ":" in ip else socket.AF_INET, socket.SOCK_STREAM,
              socket.IPPROTO_TCP, "", (ip, 0, 0, 0) if ":" in ip else (ip, 0))
@@ -127,6 +146,7 @@ def test_numeric_cluster_targets_do_not_need_dns(monkeypatch, address, expected)
     assert cluster.resolve_address(address) == expected
 
 
+@pytest.mark.skipif(not IPV6, reason=OHNE_IPV6)
 def test_ipv6_bind_and_http_request_use_the_same_address_family(monkeypatch):
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -265,6 +285,8 @@ def test_model_tunnel_over_tailnet_ip_uses_existing_encrypted_protocol(
 
 @pytest.mark.parametrize("address", ["100.81.120.2", "fd7a:115c:a1e0::2", "::1"])
 def test_rpc_and_chat_forward_over_tailnet_ip_with_real_http(tmp_path, monkeypatch, address):
+    if address == "::1" and not IPV6:
+        pytest.skip(OHNE_IPV6)
     store = _store(tmp_path / "accounts")
     account = _konto(store, "tailnet@example.org")
     monkeypatch.setattr(web, "AUTH", store)

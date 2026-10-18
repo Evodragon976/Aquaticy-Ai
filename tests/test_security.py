@@ -102,17 +102,24 @@ def test_all_model_calls_go_through_the_meter() -> None:
     ruft niemand litellm.completion direkt."""
     import re
 
-    aufruf = re.compile(r"(=|return)\s*litellm\.completion\(")
+    # Seit 11.3.2 Sol zaehlt auch llmcall.completion als direkter Aufruf: es ist nur
+    # der Ausweg fuer LiteLLM ohne `mcp` (aquaticy/llmcall.py), kein eigener Zaehler.
+    aufruf = re.compile(r"(=|return)\s*(litellm|llmcall)\.completion\(")
     wurzel = Path(__file__).resolve().parent.parent / "aquaticy"
     for datei in wurzel.glob("*.py"):
         text = datei.read_text(encoding="utf-8")
         # probe.py und local_model.py pruefen nur Erreichbarkeit (Einrichtung, lokal).
-        if datei.name in ("metering.py", "agent.py", "probe.py", "local_model.py"):
+        # llmcall.py reicht nur durch -- wer es ruft, wird hier mitgeprueft.
+        if datei.name in ("metering.py", "agent.py", "probe.py", "local_model.py",
+                          "llmcall.py"):
             continue
         assert not aufruf.search(text), f"{datei.name} ruft am Zaehler vorbei"
     agent = (wurzel / "agent.py").read_text(encoding="utf-8")
     # Im Agenten nur die zwei Wege, die selbst zaehlen (_completion und _final_answer).
     assert len(aufruf.findall(agent)) == 2
+    # llmcall selbst hat keinen weiteren Ausgang als litellm.completion.
+    durch = (wurzel / "llmcall.py").read_text(encoding="utf-8")
+    assert "metering" not in durch and "import litellm" in durch
 
 
 def test_the_main_agent_stops_mid_run(knapp: Settings, monkeypatch: pytest.MonkeyPatch) -> None:

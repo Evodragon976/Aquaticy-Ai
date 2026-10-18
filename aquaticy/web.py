@@ -334,7 +334,9 @@ NUMBERS: dict[str, tuple[int, int]] = {
     "AQUATICY_RPM": (1, 100_000),
     "AQUATICY_PARALLEL_CALLS": (1, 64),
     "AQUATICY_MAX_TOOL_CALLS": (1, 200),
-    "AQUATICY_CONTEXT_TOKENS": (2_000, 2_000_000),
+    # Ab 256 (11.3.2 Sol): Der Regler geht bei sehr grossen Modellen unter 2000,
+    # wenn sonst die 5 GB nicht reichen -- der Wert wurde dann abgelehnt.
+    "AQUATICY_CONTEXT_TOKENS": (256, 2_000_000),
     "AQUATICY_PLANNER_TIMEOUT": (1, 600),
 }
 
@@ -781,6 +783,45 @@ def system_gauges(data: dict[str, Any]) -> list[dict[str, Any]]:
                                 f"{speicher.get('entries')} Notizen",
                          "percent": speicher.get("percent")})
     return anzeigen
+
+
+#: Wie die Rolle eines Servers im Verbund heisst (11.3.2 Sol).
+ROLE_LABELS = {"modelle": "Modelle und etwas Website", "website": "Nur Website"}
+
+
+def cluster_gauges(verbund: Any) -> list[dict[str, Any]]:
+    """Die Auslastung jedes Servers im Verbund -- fuer die Anzeige unter "Auslastung".
+
+    Aus den Lebenszeichen, die sich die Server alle drei Sekunden schicken;
+    geprueft in cluster.hardware. Dazu, was der Master dem Server zuteilt.
+    """
+    rollen = verbund.roles()
+    master = verbund.master_node()
+    server: list[dict[str, Any]] = []
+    for mitglied in verbund.members():
+        knoten = str(mitglied.get("node", ""))
+        hw = verbund.hw_of(knoten)
+        lebendig = verbund.alive(knoten)
+        anzeigen: list[dict[str, Any]] = []
+        if lebendig and hw.get("cores"):
+            anzeigen.append({"name": "Prozessor", "value": f"{hw['cpu_pct']} %",
+                             "sub": f"{hw['cores']} Kerne", "percent": hw["cpu_pct"]})
+        if lebendig and hw.get("ram_gb"):
+            anzeigen.append({"name": "Arbeitsspeicher", "value": f"{hw['ram_used_gb']} GB",
+                             "sub": f"von {hw['ram_gb']} GB", "percent": hw["ram_pct"]})
+        if lebendig and hw.get("gpu"):
+            anzeigen.append({"name": "Grafikkarte", "value": f"{hw['gpu_pct']} %",
+                             "sub": f"{hw['gpu']} · {hw['vram_used_gb']} von "
+                                    f"{hw['vram_gb']} GB", "percent": hw["gpu_pct"]})
+        rolle = rollen.get(knoten, "")
+        server.append({
+            "name": str(mitglied.get("name") or knoten[:8])[:60],
+            "self": knoten == verbund.node_id, "master": knoten == master,
+            "alive": lebendig, "role": rolle, "role_label": ROLE_LABELS.get(rolle, ""),
+            "accounts": sum(1 for n in list(verbund.homes.values()) if n == knoten),
+            "gauges": anzeigen,
+        })
+    return server
 
 
 def usage_view(settings: Settings) -> dict[str, Any]:
@@ -5061,6 +5102,10 @@ class Handler(BaseHTTPRequestHandler):
             if settings.memory_enabled:
                 payload["storage"] = storage_view(SESSION.memory().usage())
             payload["gauges"] = system_gauges(payload)
+            if CLUSTER is not None and CLUSTER.joined:
+                # Server-Verbund (11.3.2 Sol): jeder Rechner mit seiner Last und Rolle.
+                with contextlib.suppress(Exception):
+                    payload["cluster"] = cluster_gauges(CLUSTER)
             self._json(payload)
         elif route == "/api/notes":
             settings = SESSION.settings()
@@ -6394,6 +6439,50 @@ def _cluster_load() -> dict[str, Any]:
     return last
 
 
+def _cluster_hardware() -> dict[str, Any]:
+    """Hardware und Auslastung dieses Rechners fuer den Verbund (11.3.2 Sol).
+
+    Der Master teilt danach ein, wer Modelle rechnet und wer nur die Website
+    bedient; die Auslastungsanzeige zeigt es fuer jeden Server.
+    """
+    from aquaticy.local_model import installed_models
+    from aquaticy.system import cpu_load, gpu_use, memory_use
+
+    cpu, ram, gpu = cpu_load(), memory_use(), gpu_use()
+    try:
+        modelle = len(installed_models(OLLAMA_URL()))
+    except Exception:
+        modelle = 0
+    return {"cores": cpu.get("cores"), "cpu_pct": cpu.get("percent"),
+            "ram_gb": ram.get("total_gb"), "ram_used_gb": ram.get("used_gb"),
+            "ram_pct": ram.get("percent"), "gpu": gpu.get("name", ""),
+            "vram_gb": gpu.get("total_gb"), "vram_used_gb": gpu.get("used_gb"),
+            "gpu_pct": gpu.get("percent"), "ollama_models": modelle}
+
+
+def _cluster_wants_models(user_id: str) -> bool:
+    """Rechnet dieses Konto mit lokalen Modellen? Dann gehoert es auf einen Modell-Server.
+
+    Aus der .env seines Profils (wie _profile_settings), sonst die Vorgabe des
+    Servers: Hauptmodell, Code-Modell, Agenten-Modell.
+    """
+    from aquaticy.local_model import local_name
+
+    if AUTH is None or AUTH.account(user_id) is None:
+        return False
+    try:
+        roh = read_env_file(AUTH.profile_dir(user_id) / ".env")
+    except Exception:
+        roh = {}
+    vorgabe = get_settings()
+    for feld, attr in (("AQUATICY_MODEL", "model"), ("AQUATICY_CODE_MODEL", "code_model"),
+                       ("AQUATICY_SUBAGENT_MODEL", "subagent_model")):
+        modell = str(roh.get(feld) or getattr(vorgabe, attr, "") or "").strip()
+        if modell and (local_name(modell) or modell == SPLIT_MODEL_ID):
+            return True
+    return False
+
+
 def _cluster_release(user_id: str) -> bool:
     """Gibt ein Konto an einen anderen Server ab -- nur, wenn hier nichts laeuft."""
     with SESSIONS._lock:
@@ -6617,6 +6706,12 @@ class AquaticyServer(ThreadingHTTPServer):
     ganzen Traceback (gemeldet mit Python 3.14, ueber Tailscale). Jetzt bleibt
     ein Abbruch durch die Gegenseite still, alles andere steht als eine Zeile da.
     """
+
+    #: Warteschlange fuer neue Verbindungen (11.3.2 Sol). Die Standardbibliothek
+    #: nimmt 5 -- eine Seite oeffnet beim Laden aber zwoelf Anfragen auf einmal.
+    #: Lief die Schlange ueber, verwarf der Kernel den Verbindungsaufbau, und der
+    #: Browser wartete mit wachsenden Pausen: einzelne Anfragen hingen 30 s und mehr.
+    request_queue_size = 128
 
     def __init__(self, server_address: tuple[str, int], handler: Any,
                  bind_and_activate: bool = True) -> None:
@@ -6930,7 +7025,9 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
                                       hooks=cluster.Hooks(load=_cluster_load,
                                                           release=_cluster_release,
                                                           adopt=_cluster_adopt,
-                                                          restart=_cluster_restart, ask=frage))
+                                                          restart=_cluster_restart, ask=frage,
+                                                          hardware=_cluster_hardware,
+                                                          wants_models=_cluster_wants_models))
             frage.cluster = CLUSTER
             CLUSTER.start()
             # Serverlast aufteilen (10.2.0 Luna): haelt rpc-server und llama-server

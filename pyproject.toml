@@ -17,7 +17,7 @@ dependencies = [
     # Seit 9.5.15 nach oben begrenzt: die naechste grosse Fassung darf eine
     # Installation nicht unbemerkt brechen. Reproduzierbar genau installiert
     # wird mit constraints.txt (siehe README, "Entwicklung").
-    "litellm>=1.100.0,<2",
+    "litellm>=1.100.0,!=1.106.0,<2",
     "typer>=0.27.2,<1",
     "rich>=15.0.0,<16",
     "httpx>=0.28.1,<0.29",

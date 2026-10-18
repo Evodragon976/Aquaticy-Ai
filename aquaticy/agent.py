@@ -18,7 +18,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from aquaticy import metering
+from aquaticy import llmcall, metering
 from aquaticy.cache import Cache
 from aquaticy.config import Settings, selected_vision_model
 from aquaticy.guardrails import (
@@ -2618,7 +2618,8 @@ class Agent:
             with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
                 if self.settings.model_access is not None:
                     self.settings.model_access(self.active_model)
-                response = litellm.completion(
+                # Ueber llmcall: LiteLLM 1.106.0 verlangte sonst das Paket `mcp`.
+                response = llmcall.completion(
                     model=self.active_model,
                     messages=messages,
                     # Ohne Werkzeuge auch kein tool_choice -- manche Anbieter

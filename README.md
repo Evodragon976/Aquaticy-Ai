@@ -1,4 +1,4 @@
-# Aquaticy AI 11.3.2 Terra
+# Aquaticy AI 11.3.2 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -115,7 +115,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.3.2 Terra
+aquaticy --version            # 11.3.2 Sol
 
 # 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -711,9 +711,21 @@ arbeiten zusammen.
 
 - **Eine Datenbank, auf jedem Server ganz.** Konten, Sitzungen und Ai-guard werden gespiegelt,
   die Profilordner auch. Anmelden geht an jedem Server.
-- **Lastausgleich nach Nutzern.** Jedes Konto hat einen Heimserver. Der Master teilt neue
-  Konten dem Server mit der wenigsten Last zu. Kommt eine Anfrage woanders an, geht sie
-  verschlüsselt zum Heimserver.
+- **Lastausgleich nach Nutzern.** Jedes Konto hat einen Heimserver. Kommt eine Anfrage
+  woanders an, geht sie verschlüsselt zum Heimserver.
+- **Arbeit nach Stärke.** Jeder Server meldet Kerne, Arbeitsspeicher, Grafikkarte und die
+  Zahl seiner Ollama-Modelle. Daraus gibt der Master jedem eine Rolle:
+  - **Modelle und etwas Website:** Grafikkarte ab 4 GB oder ab 16 GB Arbeitsspeicher, dazu
+    Ollama mit mindestens einem Modell, und mindestens 40 % der Modell-Leistung des
+    stärksten Servers.
+  - **Nur Website:** alle anderen. Sie bekommen nie ein Konto mit lokalen Modellen.
+
+  Ein Konto mit lokalen Modellen geht auf einen Modell-Server. Sitzt es auf einem schwachen,
+  zieht es um, sobald dort nichts mehr läuft. Alle anderen Konten verteilt der Master nach
+  Last im Verhältnis zur Stärke. Ein Modell-Server zählt dafür höchstens halb so stark wie
+  der beste reine Website-Server.
+- **Auslastung je Server:** Unter *Einstellungen → Auslastung* steht jeder Server mit
+  Prozessor, Arbeitsspeicher, Grafikkarte, Rolle und Zahl der Konten (nur Ultra).
 - **Master** ist der Server, der eingeladen hat. Fällt ein Server aus, übernimmt der Master
   dessen Konten per Knopf.
 
@@ -1043,7 +1055,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.3.2-Terra.md).
+[Prüfbericht](TESTREPORT-11.3.2-Sol.md).
 
 ---
 

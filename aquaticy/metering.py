@@ -399,8 +399,6 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
         enforce: Vorher pruefen. Der Rechtspruefer prueft nicht (er soll im
             Zweifel lieber ablehnen als ausfallen) -- gezaehlt wird er trotzdem.
     """
-    import litellm
-
     modell = str(kwargs.get("model") or "")
     access = getattr(settings, "model_access", None)
     if access is not None:
@@ -440,7 +438,9 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
         buchung = Reservation(settings, modell, None, 0)
         LOG.info("Kontingent erschoepft -- der Rechtspruefer laeuft trotzdem (%s)", modell)
     try:
-        response = litellm.completion(**kwargs)
+        from aquaticy import llmcall
+
+        response = llmcall.completion(**kwargs)
     except BaseException:
         buchung.cancel()
         raise
