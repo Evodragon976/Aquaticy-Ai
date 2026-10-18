@@ -657,10 +657,16 @@ def test_every_run_is_found_by_its_id() -> None:
     zweiter = buch.start("zweite Frage")
     assert buch.get(erster.id) is erster and buch.get(zweiter.id) is zweiter
     assert buch.latest() is zweiter
+    erster.finish()
+    zweiter.finish()
     for nummer in range(20):
-        buch.start(f"Frage {nummer}")
+        buch.start(f"Frage {nummer}").finish()
     assert buch.get(erster.id) is None, "alte fertige Laeufe werden nicht ewig aufgehoben"
     assert len(buch._runs) == buch.KEEP
+    # Seit 11.4.1 Luna bleibt ein laufender Lauf -- aber nie mehr als HARD je Chat.
+    for nummer in range(buch.HARD + 10):
+        buch.start(f"laeuft {nummer}")
+    assert len(buch._runs) == buch.HARD
 
 
 # -- virtual machine: harte Platzgrenze auch ohne Quote der Laufzeit -----------------------------

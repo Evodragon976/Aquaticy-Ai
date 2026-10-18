@@ -2888,7 +2888,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.4.0 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.4.1 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -3244,8 +3244,10 @@ function api(path, options = {}, versuch = 0){
         // Eine Fehlerantwort gleich ganz abholen (11.4.0 Luna): Wer sie nicht liest
         // ("if (!res.ok) return"), liess sie im Browser als offene Anfrage stehen.
         const text = await res.text().catch(() => "");
-        return new Response(text, { status: res.status, statusText: res.statusText,
-                                    headers: res.headers });
+        // 304 & Co. duerfen keinen Koerper haben -- sonst wirft new Response (11.4.1).
+        const ohneKoerper = [204, 205, 304].includes(res.status);
+        return new Response(ohneKoerper ? null : text, { status: res.status,
+                                    statusText: res.statusText, headers: res.headers });
       }
       return res;
     }, (err) => {

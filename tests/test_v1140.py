@@ -262,7 +262,8 @@ def test_the_page_waits_on_429_and_always_reads_error_bodies() -> None:
                html.index("/* ---------- Einwilligung und Konto ---------- */")]
     assert 'res.status === 429 && lesen && versuch < 3' in api
     assert 'res.headers.get("Retry-After")' in api
-    assert "const text = await res.text()" in api and "return new Response(text" in api
+    assert "const text = await res.text()" in api
+    assert "return new Response(ohneKoerper ? null : text" in api      # 304 & Co. (11.4.1)
     start = html.index('try { cfg = await (await api("/api/config")).json(); }')
     einstellungen = html[start:start + 400]
     assert 'typeof cfg.values !== "object"' in einstellungen

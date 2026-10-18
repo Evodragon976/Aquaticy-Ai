@@ -1247,8 +1247,10 @@ class Cluster:
         jetzt = _now()
         aktiv = sum(1 for u, n in list(self.homes.items())
                     if n == node and jetzt - self._activity.get(u, 0) < IDLE_SECONDS)
-        return (2.0 * float(last.get("runs", 0) or 0) + aktiv
-                + 2.0 * float(last.get("cpu", 0) or 0))
+        # Wie die Hardware geprueft (11.4.1 Luna): ein Text wie "viel" von einem
+        # anderen Server liess sonst die Zuteilung ALLER Konten abstuerzen.
+        return (2.0 * _zahl(last.get("runs"), 100_000) + aktiv
+                + 2.0 * _zahl(last.get("cpu"), 1_000))
 
     def least_loaded(self, user: str = "") -> str:
         """Der Server, der ein Konto jetzt am besten bedient (11.3.2 Sol nach Staerke).
@@ -2375,9 +2377,10 @@ class Cluster:
                 "node": m["node"], "name": m.get("name", ""), "address": m.get("address", ""),
                 "port": m.get("port"), "self": m["node"] == self.node_id,
                 "master": m["node"] == self.master_node(), "alive": self.alive(m["node"]),
-                "runs": int(last.get("runs", 0) or 0),
+                "runs": int(_zahl(last.get("runs"), 100_000)),
                 "accounts": sum(1 for n in list(self.homes.values()) if n == m["node"]),
-                "cpu": last.get("cpu"), "split": _split_status(last.get("split"))})
+                "cpu": _zahl(last.get("cpu"), 1_000) if isinstance(last.get("cpu"), (int, float))
+                else None, "split": _split_status(last.get("split"))})
         with self._lock:
             for invitation in self.invites_out.values():
                 invitation.expire()

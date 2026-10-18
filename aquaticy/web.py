@@ -100,6 +100,10 @@ PAST_THE_LIMIT = frozenset({"done"})
 #: fertig war (11.4.0 Luna). Jetzt eine Woche -- die Oberflaeche oeffnet dann
 #: den Chat, in dem die Antwort steht.
 RESUME_WINDOW = 7 * 24 * 3600
+#: So lange haelt eine fertige, ungesehene Antwort ihren Chat im Speicher fest
+#: (11.4.1 Luna). Danach darf er Platz machen -- die Antwort steht im Verlauf, und
+#: mit der Woche aus RESUME_WINDOW waren nach 16 solchen Chats keine neuen mehr moeglich.
+PIN_WINDOW = 15 * 60
 
 
 class Run:
@@ -175,6 +179,14 @@ class Run:
             return True
         return not self.delivered and (time.time() - self.finished) < RESUME_WINDOW
 
+    @property
+    def pinned(self) -> bool:
+        """Darf der Chat dieses Laufs nicht aus dem Speicher? Laeuft er oder ist er
+        eben erst ungesehen fertig geworden (11.4.1 Luna)."""
+        if not self.done:
+            return True
+        return not self.delivered and (time.time() - self.finished) < PIN_WINDOW
+
     def state(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -200,6 +212,8 @@ class RunBook:
 
     #: So viele fertige Laeufe bleiben abrufbar.
     KEEP = 8
+    #: Und so viele hoechstens, auch wenn sie noch laufen (11.4.1 Luna).
+    HARD = 32
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -211,8 +225,16 @@ class RunBook:
         with self._lock:
             lauf = Run(secrets.token_hex(8), question)
             self._runs[lauf.id] = lauf
+            # Aelteste fertige zuerst. Ein laufender bleibt (11.4.1 Luna): bis dahin
+            # flog bei neun schnellen Fragen die erste heraus, obwohl sie noch lief.
+            # Hart begrenzt bleibt es trotzdem: mehr als HARD kann kein Chat halten.
             while len(self._runs) > self.KEEP:
-                self._runs.pop(next(iter(self._runs)))
+                alt = next((k for k, r in self._runs.items() if r.done), None)
+                if alt is None:
+                    if len(self._runs) <= self.HARD:
+                        break
+                    alt = next(iter(self._runs))
+                self._runs.pop(alt)
             self.current = lauf
             return lauf
 
@@ -1378,7 +1400,7 @@ class ChatSession:
                     break
                 run = session.runs.latest()
                 if session not in (owner, owner._selected) and not session.busy() and not (
-                        run is not None and run.resumable):
+                        run is not None and run.pinned):
                     owner._chat_sessions.pop(key)
                     if session._agent is not None:
                         session._agent.close()

@@ -11,6 +11,7 @@ from aquaticy.config import Settings
 from aquaticy.subagents import Plan, plan_request
 from tests.test_agent import ScriptedLLM, _message, _stub_search, toolbox  # noqa: F401
 from tests.test_subagents import _reply
+from tests.test_v1132_sol import staerken  # noqa: F401
 
 
 @pytest.fixture
@@ -126,3 +127,67 @@ def test_pro_mode_asks_first_too(monkeypatch, einstellungen, toolbox) -> None:  
     agent.ask("Welchen Laptop soll ich kaufen?", stream=False, structured=True, mode="pro")
     assert agent.clarified == [("Welches Budget?", "bis 500 €")]
     assert gemeistert and "Welches Budget? → bis 500 €" in gemeistert[0]
+
+
+# --- 11.4.1 Luna -----------------------------------------------------------------
+
+def _offene_chats(anzahl: int, alter: float, gesehen: bool = False):
+    from aquaticy import web
+
+    owner = web.ChatSession()
+    for nummer in range(anzahl):
+        chat = web.ChatSession()
+        chat._owner = owner
+        lauf = chat.runs.start(f"Frage {nummer}")
+        lauf.add({"type": "done"})
+        lauf.finish()
+        lauf.finished -= alter
+        lauf.delivered = gesehen
+        owner._chat_sessions[f"chat-{nummer}"] = chat
+    return owner
+
+
+def test_old_unseen_answers_do_not_block_new_chats() -> None:
+    """Mit der Woche aus 11.4.0 Luna hielt jede ungesehene Antwort ihren Chat fest --
+    nach 16 davon hiess es "Zu viele offene Chats"."""
+    owner = _offene_chats(16, alter=2 * 3600)
+    neu = owner._new_chat_session()
+    assert neu in owner._chat_sessions.values()
+    assert len(owner._chat_sessions) <= 16
+
+
+def test_running_and_fresh_answers_still_hold_their_chat() -> None:
+    from aquaticy.web import BadRequest
+
+    owner = _offene_chats(16, alter=60)            # eben fertig, noch nicht gesehen
+    with pytest.raises(BadRequest, match="Zu viele offene Chats"):
+        owner._new_chat_session()
+    lauf = next(iter(owner._chat_sessions.values())).runs.latest()
+    assert lauf.pinned and lauf.resumable
+    lauf.finished -= 3600
+    assert not lauf.pinned and lauf.resumable, "abholbar bleibt sie trotzdem eine Woche"
+
+
+def test_a_running_answer_is_never_dropped_from_the_book() -> None:
+    from aquaticy.web import RunBook
+
+    buch = RunBook()
+    erster = buch.start("erste Frage")          # laeuft noch
+    for nummer in range(RunBook.KEEP + 3):
+        lauf = buch.start(f"Frage {nummer}")
+        if nummer < RunBook.KEEP:
+            lauf.finish()
+    assert buch.get(erster.id) is erster
+    fertig = [lauf for lauf in buch._runs.values() if lauf.done]
+    assert len(buch._runs) <= RunBook.KEEP + 4 and len(fertig) <= RunBook.KEEP
+
+
+def test_odd_load_numbers_from_another_server_do_not_break_placement(
+        staerken) -> None:  # noqa: F811
+    """Ein Text statt einer Zahl liess die Zuteilung aller Konten abstuerzen."""
+    a, b = staerken
+    a.loads[b.node_id] = {**a.loads.get(b.node_id, {}), "runs": "viel", "cpu": float("nan")}
+    assert a.score(b.node_id) >= 0
+    assert a.least_loaded("web-x") in (a.node_id, b.node_id)
+    zeile = next(m for m in a.view()["members"] if m["node"] == b.node_id)
+    assert zeile["runs"] == 0 and zeile["cpu"] == 0.0
