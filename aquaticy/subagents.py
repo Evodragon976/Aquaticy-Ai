@@ -231,8 +231,16 @@ Kriterium gehoeren hinein. Steht oben ein Ortsfilter, gehoert der Ort in JEDE \
 Teilfrage. Und keine zwei Teilfragen duerfen dasselbe fragen -- zwei gleiche \
 Auftraege lesen dieselben Seiten.
 
-Format: {"recherche": true, "teilfragen": ["...", "..."]}
-Bei blosser Konversation: {"recherche": false, "teilfragen": []}
+3. Fehlt eine Angabe, ohne die jede Recherche RATEN muesste, und steht sie weder im \
+bisherigen Gespraech noch im Ortsfilter? Dann stell eine kurze Rueckfrage: \
+"rueckfrage" (ein Satz) und bis zu vier "optionen". Das sind vor allem: der Ort bei \
+etwas Oertlichem (Kino, Wetter, Oeffnungszeiten, Aerzte, Geschaefte, Veranstaltungen), \
+der Zeitraum, wenn mehrere passen, das Budget, wenn ausgewaehlt werden soll, und welches \
+von mehreren gleichnamigen Dingen gemeint ist. Frag NICHT nach Kleinigkeiten oder nach \
+etwas, das sich selbst herausfinden laesst. Sonst "rueckfrage": "".
+
+Format: {"recherche": true, "teilfragen": ["...", "..."], "rueckfrage": "", "optionen": []}
+Bei blosser Konversation: {"recherche": false, "teilfragen": [], "rueckfrage": ""}
 
 %(context)sNachricht: %(question)s"""
 
@@ -324,9 +332,49 @@ PLANNER_SCHEMA: dict[str, Any] = {
     "properties": {
         "recherche": {"type": "boolean"},
         "teilfragen": {"type": "array", "items": {"type": "string"}},
+        # Fehlt eine entscheidende Angabe (11.4.0 Terra): erst fragen, dann suchen.
+        "rueckfrage": {"type": "string"},
+        "optionen": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["recherche", "teilfragen"],
 }
+
+
+class Plan(tuple):
+    """(braucht_recherche, teilfragen) -- dazu eine Rueckfrage, falls etwas fehlt.
+
+    Ein Tupel, damit ``needs, tasks = plan_request(...)`` bleibt, wie es war
+    (11.4.0 Terra). Die Rueckfrage haengt daran: ``plan.rueckfrage``, ``plan.optionen``.
+    """
+
+    rueckfrage: str = ""
+    optionen: tuple[str, ...] = ()
+
+    def __new__(cls, needs: bool, tasks: list[str], rueckfrage: str = "",
+                optionen: Sequence[str] = ()) -> Plan:
+        plan = super().__new__(cls, (needs, tasks))
+        plan.rueckfrage = rueckfrage
+        plan.optionen = tuple(optionen)
+        return plan
+
+
+def _parse_question(raw: str) -> tuple[str, list[str]]:
+    """Die Rueckfrage des Planers -- kurz, eine Zeile, ohne Klammern."""
+    start, end = (raw or "").find("{"), (raw or "").rfind("}")
+    if start == -1 or end == -1:
+        return "", []
+    try:
+        payload = bounded_json(raw[start : end + 1])
+    except (ValueError, RecursionError):
+        return "", []
+    if not isinstance(payload, dict):
+        return "", []
+    sauber = str.maketrans({"[": "(", "]": ")"})
+    frage = " ".join(str(payload.get("rueckfrage") or "").translate(sauber).split())[:200]
+    roh = payload.get("optionen")
+    optionen = [" ".join(str(o).translate(sauber).split())[:80]
+                for o in (roh if isinstance(roh, list) else []) if str(o).strip()][:4]
+    return frage, optionen
 
 
 def plan_request(
@@ -334,7 +382,7 @@ def plan_request(
     settings: Settings,
     context: str = "",
     limit: int = 4,
-) -> tuple[bool, list[str]]:
+) -> Plan:
     """Entscheidet Recherche-oder-Chat UND zerlegt -- in EINEM Aufruf.
 
     Vorher waren das zwei Aufrufe auf zwei verschiedenen Modellen: die
@@ -372,10 +420,11 @@ def plan_request(
             )
         raw = (response.choices[0].message.content or "").strip()
     except Exception:
-        return True, _located([question.strip()], settings.location)
+        return Plan(True, _located([question.strip()], settings.location))
 
     needs, tasks = _parse_plan(raw, question, limit)
-    return needs, _located(tasks, settings.location)
+    frage, optionen = _parse_question(raw) if needs else ("", [])
+    return Plan(needs, _located(tasks, settings.location), frage, optionen)
 
 
 def _located(tasks: list[str], location: str) -> list[str]:

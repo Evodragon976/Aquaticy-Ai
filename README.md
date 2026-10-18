@@ -1,4 +1,4 @@
-# Aquaticy AI 11.4.0 Luna
+# Aquaticy AI 11.4.0 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -115,7 +115,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.4.0 Luna
+aquaticy --version            # 11.4.0 Terra
 
 # 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -341,6 +341,11 @@ verlassen, das Handy sperren oder den Tab schließen. Kommst du zurück, hängt 
 wieder an. Ist die Antwort inzwischen fertig, öffnet sich ihr Chat mit der ganzen Antwort,
 auch nach Stunden (bis zu einer Woche, solange der Server läuft). Abgebrochen wird nur mit
 Stopp oder beim Wechsel in einen anderen Chat.
+
+**Nachfragen statt raten.** Fehlt etwas, ohne das Aquaticy raten müsste (der Ort bei etwas
+Örtlichem, der Zeitraum, das Budget, welches von mehreren gleichnamigen Dingen gemeint ist),
+fragt es in einem Fenster nach. Im Denken- und Pro-Modus geschieht das vor der Recherche:
+erst die Frage, dann suchen die Agenten mit deiner Antwort.
 
 **Was du im Chat klärst, gilt im Chat.** Fragt Aquaticy nach (etwa nach dem Ort) und du
 antwortest im Fenster, merkt es sich die Antwort für alle weiteren Fragen in diesem Chat,
@@ -1070,7 +1075,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.4.0-Luna.md).
+[Prüfbericht](TESTREPORT-11.4.0-Terra.md).
 
 ---
 

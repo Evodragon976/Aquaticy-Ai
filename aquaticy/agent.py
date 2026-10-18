@@ -127,10 +127,11 @@ Gezielte Angaben (11.4.0): Fragt der Nutzer nach einer BESTIMMTEN Information --
 Filme laufen, die Speisekarte, Oeffnungszeiten, Preise, Abfahrtszeiten, Termine, das \
 Programm einer Veranstaltung --, dann ist GENAU DAS die Antwort. Namen, Adressen oder \
 Bewertungen der Orte allein beantworten die Frage nicht: "Was laeuft heute im Kino?" \
-will die Filme mit Uhrzeiten, keine Liste von Kinos. Finde die Orte, oeffne dann deren \
-Seiten mit genau dieser Angabe (Programm-, Speisekarten-, Fahrplanseite) mit \
-`fetch_page` und nenne sie konkret. Steht sie nirgends lesbar, sag das ehrlich und \
-verlinke die Seite, auf der sie steht.
+will die Filme mit Uhrzeiten, keine Liste von Kinos. Fehlt dafuer etwas, ohne das du \
+raten muesstest -- vor allem der Ort oder der Tag --, frag ZUERST nach (siehe \
+Rueckfragen); rate nie eine Stadt. Sonst: finde die Orte, oeffne deren Seiten mit genau \
+dieser Angabe (Programm-, Speisekarten-, Fahrplanseite) mit `fetch_page` und nenne sie \
+konkret. Steht sie nirgends lesbar, sag das ehrlich und verlinke die Seite.
 
 Harte Regeln:
 - Rate nie. Was du nicht gefunden hast, kennzeichnest du als "nicht gefunden".
@@ -925,6 +926,9 @@ Die Frage will eine bestimmte Angabe: %s. Deine Antwort nennt sie nicht -- Orte,
 Namen oder Bewertungen allein beantworten die Frage nicht, und du hast noch keine \
 einzige Seite gelesen.
 
+Fehlt dir dafuer etwas, ohne das du raten muesstest (der Ort, der Tag), dann frag \
+jetzt mit `ask_user` nach, statt zu raten. Sonst:
+
 Oeffne jetzt mit `fetch_page` die Seiten, auf denen genau diese Angabe steht (die \
 Programm-, Speisekarten- oder Fahrplanseite der gefundenen Orte; ihre Website steht in \
 den Treffern oder in `local_places`). Dann antworte mit der Angabe selbst, mit Quelle. \
@@ -974,6 +978,11 @@ ANSWER_URL_RE = re.compile(r"https?://[^\s<>\]\)\"'`]{6,}")
 URL_TRAILING = ".,;:!?"
 
 
+#: Anhaenge an der Frage, die Aquaticy selbst schreibt (siehe :func:`own_words`).
+ANGEHAENGT = ("\n\n[Ortsfilter:", "\n\n[Im Gespräch schon geklärt:",
+              "\n\n[Rückfrage vor der Recherche:")
+
+
 def own_words(content: Any) -> str:
     """Was der Nutzer in einer Nachricht selbst geschrieben hat (11.2.2 Sol).
 
@@ -987,7 +996,11 @@ def own_words(content: Any) -> str:
     text = str(content or "").strip() if isinstance(content, str) else ""
     if not text or text.startswith(_EIGENE_ANFAENGE):
         return ""
-    text = text.split("\n\n[Ortsfilter:")[0]
+    # Was Aquaticy hinten anhaengt, faengt mit einer dieser Marken an -- ab da ist
+    # es nicht mehr das Wort des Nutzers. Die geklaerten Angaben (11.4.0) fehlten
+    # bis 11.4.0 Terra: Planer, Rechtspruefer und Ai-guard hielten sie fuer seine.
+    for marke in ANGEHAENGT:
+        text = text.split(marke)[0]
     return text.replace("\n\n" + VM_TURN_HINT, "").strip()
 
 
@@ -1450,6 +1463,53 @@ class Agent:
         modell = model or self.active_model
         return can(modell, "tools", self.settings.ollama_base(modell)) is not False
 
+    def _ask_before_research(self, frage: str, optionen: Any = ()) -> bool:
+        """Stellt die Rueckfrage des Planers, BEVOR gesucht wird (11.4.0 Terra).
+
+        Im Denken- und Pro-Modus recherchierten die Agenten sofort los. Fehlte
+        der Ort, suchten sie ins Blaue, und das Hauptmodell fragte danach nicht
+        mehr -- es hatte ja schon Ergebnisse. Jetzt fragt der Planer zuerst.
+
+        Returns: True, wenn der Nutzer geantwortet hat.
+        """
+        frage = str(frage or "").strip()
+        if not frage or self.toolbox.ask_handler is None or self.stopped:
+            return False
+        antwort = self.toolbox.ask_user(frage, list(optionen or ()))
+        if not (isinstance(antwort, dict) and antwort.get("answered")):
+            return False
+        paar = (str(antwort.get("question") or frage), str(antwort.get("answer") or ""))
+        self.remember_clarified([paar])
+        if isinstance(getattr(self, "_turn_clarified", None), list):
+            self._turn_clarified.append(paar)
+        # Die Antwort gehoert zu dieser Frage -- auch fuers Hauptmodell, das den
+        # Verlauf liest. Gekuerzt und ohne Klammern wie alle geklaerten Angaben.
+        geklaert = self.clarified[-1] if self.clarified else paar
+        for nachricht in reversed(self.messages):
+            if nachricht.get("role") == "user" and own_words(nachricht.get("content")):
+                nachricht["content"] = (f"{nachricht['content']}\n\n[Rückfrage vor der "
+                                        f"Recherche: {geklaert[0]} → {geklaert[1]}]")
+                break
+        return True
+
+    def _clarify_first(self, question: str) -> None:
+        """Pro-Modus: fehlt etwas Entscheidendes, erst fragen, dann den Master planen lassen.
+
+        Der Master plant selbst und kennt keine Rueckfrage. Ein kurzer Aufruf des
+        kleinen Planers entscheidet nur, ob gefragt werden muss -- und nur, wenn
+        jemand da ist, der antworten kann (11.4.0 Terra).
+        """
+        if self.toolbox.ask_handler is None or self.stopped:
+            return
+        from aquaticy.subagents import plan_request
+
+        try:
+            plan = plan_request(question, self.settings, context=self._planner_context(),
+                                limit=1)
+        except Exception:
+            return
+        self._ask_before_research(getattr(plan, "rueckfrage", ""), getattr(plan, "optionen", ()))
+
     def _needs_research(self, question: str) -> bool:
         """Vorpruefung UND Planung in einem Schritt.
 
@@ -1478,13 +1538,19 @@ class Agent:
         self._tell_if_loading()
         self._emit("planning", question=question)
         started = time.monotonic()
-        needs, tasks = plan_request(
+        plan = plan_request(
             text,
             self.settings,
             context=self._planner_context(),
             limit=max(1, self.agent_limit),
         )
         self._model_ready()
+        needs, tasks = plan
+        if needs and self._ask_before_research(getattr(plan, "rueckfrage", ""),
+                                               getattr(plan, "optionen", ())):
+            # Mit der Antwort neu planen: die Teilfragen brauchen den Ort.
+            needs, tasks = plan_request(text, self.settings, context=self._planner_context(),
+                                        limit=max(1, self.agent_limit))
         elapsed = round(time.monotonic() - started, 2)
         if not needs:
             self._emit("triage", decision="chat", source="modell", seconds=elapsed)
@@ -2011,9 +2077,13 @@ class Agent:
             return ""
         teile = "; ".join(f"{frage} → {antwort}" if frage else antwort
                           for frage, antwort in self.clarified)
+        # Nur DIESE Angaben gelten als geklaert. Bis 11.4.0 Luna stand hier "frag
+        # nicht noch einmal danach" -- manche Modelle lasen das als Frageverbot und
+        # fragten auch nach Fehlendem nicht mehr (11.4.0 Terra).
         return (f"[Im Gespräch schon geklärt: {teile}. Diese Angaben gelten für den ganzen "
-                "Chat -- nutze sie und frag nicht noch einmal danach, außer der Nutzer nennt "
-                "jetzt etwas anderes.]")
+                "Chat; nach ihnen fragst du nicht noch einmal, außer der Nutzer nennt jetzt "
+                "etwas anderes. Fehlt für diese Frage etwas ANDERES, frag wie immer mit "
+                "ask_user nach.]")
 
     def _home_prompt(self) -> str:
         """Die Absaetze zu Heimnetz und Zuhause -- nur, was freigegeben ist."""
@@ -3071,6 +3141,7 @@ class Agent:
                 self._emit("triage", decision="chat", source="heuristik")
             else:
                 self._planned_tasks = None
+                self._clarify_first(question)
                 used += self._auto_research(question, budget)
         elif self.online and self._auto_subagents_wanted() and self._needs_research(question):
             used += self._auto_research(question, budget)
@@ -3148,7 +3219,7 @@ class Agent:
                 # danach greift die Notloesung nach der Schleife.
                 # Gezielte Angabe gefragt, aber keine Seite gelesen (11.4.0 Luna):
                 # einmal zurueck, mit genau dieser Angabe als Auftrag.
-                angabe = "" if detailliert else self._should_force_detail(question)
+                angabe = "" if detailliert else self._should_force_detail(question, antwort)
                 if angabe:
                     detailliert = True
                     self._emit("answer_reset", reason="gezielte Angabe")
@@ -3665,7 +3736,7 @@ class Agent:
             and is_only_a_question(answer)
         )
 
-    def _should_force_detail(self, question: str) -> str:
+    def _should_force_detail(self, question: str, answer: str = "") -> str:
         """Welche Angabe noch fehlt -- "" wenn die Antwort so bleiben darf.
 
         Nur wenn die Frage eine bestimmte Angabe will (:func:`wanted_detail`), das
@@ -3677,6 +3748,11 @@ class Agent:
             return ""
         stats = self.toolbox.stats
         if stats.fetched or stats.sources:
+            return ""
+        # Hat das Modell gerade nachgefragt (im Fenster oder im Text), fehlt ihm
+        # etwas. Dann nicht zum Suchen draengen -- es wuerde den Ort raten
+        # (11.4.0 Terra: seit Luna fragte Aquaticy deshalb kaum noch nach).
+        if stats.questions or "?" in str(answer or "")[-400:]:
             return ""
         return wanted_detail(question)
 

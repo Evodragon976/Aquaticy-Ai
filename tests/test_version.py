@@ -12,7 +12,7 @@ import aquaticy
 
 ROOT = Path(__file__).resolve().parents[1]
 NUMMER = "11.4.0"
-NAME = "Luna"
+NAME = "Terra"
 LABEL = f"{NUMMER} {NAME}"
 
 
