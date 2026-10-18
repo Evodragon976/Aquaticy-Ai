@@ -221,6 +221,7 @@ def test_two_servers_connect_security_and_outage(tmp_path):
 
 @pytest.mark.parametrize("scenario", [
     "polling", "temporary_failure", "invalid_port", "stale_status",
+    "pending_invitation", "hidden_tab",
 ])
 def test_connect_in_browser_preserves_code_during_polling(tmp_path, scenario):
     playwright = pytest.importorskip("playwright.sync_api")
@@ -252,6 +253,27 @@ def test_connect_in_browser_preserves_code_during_polling(tmp_path, scenario):
             page.locator("#dev-settings").scroll_into_view_if_needed()
             page.locator("#cluster-on").check()
             page.locator("#cluster-panel").wait_for(state="visible")
+            if scenario == "hidden_tab":
+                requests = []
+                page.on("request", lambda request: requests.append(request)
+                        if request.url.endswith("/api/cluster") else None)
+                page.evaluate("""() => {
+                    Object.defineProperty(document, 'hidden', {value: true, configurable: true});
+                    document.dispatchEvent(new Event('visibilitychange'));
+                }""")
+                page.wait_for_timeout(500)
+                before = len(requests)
+                page.wait_for_timeout(4000)
+                assert len(requests) == before
+                page.evaluate("""() => {
+                    Object.defineProperty(document, 'hidden', {value: false, configurable: true});
+                    document.dispatchEvent(new Event('visibilitychange'));
+                }""")
+                page.wait_for_timeout(500)
+                assert len(requests) > before
+                assert not errors
+                browser.close()
+                return
             if scenario == "stale_status":
                 old_state = ca.get("/api/cluster").json()
                 held = []
@@ -290,9 +312,32 @@ def test_connect_in_browser_preserves_code_during_polling(tmp_path, scenario):
                 browser.close()
                 return
             page.fill("#cluster-port", str(b.port))
+            held_invites = []
+            if scenario == "pending_invitation":
+                def delay_invite(route):
+                    if (route.request.method == "POST"
+                            and route.request.post_data_json.get("action") == "invite"):
+                        held_invites.append(route)
+                    else:
+                        route.continue_()
+
+                page.route("**/api/cluster", delay_invite)
             page.click("#cluster-add")
+            if scenario == "pending_invitation":
+                playwright.expect(page.locator("#cluster-add")).to_be_disabled()
+                # Auch eine inzwischen beantwortete Statusabfrage darf den Knopf
+                # waehrend der laufenden Einladung nicht wieder freigeben.
+                page.evaluate("verbundLaden()")
+                page.wait_for_timeout(500)
+                playwright.expect(page.locator("#cluster-add")).to_be_disabled()
+                page.evaluate("document.querySelector('#cluster-add').click()")
+                assert len(held_invites) == 1
+                held_invites[0].continue_()
+                playwright.expect(page.locator("#cluster-add")).to_be_enabled()
             pending_file = b.root / "cluster" / "pending.json"
             pending = wait_for(lambda: json.loads(pending_file.read_text()))
+            if scenario == "pending_invitation":
+                assert len(pending) == 1
             invite_id = pending[0]["id"]
             b.answer(invite_id, "yes")
             field = page.get_by_role("textbox", name="Code vom anderen Server")

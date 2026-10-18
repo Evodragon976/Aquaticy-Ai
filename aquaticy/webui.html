@@ -2800,11 +2800,16 @@ html.vv,html.vv body{height:var(--app-h)}
             <ul class="device-list cluster-list" id="cluster-found"></ul>
             <div class="cluster-add">
               <input type="text" id="cluster-ip" autocomplete="off" spellcheck="false"
-                     placeholder="IP-Adresse, z. B. 192.168.1.20" aria-label="IP-Adresse">
+                     placeholder="IP-Adresse oder voller MagicDNS-Name"
+                     aria-label="IP-Adresse oder voller MagicDNS-Name"
+                     aria-describedby="cluster-network-note">
               <input type="text" id="cluster-port" inputmode="numeric" autocomplete="off"
                      placeholder="8765" aria-label="Port">
               <button type="button" class="btn" id="cluster-add">Verbinden</button>
             </div>
+            <div class="note" id="cluster-network-note">Über Tailscale: 100.x-Adresse oder
+              vollständigen Gerätenamen (…ts.net) und den Aquaticy-Port des anderen Servers
+              eintragen. Die automatische Suche funktioniert nur im lokalen Netz.</div>
             <div id="cluster-invites"></div>
             <div class="note">Nur eigene Server verbinden: Der andere bekommt eine Kopie aller
               Daten. Dort im Terminal mit „yes“ zustimmen und hier den angezeigten Code
@@ -2875,7 +2880,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.2 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "11.3.2 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5428,7 +5433,6 @@ const EN = {
 "Bis zu 10 Server teilen sich die Arbeit, jeder mit der ganzen Datenbank. Der einladende Server wird Master.": "Up to 10 servers share the work, each with the whole database. The inviting server becomes the master.",
 "🔒 Der Server-Verbund gehört zu Ultra.": "🔒 The server cluster is part of Ultra.",
 "Server im lokalen Netz": "Servers in the local network",
-"IP-Adresse, z. B. 192.168.1.20": "IP address, e.g. 192.168.1.20",
 "Nur eigene Server verbinden: Der andere bekommt eine Kopie aller Daten. Dort im Terminal mit „yes“ zustimmen und hier den angezeigten Code eingeben.": "Only connect your own servers: the other one gets a copy of all data. Confirm there with “yes” in the terminal and enter the code it shows here.",
 "Gespeichert": "Saved",
 "Abschnitte": "Sections",
@@ -5877,6 +5881,12 @@ const EN = {
 "Auflösen": "Dissolve",
 "Verlassen": "Leave",
 "Keine weiteren Server gefunden.": "No other servers found.",
+"IP-Adresse oder voller MagicDNS-Name": "IP address or full MagicDNS name",
+"Über Tailscale: 100.x-Adresse oder vollständigen Gerätenamen (…ts.net) und den Aquaticy-Port des anderen Servers eintragen. Die automatische Suche funktioniert nur im lokalen Netz.": "For Tailscale, enter the 100.x address or full device name (…ts.net) and the other server's Aquaticy port. Automatic discovery only works on the local network.",
+"Gib eine private IP-Adresse oder den vollen MagicDNS-Namen deines Tailscale-Servers an (…ts.net).": "Enter a private IP address or your Tailscale server's full MagicDNS name (…ts.net).",
+"MagicDNS nicht erreichbar. Prüfe Tailscale und MagicDNS oder verwende die Tailscale-IP-Adresse.": "MagicDNS is unavailable. Check Tailscale and MagicDNS, or use the Tailscale IP address.",
+"Der MagicDNS-Name muss ausschließlich auf Tailscale-Adressen zeigen.": "The MagicDNS name must resolve exclusively to Tailscale addresses.",
+"Die Adressfamilie passt nicht zur lokalen Server-Bindung. Verwende auf allen Servern IPv4 mit --lan oder passende IPv6-Adressen.": "The address family does not match the local server binding. Use IPv4 with --lan on all servers, or matching IPv6 addresses.",
 "Auf dem anderen Server muss der Server-Verbund ebenfalls an sein.": "The server cluster must be turned on on the other server too.",
 "schon in einem Verbund": "already in a cluster",
 "Bestätigen": "Confirm",
@@ -8472,6 +8482,15 @@ function closeSettings(){
 /* ---------- Server-Verbund (9.6.1) ---------- */
 let verbundTakt = null;
 let verbundAnfrage = 0;
+let verbundEinladungLaeuft = false, verbundStand = {};
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) clearTimeout(verbundTakt);
+  else if (devSichtbar && kontoUltra && overlay.classList.contains("open")) verbundLaden();
+});
+function verbundEinladenSperren(){
+  $("#cluster-add").disabled = verbundEinladungLaeuft || !kontoUltra || !verbundStand.enabled
+    || !verbundStand.lan || verbundStand.joining || (verbundStand.joined && !verbundStand.master);
+}
 function verbundZeile(liste, punkt, titel, unter, knopfText, tun){
   const li = document.createElement("li");
   if (punkt !== null){
@@ -8516,12 +8535,14 @@ async function verbundTun(body){
     status.textContent = "Keine Verbindung zu Aquaticy."; status.className = "note bad";
     return null;
   } finally {
-    if (anfrage === verbundAnfrage && overlay.classList.contains("open") && kontoUltra)
+    if (anfrage === verbundAnfrage && !document.hidden
+        && overlay.classList.contains("open") && kontoUltra)
       verbundTakt = setTimeout(verbundLaden, 3000);
   }
 }
 async function verbundLaden(){
   clearTimeout(verbundTakt);
+  if (document.hidden) return;
   const anfrage = ++verbundAnfrage;
   let erneut = true;
   try {
@@ -8547,10 +8568,12 @@ async function verbundLaden(){
     $("#cluster-status").textContent = error.message || "Keine Verbindung zu Aquaticy.";
     $("#cluster-status").className = "note bad";
   }
-  if (overlay.classList.contains("open") && kontoUltra && erneut)
+  if (!document.hidden && overlay.classList.contains("open") && kontoUltra && erneut)
     verbundTakt = setTimeout(verbundLaden, 3000);
 }
 function verbundZeigen(d){
+  verbundStand = d;
+  verbundEinladenSperren();
   const gesperrt = !kontoUltra || d.locked;
   $("#cluster-lock").hidden = !gesperrt;
   $("#cluster-on").disabled = gesperrt;
@@ -8611,7 +8634,6 @@ function verbundZeigen(d){
                  darf && !f.cluster && d.lan ? "Verbinden" : "",
                  async () => { await verbundTun({ action: "invite", address: f.address, port: f.port }); });
   }
-  $("#cluster-add").disabled = !d.lan || (d.joined && !d.master);
   const einladungen = $("#cluster-invites");
   // Beim Abfragen vorhandene Felder behalten: sonst verschwinden alle drei
   // Sekunden der eingegebene Code, der Fokus und die Cursorposition.
@@ -8749,6 +8771,7 @@ $("#cluster-on").addEventListener("change", async (e) => {
   verbundLaden();
 });
 $("#cluster-add").addEventListener("click", async () => {
+  if (verbundEinladungLaeuft) return;
   const adresse = $("#cluster-ip").value.trim();
   if (!adresse){ $("#cluster-ip").focus(); return; }
   const feld = $("#cluster-port");
@@ -8760,7 +8783,15 @@ $("#cluster-add").addEventListener("click", async () => {
     feld.focus();
     return;
   }
-  if (await verbundTun({ action: "invite", address: adresse, port })) $("#cluster-ip").value = "";
+  verbundEinladungLaeuft = true;
+  verbundEinladenSperren();
+  try {
+    if (await verbundTun({ action: "invite", address: adresse, port }))
+      $("#cluster-ip").value = "";
+  } finally {
+    verbundEinladungLaeuft = false;
+    verbundEinladenSperren();
+  }
 });
 $("#cancel").addEventListener("click", closeSettings);
 overlay.addEventListener("click", (e) => { if (e.target === overlay) closeSettings(); });

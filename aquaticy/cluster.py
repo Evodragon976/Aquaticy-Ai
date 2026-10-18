@@ -94,6 +94,8 @@ LOG_BATCH = 500
 LOG_KEEP_SECONDS = 3 * 86400.0
 #: Falsche Codes, bevor eine Einladung verfaellt.
 CODE_TRIES = 3
+_TAILSCALE_V4 = ipaddress.ip_network("100.64.0.0/10")
+_TAILSCALE_V6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")
 
 #: Die Datenbank, die alle Server gemeinsam haben.
 SHARED_DB = "accounts.sqlite3"
@@ -286,7 +288,66 @@ def lan_ip_ok(address: str) -> bool:
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
     return (ip.is_private or ip.is_loopback or ip.is_link_local
-            or ip in ipaddress.ip_network("100.64.0.0/10"))
+            or ip in _TAILSCALE_V4)
+
+
+def tailscale_ip_ok(address: str) -> bool:
+    """Die von Tailscale verwendeten IPv4- und IPv6-Bereiche."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    return ip in _TAILSCALE_V4 or ip in _TAILSCALE_V6
+
+
+def _address_for_family(addresses: list[str], family: int) -> str:
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        actual = socket.AF_INET6 if ip.version == 6 else socket.AF_INET
+        if family in (socket.AF_UNSPEC, actual):
+            return address
+    raise ClusterError("Die Adressfamilie passt nicht zur lokalen Server-Bindung. "
+                       "Verwende auf allen Servern IPv4 mit --lan oder passende IPv6-Adressen.")
+
+
+def resolve_address(address: str, *, family: int = socket.AF_UNSPEC) -> str:
+    """IP oder voller MagicDNS-Name; danach nur die gepruefte IP verwenden.
+
+    Alle DNS-Antworten muessen im Tailscale-Bereich liegen. Das einmalige
+    Aufloesen vor der Einladung verhindert einen spaeteren DNS-Zielwechsel
+    beim Pairing, bei RPCs, Weiterleitungen und Modell-Tunneln.
+    """
+    address = str(address).strip()
+    if address.startswith("[") and address.endswith("]"):
+        address = address[1:-1]
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        ip = None
+    if ip is not None:
+        scope = getattr(ip, "scope_id", None)
+        if lan_ip_ok(address) and (scope is None or re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", scope)):
+            return _address_for_family([str(ip)], family)
+        raise ClusterError("Nur Server im eigenen Netz lassen sich verbinden.")
+    host = address.lower().removesuffix(".")
+    if len(host) > 253 or not re.fullmatch(
+            r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+ts\.net", host):
+        raise ClusterError("Gib eine private IP-Adresse oder den vollen MagicDNS-Namen "
+                           "deines Tailscale-Servers an (…ts.net).")
+    try:
+        answers = socket.getaddrinfo(host + ".", None, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ClusterError("MagicDNS nicht erreichbar. Prüfe Tailscale und MagicDNS "
+                           "oder verwende die Tailscale-IP-Adresse.") from exc
+    addresses = list(dict.fromkeys(str(answer[4][0]) for answer in answers))
+    if not addresses or not all(tailscale_ip_ok(item) for item in addresses):
+        raise ClusterError("Der MagicDNS-Name muss ausschließlich auf Tailscale-Adressen zeigen.")
+    # Die Rueckverbindung muss zur lokalen Bindung passen. Ohne Vorgabe IPv4 zuerst.
+    return _address_for_family(sorted(addresses, key=lambda item: ":" in item), family)
 
 
 # -- Die gemeinsame Datenbank -----------------------------------------------
@@ -1860,11 +1921,11 @@ class Cluster:
             raise ClusterError("Einladen kann nur der Master des Verbunds.")
         if len(self.members()) >= MAX_NODES:
             raise ClusterError(f"Ein Verbund hat höchstens {MAX_NODES} Server.")
-        if not lan_ip_ok(address):
-            raise ClusterError("Nur Server im eigenen Netz lassen sich verbinden.")
         if not self.lan_ready():
             raise ClusterError("Dieser Server ist nur lokal erreichbar. Starte ihn mit "
                                "„aquaticy web --lan“.")
+        family = socket.AF_INET6 if ":" in self.host else socket.AF_INET
+        address = resolve_address(address, family=family)
         privat = X25519PrivateKey.generate()
         oeffentlich = privat.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
         einladung = Invite(id=secrets.token_hex(16),

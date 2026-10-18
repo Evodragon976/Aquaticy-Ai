@@ -6273,11 +6273,8 @@ def lan_address() -> str:
 
 
 def is_tailscale(address: str) -> bool:
-    """Liegt *address* im Tailscale-Bereich 100.64.0.0/10?"""
-    parts = address.split(".")
-    if len(parts) != 4 or parts[0] != "100" or not parts[1].isdigit():
-        return False
-    return 64 <= int(parts[1]) <= 127
+    """Liegt *address* in einem der Tailscale-Adressbereiche?"""
+    return cluster.tailscale_ip_ok(address)
 
 
 def tailscale_address() -> str:
@@ -6326,9 +6323,9 @@ def new_token() -> str:
 def addresses_for(host: str, port: int, token: str = "") -> list[tuple[str, str]]:
     """Alle Adressen, unter denen die Oberflaeche erreichbar ist.
 
-    Gibt Paare aus Adresse und Erklaerung zurueck. Die eigene Maschine steht
-    immer zuletzt -- die funktioniert garantiert und taugt deshalb als
-    Adresse, die der Browser beim Start selbst aufmacht.
+    Gibt Paare aus Adresse und Erklaerung zurueck. Bei Bindung an alle
+    Schnittstellen steht die lokale Adresse zuletzt, damit der Browser
+    sie beim Start oeffnet. Bei einer einzelnen Schnittstelle gilt nur diese.
     """
     suffix = f"?token={token}" if token else ""
     found: list[tuple[str, str]] = []
@@ -6342,8 +6339,13 @@ def addresses_for(host: str, port: int, token: str = "") -> list[tuple[str, str]
                 found.append((tailscale, "über Tailscale"))
         else:
             found.append((host, "wie angegeben"))
-    found.append(("127.0.0.1", "auf diesem Rechner"))
-    return [(f"http://{address}:{port}/{suffix}", note) for address, note in found]
+    if host in ("::", "::1"):
+        found = [(address, note) for address, note in found if address != "::"]
+        found.append(("::1", "auf diesem Rechner"))
+    elif host in ("0.0.0.0", "127.0.0.1", "localhost", ""):
+        found.append(("127.0.0.1", "auf diesem Rechner"))
+    return [(f"http://{'[' + address + ']' if ':' in address else address}:{port}/{suffix}",
+             note) for address, note in found]
 
 
 def urls_for(host: str, port: int, token: str = "") -> list[str]:
@@ -6615,6 +6617,11 @@ class AquaticyServer(ThreadingHTTPServer):
     ganzen Traceback (gemeldet mit Python 3.14, ueber Tailscale). Jetzt bleibt
     ein Abbruch durch die Gegenseite still, alles andere steht als eine Zeile da.
     """
+
+    def __init__(self, server_address: tuple[str, int], handler: Any,
+                 bind_and_activate: bool = True) -> None:
+        self.address_family = socket.AF_INET6 if ":" in server_address[0] else socket.AF_INET
+        super().__init__(server_address, handler, bind_and_activate=bind_and_activate)
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         fehler = sys.exc_info()[1]
@@ -6943,8 +6950,8 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         WEBSITE, PUBLIC_SERVER = _start_website(data_dir)
         LAN_ONLY = WEBSITE is not None
         if open_browser:
-            # Auf dem eigenen Rechner ist 127.0.0.1 die zuverlaessigste Adresse --
-            # die steht immer an letzter Stelle.
+            # Bei Bindung an alle Schnittstellen steht die lokale Adresse zuletzt;
+            # sonst nur die tatsaechlich gebundene Schnittstelle oeffnen.
             local = urls_for(host, port, token)[-1]
             threading.Timer(0.6, lambda: webbrowser.open(local)).start()
         server.serve_forever()

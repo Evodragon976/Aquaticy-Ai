@@ -1,4 +1,4 @@
-# Aquaticy AI 11.3.2 Luna
+# Aquaticy AI 11.3.2 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -115,7 +115,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 11.3.2 Luna
+aquaticy --version            # 11.3.2 Terra
 
 # 2. Einrichten: Modell, Schlüssel, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -718,8 +718,10 @@ arbeiten zusammen.
   dessen Konten per Knopf.
 
 **Verbinden:** Auf allen Servern `aquaticy web --lan` starten (mit eigener Domain reicht
-`aquaticy web`) und den Schalter einschalten. Die anderen Server erscheinen in der Liste. Über
-Tailscale trägst du ihre 100.x-Adresse von Hand ein. Dann **Verbinden**. Der andere Server fragt
+`aquaticy web`) und den Schalter einschalten. Im lokalen Netz erscheinen die anderen Server
+in der Liste. Über Tailscale trägst du ihre 100.x-Adresse oder ihren vollständigen
+MagicDNS-Gerätenamen (z. B. `server.tail123.ts.net`) und ihren Aquaticy-Port von Hand ein.
+Dann **Verbinden**. Der andere Server fragt
 im Terminal `Annehmen? [yes/no]` und zeigt bei `yes` einen sechsstelligen Code. Den gibst du
 auf dem Master ein. Ohne Terminal: `docker compose exec aquaticy aquaticy cluster`.
 
@@ -727,6 +729,24 @@ auf dem Master ein. Ohne Terminal: `docker compose exec aquaticy aquaticy cluste
 Seine alten Daten bleiben unter `cluster/backup-<Zeit>`. Zwischen den Servern ist alles mit
 AES-GCM verschlüsselt (Schlüsseltausch per X25519). Gefunden wird per UDP-Rundruf auf Port 8766
 (`AQUATICY_CLUSTER_PORT`). Im Container dafür `compose.host.yaml` nutzen.
+
+**Über Tailscale:** Alle Server müssen im selben Tailnet erreichbar sein. Für einen Verbund
+über mehrere Standorte jeden Server über seine Tailscale-Adresse einladen; lokale LAN-Adressen
+sind an anderen Standorten normalerweise nicht erreichbar. Die lokale Firewall und die
+Tailscale-Zugriffsregeln müssen den tatsächlichen **Aquaticy-TCP-Port** (normalerweise 8765)
+zwischen allen Mitgliedern erlauben. Ist der Wunschport belegt, den im Terminal angezeigten
+Ersatzport eintragen. Eine Freigabe im Internet oder ein zusätzlicher RPC-Port ist nicht nötig.
+Die UDP-Suche auf 8766 funktioniert nur im lokalen Netz und wird für Tailscale nicht gebraucht.
+MagicDNS muss auf dem einladenden Rechner funktionieren; andernfalls die 100.x-IP verwenden.
+Aquaticy löst nur vollständige `*.ts.net`-Namen auf, akzeptiert dabei ausschließlich
+Tailscale-IP-Adressen und speichert die geprüfte IP für alle weiteren Verbindungen.
+
+`aquaticy web --lan` bindet IPv4. Wer gezielt Tailscale-IPv6 verwendet, startet Aquaticy mit
+`aquaticy web --host fd7a:115c:a1e0:… --no-open` (die eigene vollständige Tailscale-IPv6-Adresse
+einsetzen). Dann muss diese Adressfamilie zwischen allen Mitgliedern erreichbar sein.
+Im Container muss der Aquaticy-Port auch über die Tailscale-Schnittstelle des Hosts erreichbar
+sein; bei Netzwerk-Isolation ist außerdem der Rückweg zu den anderen Mitgliedern nötig.
+Tailscale ersetzt weder die Zustimmung auf dem eingeladenen Server noch den Bestätigungscode.
 
 ### Serverlast aufteilen
 
@@ -1023,7 +1043,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-11.3.2-Luna.md).
+[Prüfbericht](TESTREPORT-11.3.2-Terra.md).
 
 ---
 
