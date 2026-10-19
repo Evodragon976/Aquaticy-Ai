@@ -16,8 +16,8 @@ from typing import Any
 
 import pytest
 
-from aquaticy import jobs as auftraege
-from aquaticy.jobs import (
+from aquaticy import coworker_schedule as auftraege
+from aquaticy.coworker_schedule import (
     MAX_JOBS,
     SCHEMA,
     Job,
@@ -121,7 +121,7 @@ def test_angehalten_heisst_nicht_faellig(tmp_path: Path) -> None:
     job = store.add("Frage")
     # Faellig machen, indem der Termin in die Vergangenheit gelegt wird.
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = 1 WHERE id = ?", (job.id,))
+        conn.execute("UPDATE coworkers SET next_wake = 1 WHERE id = ?", (job.id,))
     assert len(store.due()) == 1
     store.set_enabled(job.id, False)
     assert store.due() == []
@@ -133,7 +133,7 @@ def test_verpasste_laeufe_werden_nicht_nachgeholt(tmp_path: Path) -> None:
     job = store.add("Frage", rhythm="daily", hour=8, minute=0)
     vor_einer_woche = time.time() - 7 * 86400
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = ? WHERE id = ?", (vor_einer_woche, job.id))
+        conn.execute("UPDATE coworkers SET next_wake = ? WHERE id = ?", (vor_einer_woche, job.id))
     assert len(store.due()) == 1
     store.note_run(job.id, "fertig", "chat-1")
     frisch = store.get(job.id)
@@ -263,11 +263,11 @@ def test_der_taktgeber_fuehrt_faellige_auftraege_aus(
     store = JobStore(tmp_path / "j.db")
     job = store.add("Frage")
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = 1 WHERE id = ?", (job.id,))
+        conn.execute("UPDATE coworkers SET next_wake = 1 WHERE id = ?", (job.id,))
 
     gelaufen: list[str] = []
 
-    def statt_dessen(auftrag: Job, settings: Any) -> tuple[str, str]:
+    def statt_dessen(auftrag: Job, settings: Any, **kwargs: Any) -> tuple[str, str]:
         gelaufen.append(auftrag.question)
         return ("fertig", "c1")
 
@@ -514,7 +514,7 @@ def test_the_offer_address_is_read_from_the_answer() -> None:
     """Nur noch eine Lesart: die gepruefte. Es gab daneben ein `offer_url`,
     das die ERSTE Adresse nahm -- benutzt wurde es nirgends mehr, und wer es
     wieder aufgriffe, bekaeme stillschweigend die andere Regel."""
-    from aquaticy.jobs import verified_offer_url
+    from aquaticy.coworker_schedule import verified_offer_url
 
     assert verified_offer_url(
         "Bei https://laden.example/x/ für 9 €.", [{"url": "https://laden.example/x"}]
@@ -574,12 +574,12 @@ def test_a_broken_job_does_not_block_the_others(
     kaputt = store.add("Stolpert")
     heil = store.add("Laeuft")
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = ? WHERE id = ?", (1, kaputt.id))
-        conn.execute("UPDATE jobs SET next_run = ? WHERE id = ?", (2, heil.id))
+        conn.execute("UPDATE coworkers SET next_wake = ? WHERE id = ?", (1, kaputt.id))
+        conn.execute("UPDATE coworkers SET next_wake = ? WHERE id = ?", (2, heil.id))
 
     gelaufen: list[str] = []
 
-    def statt_dessen(auftrag: Job, settings: Any) -> tuple[str, str]:
+    def statt_dessen(auftrag: Job, settings: Any, **kwargs: Any) -> tuple[str, str]:
         gelaufen.append(auftrag.question)
         if auftrag.question == "Stolpert":
             raise RuntimeError("kein Modell erreichbar")
@@ -709,7 +709,7 @@ def test_a_job_at_the_quota_stays_on_for_the_next_turn(
     store = JobStore(tmp_path / "j.db")
     job = store.add("Frage")
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = 1 WHERE id = ?", (job.id,))
+        conn.execute("UPDATE coworkers SET next_wake = 1 WHERE id = ?", (job.id,))
     monkeypatch.setattr(
         auftraege, "run_job",
         lambda auftrag, settings, **kw: (auftraege.TOKEN_LIMIT_STATE, ""),

@@ -748,7 +748,7 @@ def test_a_full_gate_waits_at_most_max_wait(monkeypatch: pytest.MonkeyPatch) -> 
 
 # -- 10/30/31: Auftraege -------------------------------------------------------
 def test_research_jobs_run_at_most_hourly(settings: Settings) -> None:
-    from aquaticy.jobs import JobStore
+    from aquaticy.coworker_schedule import JobStore
 
     store = JobStore(settings.db_path)
     recherche = store.add("Neuigkeiten zu X", rhythm="minutes1", kind="research")
@@ -759,7 +759,7 @@ def test_research_jobs_run_at_most_hourly(settings: Settings) -> None:
 
 
 def test_a_job_never_runs_twice_at_once(settings: Settings) -> None:
-    from aquaticy.jobs import claim_run, release_run
+    from aquaticy.coworker_schedule import claim_run, release_run
 
     assert claim_run(settings.db_path, 7) is True
     assert claim_run(settings.db_path, 7) is False

@@ -125,7 +125,7 @@ def test_incomplete_http_request_does_not_hold_thread_forever(http_server, monke
 @pytest.mark.parametrize("method", ["POST", "DELETE"])
 def test_uncertain_forward_is_not_executed_twice(tmp_path, monkeypatch, method):
     home, entrance = _paar(tmp_path, 1001)
-    handler = _Handler("/api/jobs")
+    handler = _Handler("/api/coworkers")
     handler.command = method
     executed = []
     monkeypatch.setattr(entrance, "home_for", lambda user: home.node_id)
@@ -151,7 +151,7 @@ def test_explicit_moved_reply_can_redirect_without_duplicate_execution(tmp_path,
         return "moved"  # Heimserver hat vor der Ausfuehrung abgelehnt.
 
     monkeypatch.setattr(entrance, "_proxy_once", moved)
-    assert not entrance.forward(_Handler("/api/jobs"), "user1", b"{}", False, "127.0.0.1")
+    assert not entrance.forward(_Handler("/api/coworkers"), "user1", b"{}", False, "127.0.0.1")
     assert attempts == [True]
 
 

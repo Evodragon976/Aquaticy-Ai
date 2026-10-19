@@ -11,8 +11,8 @@ from pathlib import Path
 import aquaticy
 
 ROOT = Path(__file__).resolve().parents[1]
-NUMMER = "12.1.1"
-NAME = "Sol"
+NUMMER = "12.2.1"
+NAME = "Luna"
 LABEL = f"{NUMMER} {NAME}"
 
 

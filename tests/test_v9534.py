@@ -234,7 +234,7 @@ def test_a_whole_fetch_has_a_deadline() -> None:
 
 # -- Agent, Speicher, Einstellungen ------------------------------------------------------
 def test_price_limits_ignore_units() -> None:
-    from aquaticy.jobs import price_condition_met
+    from aquaticy.coworker_schedule import price_condition_met
 
     class P:
         price = "59,90"

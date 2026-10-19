@@ -1038,22 +1038,17 @@ def workshop_changed(alt: Any, neu: Any) -> bool:
     return any(getattr(alt, feld, None) != getattr(neu, feld, None) for feld in WORKSHOP_FIELDS)
 
 
-def delete_job(store: Any, nummer: int, settings: Settings) -> bool:
-    """Loescht einen Auftrag -- samt seinem Vergleichsbild.
-
-    Das hochgeladene Foto haengt an genau diesem Auftrag und ist vom
-    Aufraeumen ausgenommen. Bis 9.5.16 raeumte es nur der POST-Weg weg;
-    ``DELETE /api/jobs`` liess es fuer immer auf dem Server liegen.
-    """
-    job = store.get(nummer)
-    bild = str(getattr(job, "image_id", "") or "") if job is not None else ""
-    geloescht = bool(store.delete(nummer))
-    if geloescht and bild:
+def delete_coworker(store: Any, nummer: int, settings: Settings) -> bool:
+    """Loescht den Coworker samt exklusivem privaten Vergleichsbild."""
+    cw = store.get(nummer)
+    bild = str(cw.schedule.get("image_id") or "") if cw is not None else ""
+    deleted = bool(store.delete(nummer))
+    if deleted and bild and not any(c.schedule.get("image_id") == bild for c in store.all()):
         from aquaticy.media import delete_snapshot
 
         with contextlib.suppress(OSError, ValueError):
             delete_snapshot(settings.data_dir, bild)
-    return geloescht
+    return deleted
 
 
 def _chat_untrusted(entries: list[Any]) -> bool:
@@ -2322,7 +2317,6 @@ class SessionRegistry:
 
 
 SESSIONS = SessionRegistry()
-USER_SCHEDULERS: dict[str, Any] = {}
 #: Die Taktgeber der Coworker je Konto (11.0.0 Luna, aquaticy/coworker.py).
 USER_COWORKERS: dict[str, Any] = {}
 #: Zwei Anmeldungen desselben Kontos koennen zeitgleich hereinkommen. Ohne
@@ -2400,9 +2394,8 @@ def _plan_of(konto_id: str, fallback: Any) -> str:
 
 
 def start_user_scheduler(account: Account) -> None:
-    """Startet die Taktgeber genau einmal fuer das Konto: Auftraege und Coworker."""
+    """Startet genau einen Coworker-Taktgeber fuer alle Aufgaben des Kontos."""
     from aquaticy import coworker as coworker_mod
-    from aquaticy.jobs import Scheduler
 
     with _SCHEDULER_LOCK:
         # Das Kontingent steckt in den Einstellungen des Kontos (settings.quota).
@@ -2416,14 +2409,6 @@ def start_user_scheduler(account: Account) -> None:
                     and AIGUARD.is_banned(user_id=konto_id) is not None) or (
                 CLUSTER is not None and not CLUSTER.is_home(konto_id))
 
-        if account.id not in USER_SCHEDULERS:
-            scheduler = Scheduler(
-                SESSIONS.get(account).settings,
-                paused=ruht,
-                on_abuse=lambda job, payload: job_abuse(account, job, payload),
-            )
-            scheduler.start()
-            USER_SCHEDULERS[account.id] = scheduler
         if account.id not in USER_COWORKERS:
             # Coworker (11.0.0 Luna): nur mit Pro und Ultra -- die Stufe wird bei
             # jedem Takt neu gelesen.
@@ -2462,15 +2447,14 @@ def _bind_ha_token(settings: Settings, tresor: Any) -> None:
 
 def _stop_schedulers() -> None:
     """Haelt alle Planer an -- beim Beenden und vor einem Neustart (9.6.8 Ultra)."""
-    global SCHEDULER, COWORKER_SCHEDULER
+    global COWORKER_SCHEDULER
     with _SCHEDULER_LOCK:
-        planer = list(USER_SCHEDULERS.values()) + list(USER_COWORKERS.values())
-        USER_SCHEDULERS.clear()
+        planer = list(USER_COWORKERS.values())
         USER_COWORKERS.clear()
-    for global_planer in (SCHEDULER, COWORKER_SCHEDULER):
+    for global_planer in (COWORKER_SCHEDULER,):
         if global_planer is not None:
             planer.append(global_planer)
-    SCHEDULER = COWORKER_SCHEDULER = None
+    COWORKER_SCHEDULER = None
     for eins in planer:
         with contextlib.suppress(Exception):
             eins.stop()
@@ -2487,11 +2471,13 @@ def forget_account_runtime(account: Account) -> None:
     laufender Auftrag gleich wieder in den frisch geleerten Ordner.
     """
     with _SCHEDULER_LOCK:
-        planer = [USER_SCHEDULERS.pop(account.id, None), USER_COWORKERS.pop(account.id, None)]
+        planer = [USER_COWORKERS.pop(account.id, None)]
     for eins in planer:
         if eins is not None:
             with contextlib.suppress(Exception):
                 eins.stop()
+                if hasattr(eins, "wait_stopped"):
+                    eins.wait_stopped()
     sitzung = SESSIONS.drop(account.id)
     # Die virtual machines seiner Coworker gehen mit (11.0.0 Luna) -- ohne die
     # Einstellungen neu zu bauen, das legte Ordner wieder an.
@@ -2530,7 +2516,6 @@ def ui_state() -> Any:
 
 #: Der Taktgeber fuer die Auftraege. Wird beim Start gesetzt; im Test laeuft
 #: kein Server und damit auch keiner.
-SCHEDULER: Any = None
 #: Coworker ohne Konto (eigener Rechner) -- wie Ultra.
 COWORKER_SCHEDULER: Any = None
 
@@ -3188,7 +3173,7 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
 # ---------------------------------------------------------------------------
 COWORKER_ACTIONS = frozenset({
     "create", "message", "approve", "reject", "pause", "resume", "wake", "rules", "edit",
-    "delete", "seen", "reset_notes",
+    "delete", "seen", "reset_notes", "preferences",
 })
 
 
@@ -3207,9 +3192,8 @@ def coworkers_view(session: Any, *, badge_only: bool = False) -> dict[str, Any]:
 
     plan = session.plan
     erlaubt = plan in coworker_mod.MAX_COWORKERS
-    antwort: dict[str, Any] = {"allowed": erlaubt, "plan": plan, "badge": 0}
-    if not erlaubt:
-        return antwort
+    antwort: dict[str, Any] = {"allowed": True, "autonomous_allowed": erlaubt,
+                               "plan": plan, "badge": 0}
     settings = session.settings()
     store = coworker_mod.CoworkerStore(settings.db_path)
     antwort["badge"] = store.unseen()
@@ -3218,13 +3202,14 @@ def coworkers_view(session: Any, *, badge_only: bool = False) -> dict[str, Any]:
                                  for cw in store.all())
         return antwort
     antwort.update({
-        "max": coworker_mod.MAX_COWORKERS[plan],
+        "max": coworker_mod.MAX_COWORKERS.get(plan, 0),
+        "max_scheduled": coworker_mod.MAX_SCHEDULED,
         "vm": coworker_mod.vm_possible(settings, session.ultra),
         "categories": coworker_mod.catalog(session.ultra),
         "avatars": list(coworker_mod.AVATARS),
         "connections": coworker_mod.connections(settings, session.ultra),
-        "min_sleep": coworker_mod.MIN_SLEEP_MINUTES[plan],
-        "daily": coworker_mod.DAILY_RUNS[plan],
+        "min_sleep": coworker_mod.MIN_SLEEP_MINUTES.get(plan, 15),
+        "daily": coworker_mod.DAILY_RUNS.get(plan, 0),
         "coworkers": [coworker_mod.view(store, cw) for cw in store.all()],
     })
     return antwort
@@ -3251,6 +3236,37 @@ def _json_int(wert: Any) -> int:
     return int(wert)
 
 
+def coworker_image(payload: dict[str, Any], settings: Settings) -> tuple[str, str]:
+    """Nimmt das Vergleichsbild eines Bildauftrags entgegen.
+
+    Es landet im privaten Datenordner des Kontos -- derselbe Ort, an dem
+    auch geprueftes Bildmaterial liegt. Zurueck kommt (Kennung, Fehler);
+    genau eines von beiden ist gefuellt.
+    """
+    from aquaticy.media import save_snapshot
+
+    try:
+        data = base64.b64decode(str(payload.get("image_data") or ""), validate=True)
+    except (ValueError, binascii.Error):
+        return "", "Das Bild konnte nicht gelesen werden."
+    if not data:
+        return "", "Für die Bildsuche fehlt das Bild."
+    if not looks_like_image(data) or blocked_upload(str(payload.get("image_name") or "")):
+        return "", ("Das Bildformat stimmt nicht: Es gehen nur echte PNG-, JPEG-, "
+                    "GIF- oder WebP-Bilder.")
+    if len(data) > MAX_UPLOAD_BYTES:
+        return "", (
+            f"Das Bild ist zu groß (erlaubt sind "
+            f"{MAX_UPLOAD_BYTES // 1_000_000} MB)."
+        )
+    try:
+        # `keep`: darauf beruft sich der Auftrag bei jedem Lauf. Ohne das
+        # waere das Foto nach zweihundert Schnappschuessen weg.
+        return save_snapshot(settings.data_dir, data, image_mime(data), keep=True), ""
+    except (OSError, ValueError):
+        return "", "Dieses Bildformat wird nicht unterstützt (JPEG, PNG, WebP, GIF)."
+
+
 def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any], int]:
     """Anlegen, schreiben, freigeben, pausieren -- alles aus der Coworker-Uebersicht.
 
@@ -3263,8 +3279,6 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
     session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
     if konto is None:
         konto = getattr(session, "account", None)
-    if session.plan not in coworker_mod.MAX_COWORKERS:
-        return {"ok": False, "error": "Coworker gibt es mit Pro und Ultra."}, 403
     if AIGUARD is not None and konto is not None and AIGUARD.is_banned(
             user_id=konto.id) is not None:
         return {"ok": False, "error": "Während einer Sperre arbeiten keine Coworker."}, 403
@@ -3283,8 +3297,41 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
             if nein:
                 return {"ok": False, "error": nein}, 400
             chat = new_session_id()
-            kollege: Any = store.add(name, aufgabe, avatar=str(payload.get("avatar") or ""),
-                                plan=session.plan, chat=chat)
+            timing = payload.get("schedule") or {}
+            if not isinstance(timing, dict):
+                raise coworker_mod.CoworkerError("Der Zeitplan muss ein Objekt sein.")
+            if not timing and session.plan not in coworker_mod.MAX_COWORKERS:
+                return {"ok": False, "error": "Dauerhafte Coworker gibt es mit Pro und Ultra."}, 403
+            # Niemals vom Client gelieferte Bild-Kennungen oder Bildnotizen uebernehmen.
+            timing = {k: v for k, v in timing.items() if k not in ("image_id", "image_note")}
+            image_id, saved = "", False
+            try:
+                if (timing.get("kind") in ("visual", "image")
+                        and not selected_vision_model(settings)):
+                    raise coworker_mod.CoworkerError(
+                        "Die Bildbeobachtung braucht ein Vision-Modell unter Modell.")
+                if timing.get("kind") == "image":
+                    image_id, error = coworker_image(payload, settings)
+                    if error:
+                        raise coworker_mod.CoworkerError(error)
+                    timing["image_id"] = image_id
+                kollege: Any = store.add(name, aufgabe, avatar=str(payload.get("avatar") or ""),
+                                         plan=session.plan, chat=chat, schedule=timing)
+                saved = True
+                # Kontextfreigaben vor dem ersten Schritt setzen, ohne erhoehte Aktionsrechte.
+                store.set_preferences(kollege.id, {k: payload[k] for k in (
+                    "sharing_chats", "sharing_coworkers", "notes_limit") if k in payload})
+                kollege = store.get(kollege.id)
+            except (ValueError, TypeError, OverflowError):
+                if saved:
+                    delete_coworker(store, kollege.id, settings)
+                raise
+            finally:
+                if image_id and not saved:
+                    from aquaticy.media import delete_snapshot
+
+                    with contextlib.suppress(OSError, ValueError):
+                        delete_snapshot(settings.data_dir, image_id)
             # Der Chat des Coworkers: hier erscheinen seine Meldungen.
             with contextlib.suppress(Exception):
                 Cache(settings.db_path, settings.cache_ttl_hours).add_history(
@@ -3323,12 +3370,18 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 if entschieden is None:
                     return {"ok": False, "error": "Diese Anfrage ist schon entschieden."}, 409
                 if action == "approve":
-                    ultra = session.ultra
 
                     def ausfuehren() -> None:
                         try:
-                            ok, ergebnis = coworker_mod.run_action(store, entschieden,
-                                                                   settings, ultra)
+                            banned = AIGUARD is not None and konto is not None and \
+                                AIGUARD.is_banned(user_id=konto.id) is not None
+                            fresh_plan = (_plan_of(konto.id, konto) if konto is not None
+                                          else session.plan)
+                            if banned:
+                                ok, ergebnis = False, "Während einer Sperre laufen keine Aktionen."
+                            else:
+                                ok, ergebnis = coworker_mod.run_action(
+                                    store, entschieden, session.settings(), fresh_plan == "ultra")
                         except Exception as exc:  # die Anfrage darf nie haengen bleiben
                             ok, ergebnis = False, f"Fehler: {type(exc).__name__}"
                         try:
@@ -3371,16 +3424,19 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                              avatar=None if payload.get("avatar") is None
                              else str(payload.get("avatar")))
                 hinweis = "Gespeichert."
+            elif action == "preferences":
+                store.set_preferences(kollege.id, payload, settings=settings, ultra=session.ultra)
+                hinweis = "Einstellungen gespeichert."
             elif action == "reset_notes":
                 store.reset_notes(kollege.id)
                 hinweis = f"Die Notizen von {kollege.name} sind gelöscht."
             elif action == "delete":
-                store.delete(kollege.id)
+                delete_coworker(store, kollege.id, settings)
                 coworker_mod.stop_boxes(settings.data_dir, kollege.id)
                 hinweis = f"{kollege.name} ist gelöscht. Sein Chat bleibt."
             else:  # seen
                 store.mark_seen(kollege.id)
-    except coworker_mod.CoworkerError as exc:
+    except (ValueError, TypeError, OverflowError) as exc:
         return {"ok": False, "error": str(exc)}, 400
     except sqlite3.Error:
         return {"ok": False, "error": "Das ließ sich nicht speichern. Bitte versuch es gleich "
@@ -4454,16 +4510,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         route = self._route()
         settings = SESSION.settings()
-        if route == "/api/jobs":
-            from aquaticy.jobs import JobStore
-
-            gemeint = (parse_qs(urlsplit(self.path).query).get("id") or [""])[0].strip()
-            try:
-                nummer = int(gemeint)
-            except ValueError:
-                self._json({"ok": False, "error": "Keine gültige Kennung."}, 400)
-                return
-            self._json({"ok": delete_job(JobStore(settings.db_path), nummer, settings)})
+        if route == "/api/coworkers":
+            value = (parse_qs(urlsplit(self.path).query).get("id") or [""])[0]
+            response, status = coworker_action({"action": "delete", "id": value}, self._account())
+            self._json(response, status)
         elif route == "/api/memory":
             frage = parse_qs(urlsplit(self.path).query)
             if not settings.memory_enabled:
@@ -4484,144 +4534,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"forgotten": bool(store.forget(nummer))})
         else:
             self._json({"error": "unbekannt"}, 404)
-
-    def _job_image(self, payload: dict[str, Any], settings: Settings) -> tuple[str, str]:
-        """Nimmt das Vergleichsbild eines Bildauftrags entgegen.
-
-        Es landet im privaten Datenordner des Kontos -- derselbe Ort, an dem
-        auch geprueftes Bildmaterial liegt. Zurueck kommt (Kennung, Fehler);
-        genau eines von beiden ist gefuellt.
-        """
-        from aquaticy.media import save_snapshot
-
-        try:
-            data = base64.b64decode(str(payload.get("image_data") or ""), validate=True)
-        except (ValueError, binascii.Error):
-            return "", "Das Bild konnte nicht gelesen werden."
-        if not data:
-            return "", "Für die Bildsuche fehlt das Bild."
-        if not looks_like_image(data) or blocked_upload(str(payload.get("image_name") or "")):
-            return "", ("Das Bildformat stimmt nicht: Es gehen nur echte PNG-, JPEG-, "
-                        "GIF- oder WebP-Bilder.")
-        if len(data) > MAX_UPLOAD_BYTES:
-            return "", (
-                f"Das Bild ist zu groß (erlaubt sind "
-                f"{MAX_UPLOAD_BYTES // 1_000_000} MB)."
-            )
-        try:
-            # `keep`: darauf beruft sich der Auftrag bei jedem Lauf. Ohne das
-            # waere das Foto nach zweihundert Schnappschuessen weg.
-            return save_snapshot(settings.data_dir, data, image_mime(data), keep=True), ""
-        except (OSError, ValueError):
-            return "", "Dieses Bildformat wird nicht unterstützt (JPEG, PNG, WebP, GIF)."
-
-    def _job_edit(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Auftrag anlegen, anhalten, weiterlaufen lassen oder sofort ausfuehren."""
-        from aquaticy.jobs import JobStore, run_job
-
-        settings = SESSION.settings()
-        store = JobStore(settings.db_path)
-        action = str(payload.get("action", "add")).strip().lower()
-        konto = self._account()
-
-        if action == "add":
-            if AIGUARD is not None and konto is not None:
-                # Auch ein Auftrag ist Text an Aquaticy (9.5.26): eine Beleidigung
-                # darin zaehlt wie im Chat -- und der Auftrag wird nicht angelegt.
-                from aquaticy.aiguard import demeaning_request, insult_level
-
-                frage = str(payload.get("question", ""))
-                stufe = insult_level(frage) or demeaning_request(frage)
-                if stufe:
-                    AIGUARD.record_incident(
-                        konto.id, "beleidigung", stufe, chat="auftrag",
-                        detail="Beleidigung im Auftrag (erkannt)",
-                        enforce=not getattr(konto, "ultra", False))
-                    return {"ok": False, "error": "Diesen Auftrag lege ich nicht an — "
-                            "Ai-guard hat darin eine Beleidigung oder den Auftrag erkannt, "
-                            "jemanden herabzusetzen."}
-            image_id = ""
-            saved = False
-            try:
-                kind = str(payload.get("kind", "research")).strip().lower()
-                if kind in ("visual", "image") and not selected_vision_model(settings):
-                    return {
-                        "ok": False,
-                        "error": "Die Bildbeobachtung braucht ein Vision-Modell unter Modell.",
-                    }
-                if kind == "image":
-                    image_id, fehler = self._job_image(payload, settings)
-                    if fehler:
-                        return {"ok": False, "error": fehler}
-                job: Any = store.add(
-                    str(payload.get("question", "")),
-                    rhythm=str(payload.get("rhythm", "daily")),
-                    hour=int(payload.get("hour", 8) or 0),
-                    minute=int(payload.get("minute", 0) or 0),
-                    weekday=int(payload.get("weekday", 0) or 0),
-                    structured=bool(payload.get("structured", True)),
-                    kind=kind,
-                    source_url=str(payload.get("source_url", "")),
-                    image_id=image_id,
-                )
-                saved = True
-            except (ValueError, TypeError, OverflowError) as exc:  # 1e999 (9.5.34)
-                return {"ok": False, "error": str(exc)}
-            except sqlite3.Error:
-                return {"ok": False, "error": "Der Auftrag konnte nicht gespeichert werden. "
-                        "Bitte versuche es erneut."}
-            finally:
-                if image_id and not saved:
-                    from aquaticy.media import delete_snapshot
-
-                    with contextlib.suppress(OSError, ValueError):
-                        delete_snapshot(settings.data_dir, image_id)
-            return {"ok": True, "job": job.as_dict()}
-
-        try:
-            nummer = int(payload.get("id", 0))
-        except (TypeError, ValueError, OverflowError):
-            return {"ok": False, "error": "Keine gültige Kennung."}
-
-        if action in ("pause", "resume"):
-            if not store.set_enabled(nummer, action == "resume"):
-                return {"ok": False, "error": "Diesen Auftrag gibt es nicht."}
-            return {"ok": True}
-        if action == "delete":
-            return {"ok": delete_job(store, nummer, settings)}
-        if action == "run":
-            # Sofort ausfuehren laeuft im Hintergrund: eine Recherche dauert
-            # Minuten, so lange darf keine Anfrage offen stehen.
-            job = store.get(nummer)
-            if job is None:
-                return {"ok": False, "error": "Diesen Auftrag gibt es nicht."}
-
-            from aquaticy.jobs import GUARD_STATE, claim_run, release_run
-
-            # Laeuft er schon (Planer oder ein frueherer Klick), nicht doppelt.
-            if not claim_run(settings.db_path, job.id):
-                return {"ok": False, "error": "Dieser Auftrag läuft gerade schon."}
-
-            def sofort() -> None:
-                # Scheitert der Lauf, muss das trotzdem am Auftrag stehen:
-                # sonst bleibt er auf "laeuft gerade" haengen und sein
-                # naechster Termin in der Vergangenheit.
-                try:
-                    # Das Kontingent prueft run_job ueber settings.quota.
-                    state, chat = run_job(
-                        job, settings,
-                        on_abuse=lambda j, p: job_abuse(konto, j, p))
-                except Exception as exc:
-                    state, chat = (f"Fehler: {type(exc).__name__}", "")
-                finally:
-                    release_run(settings.db_path, job.id)
-                store.note_run(job.id, state, chat)
-                if state == "erfüllt" or state.startswith(GUARD_STATE):
-                    store.set_enabled(job.id, False)
-
-            threading.Thread(target=sofort, daemon=True).start()
-            return {"ok": True, "started": True}
-        return {"ok": False, "error": f"Unbekannt: {action}"}
 
     def _workshop_file(self) -> None:
         """Reicht eine Datei aus der virtual machine heraus -- zum Herunterladen."""
@@ -4971,18 +4883,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(coworkers_view(sitzung, badge_only=nur))
         elif route == "/api/werkstatt/bildschirm":
             self._workshop_screen()
-        elif route == "/api/jobs":
-            from aquaticy.jobs import RHYTHM_NAMES, JobStore
-
-            store = JobStore(SESSION.settings().db_path)
-            self._json(
-                {
-                    "jobs": [webview.job_view(job.as_dict()) for job in store.all_jobs()],
-                    "rhythms": [
-                        {"id": key, "name": name} for key, name in RHYTHM_NAMES.items()
-                    ],
-                }
-            )
         elif route == "/api/prefs":
             self._json(ui_state().read())
         elif route == "/api/models":
@@ -5335,8 +5235,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(antwort, status)
         elif route == "/api/chat-edit":
             self._json(self._chat_edit(self._read_json()))
-        elif route == "/api/jobs":
-            self._json(self._job_edit(self._read_json()))
         elif route == "/api/coworkers":
             antwort, status = coworker_action(self._read_json(), self._account())
             self._json(antwort, status)
@@ -6937,11 +6835,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     # Auftraege: was faellig ist, laeuft von selbst. Ein eigener Thread, der
     # jede Minute nachsieht -- kostet nichts, solange nichts ansteht.
     try:
-        from aquaticy.jobs import Scheduler
-
-        global SCHEDULER, COWORKER_SCHEDULER
-        SCHEDULER = Scheduler(SESSION.settings)
-        SCHEDULER.start()
+        global COWORKER_SCHEDULER
         from aquaticy import coworker as coworker_mod
 
         COWORKER_SCHEDULER = coworker_mod.Scheduler(SESSION.settings, plan=lambda: "ultra")

@@ -1693,6 +1693,8 @@ class Toolbox:
         #: Eine Pruefung vor jedem Aufruf (11.0.0 Luna, aquaticy/coworker.py): gibt
         #: sie ein Ergebnis zurueck, laeuft das Werkzeug nicht. Coworker setzen
         #: hier ihre Regeln durch -- erlauben, fragen, sperren.
+        self.coworker_ha_approval: Callable[[dict[str, Any]], bool] | None = None
+        self.private_context: list[str] = []
         self.gate: Callable[[str, dict[str, Any]], dict[str, Any] | None] | None = None
 
     def close(self, *, close_fetcher: bool = True) -> None:
@@ -2797,6 +2799,7 @@ class Toolbox:
         from aquaticy import injection
 
         texte: list[str] = [str(getattr(self.settings, "location", "") or "")]
+        texte.extend(getattr(self, "private_context", []))
         if self.cache is not None:
             with contextlib.suppress(Exception):
                 texte += [n.text for n in self.cache.list_notes(limit=50)]
@@ -2852,6 +2855,9 @@ class Toolbox:
         if not was or not getattr(self, "untrusted_seen", False):
             return None
         if name == "ha_call":
+            approval = getattr(self, "coworker_ha_approval", None)
+            if approval is not None and approval(arguments):
+                return None  # explizite, eng begrenzte Dauerfreigabe des Besitzers
             from aquaticy.homeassistant import PROTECTED_DOMAINS
 
             if str(arguments.get("domain", "")).strip().lower() in PROTECTED_DOMAINS:

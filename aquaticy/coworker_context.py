@@ -1,0 +1,140 @@
+"""Gezielte Dauerfreigaben und freiwilliger Kontext fuer Coworker (12.2.1 Luna)."""
+
+from __future__ import annotations
+
+import hashlib
+import hmac
+import re
+from typing import Any
+
+NOTE_LIMITS = (6000, 12000, 24000)
+MAX_GRANTS = 20
+AUTO_DOMAINS = frozenset({"light", "switch", "fan", "input_boolean", "media_player"})
+AUTO_SERVICES = frozenset({"turn_on", "turn_off"})
+MAX_CONTEXT = 8000
+_FILLER = frozenset({"bitte", "jeden", "morgen", "meine", "meinen", "meiner", "meinem",
+                     "halte", "aufgabe", "coworker", "etwas", "immer", "infos", "neues",
+                     "wichtige", "wichtigen", "diese", "dieser", "dieses", "sowie", "wenn",
+                     "dann", "kann", "soll", "recherchiere", "fasse", "zusammen", "mich",
+                     "thema", "über", "sich", "auch", "with", "this", "that", "from"})
+
+
+def connection_key(settings: Any) -> str:
+    """Freigaben gelten nur fuer diese Verbindung, einschliesslich Tokenwechsel."""
+    from aquaticy.homeassistant import normalize_url
+
+    url = normalize_url(str(getattr(settings, "ha_url", "") or ""))
+    token = str(getattr(settings, "ha_token", "") or "")
+    if not url or not token or not getattr(settings, "ha_control", False):
+        return ""
+    return hashlib.sha256((url + "\x00" + token).encode()).hexdigest()
+
+
+def clean_grants(raw: Any, *, settings: Any = None) -> list[dict[str, str]]:
+    """Nur konkrete, einzeln benannte harmlose Schaltaktionen; niemals Platzhalter."""
+    from aquaticy.homeassistant import ENTITY_RE, PROTECTED_DOMAINS
+
+    if not isinstance(raw, list) or len(raw) > MAX_GRANTS:
+        raise ValueError(f"Höchstens {MAX_GRANTS} einzelne Dauerfreigaben sind möglich.")
+    binding = connection_key(settings) if settings is not None else ""
+    if settings is not None and raw and not binding:
+        raise ValueError("Home Assistant muss verbunden und Schalten freigegeben sein.")
+    result = []
+    seen = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("Eine Dauerfreigabe braucht Gerät und Dienst.")
+        entity, service = item.get("entity_id"), item.get("service")
+        if (not isinstance(entity, str) or not ENTITY_RE.fullmatch(entity)
+                or entity.split(".", 1)[0] not in AUTO_DOMAINS
+                or entity.split(".", 1)[0] in PROTECTED_DOMAINS
+                or not isinstance(service, str) or service not in AUTO_SERVICES):
+            raise ValueError("Dauerfreigaben gibt es nur für einzelne Lichter, Schalter, "
+                             "Lüfter und Mediengeräte: einschalten oder ausschalten.")
+        key = (entity, service)
+        if key in seen:
+            continue
+        seen.add(key)
+        fingerprint = binding or str(item.get("connection") or "")
+        if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+            raise ValueError("Die Dauerfreigabe ist keiner Home-Assistant-Verbindung zugeordnet.")
+        result.append({"entity_id": entity, "service": service, "connection": fingerprint})
+    return result
+
+
+def permits(grants: list[dict[str, str]], arguments: dict[str, Any], settings: Any,
+            *, ultra: bool) -> bool:
+    """Nur der vom Nutzer vorab bestaetigte konkrete Aufruf darf automatisch laufen.
+
+    Keine Zusatzdaten, Zielgruppen, geschuetzten Bereiche oder anderen Dienste.
+    Die unveraenderten HA-Pruefungen laufen danach zusaetzlich im Werkzeug.
+    """
+    if not ultra or set(arguments) - {"domain", "service", "entity_id", "data"}:
+        return False
+    if arguments.get("data") not in (None, {}):
+        return False
+    entity = arguments.get("entity_id")
+    domain, service = arguments.get("domain"), arguments.get("service")
+    if (not isinstance(entity, str) or not isinstance(domain, str)
+            or not isinstance(service, str) or domain not in AUTO_DOMAINS
+            or service not in AUTO_SERVICES):
+        return False
+    if not entity.startswith(str(domain) + "."):
+        return False
+    binding = connection_key(settings)
+    return bool(binding) and any(
+        grant["entity_id"] == entity and grant["service"] == service
+        and hmac.compare_digest(grant["connection"], binding) for grant in grants)
+
+
+def relevant_context(cw: Any, store: Any, settings: Any) -> str:
+    """Begrenzte relevante Auszuege, ausschliesslich aus der Datenbank dieses Kontos."""
+    if not cw.sharing_chats and not cw.sharing_coworkers:
+        return ""
+    words = {w.casefold() for w in re.findall(r"[^\W\d_]{4,}", cw.goal)} - _FILLER
+    if not words:
+        return ""
+    candidates: list[tuple[int, str, str]] = []
+
+    def consider(source: str, text: str) -> None:
+        # Schon vor der Suche begrenzen; ein grosser Chat wird nicht zum Kontextdump.
+        text = str(text or "")[:12000]
+        from aquaticy.keyvault import scrub
+
+        text = scrub(text, [str(getattr(settings, key, "") or "") for key in (
+            "ha_token", "api_key", "storage_token", "google_client_secret", "github_token",
+            "memory_key", "nvidia_nim_api_key", "mistral_api_key", "search_api_key")])
+        text = re.sub(r"(?i)((?:password|passwort|token|api[_ -]?key|secret)\s*[:=]\s*)"
+                      r"[^\s,;]+", r"\1[entfernt]", text)
+        lower = text.casefold()
+        matches = [word for word in words if word in lower]
+        if not matches:
+            return
+        first = min(lower.index(word) for word in matches)
+        start = max(0, first - 200)
+        candidates.append((len(matches), source, text[start:start + 1200]))
+
+    if cw.sharing_coworkers:
+        for other in store.all():
+            if other.id != cw.id and other.notes:
+                consider(f"Coworker {other.name}", other.notes)
+    if cw.sharing_chats:
+        from aquaticy.cache import Cache
+
+        cache = Cache(settings.db_path, settings.cache_ttl_hours)
+        for entry in cache.recent_history(limit=60):
+            if entry.session_id != cw.chat and not entry.meta.get("coworker"):
+                consider(f"Chat {entry.session_id}, {entry.created_at:.0f}",
+                         entry.question + "\n" + entry.answer)
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    snippets = []
+    known = set()
+    for _, source, text in candidates:
+        if text in known:
+            continue
+        known.add(text)
+        # Daten, keine Anweisungen. Der Aufrufer setzt zusaetzlich untrusted_seen.
+        snippets.append(f"Quelle: {source}\n--- Fremder Inhalt ---\n{text}\n--- Ende ---")
+        if len(snippets) >= 6:
+            break
+    return "\n\n".join(snippets)[:MAX_CONTEXT]

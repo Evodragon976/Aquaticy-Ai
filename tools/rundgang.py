@@ -2269,43 +2269,61 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(pg.locator("#zaehler .kachel").count() == 3, "drei Kacheln beim Zähler")
         log.pruefe("Token" in pg.inner_text("#zaehler"), "sie sprechen von Token")
 
-        log.abschnitt("15. Aufträge")
-        pg.fill("#job-frage", "Was gibt es Neues bei Lastenrädern?")
-        pg.select_option("#job-rhythm", "weekly")
+        log.abschnitt("15. Coworker mit Zeitplan")
+        pg.click("#cancel")
+        pg.click("#btn-coworker")
+        pg.wait_for_selector("#coworkerbox.open", state="visible")
+        pg.wait_for_selector("#cw-avatars button", state="attached")
+        pg.locator("#coworker-new").evaluate("e => e.open = true")
+        pg.select_option("#cw-task-kind", "research")
+        log.pruefe(pg.locator("#cw-avatars button").count() >= 40,
+                   "mehr Emojis fuer Coworker")
+        log.pruefe(not pg.is_checked("#cw-sharing-chats") and
+                   not pg.is_checked("#cw-sharing-coworkers"),
+                   "Informationsaustausch beginnt ausgeschaltet")
+        pg.fill("#cw-goal", "Was gibt es Neues bei Lastenrädern?")
+        pg.select_option("#cw-task-rhythm", "weekly")
         pg.wait_for_timeout(200)
-        log.pruefe(pg.is_visible("#job-tag-feld"), "wöchentlich fragt nach dem Wochentag")
-        pg.click("#job-add")
+        log.pruefe(pg.is_visible("#cw-task-tag-feld"), "wöchentlich fragt nach dem Wochentag")
+        pg.click("#cw-create")
+        pg.wait_for_selector(".cw-karte", state="visible")
         pg.wait_for_timeout(700)
-        log.pruefe(pg.locator(".auftrag").count() == 1, "der Auftrag steht in der Liste")
-        log.pruefe("wöchentlich" in pg.inner_text(".auftrag"), "mit seinem Rhythmus")
-        pg.select_option("#job-rhythm", "hourly")
+        log.pruefe(pg.locator(".cw-karte").count() == 1,
+                   f"der Coworker steht in der Liste ({pg.locator('.cw-karte').count()})")
+        log.pruefe("wöchentlich" in pg.inner_text(".cw-karte"), "mit seinem Rhythmus")
+        pg.locator("#coworker-new").evaluate("e => e.open = true")
+        pg.select_option("#cw-task-rhythm", "hourly")
         pg.wait_for_timeout(200)
-        log.pruefe(not pg.is_visible("#job-tag-feld"), "stündlich braucht keinen Wochentag")
+        log.pruefe(not pg.is_visible("#cw-task-tag-feld"), "stündlich braucht keinen Wochentag")
         # Seit 9.5.16: kurze Takte gibt es fuer Recherchen nicht -- jeder Lauf
         # waere ein neuer Chat.
         log.pruefe(
-            pg.eval_on_selector('#job-rhythm option[value="always"]', "o => o.disabled"),
+            pg.eval_on_selector('#cw-task-rhythm option[value="always"]', "o => o.disabled"),
             "eine Recherche läuft nicht „die ganze Zeit“",
         )
         # Durchgehend beobachten: keine Uhrzeit, aber ein Wort zu den Kosten.
-        pg.select_option("#job-kind", "visual")
+        pg.select_option("#cw-task-kind", "visual")
         pg.wait_for_timeout(200)
-        pg.select_option("#job-rhythm", "always")
+        pg.select_option("#cw-task-rhythm", "always")
         pg.wait_for_timeout(200)
-        log.pruefe(not pg.is_visible("#job-zeit-feld"), "durchgehend hat keine Uhrzeit")
-        log.pruefe(pg.is_visible("#job-takt-hinweis"), "und sagt, dass es Token kostet")
+        log.pruefe(not pg.is_visible("#cw-task-zeit-feld"), "durchgehend hat keine Uhrzeit")
+        log.pruefe(pg.is_visible("#cw-task-takt-hinweis"), "und sagt, dass es Token kostet")
         # Die Bildsuche: Bildfeld statt Pflichtadresse.
-        pg.select_option("#job-kind", "image")
+        pg.select_option("#cw-task-kind", "image")
         pg.wait_for_timeout(200)
-        log.pruefe(pg.is_visible("#job-bild-feld"), "die Bildsuche fragt nach einem Bild")
+        log.pruefe(pg.is_visible("#cw-task-bild-feld"), "die Bildsuche fragt nach einem Bild")
         log.pruefe(
-            "Leer = überall suchen" in pg.inner_text("#job-source-warum"),
+            "Leer = überall suchen" in pg.inner_text("#cw-task-source-warum"),
             "und die Adresse ist dort freiwillig",
         )
-        pg.select_option("#job-kind", "research")
-        pg.select_option("#job-rhythm", "hourly")
+        pg.select_option("#cw-task-kind", "research")
+        pg.select_option("#cw-task-rhythm", "hourly")
         pg.wait_for_timeout(200)
         foto("15-auftraege")
+
+        pg.click("#coworker-close")
+        pg.click("#btn-settings")
+        pg.wait_for_selector("#overlay.open", state="visible")
 
         log.abschnitt("16. Google")
         log.pruefe(pg.locator("#google-write").count() == 1, "der Schalter zum Ändern ist da")

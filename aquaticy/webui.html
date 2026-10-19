@@ -163,24 +163,9 @@ body.collapsed aside{margin-left:-260px}
   padding:0 1px}
 .recents-leer{color:var(--text-3);font-size:calc(12.5px * var(--fs));padding:14px 10px;line-height:1.5}
 
-/* Auftraege: eine Zeile je Auftrag, mit dem naechsten Termin daneben. */
-.auftraege{display:flex;flex-direction:column;gap:8px;margin:12px 0 14px}
-.auftrag{background:var(--surface);border:1px solid var(--line-2);border-radius:12px;
-  padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
-.auftrag.pausiert{opacity:.6}
-.auftrag .inhalt{flex:1;min-width:0}
-.auftrag .frage{font-size:calc(14px * var(--fs));line-height:1.45;overflow-wrap:anywhere}
-.auftrag .wann{font-size:calc(11.5px * var(--fs));color:var(--text-3);margin-top:4px}
-.auftrag .knoepfe{display:flex;gap:5px;flex:none}
-.auftrag .knoepfe button{background:none;border:1px solid var(--line-2);border-radius:8px;
-  color:var(--text-3);cursor:pointer;font:inherit;font-size:calc(11.5px * var(--fs));padding:5px 8px}
-@media (hover:hover){.auftrag .knoepfe button:hover{border-color:var(--accent);color:var(--accent-text)}}
-@media (hover:hover){.auftrag .knoepfe button.weg:hover{border-color:var(--err);color:var(--err)}}
-.auftrag{animation:rise var(--t-mid) var(--ease-out) both}
-.auftraege-leer{color:var(--text-3);font-size:calc(13px * var(--fs));padding:6px 2px}
 /* Das Vergleichsbild eines Bildauftrags -- klein genug, dass das Formular
    seine Form behaelt, gross genug, um zu erkennen, was man gewaehlt hat. */
-#job-bild-vorschau{max-width:120px;max-height:90px;border-radius:8px;
+#cw-task-bild-vorschau{max-width:120px;max-height:90px;border-radius:8px;
   border:1px solid var(--line-2);object-fit:cover;align-self:flex-end}
 
 /* Unter jeder fertigen Antwort: mitnehmen, was dasteht. Erst beim
@@ -1346,7 +1331,7 @@ input:focus,select:focus{border-color:var(--accent)}
 .coworker-new label.block{display:block;margin-top:10px}
 .coworker-new textarea{width:100%;border:1px solid var(--line-2);border-radius:10px;
   background:var(--bg);padding:8px 10px;min-height:5em;resize:vertical}
-.cw-avatars{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.cw-avatars{max-height:180px;overflow:auto;display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .cw-avatars button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line-2);
   background:var(--bg);font-size:calc(19px * var(--fs));cursor:pointer}
 .cw-avatars button[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft)}
@@ -2103,11 +2088,11 @@ html.vv,html.vv body{height:var(--app-h)}
   <div class="sheet addon-sheet" role="dialog" aria-modal="true" aria-labelledby="coworker-title">
     <h2 id="coworker-title">Coworker</h2>
     <p class="lead">Ein Coworker arbeitet dauerhaft an einer Aufgabe: Er recherchiert, liest
-      Gmail, Kalender und GitHub und meldet Neues. Vor jeder Änderung fragt er. Er wacht von
-      selbst auf und sofort, wenn du ihm schreibst.</p>
+      Gmail, Kalender und GitHub und meldet Neues. Er arbeitet mit festem Zeitplan oder wacht
+      selbst auf. Änderungen brauchen deine Freigabe oder eine passende Dauerfreigabe.</p>
     <div class="note" id="coworker-note" role="status" aria-live="polite"></div>
-    <div class="coworker-lock" id="coworker-lock" hidden>🔒 Coworker gibt es mit Pro und
-      Ultra. Mit Ultra arbeiten sie zusätzlich in ihrer eigenen virtual machine.</div>
+    <div class="coworker-lock" id="coworker-lock" hidden>Feste Zeitpläne und Beobachtungen stehen allen Konten zur Verfügung. Dauerhafte Coworker
+      gibt es mit Pro und Ultra; mit Ultra auch mit eigener virtual machine.</div>
     <div class="coworker-list" id="coworker-list"></div>
     <details class="coworker-new" id="coworker-new">
       <summary>＋ Neuer Coworker</summary>
@@ -2118,6 +2103,82 @@ html.vv,html.vv body{height:var(--app-h)}
       <label class="block"><span class="lbl">Aufgabe</span>
         <textarea id="cw-goal" rows="3" maxlength="2000"
                   placeholder="z. B. Sag mir jeden Morgen, welche Mails wichtig sind und welche Termine anstehen."></textarea></label>
+        <div class="row">
+          <label><span class="lbl">Art</span>
+            <select id="cw-task-kind">
+              <option value="adaptive">dauerhaft an der Aufgabe arbeiten</option>
+              <option value="research">regelmäßig recherchieren</option>
+              <option value="visual">Kamera, Satellit oder Straße beobachten</option>
+              <option value="price">Preis beobachten</option>
+              <option value="image">Bild hochladen und danach suchen</option>
+            </select></label>
+          <label id="cw-task-rhythm-feld"><span class="lbl">Rhythmus</span>
+            <select id="cw-task-rhythm">
+              <option value="daily">täglich</option>
+              <option value="hourly">stündlich</option>
+              <option value="weekly">wöchentlich</option>
+              <option value="minutes30">alle 30 Minuten</option>
+              <option value="minutes15">alle 15 Minuten</option>
+              <option value="minutes5">alle 5 Minuten</option>
+              <option value="minutes1">jede Minute</option>
+              <option value="always">die ganze Zeit</option>
+            </select>
+            <span class="why" id="cw-task-takt-hinweis" hidden>Je öfter geprüft wird, desto
+              schneller ist dein Limit aufgebraucht.</span></label>
+        </div>
+        <div class="row" id="cw-task-source-feld" hidden>
+          <label style="flex:1"><span class="lbl">Öffentliche Quelladresse
+            <span class="why" id="cw-task-source-warum">Die genaue Webcam-, Karten-,
+              Satelliten- oder Produktseite. Private Kameras und Anmeldungen werden
+              nicht verwendet.</span></span>
+            <input type="url" id="cw-task-source" placeholder="https://…"
+                   inputmode="url" autocomplete="off"></label>
+        </div>
+        <div class="row" id="cw-task-bild-feld" hidden>
+          <label style="flex:1"><span class="lbl">Bild des gesuchten Gegenstands
+            <span class="why">Ein Foto oder Produktbild. Aquaticy sucht damit, bis es ein
+              Angebot findet, und schickt die Adresse als Chat.</span></span>
+            <input type="file" id="cw-task-bild" accept="image/jpeg,image/png,image/webp,image/gif">
+          </label>
+          <img id="cw-task-bild-vorschau" alt="Gewähltes Bild" hidden>
+        </div>
+        <div class="row">
+          <label id="cw-task-tag-feld"><span class="lbl">Wochentag</span>
+            <select id="cw-task-weekday">
+              <option value="0">Montag</option>
+              <option value="1">Dienstag</option>
+              <option value="2">Mittwoch</option>
+              <option value="3">Donnerstag</option>
+              <option value="4">Freitag</option>
+              <option value="5">Samstag</option>
+              <option value="6">Sonntag</option>
+            </select></label>
+          <label id="cw-task-zeit-feld"><span class="lbl">Uhrzeit <span class="why">Bei „stündlich"
+            zählt nur die Minute</span></span>
+            <input type="time" id="cw-task-zeit" value="08:00"></label>
+        </div>
+        <div class="check" id="cw-task-struktur-feld">
+          <input type="checkbox" id="cw-task-struktur" checked>
+          <label for="cw-task-struktur" style="margin:0">Richtig recherchieren
+            <span class="why">Mit Teilfragen, Helfern und Quellen — wie der Schalter
+              „Strukturieren“. Aus: Aquaticy antwortet kurz mit dem, was es
+              weiß.</span></label>
+        </div>
+      <details class="cw-mehr">
+        <summary>Notizspeicher und Informationsaustausch</summary>
+        <p class="note">Freiwillig: Der Coworker darf passende Auszüge aus freigegebenen
+          Quellen deines Kontos lesen und relevante Fakten in seinen eigenen Notizen behalten.
+          Bereits übernommene Notizen bleiben beim Ausschalten erhalten; du kannst sie löschen.
+          Es werden keine Inhalte anderer Konten gelesen.</p>
+        <label class="check"><input type="checkbox" id="cw-sharing-chats">
+          Informationen aus normalen Chats verwenden</label>
+        <label class="check"><input type="checkbox" id="cw-sharing-coworkers">
+          Notizen anderer Coworker verwenden</label>
+        <label class="block">Notizspeicher
+          <select id="cw-notes-limit"><option value="6000">6.000 Zeichen</option>
+            <option value="12000">12.000 Zeichen</option>
+            <option value="24000">24.000 Zeichen</option></select></label>
+      </details>
       <div class="cw-beispiele" id="cw-beispiele">
         <button type="button" class="cw-beispiel">Fasse mir jeden Morgen meine wichtigen Mails und die Termine des Tages zusammen.</button>
         <button type="button" class="cw-beispiel">Behalte meine GitHub-Repos im Blick: neue Issues und Pull Requests, die auf mich warten.</button>
@@ -2300,7 +2361,7 @@ html.vv,html.vv body{height:var(--app-h)}
         <div class="danger-zone">
           <strong>Daten und Konto löschen</strong>
           <p class="note">„Alle Daten löschen“ entfernt Chats, Bilder, Uploads, Erinnerungen,
-            Aufträge, Einstellungen, Schlüssel, Google-Verbindung und Geräte. Das Konto bleibt.
+            Coworker, Einstellungen, Schlüssel, Google-Verbindung und Geräte. Das Konto bleibt.
             „Konto löschen“ entfernt auch das Konto. Beides lässt sich nicht rückgängig machen.</p>
           <div class="actions section">
             <button type="button" class="btn danger" id="account-wipe">Alle Daten löschen</button>
@@ -2478,80 +2539,6 @@ html.vv,html.vv body{height:var(--app-h)}
         <div class="limits" id="limits"></div>
         <div class="zaehler" id="zaehler"></div>
         <div class="note" id="usage-detail"></div>
-      </fieldset>
-
-      <fieldset><legend>Aufträge</legend>
-        <p class="lead">Aquaticy recherchiert regelmäßig oder beobachtet eine Webcam, eine
-          Satellitenansicht oder einen Preis. Tritt ein, worauf du wartest, kommt ein neuer Chat
-          mit Bild und Uhrzeit.</p>
-        <div class="auftraege" id="auftraege"></div>
-        <div class="row">
-          <label><span class="lbl">Art</span>
-            <select id="job-kind">
-              <option value="research">regelmäßig recherchieren</option>
-              <option value="visual">Kamera, Satellit oder Straße beobachten</option>
-              <option value="price">Preis beobachten</option>
-              <option value="image">Bild hochladen und danach suchen</option>
-            </select></label>
-          <label style="flex:2"><span class="lbl">Frage oder Bedingung</span>
-            <input type="text" id="job-frage"
-                   placeholder="z. B. Ein oranges Flugzeug ist sichtbar"></label>
-          <label><span class="lbl">Rhythmus</span>
-            <select id="job-rhythm">
-              <option value="daily">täglich</option>
-              <option value="hourly">stündlich</option>
-              <option value="weekly">wöchentlich</option>
-              <option value="minutes30">alle 30 Minuten</option>
-              <option value="minutes15">alle 15 Minuten</option>
-              <option value="minutes5">alle 5 Minuten</option>
-              <option value="minutes1">jede Minute</option>
-              <option value="always">die ganze Zeit</option>
-            </select>
-            <span class="why" id="job-takt-hinweis" hidden>Je öfter geprüft wird, desto
-              schneller ist dein Limit aufgebraucht.</span></label>
-        </div>
-        <div class="row" id="job-source-feld" hidden>
-          <label style="flex:1"><span class="lbl">Öffentliche Quelladresse
-            <span class="why" id="job-source-warum">Die genaue Webcam-, Karten-,
-              Satelliten- oder Produktseite. Private Kameras und Anmeldungen werden
-              nicht verwendet.</span></span>
-            <input type="url" id="job-source" placeholder="https://…"
-                   inputmode="url" autocomplete="off"></label>
-        </div>
-        <div class="row" id="job-bild-feld" hidden>
-          <label style="flex:1"><span class="lbl">Bild des gesuchten Gegenstands
-            <span class="why">Ein Foto oder Produktbild. Aquaticy sucht damit, bis es ein
-              Angebot findet, und schickt die Adresse als Chat.</span></span>
-            <input type="file" id="job-bild" accept="image/jpeg,image/png,image/webp,image/gif">
-          </label>
-          <img id="job-bild-vorschau" alt="Gewähltes Bild" hidden>
-        </div>
-        <div class="row">
-          <label id="job-tag-feld"><span class="lbl">Wochentag</span>
-            <select id="job-weekday">
-              <option value="0">Montag</option>
-              <option value="1">Dienstag</option>
-              <option value="2">Mittwoch</option>
-              <option value="3">Donnerstag</option>
-              <option value="4">Freitag</option>
-              <option value="5">Samstag</option>
-              <option value="6">Sonntag</option>
-            </select></label>
-          <label id="job-zeit-feld"><span class="lbl">Uhrzeit <span class="why">Bei „stündlich"
-            zählt nur die Minute</span></span>
-            <input type="time" id="job-zeit" value="08:00"></label>
-        </div>
-        <div class="check" id="job-struktur-feld">
-          <input type="checkbox" id="job-struktur" checked>
-          <label for="job-struktur" style="margin:0">Richtig recherchieren
-            <span class="why">Mit Teilfragen, Helfern und Quellen — wie der Schalter
-              „Strukturieren“. Aus: Aquaticy antwortet kurz mit dem, was es
-              weiß.</span></label>
-        </div>
-        <div class="actions section">
-          <span class="note" id="job-note"></span>
-          <button type="button" class="btn primary" id="job-add">Auftrag anlegen</button>
-        </div>
       </fieldset>
 
       <fieldset><legend>Gmail &amp; Kalender</legend>
@@ -2903,7 +2890,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.1.1 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.2.1 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5558,6 +5545,19 @@ try {
    Chat-Titel, Gemerktes), bleibt unangetastet: das sind Inhalte, keine
    Bedienelemente. Gespeichert wird die Wahl am Konto, wie das Design. */
 const EN = {
+  "dauerhaft an der Aufgabe arbeiten": "work continuously on the task",
+  "Notizspeicher und Informationsaustausch": "Note capacity and information sharing",
+  "Freiwillig: Der Coworker darf passende Auszüge aus freigegebenen Quellen deines Kontos lesen und relevante Fakten in seinen eigenen Notizen behalten. Bereits übernommene Notizen bleiben beim Ausschalten erhalten; du kannst sie löschen. Es werden keine Inhalte anderer Konten gelesen.": "Optional: the coworker may read relevant excerpts from approved sources in your account and retain relevant facts in its own notes. Copied notes remain when disabled; you can delete them. No content from other accounts is read.",
+  "Informationen aus normalen Chats verwenden": "Use information from regular chats",
+  "Notizen anderer Coworker verwenden": "Use other coworkers’ notes",
+  "Notizspeicher": "Note capacity",
+  "6.000 Zeichen": "6,000 characters",
+  "12.000 Zeichen": "12,000 characters",
+  "24.000 Zeichen": "24,000 characters",
+  "Ein Coworker arbeitet dauerhaft an einer Aufgabe: Er recherchiert, liest Gmail, Kalender und GitHub und meldet Neues. Er arbeitet mit festem Zeitplan oder wacht selbst auf. Änderungen brauchen deine Freigabe oder eine passende Dauerfreigabe.": "A coworker works on a task: it researches, reads Gmail, Calendar and GitHub and reports updates. It follows a fixed schedule or wakes itself. Changes require your approval or a matching standing permission.",
+  "Feste Zeitpläne und Beobachtungen stehen allen Konten zur Verfügung. Dauerhafte Coworker gibt es mit Pro und Ultra; mit Ultra auch mit eigener virtual machine.": "Fixed schedules and monitoring are available to all accounts. Continuous coworkers require Pro or Ultra; Ultra includes a personal virtual machine.",
+  "Diese Notizen enthalten fremde Inhalte. Vor Änderungen fragt er nach, außer bei deinen passenden Home-Assistant-Dauerfreigaben.": "These notes contain external content. Changes require approval, except for your matching Home Assistant standing permissions.",
+
 "Dieses Modell braucht mehr Kontextspeicher als erlaubt.":
   "This model needs more context memory than allowed.",
 "Die Anfrage ist zu lang. Bitte teile sie in kleinere Schritte.":
@@ -5653,7 +5653,7 @@ const EN = {
 "Passwort ändern": "Change password",
 "Überall sonst abmelden": "Sign out everywhere else",
 "Daten und Konto löschen": "Delete data and account",
-"„Alle Daten löschen“ entfernt Chats, Bilder, Uploads, Erinnerungen, Aufträge, Einstellungen, Schlüssel, Google-Verbindung und Geräte. Das Konto bleibt. „Konto löschen“ entfernt auch das Konto. Beides lässt sich nicht rückgängig machen.": "“Delete all data” removes chats, images, uploads, memories, tasks, settings, keys, the Google connection and devices. The account stays. “Delete account” also removes the account. Neither can be undone.",
+"„Alle Daten löschen“ entfernt Chats, Bilder, Uploads, Erinnerungen, Coworker, Einstellungen, Schlüssel, Google-Verbindung und Geräte. Das Konto bleibt. „Konto löschen“ entfernt auch das Konto. Beides lässt sich nicht rückgängig machen.": "“Delete all data” removes chats, images, uploads, memories, tasks, settings, keys, the Google connection and devices. The account stays. “Delete account” also removes the account. Neither can be undone.",
 "Alle Daten löschen": "Delete all data",
 "Konto löschen": "Delete account",
 "Ansehen": "View",
@@ -5852,8 +5852,6 @@ const EN = {
 "Merkzettel": "Notes",
 "Befehle": "Commands",
 "Was geprüft wird": "What is checked",
-"Ein Coworker arbeitet dauerhaft an einer Aufgabe: Er recherchiert, liest Gmail, Kalender und GitHub und meldet Neues. Vor jeder Änderung fragt er. Er wacht von selbst auf und sofort, wenn du ihm schreibst.": "A coworker works on one task all the time: it researches, reads Gmail, Calendar and GitHub and reports anything new. It asks before every change. It wakes up by itself and right away when you write to it.",
-"🔒 Coworker gibt es mit Pro und Ultra. Mit Ultra arbeiten sie zusätzlich in ihrer eigenen virtual machine.": "🔒 Coworkers come with Pro and Ultra. With Ultra they also work in their own virtual machine.",
 "＋ Neuer Coworker": "＋ New coworker",
 "Aufgabe": "Task",
 "z. B. Ava": "e.g. Ava",
@@ -5877,7 +5875,6 @@ const EN = {
 "Noch keine — die schreibt er nach dem ersten Arbeitsschritt.": "None yet — it writes them after its first work step.",
 "Notizen löschen": "Delete notes",
 "Notizen löschen?": "Delete notes?",
-"Diese Notizen enthalten Gelesenes aus Webseiten oder Mails — deshalb fragt er vor jeder Aktion nach, bis du sie löschst.": "These notes contain things read from web pages or emails — so it asks before every action until you delete them.",
 "„Fragen“: Er legt die Aktion hier zur Freigabe ab. Nach Webseiten oder Mails fragt er auch bei „Erlauben“, damit ihn kein fremder Text zu etwas überredet.": "“Ask”: it puts the action here for your approval. After reading web pages or emails it asks even with “Allow”, so no outside text can talk it into anything.",
 "Termine eintragen und ändern": "Add and change appointments",
 "Mail-Entwürfe anlegen": "Create email drafts",
@@ -5946,14 +5943,11 @@ const EN = {
 "von fünf Stunden ab deiner ersten Nachricht und einer": "of five hours from your first message and a",
 "Woche": "week",
 ", die zur Uhrzeit deiner Kontoerstellung neu beginnt. Pro hat deutlich mehr als Normal. Ultra hat kein Limit.": ", which starts again at the time your account was created. Pro has considerably more than Normal. Ultra has no limit.",
-"Aufträge": "Jobs",
-"Aquaticy recherchiert regelmäßig oder beobachtet eine Webcam, eine Satellitenansicht oder einen Preis. Tritt ein, worauf du wartest, kommt ein neuer Chat mit Bild und Uhrzeit.": "Aquaticy researches regularly or watches a webcam, a satellite view or a price. When what you're waiting for happens, a new chat arrives with image and time.",
 "Art": "Type",
 "regelmäßig recherchieren": "research regularly",
 "Kamera, Satellit oder Straße beobachten": "watch a camera, satellite or street",
 "Preis beobachten": "watch a price",
 "Bild hochladen und danach suchen": "upload an image and search for it",
-"Frage oder Bedingung": "Question or condition",
 "z. B. Ein oranges Flugzeug ist sichtbar": "e.g. An orange plane is visible",
 "Rhythmus": "Rhythm",
 "täglich": "daily",
@@ -5981,7 +5975,6 @@ const EN = {
 "Bei „stündlich\" zählt nur die Minute": "With “hourly” only the minute counts",
 "Richtig recherchieren": "Research properly",
 "Mit Teilfragen, Helfern und Quellen — wie der Schalter „Strukturieren“. Aus: Aquaticy antwortet kurz mit dem, was es weiß.": "With sub-questions, helpers and sources — like the “Structure” switch. Off: Aquaticy answers briefly with what it knows.",
-"Auftrag anlegen": "Create job",
 "Gmail & Kalender": "Gmail & Calendar",
 "Termine und Mails lesen dürfen": "May read appointments and mails",
 "Dann beantwortet Aquaticy Fragen zu Terminen und Mails. Nur lesen, ändern geht erst mit dem Schalter darunter.": "Then Aquaticy answers questions about your appointments and mails. Read only; changing needs the switch below.",
@@ -6085,8 +6078,6 @@ const EN = {
 "Design selber erstellen": "Create your own design",
 "deine Farben": "your colours",
 "Sprache": "Language",
-"Angelegt.": "Created.",
-"Anlegen ging nicht.": "Couldn't create it.",
 "Aquaticy ist gerade nicht erreichbar. Versuch es gleich noch einmal.": "Aquaticy can't be reached right now. Try again in a moment.",
 "Bestätige kurz, dass du ein Mensch bist: Schieb den Regler ganz nach rechts.": "Quickly confirm you're human: slide the control all the way to the right.",
 "Regler ganz nach rechts schieben": "Slide the control all the way to the right",
@@ -6099,8 +6090,6 @@ const EN = {
 "Der Speicher ließ sich nicht laden.": "Memory couldn't be loaded.",
 "Der Zählerstand ließ sich nicht laden.": "The usage couldn't be loaded.",
 "Die Add-ons ließen sich nicht laden.": "The add-ons couldn't be loaded.",
-"Die Adresse muss vollständig sein — oder leer bleiben.": "The address must be complete — or stay empty.",
-"Die Aufträge ließen sich nicht laden.": "The jobs couldn't be loaded.",
 "Die Datei kam nicht durch.": "The file didn't get through.",
 "Die virtual machine antwortet nicht.": "The virtual machine isn't answering.",
 "Die virtual machine läuft, es liegt aber noch nichts darin.": "The virtual machine is running, but there's nothing in it yet.",
@@ -6112,13 +6101,10 @@ const EN = {
 "Keine Verbindung zu Aquaticy. Versuch es gleich noch einmal.": "No connection to Aquaticy. Try again in a moment.",
 "Kopieren": "Copy",
 "Kopiert": "Copied",
-"Läuft — die Antwort steht gleich in der Leiste.": "Running — the answer will appear in the sidebar shortly.",
 "Löse den Code ein …": "Redeeming the code …",
 "Moment …": "One moment …",
-"Noch kein Auftrag. Unten steht, wie einer entsteht.": "No job yet. Below you can see how to create one.",
 "Nutzungslimits": "Usage limits",
 "Kein Limit": "No limit",
-"Ohne Frage gibt es nichts zu tun.": "Without a question there's nothing to do.",
 "Sehe nach …": "Checking …",
 "Speichere …": "Saving …",
 "Teste Modell und Suche …": "Testing model and search …",
@@ -6317,7 +6303,7 @@ const EN = {
 "unbekanntes Gerät": "unknown device",
 "Überall sonst abmelden?": "Sign out everywhere else?",
 "Alle anderen Geräte und Browser werden abgemeldet. Dieses Gerät bleibt angemeldet.": "All other devices and browsers are signed out. This device stays signed in.",
-"Chats, Bilder, Uploads, Erinnerungen, Aufträge, Einstellungen und eigene Schlüssel sind danach weg. Dein Konto bleibt.": "Chats, images, uploads, memories, tasks, settings and your own keys are gone afterwards. Your account stays.",
+"Chats, Bilder, Uploads, Erinnerungen, Coworker, Einstellungen und eigene Schlüssel sind danach weg. Dein Konto bleibt.": "Chats, images, uploads, memories, tasks, settings and your own keys are gone afterwards. Your account stays.",
 "Tritt gerade bei — die Daten werden übernommen …": "Joining — the data is being taken over …",
 "Dieser Server ist nur lokal erreichbar. Für den Verbund mit „aquaticy web --lan“ starten.": "This server is only reachable locally. Start it with “aquaticy web --lan” for the cluster.",
 "Dieser Server ist der Master.": "This server is the master.",
@@ -6358,8 +6344,6 @@ const EN = {
 "Der Speicher ist abgeschaltet. Solange er aus ist, legt Aquaticy AI nichts ab — und es steht auch nichts drin.": "Memory is turned off. While it's off, Aquaticy AI stores nothing — and there's nothing in it.",
 "Noch nichts gemerkt. Was du im Gespräch über dich erzählst, landet von selbst hier.": "Nothing remembered yet. What you tell about yourself in a conversation ends up here by itself.",
 "Wirklich alles vergessen, was Aquaticy AI über dich weiß?": "Really forget everything Aquaticy AI knows about you?",
-"Diesen Auftrag löschen?": "Delete this task?",
-"Die bisherigen Chats bleiben.": "The chats so far stay.",
 "Freiwillig: eine Seite, auf der zuerst gesucht wird. Leer = überall suchen.": "Optional: a page to search first. Empty = search everywhere.",
 "z. B. neu oder gebraucht, Versand nach Deutschland": "e.g. new or used, shipping to Germany",
 "Nichts gefunden. Die Adresse steht in der Browserzeile, wenn du Home Assistant offen hast.": "Nothing found. The address is in the browser bar when you have Home Assistant open.",
@@ -7512,9 +7496,6 @@ $("#btn-settings").addEventListener("click", async () => {
   loadUsage();
   loadAccount(cfg.account);
   loadLearning();
-  $("#job-note").textContent = "";
-  jobFelder();
-  loadJobs();
   $("#showtrace").checked = document.body.classList.contains("tracing");
   const wanted = START.load === true && kontoUltra;   // kontoUltra = Ultra
   $("#showload").checked = wanted;
@@ -8224,7 +8205,7 @@ function cwZeit(stempel){
 }
 function cwStatus(cw){
   if (cw.working) return "arbeitet gerade …";
-  if (!cw.enabled) return cw.last_state.startsWith("abgelehnt") ? "angehalten — " + cw.last_state : "pausiert";
+  if (!cw.enabled) return cw.last_state ? "angehalten · " + cw.last_state : "pausiert";
   const spaeter = cw.next_wake && cw.next_wake * 1000 > Date.now();
   return (spaeter ? `wacht ${cwZeit(cw.next_wake)} Uhr auf` : "legt gleich los")
     + (cw.wake_reason ? " · " + cw.wake_reason : "");
@@ -8260,6 +8241,7 @@ async function coworkerTun(body, knopf){
 }
 async function coworkerLaden(){
   clearTimeout(coworkerTakt);
+  if (document.hidden || !coworkerBox.classList.contains("open")) return;
   try {
     const res = await api("/api/coworkers");
     if (!res.ok){ await res.text().catch(() => ""); return; }
@@ -8324,6 +8306,8 @@ function coworkerKarte(cw, d){
     kopf.appendChild(zahl);
   }
   karte.append(kopf, cwElement("div", "cw-aufgabe", cw.goal));
+  if (cw.schedule?.when_text)
+    karte.appendChild(cwElement("p", "note", cw.schedule.when_text));
 
   // Freigaben: genau das, was ausgeführt würde -- dann Erlauben oder Ablehnen.
   if ((cw.actions || []).length){
@@ -8434,6 +8418,98 @@ function coworkerKarte(cw, d){
   regeln.appendChild(cwElement("div", "addon-hint", "„Fragen“: Er legt die Aktion hier zur Freigabe ab. Nach Webseiten oder Mails fragt er auch bei „Erlauben“, damit ihn kein fremder Text zu etwas überredet."));
   karte.appendChild(cwAufklapp(cw, "regeln", `Regeln — was ${cw.name} ohne dich darf`, regeln));
 
+  const prefs = cwElement("div", "");
+  prefs.appendChild(cwElement("p", "note", sp(
+    "Freiwillig: passende Informationen nur aus deinem Konto. Übernommene Notizen bleiben beim Ausschalten erhalten; du kannst sie löschen.",
+    "Optional: relevant information from your account only. Copied notes remain when disabled; you can delete them.")));
+  function toggle(label, checked){
+    const row = cwElement("label", "check"), input = cwElement("input", "");
+    input.type = "checkbox"; input.checked = checked;
+    row.append(input, document.createTextNode(label)); prefs.appendChild(row); return input;
+  }
+  const chats = toggle(sp("Informationen aus normalen Chats verwenden", "Use information from regular chats"), cw.sharing_chats);
+  const peers = toggle(sp("Notizen anderer Coworker verwenden", "Use other coworkers' notes"), cw.sharing_coworkers);
+  const capacity = cwElement("select", "");
+  capacity.setAttribute("aria-label", sp("Notizspeicher", "Note capacity"));
+  for (const n of [6000,12000,24000]){
+    const opt = cwElement("option", "", `${n.toLocaleString()} ` + sp("Zeichen", "characters"));
+    opt.value = n; capacity.appendChild(opt);
+  }
+  capacity.value = cw.notes_limit || 6000;
+  prefs.append(capacity, cwKnopf("Speichern", "primary", b => coworkerTun({
+    action: "preferences", id: cw.id, sharing_chats: chats.checked,
+    sharing_coworkers: peers.checked, notes_limit: Number(capacity.value),
+  }, b)));
+  karte.appendChild(cwAufklapp(cw, "kontext", sp("Notizspeicher und Informationsaustausch",
+    "Note capacity and information sharing"), prefs));
+
+  if (d.plan === "ultra"){
+    const ha = cwElement("div", "");
+    ha.appendChild(cwElement("p", "note", sp(
+      "Einzelne Lichter, Schalter, Lüfter oder Mediengeräte ohne Rückfrage schalten. Pro Zeile: Gerät und turn_on oder turn_off. Keine Zusatzdaten. Geschützte Geräte brauchen weiter deine Freigabe. Eine neue Verbindung oder ein neuer Token erfordert neue Dauerfreigaben. Sperren hat Vorrang.",
+      "Switch individual lights, switches, fans or media players without asking. One device and turn_on or turn_off per line. No extra data. Protected devices still require approval. A changed connection or token requires new grants. Blocking takes priority.")));
+    const grants = cwElement("textarea", "");
+    grants.rows = 4; grants.maxLength = 5000;
+    grants.placeholder = "light.wohnzimmer turn_on\nlight.wohnzimmer turn_off";
+    grants.setAttribute("aria-label", sp("Home-Assistant-Dauerfreigaben", "Home Assistant standing permissions"));
+    grants.value = (cw.ha_grants || []).map(g => `${g.entity_id} ${g.service}`).join("\n");
+    ha.append(grants, cwKnopf("Speichern", "primary", async b => {
+      const list = grants.value.split(/\n/).map(t => t.trim()).filter(Boolean).map(line => {
+        const [entity_id, service, ...extra] = line.split(/\s+/);
+        return {entity_id, service: extra.length ? "invalid" : service};
+      });
+      const review = list.map(g => `${g.entity_id}: ${g.service}`).join("\n");
+      if (!await frage(sp("Dauerfreigaben bestätigen?", "Confirm standing permissions?"),
+        sp("Diese Aktionen darf dieser Coworker künftig ohne Rückfrage ausführen:\n",
+           "This coworker may perform these actions without asking again:\n") + (review || sp("Keine — alle widerrufen.", "None — revoke all.")))) return;
+      coworkerTun({action:"preferences", id:cw.id, ha_grants:list, confirmed:true}, b);
+    }));
+    karte.appendChild(cwAufklapp(cw, "ha", sp("Home-Assistant-Dauerfreigaben",
+      "Home Assistant standing permissions"), ha));
+  }
+  if (cw.schedule?.kind){
+    const schedule = cwElement("div", ""), rhythm = cwElement("select", "");
+    rhythm.setAttribute("aria-label", sp("Rhythmus", "Schedule"));
+    for (const [value, de, en] of [
+      ["daily","täglich","daily"],["hourly","stündlich","hourly"],
+      ["weekly","wöchentlich","weekly"],["minutes30","alle 30 Minuten","every 30 minutes"],
+      ["minutes15","alle 15 Minuten","every 15 minutes"],["minutes5","alle 5 Minuten","every 5 minutes"],
+      ["minutes1","jede Minute","every minute"],["always","die ganze Zeit","continuously"]]){
+      if (cw.schedule.kind === "research" && value.startsWith("minutes")) continue;
+      if (cw.schedule.kind === "research" && value === "always") continue;
+      const opt = cwElement("option", "", sp(de,en)); opt.value = value; rhythm.appendChild(opt);
+    }
+    rhythm.value = cw.schedule.rhythm;
+    const when = cwElement("input", ""); when.type = "time";
+    when.setAttribute("aria-label", sp("Uhrzeit", "Time"));
+    when.value = `${String(cw.schedule.hour).padStart(2,"0")}:${String(cw.schedule.minute).padStart(2,"0")}`;
+    const day = cwElement("select", "");
+    day.setAttribute("aria-label", sp("Wochentag", "Weekday"));
+    [["Montag","Monday"],["Dienstag","Tuesday"],["Mittwoch","Wednesday"],
+      ["Donnerstag","Thursday"],["Freitag","Friday"],["Samstag","Saturday"],
+      ["Sonntag","Sunday"]].forEach(([de,en], i) => {
+      const option = cwElement("option", "", sp(de,en)); option.value = i; day.appendChild(option);
+    });
+    day.value = cw.schedule.weekday;
+    const timeLabel = cwElement("label", "block", sp("Uhrzeit", "Time"));
+    timeLabel.appendChild(when);
+    const dayLabel = cwElement("label", "block", sp("Wochentag", "Weekday"));
+    dayLabel.appendChild(day);
+    function visibleFields(){
+      dayLabel.hidden = rhythm.value !== "weekly";
+      timeLabel.hidden = rhythm.value.startsWith("minutes") || rhythm.value === "always";
+    }
+    rhythm.addEventListener("change", visibleFields); visibleFields();
+    schedule.append(rhythm, timeLabel, dayLabel, cwElement("p", "note", sp(
+      "Je öfter geprüft wird, desto schneller ist dein Limit aufgebraucht.",
+      "More frequent checks use up your allowance faster.")), cwKnopf("Speichern", "primary", b => {
+      const [hour,minute] = when.value.split(":").map(Number);
+      coworkerTun({action:"preferences", id:cw.id, schedule:{rhythm:rhythm.value,
+        hour,minute,weekday:Number(day.value)}}, b);
+    }));
+    karte.appendChild(cwAufklapp(cw, "zeitplan", sp("Zeitplan ändern", "Edit schedule"), schedule));
+  }
+
   const notizen = cwElement("div", "inhalt");
   const notizText = cwElement("div", "");
   if (cw.notes) notizText.innerHTML = md(cw.notes);
@@ -8442,7 +8518,7 @@ function coworkerKarte(cw, d){
   if (cw.notes){
     // Stammen sie aus einem Schritt mit fremdem Text, fragt er auch bei „Erlauben“ nach.
     if (cw.tainted) notizen.appendChild(cwElement("div", "addon-hint",
-      "Diese Notizen enthalten Gelesenes aus Webseiten oder Mails — deshalb fragt er vor jeder Aktion nach, bis du sie löschst."));
+      "Diese Notizen enthalten fremde Inhalte. Vor Änderungen fragt er nach, außer bei deinen passenden Home-Assistant-Dauerfreigaben."));
     const reihe = cwElement("div", "cw-knoepfe");
     reihe.appendChild(cwKnopf("Notizen löschen", "", async (b) => {
       if (await frage("Notizen löschen?", `${cw.name} fängt beim nächsten Schritt ohne sein bisheriges Gedächtnis an.`))
@@ -8464,7 +8540,7 @@ function coworkerKarte(cw, d){
 
 function coworkerZeigen(sofort = false){
   const d = coworkerDaten || {};
-  $("#coworker-lock").hidden = !!d.allowed;
+  $("#coworker-lock").hidden = !!d.autonomous_allowed;
   $("#coworker-new").hidden = !d.allowed;
   const liste = $("#coworker-list");
   if (!d.allowed){ liste.replaceChildren(); return; }
@@ -8490,11 +8566,19 @@ function coworkerZeigen(sofort = false){
       avatare.appendChild(b);
     }
   }
+  const adaptive = $("#cw-task-kind option[value=adaptive]");
+  adaptive.disabled = !d.autonomous_allowed;
+  if (!d.autonomous_allowed && $("#cw-task-kind").value === "adaptive")
+    $("#cw-task-kind").value = "research";
+  cwTaskFelder();
   const plan = d.plan === "ultra" ? "Ultra" : "Pro";
   const info = [sp(`Mit ${plan}: bis zu ${d.max} Coworker, `
                    + `je Coworker bis zu ${d.daily} Arbeitsschritte am Tag.`,
                    `With ${plan}: up to ${d.max} coworkers, `
                    + `each with up to ${d.daily} work steps a day.`)];
+  if (!d.autonomous_allowed) info.length = 0;
+  info.push(sp(`Bis zu ${d.max_scheduled || 20} Coworker mit festem Zeitplan.`,
+               `Up to ${d.max_scheduled || 20} coworkers with fixed schedules.`));
   info.push((d.connections || []).length
     ? sp("Er kann lesen: ", "It can read: ") + d.connections.join(", ") + "."
     : sp("Verbindungen wie Gmail, Google Kalender oder GitHub schaltest du in den "
@@ -8504,7 +8588,7 @@ function coworkerZeigen(sofort = false){
   if (d.vm) info.push(sp("Er bekommt eine eigene virtual machine.",
                          "It gets its own virtual machine."));
   $("#cw-info").textContent = info.join(" ");
-  $("#cw-create").disabled = (d.coworkers || []).length >= (d.max || 0);
+  cwTaskFelder();
   liste.replaceChildren(...(d.coworkers || []).map(cw => coworkerKarte(cw, d)));
   // Nur beim Öffnen laufen die Karten ein -- danach bleibt es ruhig.
   requestAnimationFrame(() => liste.classList.add("ruhig"));
@@ -8534,15 +8618,45 @@ $("#cw-beispiele").querySelectorAll(".cw-beispiel").forEach(c => c.addEventListe
   $("#cw-goal").value = c.textContent; $("#cw-goal").focus();
 }));
 $("#cw-create").addEventListener("click", async (e) => {
-  const name = $("#cw-name").value.trim();
-  const ziel = $("#cw-goal").value.trim();
-  if (ziel.length < 8){ $("#cw-goal").focus(); $("#coworker-note").className = "note bad";
-    $("#coworker-note").textContent = "Beschreib die Aufgabe in ein, zwei Sätzen."; return; }
-  if (await coworkerTun({ action: "create", name, goal: ziel, avatar: coworkerAvatar }, e.currentTarget)){
+  const name = $("#cw-name").value.trim(), ziel = $("#cw-goal").value.trim();
+  const kind = $("#cw-task-kind").value;
+  const note = $("#coworker-note");
+  if (ziel.length < (kind === "adaptive" ? 8 : 1)){
+    $("#cw-goal").focus(); note.className = "note bad";
+    note.textContent = "Beschreib die Aufgabe in ein, zwei Sätzen."; return;
+  }
+  const source = $("#cw-task-source").value.trim();
+  if ((kind === "visual" || kind === "price" || (kind === "image" && source))
+      && !safeHttpUrl(source)){
+    note.textContent = "Bitte gib eine vollständige öffentliche http(s)-Quelladresse an."; return;
+  }
+  if (kind === "image" && !cwTaskBild){
+    note.textContent = "Bitte wähle das Bild aus, nach dem gesucht werden soll."; return;
+  }
+  const [hour, minute] = ($("#cw-task-zeit").value || "08:00").split(":").map(Number);
+  const schedule = kind === "adaptive" ? {} : {
+    kind, rhythm: $("#cw-task-rhythm").value, hour, minute,
+    weekday: Number($("#cw-task-weekday").value),
+    structured: $("#cw-task-struktur").checked, source_url: source,
+  };
+  const data = await coworkerTun({ action: "create", name, goal: ziel, avatar: coworkerAvatar,
+    schedule, sharing_chats: $("#cw-sharing-chats").checked,
+    sharing_coworkers: $("#cw-sharing-coworkers").checked,
+    notes_limit: Number($("#cw-notes-limit").value),
+    image_data: kind === "image" ? cwTaskBild.data : "",
+    image_name: kind === "image" ? cwTaskBild.name : "",
+  }, e.currentTarget);
+  if (data){
     $("#cw-name").value = ""; $("#cw-goal").value = "";
+    $("#cw-task-bild").value = ""; $("#cw-task-bild-vorschau").hidden = true;
+    cwTaskBild = null; $("#cw-task-source").value = "";
     $("#coworker-new").open = false;
     coworkerLaden();
   }
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) clearTimeout(coworkerTakt);
+  else if (coworkerBox.classList.contains("open")) coworkerLaden();
 });
 
 /* ---------- NVIDIA NIM und Mistral (12.0.0 Luna) ----------
@@ -8870,7 +8984,7 @@ $("#account-password").addEventListener("click", async () => {
 });
 $("#account-wipe").addEventListener("click", async () => {
   if (!await frage("Wirklich alle deine Daten löschen?",
-      "Chats, Bilder, Uploads, Erinnerungen, Aufträge, Einstellungen und eigene Schlüssel "
+      "Chats, Bilder, Uploads, Erinnerungen, Coworker, Einstellungen und eigene Schlüssel "
       + "sind danach weg. Dein Konto bleibt.", "Weiter")) return;
   const passwort = await passwortAbfragen("Zur Sicherheit: dein Passwort");
   if (passwort === null) return;
@@ -9597,167 +9711,72 @@ $("#merk-clear").addEventListener("click", async () => {
   } catch { $("#merk-note").textContent = "Ging nicht."; }
 });
 
-/* ---------- Auftraege ---------- */
-// Eine Frage, die sich von selbst stellt. Die Antwort landet als Chat --
-// so muss man nichts Neues lernen, um sie zu lesen.
-async function loadJobs(){
-  const box = $("#auftraege");
-  box.innerHTML = "";
-  let data;
-  try { data = await (await api("/api/jobs")).json(); }
-  catch { box.innerHTML = '<div class="auftraege-leer"></div>';
-          box.firstChild.textContent = "Die Aufträge ließen sich nicht laden."; return; }
-  const jobs = data.jobs || [];
-  if (!jobs.length){
-    const leer = document.createElement("div");
-    leer.className = "auftraege-leer";
-    leer.textContent = "Noch kein Auftrag. Unten steht, wie einer entsteht.";
-    box.appendChild(leer);
-    return;
-  }
-  for (const job of jobs) box.appendChild(jobZeile(job));
-  stagger(box.querySelectorAll(".auftrag"), 18);
-}
-
-function jobZeile(job){
-  const zeile = document.createElement("div");
-  zeile.className = "auftrag" + (job.enabled ? "" : " pausiert");
-  zeile.innerHTML = '<div class="inhalt"><div class="frage"></div>'
-    + '<div class="wann"></div></div><div class="knoepfe">'
-    + '<button type="button" data-do="run">Jetzt</button>'
-    + '<button type="button" data-do="toggle"></button>'
-    + '<button type="button" class="weg" data-do="delete">Löschen</button></div>';
-  // Was, wie oft, wann -- die Saetze schreibt der Server (aquaticy/webview.py).
-  zeile.querySelector(".frage").textContent = job.title || job.question || "";
-  zeile.querySelector(".wann").textContent = job.when_text || "";
-  zeile.querySelector('[data-do="toggle"]').textContent = job.toggle_label || "";
-  zeile.querySelectorAll("button").forEach(knopf =>
-    knopf.addEventListener("click", async () => {
-      const was = knopf.dataset.do;
-      if (was === "delete"
-          && !await frage("Diesen Auftrag löschen?", "Die bisherigen Chats bleiben.")) return;
-      const aktion = was === "toggle" ? (job.enabled ? "pause" : "resume") : was;
-      knopf.disabled = true;
-      try {
-        const res = await api("/api/jobs", {
-          method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({ action: aktion, id: job.id }),
-        });
-        const antwort = await res.json();
-        if (!antwort.ok){ $("#job-note").textContent = antwort.error || "Ging nicht."; }
-        else if (aktion === "run"){
-          $("#job-note").textContent = "Läuft — die Antwort steht gleich in der Leiste.";
-        }
-      } catch { $("#job-note").textContent = "Ging nicht."; }
-      finally { knopf.disabled = false; loadJobs(); }
-    }));
-  return zeile;
-}
-
-// Bei "stündlich" gibt es keinen Wochentag und keine Stunde -- also weg damit.
-function jobFelder(){
-  const art = $("#job-kind").value;
+/* ---------- Zeitplaene innerhalb Coworker ---------- */
+function cwTaskFelder(){
+  const art = $("#cw-task-kind").value;
   // Kurze Takte gibt es nur fuer Beobachtungen (seit 9.5.16): eine Recherche
   // legt bei jedem Lauf einen neuen Chat an -- der Server rechnet sie ohnehin
   // auf stuendlich um.
   const kurz = ["minutes30", "minutes15", "minutes5", "minutes1", "always"];
-  const auswahl = $("#job-rhythm");
+  const auswahl = $("#cw-task-rhythm");
   for (const option of auswahl.options){
     option.disabled = art === "research" && kurz.includes(option.value);
   }
   if (art === "research" && kurz.includes(auswahl.value)) auswahl.value = "hourly";
   const takt = auswahl.value;
-  $("#job-tag-feld").hidden = takt !== "weekly";
-  $("#job-zeit-feld").hidden = takt.startsWith("minutes") || takt === "always";
+  const adaptive = art === "adaptive";
+  $("#cw-task-rhythm-feld").hidden = adaptive;
+  $("#cw-task-tag-feld").hidden = adaptive || takt !== "weekly";
+  $("#cw-task-zeit-feld").hidden = adaptive || takt.startsWith("minutes") || takt === "always";
   // Bei der Bildsuche ist die Adresse freiwillig: ohne sie sucht Aquaticy im
   // ganzen Web, mit ihr bleibt es bei diesem einen Anbieter.
-  $("#job-source-feld").hidden = art === "research";
-  $("#job-bild-feld").hidden = art !== "image";
-  $("#job-struktur-feld").hidden = art !== "research";
-  $("#job-takt-hinweis").hidden = !(takt === "always" || takt === "minutes1");
-  $("#job-source-warum").textContent = art === "image"
+  $("#cw-task-source-feld").hidden = art === "research" || adaptive;
+  $("#cw-task-bild-feld").hidden = art !== "image";
+  $("#cw-task-struktur-feld").hidden = art !== "research";
+  $("#cw-task-takt-hinweis").hidden = adaptive || !(takt === "always" || takt === "minutes1");
+  $("#cw-task-source-warum").textContent = art === "image"
     ? "Freiwillig: eine Seite, auf der zuerst gesucht wird. Leer = überall suchen."
     : "Die genaue Webcam-, Karten-, Satelliten- oder Produktseite. "
       + "Private Kameras und Anmeldungen werden nicht verwendet.";
-  $("#job-frage").placeholder = art === "image"
+  const limit = adaptive ? (coworkerDaten?.max || 0) : (coworkerDaten?.max_scheduled || 20);
+  const used = (coworkerDaten?.coworkers || []).filter(cw =>
+    !!cw.schedule?.kind === !adaptive).length;
+  $("#cw-create").disabled = coworkerDaten !== null && used >= limit;
+  $("#cw-goal").placeholder = art === "image"
     ? "z. B. neu oder gebraucht, Versand nach Deutschland"
+    : adaptive ? "z. B. Fasse morgens wichtige Mails und Termine zusammen."
     : "z. B. Ein oranges Flugzeug ist sichtbar";
 }
 
 // Das gewaehlte Bild einmal lesen: als Base64 geht es mit dem Auftrag an den
 // Server, der es im privaten Ordner des Kontos ablegt.
-let jobBild = null;
-$("#job-bild").addEventListener("change", () => {
-  const datei = $("#job-bild").files?.[0] || null;
-  const vorschau = $("#job-bild-vorschau");
-  jobBild = null;
+let cwTaskBild = null, cwTaskBildSerial = 0;
+$("#cw-task-bild").addEventListener("change", () => {
+  const datei = $("#cw-task-bild").files?.[0] || null;
+  const vorschau = $("#cw-task-bild-vorschau");
+  const serial = ++cwTaskBildSerial;
+  cwTaskBild = null;
   vorschau.hidden = true;
   if (!datei) return;
+  if (datei.size > 25_000_000){
+    $("#coworker-note").textContent = sp("Das Bild ist zu groß.", "The image is too large.");
+    return;
+  }
   const leser = new FileReader();
   leser.onload = () => {
+    if (serial !== cwTaskBildSerial) return;
     const roh = String(leser.result || "");
     const komma = roh.indexOf(",");
     if (komma < 0) return;
-    jobBild = { data: roh.slice(komma + 1), type: datei.type || "image/jpeg" };
+    cwTaskBild = { data: roh.slice(komma + 1), type: datei.type || "image/jpeg", name: datei.name };
     vorschau.src = roh;
     vorschau.hidden = false;
   };
   leser.readAsDataURL(datei);
 });
-$("#job-rhythm").addEventListener("change", jobFelder);
-$("#job-kind").addEventListener("change", jobFelder);
-jobFelder();
-
-$("#job-add").addEventListener("click", async () => {
-  const frage = $("#job-frage").value.trim();
-  const note = $("#job-note");
-  if (!frage){ note.textContent = "Ohne Frage gibt es nichts zu tun."; return; }
-  const kind = $("#job-kind").value;
-  const source = $("#job-source").value.trim();
-  // Kamera und Preis brauchen die eine Seite. Die Bildsuche darf ohne
-  // Adresse loslaufen -- dann sucht sie überall.
-  if (kind === "visual" || kind === "price"){
-    if (!safeHttpUrl(source)){
-      note.textContent = "Bitte gib eine vollständige öffentliche http(s)-Quelladresse an.";
-      return;
-    }
-  } else if (kind === "image" && source && !safeHttpUrl(source)){
-    note.textContent = "Die Adresse muss vollständig sein — oder leer bleiben.";
-    return;
-  }
-  if (kind === "image" && !jobBild){
-    note.textContent = "Bitte wähle das Bild aus, nach dem gesucht werden soll.";
-    return;
-  }
-  const [stunde, minute] = ($("#job-zeit").value || "08:00").split(":");
-  try {
-    const res = await api("/api/jobs", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        action: "add",
-        question: frage,
-        rhythm: $("#job-rhythm").value,
-        hour: Number(stunde) || 0,
-        minute: Number(minute) || 0,
-        weekday: Number($("#job-weekday").value) || 0,
-        structured: $("#job-struktur").checked,
-        kind,
-        source_url: source,
-        image_data: kind === "image" ? jobBild.data : "",
-        image_type: kind === "image" ? jobBild.type : "",
-      }),
-    });
-    const data = await res.json();
-    if (!data.ok){ note.textContent = data.error || "Anlegen ging nicht."; return; }
-    $("#job-frage").value = "";
-    $("#job-source").value = "";
-    $("#job-bild").value = "";
-    $("#job-bild-vorschau").hidden = true;
-    jobBild = null;
-    note.textContent = "Angelegt.";
-    loadJobs();
-  } catch { note.textContent = "Anlegen ging nicht."; }
-});
+$("#cw-task-rhythm").addEventListener("change", cwTaskFelder);
+$("#cw-task-kind").addEventListener("change", cwTaskFelder);
+cwTaskFelder();
 
 /* ---------- Anbieter und Schluessel ---------- */
 // Wer welchen Schluessel braucht -- damit man den Anbieter waehlen kann,

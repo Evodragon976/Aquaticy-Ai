@@ -65,9 +65,9 @@ def test_intended_hints_still_reach_the_chat() -> None:
 
 def test_a_failed_start_frees_the_port_and_stops_the_planner(settings, monkeypatch) -> None:
     """Scheitert der Start nach dem Binden, bleibt weder Port noch Planer zurueck."""
-    for name in ("AUTH", "TOKEN", "AIGUARD", "SCHEDULER", "SERVER", "CLUSTER"):
+    for name in ("AUTH", "TOKEN", "AIGUARD", "COWORKER_SCHEDULER", "SERVER", "CLUSTER"):
         monkeypatch.setattr(web, name, getattr(web, name))
-    monkeypatch.setattr(web, "USER_SCHEDULERS", {})
+    monkeypatch.setattr(web, "USER_COWORKERS", {})
     monkeypatch.setattr(web, "get_settings", lambda: settings)
     monkeypatch.setattr("aquaticy.sandbox.sweep", lambda: None)
 
@@ -81,7 +81,7 @@ def test_a_failed_start_frees_the_port_and_stops_the_planner(settings, monkeypat
     probe.close()
     with pytest.raises(OSError, match="locked"):
         web.serve("127.0.0.1", port, open_browser=False)
-    assert web.SCHEDULER is None and not web.USER_SCHEDULERS
+    assert web.COWORKER_SCHEDULER is None and not web.USER_COWORKERS
     wieder = socket.socket()
     try:
         wieder.bind(("127.0.0.1", port))  # der Port ist wieder frei

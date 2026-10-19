@@ -387,9 +387,18 @@ def test_a_pro_account_does_not_see_the_load_either(server: int) -> None:
 
 def test_accounts_cannot_see_each_other(server: int) -> None:
     eins, zwei = _konto(server), _konto(server)
-    _anfrage(server, "POST", "/api/jobs", {"action": "add", "question": "Wetter Bremen",
-                                          "rhythm": "daily"}, eins)
-    assert _anfrage(server, "GET", "/api/jobs", None, zwei)[2]["jobs"] == []
+    _anfrage(
+        server,
+        "POST",
+        "/api/coworkers",
+        {
+            "action": "create",
+            "goal": "Wetter Bremen",
+            "schedule": {"rhythm": "daily", "kind": "research"},
+        },
+        eins,
+    )
+    assert _anfrage(server, "GET", "/api/coworkers", None, zwei)[2]["coworkers"] == []
     assert _anfrage(server, "GET", "/api/chatexport?session_id=abc", None, zwei)[0] == 404
 
 

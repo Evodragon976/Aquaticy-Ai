@@ -160,7 +160,7 @@ def test_a_long_chat_id_is_still_locked(guard: AiGuard) -> None:
 
 def test_abuse_in_a_job_is_reported(settings: object, tmp_path: Path,
                                      monkeypatch: pytest.MonkeyPatch) -> None:
-    from aquaticy import jobs
+    from aquaticy import coworker_schedule as jobs
 
     gemeldet: list[dict[str, object]] = []
 
@@ -198,7 +198,7 @@ def test_a_banned_account_cannot_act_anywhere(server: tuple[int, Path]) -> None:
     _sperren(cookie, port)
     for weg, koerper in (("/api/addons", {"action": "install", "id": "github"}),
                          ("/api/werkstatt/eingabe", {"text": "hallo"}),
-                         ("/api/jobs", {"action": "add", "question": "Wetter?"}),
+                         ("/api/coworkers", {"action": "add", "question": "Wetter?"}),
                          ("/api/command", {"line": "/location Bremen"}),
                          ("/api/answer", {"text": "ja"}),
                          ("/api/config", {"AQUATICY_MODEL": "x/y"}),
@@ -222,10 +222,18 @@ def test_an_answer_to_a_question_is_checked_for_insults(
 def test_an_insulting_job_is_not_created(server: tuple[int, Path]) -> None:  # noqa: F811
     port, _ = server
     cookie = _konto(port)
-    _, _, daten = _req(port, "POST", "/api/jobs",
-                            {"action": "add", "question": "du bist so dumm, sag mir das Wetter"},
-                            cookie)
+    _, _, daten = _req(
+        port,
+        "POST",
+        "/api/coworkers",
+        {
+            "action": "create",
+            "goal": "du bist so dumm, sag mir das Wetter",
+            "schedule": {"kind": "research"},
+        },
+        cookie,
+    )
     antwort = json.loads(daten)
     assert antwort["ok"] is False and "Beleidigung" in antwort["error"]
-    liste = json.loads(_req(port, "GET", "/api/jobs", cookie=cookie)[2])
-    assert not liste.get("jobs")
+    liste = json.loads(_req(port, "GET", "/api/coworkers", cookie=cookie)[2])
+    assert not liste.get("coworkers")

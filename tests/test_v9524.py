@@ -256,7 +256,7 @@ def test_workshop_tools_are_checked_by_the_judge() -> None:
 
 def test_jobs_wait_while_the_account_is_banned(settings: object, tmp_path: Path) -> None:
     """Waehrend einer Sperre laufen keine Auftraege (9.5.24)."""
-    from aquaticy.jobs import Scheduler
+    from aquaticy.coworker_schedule import Scheduler
 
     gesperrt = [True]
     takt = Scheduler(lambda: settings, paused=lambda: gesperrt[0])

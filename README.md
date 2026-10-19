@@ -1,4 +1,4 @@
-# Aquaticy AI 12.1.1 Sol
+# Aquaticy AI 12.2.1 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -36,7 +36,7 @@ $ aquaticy
 - [Konten: Normal, Pro und Ultra](#konten-normal-pro-und-ultra)
 - [Add-ons](#add-ons)
 - [Virtual machine und User mode](#virtual-machine-und-user-mode)
-- [Speicher und Aufträge](#speicher-und-aufträge)
+- [Speicher](#speicher)
 - [Coworker](#coworker)
 - [Gmail und Kalender](#gmail-und-kalender)
 - [Zuhause: Heimnetz, Home Assistant, Lager](#zuhause-heimnetz-home-assistant-lager)
@@ -87,14 +87,14 @@ $ aquaticy
 - Chats durchsuchen, umbenennen und exportieren (HTML, Markdown, CSV).
 
 **Extras**
-- **Coworker** (Pro und Ultra): arbeiten dauerhaft an einer Aufgabe. Sie lesen Gmail, Kalender
-  und GitHub, melden Ergebnisse und fragen, bevor sie etwas ändern.
+- **Coworker:** feste Zeitpläne und Beobachtungen für alle, dauerhafte Aufgaben mit
+  Pro und Ultra. Sie lesen Gmail, Kalender und GitHub, melden Ergebnisse und fragen, bevor sie etwas ändern.
 - **Add-ons:** **NVIDIA NIM** und **Mistral** (die einzigen Modelle mit API-Schlüssel), GitHub,
   Wetter, RSS-Feeds, Tagesschau, Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal,
   Telegram Web, Blender. Dazu die Plugins **Code-Review** und **Security-Review**. Die Dienste
   und Plugins haben im Chat einen Befehl: `/code-review`, `/github`, `/wetter` …
 - **Speicher:** merkt sich, was länger gilt. Verschlüsselt und jederzeit einsehbar.
-- **Aufträge:** regelmäßig recherchieren, Preise oder Webcams beobachten.
+- **Zeitpläne und Beobachtungen:** direkt in Coworker, für alle Konten.
 - **Gmail und Kalender:** lesen, Termine anlegen, Entwürfe schreiben. Verschickt wird nichts.
 - **Zuhause** (Ultra): Heimnetz, Home Assistant, Lagerverwaltung.
 - **KI-Bilder** und **automatische Modellwahl**.
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.1.1 Sol
+aquaticy --version            # 12.2.1 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -405,7 +405,7 @@ Ultra darf, trägt ein 🔒.
 - **Konto:** Name, E-Mail, Kontotyp, Nutzung, Abmelden. **Sicherheit** mit deinen Geräten,
   Passwort ändern, überall sonst abmelden. **Daten und Konto löschen**.
 - Dazu: Gemeinsames Lernen, Modell, Eigene Modelle, virtual machine, Speicher, Mitlesen,
-  Auslastung (Ultra), Nutzung, Aufträge, Gmail & Kalender, Zuhause & Netz (Ultra), Suche,
+  Auslastung (Ultra), Nutzung, Gmail & Kalender, Zuhause & Netz (Ultra), Suche,
   Ort & Sprache, Helfer & Grenzen, **Dev settings** (Ultra).
 
 **Design** (links unten): Hell, Dunkel oder wie das System. Standard, Schlicht oder eigene
@@ -662,35 +662,43 @@ docker build -f docker/workshop-desktop.Dockerfile -t aquaticy-werkstatt-desktop
 
 ---
 
-## Speicher und Aufträge
+## Speicher
 
 **Speicher.** Aquaticy merkt sich, was länger gilt: Wohnort, Vorlieben, laufende Vorhaben. Nur
 Text, verschlüsselt, höchstens 400 MB je Konto. Unter **„Was weißt du über mich?“** siehst du
 jeden Eintrag und löschst ihn einzeln oder alle.
 
-**Aufträge** (*Einstellungen → Aufträge*). Aquaticy bleibt dran:
-
-- **regelmäßig recherchieren** – stündlich, täglich, wöchentlich;
-- **Kamera, Satellit oder Straße beobachten** – z. B. „ein oranges Flugzeug ist sichtbar“;
-- **Preis beobachten**;
-- **Bild hochladen und danach suchen**, bis ein Angebot auftaucht.
-
-Tritt ein, worauf du wartest, bekommst du einen neuen Chat mit Bild und Uhrzeit. Nur
-öffentliche Quellen, keine privaten Kameras, keine Anmeldungen.
-
 ---
 
 ## Coworker
 
-*Seitenleiste → 🤝 Coworker* (Pro und Ultra). Ein Auftrag stellt eine feste Frage in festem
-Takt. Ein **Coworker** übernimmt eine *Aufgabe* und bleibt dran, solange sie dauert. Das
-Vorbild ist „dots“ in ChatGPT. Beispiele: „Sag mir jeden Morgen, welche Mails wichtig sind“
-oder „Behalte meine GitHub-Repos im Blick“.
+*Seitenleiste → 🤝 Coworker*. Hier stehen alle Aufgaben: mit festem Zeitplan, als
+Beobachtung oder dauerhaft. Der bisherige separate Einstellungsbereich „Aufträge“ entfällt;
+vorhandene Aufgaben, Bilder, Termine und Chat-Verweise werden automatisch übernommen.
+
+**Feste Zeitpläne und Beobachtungen** gibt es für alle Konten (bis zu 20):
+
+- regelmäßig recherchieren – stündlich, täglich, wöchentlich, mit optionalem Strukturieren;
+- Kamera, Satellit oder Straße beobachten;
+- Preise beobachten;
+- ein Bild hochladen und nach einem Angebot dafür suchen, mit optionaler Quelladresse.
+
+Beobachtungen können bis zu minütlich oder durchgehend prüfen. Nur bei einem belegten Treffer
+erscheint ein neuer Chat mit Quelle und Prüfzeit; danach hält die Beobachtung an. Nur öffentliche
+Quellen, keine privaten Kameras oder Anmeldungen. Alle Läufe zählen ins Kontingent.
+
+**Dauerhafte Coworker** gibt es zusätzlich mit Pro (2) und Ultra (5). Sie übernehmen eine
+Aufgabe und entscheiden selbst, wann sie daran weiterarbeiten:
 
 - **Er arbeitet in Schritten, die ganze Zeit.** Nach jedem Schritt entscheidet er, wann er
   wieder aufwacht. Mitten in der Arbeit nach wenigen Minuten, beim Warten erst morgen. Schreibst
   du ihm, wacht er sofort auf.
-- **Er hat ein Gedächtnis.** Seine Notizen kannst du jederzeit lesen.
+- **Er hat ein Gedächtnis.** Notizen, Aufgaben, Verläufe und Aktionsdaten liegen verschlüsselt
+  im Konto. Je Coworker sind 6.000, 12.000 oder 24.000 Zeichen einstellbar. Optional darf er
+  passende Auszüge aus normalen Chats und/oder Notizen anderer Coworker desselben Kontos lesen
+  und hilfreiche Fakten übernehmen. Beide Freigaben beginnen ausgeschaltet. Ausschalten beendet
+  neue Übernahmen; vorhandene Notizen kannst du separat löschen. Andere Konten bleiben getrennt.
+- **Mehr Emojis.** Bei der Erstellung stehen über 40 Bilder zur Auswahl.
 - **Er nutzt deine Verbindungen.** Gmail, Kalender, GitHub und die anderen Add-ons, mit
   denselben Rechten wie im Chat.
 - **Er meldet sich.** Ergebnisse und Fragen stehen in der Übersicht und als eigener Chat. Das
@@ -701,6 +709,13 @@ oder „Behalte meine GitHub-Repos im Blick“.
   Ausgeführt wird genau das, vom Code und nicht noch einmal vom Modell. Hat er Webseiten oder
   Mails gelesen, fragt er auch bei „Erlauben“. So kann ihn ein fremder Text zu nichts
   überreden.
+- **Gezielte Home-Assistant-Dauerfreigaben (Ultra).** In der Karte des Coworkers kannst du
+  einzelne Geräte und `turn_on`/`turn_off` ausdrücklich vorab freigeben. Danach darf genau diese
+  Aktion ohne erneute Nachfrage laufen, auch nach gelesenen Inhalten. Keine Gruppen, Platzhalter
+  oder Zusatzdaten. Schlösser, Alarme, Garagentore, Skripte, Szenen und andere geschützte Geräte
+  behalten ihre Bestätigungen. Die Verbindung muss Schalten erlauben; ein geänderter Token oder
+  eine andere Adresse erfordert neue Freigaben. „Sperren“ hat Vorrang. Du kannst Freigaben
+  jederzeit löschen.
 - **Ultra: eigener Rechner.** Jeder Coworker bekommt eine eigene virtual machine ohne Desktop.
 
 | | Pro | Ultra |
@@ -1158,7 +1173,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.1.1-Sol.md).
+[Prüfbericht](TESTREPORT-12.2.1-Luna.md).
 
 ---
 

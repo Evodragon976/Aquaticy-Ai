@@ -495,8 +495,9 @@ def test_normal_accounts_get_no_coworker(client, session) -> None:  # noqa: F811
     status, daten = _post(client, {"action": "create", "goal": "Mach etwas Nützliches."})
     assert status == 403 and "Pro und Ultra" in daten["error"]
     status, roh = client("GET", "/api/coworkers")
-    assert status == 200 and json.loads(roh) == {"allowed": False, "plan": "normal",
-                                                 "badge": 0}
+    data = json.loads(roh)
+    assert status == 200 and data["allowed"] and not data["autonomous_allowed"]
+    assert data["max"] == 0 and data["max_scheduled"] == 20 and data["badge"] == 0
 
 
 def test_an_insult_is_not_passed_on(client, session, monkeypatch) -> None:  # noqa: F811
@@ -519,7 +520,13 @@ def test_the_badge_is_cheap(client, session) -> None:  # noqa: F811
     _post(client, {"action": "create", "goal": "Behalte meine Termine im Blick."})
     status, roh = client("GET", "/api/coworkers?badge=1")
     daten = json.loads(roh)
-    assert status == 200 and set(daten) == {"allowed", "plan", "badge", "working"}
+    assert status == 200 and set(daten) == {
+        "allowed",
+        "autonomous_allowed",
+        "plan",
+        "badge",
+        "working",
+    }
 
 
 def test_the_ui_has_the_coworker_window() -> None:
@@ -548,3 +555,38 @@ def test_account_deletion_stops_the_coworkers(monkeypatch, settings, tmp_path: P
     monkeypatch.setattr(cwm, "stop_boxes", lambda *a, **k: gestoppt.append("boxen"))
     web.forget_account_runtime(konto)
     assert "takt" in gestoppt and konto.id not in web.USER_COWORKERS
+
+
+def test_new_preferences_require_explicit_owner_confirmation(client, session) -> None:  # noqa: F811
+    settings = session.settings()
+    settings.ha_url = "http://100.72.1.2:8123"
+    settings.ha_token = "owner-token-123456789"
+    settings.ha_control = True
+    status, data = _post(client, {"action": "create", "goal": "Schalte das Wohnzimmerlicht."})
+    assert status == 200
+    colleague = data["coworkers"][0]
+    assert not colleague["sharing_chats"] and not colleague["sharing_coworkers"]
+    assert colleague["notes_limit"] == 6000 and colleague["ha_grants"] == []
+    grants = [{"entity_id": "light.room", "service": "turn_on"}]
+    status, _ = _post(client, {"action": "preferences", "id": colleague["id"],
+                             "ha_grants": grants})
+    assert status == 400
+    status, data = _post(client, {"action": "preferences", "id": colleague["id"],
+                                 "ha_grants": grants, "confirmed": True,
+                                 "sharing_chats": True, "sharing_coworkers": True,
+                                 "notes_limit": 24000})
+    assert status == 200
+    updated = data["coworkers"][0]
+    assert updated["ha_grants"] == grants and updated["notes_limit"] == 24000
+    assert updated["sharing_chats"] and updated["sharing_coworkers"]
+    assert all("connection" not in grant for grant in updated["ha_grants"])
+    for invalid in ({"notes_limit": 999999}, {"sharing_chats": "true"},
+                    {"ha_grants": [{"entity_id": "lock.front", "service": "unlock"}],
+                     "confirmed": True}):
+        status, _ = _post(client, {"action": "preferences", "id": colleague["id"], **invalid})
+        assert status == 400
+
+
+def test_old_job_routes_are_gone(client) -> None:  # noqa: F811
+    for method in ("GET", "POST", "DELETE"):
+        assert client(method, "/api/jobs")[0] == 404

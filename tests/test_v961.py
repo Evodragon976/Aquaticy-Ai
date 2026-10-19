@@ -92,15 +92,15 @@ def test_jobs_only_run_on_the_home_server(monkeypatch) -> None:
     gestartet: list = []
 
     class Planer:
-        def __init__(self, getter, paused=None, on_abuse=None) -> None:
+        def __init__(self, getter, paused=None, on_abuse=None, **kwargs) -> None:
             self.paused = paused
             gestartet.append(self)
 
         def start(self) -> None:
             pass
 
-    monkeypatch.setattr("aquaticy.jobs.Scheduler", Planer)
-    monkeypatch.setattr(web, "USER_SCHEDULERS", {})
+    monkeypatch.setattr("aquaticy.coworker.Scheduler", Planer)
+    monkeypatch.setattr(web, "USER_COWORKERS", {})
     monkeypatch.setattr(web, "AIGUARD", None)
     monkeypatch.setattr(web, "SESSIONS", SimpleNamespace(
         get=lambda account: SimpleNamespace(settings=lambda: None)))

@@ -174,15 +174,15 @@ def test_stale_adoption_does_not_restart_foreign_or_stopped_runtime(tmp_path, st
 
 
 def test_ephemeral_server_prints_its_actual_address(settings, monkeypatch, capsys):
-    for name in ("AUTH", "TOKEN", "AIGUARD", "SCHEDULER", "SERVER", "CLUSTER"):
+    for name in ("AUTH", "TOKEN", "AIGUARD", "COWORKER_SCHEDULER", "SERVER", "CLUSTER"):
         monkeypatch.setattr(web, name, getattr(web, name))
-    monkeypatch.setattr(web, "USER_SCHEDULERS", {})
+    monkeypatch.setattr(web, "USER_COWORKERS", {})
     monkeypatch.setattr(web, "get_settings", lambda: settings)
     monkeypatch.setattr(web, "_warm_up", lambda: None)
     monkeypatch.setattr("aquaticy.sandbox.sweep", lambda: None)
 
     class Scheduler:
-        def __init__(self, *args):
+        def __init__(self, *args, **kwargs):
             pass
 
         def start(self):
@@ -191,7 +191,7 @@ def test_ephemeral_server_prints_its_actual_address(settings, monkeypatch, capsy
         def stop(self):
             pass
 
-    monkeypatch.setattr("aquaticy.jobs.Scheduler", Scheduler)
+    monkeypatch.setattr("aquaticy.coworker.Scheduler", Scheduler)
     original = web.bind_server
     ports = []
 

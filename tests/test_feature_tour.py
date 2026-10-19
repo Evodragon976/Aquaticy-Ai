@@ -92,7 +92,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     for route in sorted(web.LEGAL_ROUTES):
         assert tour("GET", route)[0] == 200, route
     for route in ("/api/auth/status", "/api/config", "/api/runstate", "/api/chats",
-                  "/api/chats?q=x", "/api/jobs", "/api/prefs", "/api/models",
+                  "/api/chats?q=x", "/api/coworkers", "/api/prefs", "/api/models",
                   "/api/models?purpose=code", "/api/memory", "/api/usage", "/api/notes",
                   "/api/history", "/api/addons"):
         status, daten = tour("GET", route)
@@ -168,23 +168,42 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     # -- Speicher und Auftraege -----------------------------------------------
     assert tour("DELETE", "/api/memory?id=abc")[0] == 400
     assert tour("DELETE", "/api/memory")[0] == 200
-    status, job = tour("POST", "/api/jobs", {"action": "add", "question": "Neues in Bremen",
-                                             "rhythm": "weekly", "hour": 9})
-    nummer = job["job"]["id"]
-    for aktion in ("pause", "resume", "run"):
-        assert tour("POST", "/api/jobs", {"action": aktion, "id": nummer})[1]["ok"], aktion
+    status, job = tour(
+        "POST",
+        "/api/coworkers",
+        {
+            "action": "create",
+            "goal": "Neues in Bremen",
+            "schedule": {"rhythm": "weekly", "hour": 9, "kind": "research"},
+        },
+    )
+    nummer = job["coworkers"][-1]["id"]
+    for aktion in ("pause", "resume", "wake"):
+        assert tour("POST", "/api/coworkers", {"action": aktion, "id": nummer})[1]["ok"], aktion
     for _ in range(80):
-        stand = next(j for j in tour("GET", "/api/jobs")[1]["jobs"] if j["id"] == nummer)
+        stand = next(j for j in tour("GET", "/api/coworkers")[1]["coworkers"] if j["id"] == nummer)
         if stand.get("last_state"):
             break
         time.sleep(0.25)
     assert stand["last_state"] and "Fehler" not in stand["last_state"], stand
-    assert tour("POST", "/api/jobs", {"action": "add", "question": "x", "hour": "abc"}
-                )[1]["ok"] is False
-    assert tour("POST", "/api/jobs", {"action": "add", "kind": "image", "question": "x",
-                                      "image_data": PNG})[1]["ok"] is False
-    assert tour("DELETE", f"/api/jobs?id={nummer}")[1]["ok"] is True
-    assert tour("DELETE", "/api/jobs?id=x")[0] == 400
+    assert (
+        tour(
+            "POST",
+            "/api/coworkers",
+            {"action": "create", "goal": "x", "schedule": {"hour": "abc", "kind": "research"}},
+        )[1]["ok"]
+        is False
+    )
+    assert (
+        tour(
+            "POST",
+            "/api/coworkers",
+            {"image_data": PNG, "action": "create", "goal": "x", "schedule": {"kind": "image"}},
+        )[1]["ok"]
+        is False
+    )
+    assert tour("DELETE", f"/api/coworkers?id={nummer}")[1]["ok"] is True
+    assert tour("DELETE", "/api/coworkers?id=x")[0] == 400
 
     # -- Add-ons ohne virtual machine -----------------------------------------------
     katalog = {a["id"] for a in tour("GET", "/api/addons")[1]["addons"]}

@@ -1,4 +1,4 @@
-"""Auftraege: Fragen, die Aquaticy von selbst stellt.
+"""Zeitplaene und Beobachtungen der Coworker (12.2.1 Luna).
 
 Manche Fragen stellt man nicht einmal, sondern immer wieder -- "was ist in
 meiner Branche passiert?", "gibt es Neues zu diesem Gesetz?". Ein Auftrag ist
@@ -21,18 +21,14 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
-import sqlite3
-import threading
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
-LOG = logging.getLogger("aquaticy.jobs")
+LOG = logging.getLogger("aquaticy.coworker.schedule")
 
 #: Recherchen laufen eher taeglich; eine Bild- oder Preisbeobachtung darf in
 #: kurzen Abstaenden pruefen, damit ein voruebergehender Zustand nicht entgeht.
@@ -119,23 +115,16 @@ def rhythm_for(kind: str, rhythm: str) -> str:
 
 #: Welche Auftraege gerade laufen: (Datenbank, Nummer). Planer und "Jetzt"-
 #: Knopf fragen hier nach -- bis 9.5.15 konnte derselbe Auftrag doppelt laufen.
-_RUNNING: set[tuple[str, int]] = set()
-_RUNNING_LOCK = threading.Lock()
-
-
 def claim_run(db_path: Any, job_id: int) -> bool:
-    """Meldet einen Lauf an. ``False`` = der Auftrag laeuft schon."""
-    schluessel = (str(db_path), int(job_id))
-    with _RUNNING_LOCK:
-        if schluessel in _RUNNING:
-            return False
-        _RUNNING.add(schluessel)
-        return True
+    from aquaticy.coworker import claim
+
+    return claim(db_path, job_id)
 
 
 def release_run(db_path: Any, job_id: int) -> None:
-    with _RUNNING_LOCK:
-        _RUNNING.discard((str(db_path), int(job_id)))
+    from aquaticy.coworker import release
+
+    release(db_path, job_id)
 
 
 #: Womit der Zustand eines Auftrags beginnt, den der Rechtsrahmen abgelehnt
@@ -309,202 +298,103 @@ def next_time(rhythm: str, hour: int, minute: int, weekday: int, now: float = 0.
 
 
 class JobStore:
-    """Die Auftraege auf der Platte -- in derselben Datenbank wie alles andere."""
+    """Zeitplan-Ansicht auf den gemeinsamen Coworker-Speicher.
+
+    Job bezeichnet hier einen einzelnen geplanten Arbeitsschritt. Es gibt
+    weder eine zweite Tabelle noch einen eigenen Auftragsdienst.
+    """
 
     def __init__(self, db_path: Path | str) -> None:
-        from aquaticy.cache import _initializing
+        from aquaticy.coworker import CoworkerStore
 
-        self.db_path = Path(db_path)
-        self._lock = threading.Lock()
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with _initializing(self.db_path), self._connect() as conn:
-            conn.executescript(SCHEMA)
-            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(jobs)")}
-            for name, declaration in MIGRATIONS.items():
-                if name not in columns:
-                    conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {declaration}")
+        self._store = CoworkerStore(db_path)
+        self.db_path = self._store.db_path
+        self._lock = self._store._lock
 
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        finally:
-            conn.close()
+    def _connect(self) -> Any:
+        return self._store._connect()
 
     @staticmethod
-    def _row(row: sqlite3.Row) -> Job:
-        return Job(
-            id=int(row["id"]),
-            question=str(row["question"]),
-            # Aeltere Recherchen mit kurzem Takt gelten als stuendlich.
-            rhythm=rhythm_for(str(row["kind"] or "research"), str(row["rhythm"])),
-            hour=int(row["hour"]),
-            minute=int(row["minute"]),
-            weekday=int(row["weekday"]),
-            enabled=bool(row["enabled"]),
-            structured=bool(row["structured"]),
-            created_at=float(row["created_at"] or 0.0),
-            next_run=float(row["next_run"] or 0.0),
-            last_run=float(row["last_run"] or 0.0),
-            last_state=str(row["last_state"] or ""),
-            last_chat=str(row["last_chat"] or ""),
-            kind=str(row["kind"] or "research"),
-            source_url=str(row["source_url"] or ""),
-            image_id=str(row["image_id"] or ""),
-            image_note=str(row["image_note"] or ""),
-        )
+    def _row(cw: Any) -> Job:
+        data = cw.schedule
+        return Job(id=cw.id, question=cw.goal, rhythm=data["rhythm"],
+                   hour=data["hour"], minute=data["minute"], weekday=data["weekday"],
+                   enabled=cw.enabled, structured=data["structured"], created_at=cw.created_at,
+                   next_run=cw.next_wake, last_run=cw.last_run, last_state=cw.last_state,
+                   last_chat=cw.chat, kind=data["kind"], source_url=data["source_url"],
+                   image_id=data["image_id"], image_note=data.get("image_note", ""))
 
     def all_jobs(self) -> list[Job]:
-        with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM jobs ORDER BY next_run").fetchall()
-        return [self._row(row) for row in rows]
+        return sorted((self._row(cw) for cw in self._store.all() if cw.schedule),
+                      key=lambda job: job.next_run)
 
     def get(self, job_id: int) -> Job | None:
-        with self._connect() as conn:
-            row = conn.execute("SELECT * FROM jobs WHERE id = ?", (int(job_id),)).fetchone()
-        return self._row(row) if row else None
+        cw = self._store.get(job_id)
+        return self._row(cw) if cw is not None and cw.schedule else None
 
-    def add(
-        self,
-        question: str,
-        *,
-        rhythm: str = "daily",
-        hour: int = 8,
-        minute: int = 0,
-        weekday: int = 0,
-        structured: bool = True,
-        kind: str = "research",
-        source_url: str = "",
-        image_id: str = "",
-    ) -> Job:
-        """Legt einen Auftrag an.
-
-        Raises:
-            ValueError: Ohne Frage, oder wenn die Liste voll ist.
-        """
-        frage = " ".join(str(question).split())[:500]
-        if not frage:
-            raise ValueError("Ein Auftrag braucht eine Frage.")
-        rhythm = clean_rhythm(rhythm)
-        hour = max(0, min(23, int(hour)))
-        minute = max(0, min(59, int(minute)))
-        weekday = max(0, min(6, int(weekday)))
-        kind = str(kind or "research").strip().lower()
-        if kind not in KINDS:
-            kind = "research"
-        rhythm = rhythm_for(kind, rhythm)
-        source_url = str(source_url or "").strip()[:2_000]
-        image_id = str(image_id or "").strip()[:80]
-        if kind == "image" and not image_id:
-            raise ValueError("Für die Bildsuche fehlt das hochgeladene Bild.")
-        # Kamera, Satellit und Preis brauchen die eine Seite, die geprueft
-        # wird. Die Bildsuche nicht: sie sucht im ganzen Web -- eine Adresse
-        # darf sie trotzdem bekommen, dann bleibt sie bei diesem Anbieter.
-        if kind in ("visual", "price") and not source_url:
-            raise ValueError("Eine Beobachtung braucht die öffentliche Quelladresse.")
-        if source_url:
-            parsed = urlsplit(source_url)
-            if parsed.scheme not in ("http", "https") or not parsed.hostname:
-                raise ValueError("Die Quelladresse muss eine vollständige http(s)-Adresse sein.")
-        with self._lock, self._connect() as conn:
-            (anzahl,) = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()
-            if int(anzahl) >= MAX_JOBS:
-                raise ValueError(
-                    f"Mehr als {MAX_JOBS} Aufträge werden unübersichtlich — "
-                    "lösch erst einen."
-                )
-            jetzt = time.time()
-            cur = conn.execute(
-                "INSERT INTO jobs (question, rhythm, hour, minute, weekday, enabled,"
-                " structured, created_at, next_run, kind, source_url, image_id) "
-                "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
-                (
-                    frage,
-                    rhythm,
-                    hour,
-                    minute,
-                    weekday,
-                    1 if structured else 0,
-                    jetzt,
-                    next_time(rhythm, hour, minute, weekday, jetzt),
-                    kind,
-                    source_url,
-                    image_id,
-                ),
-            )
-            neu = conn.execute(
-                "SELECT * FROM jobs WHERE id = ?", (int(cur.lastrowid or 0),)
-            ).fetchone()
-        return self._row(neu)
+    def add(self, question: str, *, rhythm: str = "daily", hour: int = 8,
+            minute: int = 0, weekday: int = 0, structured: bool = True,
+            kind: str = "research", source_url: str = "", image_id: str = "") -> Job:
+        schedule = clean_schedule(dict(rhythm=rhythm, hour=hour, minute=minute,
+                                       weekday=weekday, structured=structured, kind=kind,
+                                       source_url=source_url, image_id=image_id))
+        cw = self._store.add(str(question)[:40], question, plan="normal", schedule=schedule)
+        return self._row(cw)
 
     def set_enabled(self, job_id: int, enabled: bool) -> bool:
-        """Haelt einen Auftrag an oder laesst ihn weiterlaufen."""
-        with self._lock, self._connect() as conn:
-            job = conn.execute("SELECT * FROM jobs WHERE id = ?", (int(job_id),)).fetchone()
-            if job is None:
-                return False
-            weiter = next_time(
-                rhythm_for(str(job["kind"] or "research"), str(job["rhythm"])),
-                int(job["hour"]), int(job["minute"]), int(job["weekday"])
-            )
-            conn.execute(
-                "UPDATE jobs SET enabled = ?, next_run = ? WHERE id = ?",
-                (1 if enabled else 0, weiter, int(job_id)),
-            )
-        return True
+        return self._store.set_enabled(job_id, enabled) if self.get(job_id) else False
 
     def set_image_note(self, job_id: int, note: str) -> None:
-        """Haelt fest, was auf dem Auftragsbild zu sehen ist."""
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                "UPDATE jobs SET image_note = ? WHERE id = ?",
-                (str(note or "")[:4_000], int(job_id)),
-            )
+        self._store.set_image_note(job_id, note)
 
     def delete(self, job_id: int) -> bool:
-        with self._lock, self._connect() as conn:
-            cur = conn.execute("DELETE FROM jobs WHERE id = ?", (int(job_id),))
-            return bool(cur.rowcount)
+        return self._store.delete(job_id) if self.get(job_id) else False
 
     def due(self, now: float = 0.0) -> list[Job]:
-        """Was jetzt faellig ist."""
-        jetzt = now or time.time()
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM jobs WHERE enabled = 1 AND next_run <= ? ORDER BY next_run",
-                (jetzt,),
-            ).fetchall()
-        return [self._row(row) for row in rows]
+        return [self._row(cw) for cw in self._store.due(now) if cw.schedule]
 
     def note_run(self, job_id: int, state: str, chat: str = "") -> None:
-        """Traegt ein, was aus einem Lauf geworden ist, und setzt den naechsten an.
+        cw = self._store.get(job_id)
+        if cw is None or not cw.schedule:
+            return
+        data = cw.schedule
+        self._store.note_run(job_id, state=state, notes=None,
+                             next_wake=next_time(data["rhythm"], data["hour"],
+                                                 data["minute"], data["weekday"]),
+                             reason="Zeitplan", chat=chat)
 
-        Verpasste Termine werden dabei nicht nachgeholt: der naechste wird von
-        jetzt an gerechnet.
-        """
-        with self._lock, self._connect() as conn:
-            job = conn.execute("SELECT * FROM jobs WHERE id = ?", (int(job_id),)).fetchone()
-            if job is None:
-                return
-            conn.execute(
-                "UPDATE jobs SET last_run = ?, last_state = ?, last_chat = ?, next_run = ?"
-                " WHERE id = ?",
-                (
-                    time.time(),
-                    str(state)[:300],
-                    str(chat)[:80],
-                    next_time(
-                        rhythm_for(str(job["kind"] or "research"), str(job["rhythm"])),
-                        int(job["hour"]),
-                        int(job["minute"]),
-                        int(job["weekday"]),
-                    ),
-                    int(job_id),
-                ),
-            )
+
+def clean_schedule(raw: Any) -> dict[str, Any]:
+    """Ein vollstaendiger, validierter Zeitplan; leeres Dict heisst selbststaendig."""
+    if not isinstance(raw, dict):
+        raise ValueError("Der Zeitplan muss ein Objekt sein.")
+    if not raw:
+        return {}
+    kind = str(raw.get("kind") or "research").strip().lower()
+    if kind not in KINDS:
+        raise ValueError("Diese Art Beobachtung gibt es nicht.")
+    source = str(raw.get("source_url") or "").strip()[:2000]
+    image = str(raw.get("image_id") or "").strip()[:80]
+    if kind == "image" and not image:
+        raise ValueError("Für die Bildsuche fehlt das hochgeladene Bild.")
+    if kind in ("visual", "price") and not source:
+        raise ValueError("Eine Beobachtung braucht die öffentliche Quelladresse.")
+    if source:
+        try:
+            parsed = urlsplit(source)
+            if (parsed.scheme not in ("http", "https") or not parsed.hostname
+                    or parsed.username or parsed.password or any(ord(c) < 33 for c in source)):
+                raise ValueError
+            _ = parsed.port
+        except ValueError as exc:
+            raise ValueError("Die Quelladresse muss eine vollständige http(s)-Adresse sein.") \
+                from exc
+    return {"kind": kind, "rhythm": rhythm_for(kind, str(raw.get("rhythm") or "daily")),
+            "hour": max(0, min(23, int(raw.get("hour", 8)))),
+            "minute": max(0, min(59, int(raw.get("minute", 0)))),
+            "weekday": max(0, min(6, int(raw.get("weekday", 0)))),
+            "structured": raw.get("structured", True) is True, "source_url": source,
+            "image_id": image, "image_note": str(raw.get("image_note") or "")[:6000]}
 
 
 #: Woran ein gefundenes Angebot erkennbar ist: eine vollstaendige Adresse.
@@ -599,7 +489,8 @@ def describe_job_image(agent: Any, job: Job, settings: Any) -> str:
         return ""
 
 
-def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
+def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
+            agent_factory: Any = None, context: str = "", active: Any = None) -> tuple[str, str]:
     """Fuehrt einen Auftrag aus. Returns: (Zustand, Chat-Kennung).
 
     Der Agent ist ein eigener: das laufende Gespraech des Nutzers bleibt
@@ -632,7 +523,8 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             except Exception:
                 LOG.exception("Aufträge: Ai-guard-Meldung zu %s fehlgeschlagen", job.id)
 
-    agent = Agent(settings, cache=None if monitoring else cache)
+    factory = agent_factory or Agent
+    agent = factory(settings, cache=None if monitoring else cache)
     if on_abuse is not None:
         agent.on_event = ereignis
     try:
@@ -643,6 +535,8 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             gesehen = job.image_note.strip()
             if not gesehen:
                 gesehen = describe_job_image(agent, job, settings)
+                if active is not None and not active():
+                    return ("angehalten", "")
                 if gesehen:
                     with contextlib.suppress(Exception):
                         JobStore(settings.db_path).set_image_note(job.id, gesehen)
@@ -687,7 +581,7 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
                   "Quelle und Prüfzeit. Rate nicht."
             )
         result = agent.ask(
-            frage,
+            (context + "\n\n## Zeitplan: aktuelle Prüfung\n" if context else "") + frage,
             stream=False,
             mode="normal",
             structured=False if monitoring else job.structured,
@@ -695,6 +589,8 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             online=True if monitoring else None,
             visual_sources=True if job.kind == "visual" else None,
         )
+        if active is not None and not active():
+            return ("angehalten", "")
         antwort = str(getattr(result, "answer", "") or "").strip()
         chat = str(getattr(agent, "session_id", ""))
         if str(getattr(result, "error", "") or "") == UNAVAILABLE:
@@ -733,10 +629,16 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             meta = result.meta() if hasattr(result, "meta") else {}
             checked = datetime.now().astimezone().isoformat(timespec="seconds")
             meta["monitor_checked_at"] = checked
+            if agent_factory is not None:
+                meta["coworker"] = job.id
             cache.add_history(chat, job.question, antwort, meta)
             with contextlib.suppress(Exception):
                 cache.mark_unread(chat, reason="beobachtung")
             return ("erfüllt", chat)
+        if agent_factory is not None:
+            meta = result.meta() if hasattr(result, "meta") else {}
+            meta["coworker"] = job.id
+            cache.add_history(chat, job.question, antwort, meta)
         # Der Auftrag hat sich selbst gestellt -- oft nachts, jedenfalls ohne
         # dass jemand davorsitzt. Damit die Antwort nicht in der Liste
         # untergeht, leuchtet der Chat, bis ihn jemand geoeffnet hat.
@@ -744,87 +646,28 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None) -> tuple[str, str]:
             cache.mark_unread(chat, reason="auftrag")
         return ("fertig", chat)
     except Exception as exc:  # pragma: no cover - haengt am Modell
-        return (f"Fehler: {type(exc).__name__}: {exc}"[:300], "")
+        return (f"Fehler: {type(exc).__name__}", "")
     finally:
         with contextlib.suppress(Exception):
             agent.close()
 
 
 class Scheduler:
-    """Sieht im Takt nach, ob etwas ansteht -- und fuehrt es aus.
-
-    Ein einzelner Thread, kein Prozess: ein Auftrag laeuft nach dem anderen.
-    Zwei gleichzeitige Recherchen wuerden sich auf einem kleinen Rechner
-    ohnehin gegenseitig ausbremsen.
-    """
+    """Interne Zeitplan-Ansicht desselben Coworker-Taktgebers."""
 
     def __init__(self, settings_getter: Any, on_run: Any = None, paused: Any = None,
                  on_abuse: Any = None) -> None:
-        self._settings_getter = settings_getter
-        self._on_run = on_run
-        #: Meldet Missbrauch aus einem Auftrag an Ai-guard (9.5.26).
-        self._on_abuse = on_abuse
-        #: Liefert True, solange nichts laufen darf -- etwa waehrend eine
-        #: Ai-guard-Sperre gilt (9.5.24). Die Auftraege bleiben liegen.
-        self._paused = paused
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        from aquaticy.coworker import Scheduler as CoworkerScheduler
+
+        self._scheduler = CoworkerScheduler(settings_getter, plan=lambda: "normal",
+                                           paused=paused, on_abuse=on_abuse,
+                                           on_run=on_run, scheduled_only=True)
 
     def start(self) -> None:
-        if self._thread is not None:
-            return
-        self._thread = threading.Thread(target=self._loop, name="aquaticy-jobs", daemon=True)
-        self._thread.start()
+        self._scheduler.start()
 
     def stop(self) -> None:
-        self._stop.set()
-
-    def _loop(self) -> None:
-        while not self._stop.wait(TICK_SECONDS):
-            try:
-                self.tick()
-            except Exception:
-                # Nicht still (9.5.15): ein Takt, der scheitert, steht im Protokoll.
-                LOG.exception("Aufträge: Takt fehlgeschlagen")
+        self._scheduler.stop()
 
     def tick(self) -> int:
-        """Ein Durchgang. Returns: wie viele Auftraege gelaufen sind."""
-        if self._paused is not None:
-            try:
-                if self._paused():
-                    return 0
-            except Exception:
-                LOG.exception("Aufträge: Sperrprüfung fehlgeschlagen")
-                return 0
-        settings = self._settings_getter()
-        store = JobStore(settings.db_path)
-        gelaufen = 0
-        for job in store.due():
-            if self._stop.is_set():
-                break
-            # Ein Auftrag, der stolpert, darf nicht die anderen mitreissen.
-            # Ohne das hier bliebe sein `next_run` in der Vergangenheit: er
-            # waere beim naechsten Takt wieder der erste, wuerde wieder
-            # stolpern -- und alles, was hinter ihm steht, kaeme nie dran.
-            if not claim_run(settings.db_path, job.id):
-                continue  # laeuft gerade ueber "Jetzt" -- nicht ein zweites Mal
-            try:
-                if self._on_abuse is not None:
-                    state, chat = run_job(job, settings, on_abuse=self._on_abuse)
-                else:
-                    state, chat = run_job(job, settings)
-            except Exception as exc:
-                state, chat = (f"Fehler: {type(exc).__name__}", "")
-            finally:
-                release_run(settings.db_path, job.id)
-            store.note_run(job.id, state, chat)
-            # Am Kontingent bleibt der Auftrag an: es setzt sich zurueck.
-            if state == "erfüllt" or state.startswith(GUARD_STATE):
-                store.set_enabled(job.id, False)
-            gelaufen += 1
-            if self._on_run:
-                try:
-                    self._on_run(job, state, chat)
-                except Exception:
-                    LOG.exception("Aufträge: Rückmeldung zu %s fehlgeschlagen", job.id)
-        return gelaufen
+        return self._scheduler.tick()

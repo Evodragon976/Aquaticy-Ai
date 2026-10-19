@@ -499,7 +499,7 @@ def test_switches_save_at_once_and_forms_use_checkboxes() -> None:
     html = _seite()
     assert "async function sofortSpeichern(schalter)" in html
     assert 'feld.matches("input.schalter[name]")' in html
-    assert '<input type="checkbox" id="job-struktur" checked>' in html
+    assert '<input type="checkbox" id="cw-task-struktur" checked>' in html
 
 
 def test_no_browser_alert_or_confirm_is_left() -> None:

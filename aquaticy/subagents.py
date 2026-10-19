@@ -817,8 +817,12 @@ def _run_one(
                     arguments = bounded_json(raw)
                 except (ValueError, RecursionError):
                     arguments = {}
+                allowed = {schema["function"]["name"] for schema in TOOL_SCHEMAS}
                 try:
-                    payload = box.call(name, arguments if isinstance(arguments, dict) else {})
+                    if name not in allowed:
+                        payload = {"error": "Dieses Werkzeug ist für Recherchehelfer gesperrt."}
+                    else:
+                        payload = box.call(name, arguments if isinstance(arguments, dict) else {})
                 except Exception as exc:
                     payload = {"error": f"{type(exc).__name__}: {exc}"}
                 return {

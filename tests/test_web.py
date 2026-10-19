@@ -3219,28 +3219,38 @@ def test_exporting_an_unknown_chat_is_a_404(client) -> None:
 
 def test_jobs_can_be_created_paused_and_deleted(client) -> None:
     status, data = client(
-        "POST", "/api/jobs",
-        {"action": "add", "question": "Was gibt es Neues?", "rhythm": "daily",
-         "hour": 7, "minute": 30},
+        "POST",
+        "/api/coworkers",
+        {
+            "action": "create",
+            "goal": "Was gibt es Neues?",
+            "schedule": {"rhythm": "daily", "hour": 7, "minute": 30, "kind": "research"},
+        },
     )
     assert status == 200
-    job = json.loads(data)["job"]
-    assert job["question"] == "Was gibt es Neues?"
-    assert job["rhythm_name"] == "täglich"
+    job = json.loads(data)["coworkers"][-1]
+    assert job["goal"] == "Was gibt es Neues?"
+    assert job["schedule"]["rhythm_name"] == "täglich"
 
-    payload = json.loads(client("GET", "/api/jobs")[1])
-    assert len(payload["jobs"]) == 1
+    payload = json.loads(client("GET", "/api/coworkers")[1])
+    assert len(payload["coworkers"]) == 1
 
-    assert json.loads(client("POST", "/api/jobs", {"action": "pause", "id": job["id"]})[1])["ok"]
-    assert json.loads(client("GET", "/api/jobs")[1])["jobs"][0]["enabled"] is False
+    assert json.loads(client("POST", "/api/coworkers", {"action": "pause", "id": job["id"]})[1])[
+        "ok"
+    ]
+    assert json.loads(client("GET", "/api/coworkers")[1])["coworkers"][0]["enabled"] is False
 
-    assert json.loads(client("DELETE", f"/api/jobs?id={job['id']}")[1])["ok"] is True
-    assert json.loads(client("GET", "/api/jobs")[1])["jobs"] == []
+    assert json.loads(client("DELETE", f"/api/coworkers?id={job['id']}")[1])["ok"] is True
+    assert json.loads(client("GET", "/api/coworkers")[1])["coworkers"] == []
 
 
 def test_a_job_without_a_question_is_refused(client) -> None:
-    status, data = client("POST", "/api/jobs", {"action": "add", "question": "  "})
-    assert status == 200
+    status, data = client(
+        "POST",
+        "/api/coworkers",
+        {"action": "create", "goal": "  ", "schedule": {"kind": "research"}},
+    )
+    assert status == 400
     assert json.loads(data)["ok"] is False
 
 
@@ -3309,8 +3319,10 @@ def test_the_workshop_button_only_shows_in_code_mode() -> None:
 
 def test_the_settings_offer_scheduled_jobs() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "<legend>Aufträge</legend>" in html
-    assert 'id="job-rhythm"' in html
+    assert "<legend>Aufträge</legend>" not in html
+    assert html.index('id="coworkerbox"') < html.index('id="cw-task-rhythm"')
+    assert html.index('id="cw-task-rhythm"') < html.index('id="screenbox"')
+    assert 'id="cw-task-rhythm"' in html
     assert "stündlich" in html and "wöchentlich" in html
 
 
@@ -3423,13 +3435,15 @@ def test_the_switch_looks_like_a_switch_and_moves() -> None:
 def test_no_plain_checkbox_is_left_over() -> None:
     """Funktionsschalter bleiben Schalter; Kontrollkästchen gibt es nur dort, wo
     erst ein Knopf die Wahl abschickt: die Zustimmung und (seit 9.5.32) die
-    Option im Auftragsformular -- ein Schalter verspricht sofortige Wirkung."""
+    Optionen im Coworker-Formular -- ein Schalter verspricht sofortige Wirkung."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     roh = html.count('<input type="checkbox"')
     angezogen = html.count('<input type="checkbox" role="switch" class="schalter"')
-    assert roh == angezogen + 3
+    assert roh == angezogen + 5
+    assert '<input type="checkbox" id="cw-sharing-chats">' in html
+    assert '<input type="checkbox" id="cw-sharing-coworkers">' in html
     assert '<input type="checkbox" id="auth-terms" required>' in html
-    assert '<input type="checkbox" id="job-struktur" checked>' in html
+    assert '<input type="checkbox" id="cw-task-struktur" checked>' in html
     assert '<input type="checkbox" id="consent-learning">' in html
 
 
@@ -4059,21 +4073,28 @@ def test_an_image_job_stores_the_picture_privately(client, session: web.ChatSess
 
     session.settings().vision_model = "ollama_chat/gemma4:12b"
     png = base64.b64encode(b"\x89PNG\r\n\x1a\ndas-bild").decode()
-    status, body = client("POST", "/api/jobs", {
-        "action": "add", "kind": "image", "question": "Handy gesucht",
-        "rhythm": "hourly", "image_data": png, "image_type": "image/png",
-    })
+    status, body = client(
+        "POST",
+        "/api/coworkers",
+        {
+            "image_data": png,
+            "image_type": "image/png",
+            "action": "create",
+            "goal": "Handy gesucht",
+            "schedule": {"kind": "image", "rhythm": "hourly"},
+        },
+    )
     assert status == 200
     payload = json.loads(body)
     assert payload["ok"] is True, payload.get("error")
-    media_id = payload["job"]["image_id"]
+    media_id = payload["coworkers"][-1]["schedule"]["image_id"]
     assert media_id
     assert load_snapshot(session.settings().data_dir, media_id) == (
         b"\x89PNG\r\n\x1a\ndas-bild", "image/png")
 
 
 def test_p2_deleting_an_image_job_removes_its_picture(client, session: web.ChatSession) -> None:
-    """Seit 9.5.16 auch ueber DELETE /api/jobs -- vorher nur ueber den POST-Weg."""
+    """Seit 9.5.16 auch ueber DELETE /api/coworkers -- vorher nur ueber den POST-Weg."""
     import base64
 
     from aquaticy.media import load_snapshot
@@ -4081,16 +4102,28 @@ def test_p2_deleting_an_image_job_removes_its_picture(client, session: web.ChatS
     session.settings().vision_model = "ollama_chat/gemma4:12b"
     for weg in ("DELETE", "POST"):
         png = base64.b64encode(b"\x89PNG\r\n\x1a\ndas-bild").decode()
-        payload = json.loads(client("POST", "/api/jobs", {
-            "action": "add", "kind": "image", "question": "Handy gesucht",
-            "rhythm": "hourly", "image_data": png, "image_type": "image/png",
-        })[1])
-        nummer, media_id = payload["job"]["id"], payload["job"]["image_id"]
+        payload = json.loads(
+            client(
+                "POST",
+                "/api/coworkers",
+                {
+                    "image_data": png,
+                    "image_type": "image/png",
+                    "action": "create",
+                    "goal": "Handy gesucht",
+                    "schedule": {"kind": "image", "rhythm": "hourly"},
+                },
+            )[1]
+        )
+        nummer, media_id = (
+            payload["coworkers"][-1]["id"],
+            payload["coworkers"][-1]["schedule"]["image_id"],
+        )
         assert load_snapshot(session.settings().data_dir, media_id) is not None
         if weg == "DELETE":
-            status, body = client("DELETE", f"/api/jobs?id={nummer}")
+            status, body = client("DELETE", f"/api/coworkers?id={nummer}")
         else:
-            status, body = client("POST", "/api/jobs", {"action": "delete", "id": nummer})
+            status, body = client("POST", "/api/coworkers", {"action": "delete", "id": nummer})
         assert status == 200 and json.loads(body)["ok"] is True, weg
         assert load_snapshot(session.settings().data_dir, media_id) is None, weg
 
@@ -4099,10 +4132,16 @@ def test_an_image_job_without_a_picture_is_refused(
     client, session: web.ChatSession
 ) -> None:
     session.settings().vision_model = "ollama_chat/gemma4:12b"
-    status, body = client("POST", "/api/jobs", {
-        "action": "add", "kind": "image", "question": "Handy gesucht", "rhythm": "hourly",
-    })
-    assert status == 200
+    status, body = client(
+        "POST",
+        "/api/coworkers",
+        {
+            "action": "create",
+            "goal": "Handy gesucht",
+            "schedule": {"kind": "image", "rhythm": "hourly"},
+        },
+    )
+    assert status == 400
     payload = json.loads(body)
     assert payload["ok"] is False
     assert "fehlt das Bild" in payload["error"]
@@ -4115,7 +4154,7 @@ def test_a_rejected_image_job_removes_its_permanent_snapshot(
     session.settings().vision_model = "ollama_chat/gemma4:12b"
     deleted: list[str] = []
     monkeypatch.setattr(
-        "aquaticy.jobs.JobStore.add",
+        "aquaticy.coworker.CoworkerStore.add",
         lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("Liste voll")),
     )
     monkeypatch.setattr(
@@ -4123,11 +4162,17 @@ def test_a_rejected_image_job_removes_its_permanent_snapshot(
         lambda data_dir, media_id: deleted.append(media_id),
     )
 
-    _, body = client("POST", "/api/jobs", {
-        "action": "add", "kind": "image", "question": "Handy gesucht",
-        "rhythm": "hourly", "image_data": base64.b64encode(b"\x89PNG\r\n\x1a\nbild").decode(),
-        "image_type": "image/png",
-    })
+    _, body = client(
+        "POST",
+        "/api/coworkers",
+        {
+            "image_data": base64.b64encode(b"\x89PNG\r\n\x1a\nbild").decode(),
+            "image_type": "image/png",
+            "action": "create",
+            "goal": "Handy gesucht",
+            "schedule": {"kind": "image", "rhythm": "hourly"},
+        },
+    )
     payload = json.loads(body)
     assert payload["ok"] is False
     assert len(deleted) == 1 and deleted[0].endswith("-fest.png")
@@ -4135,9 +4180,15 @@ def test_a_rejected_image_job_removes_its_permanent_snapshot(
 
 def test_an_image_job_needs_a_vision_model(client) -> None:
     """Ein Textmodell wuerde das Foto nicht sehen, sondern raten."""
-    _, body = client("POST", "/api/jobs", {
-        "action": "add", "kind": "image", "question": "Handy gesucht", "rhythm": "hourly",
-    })
+    _, body = client(
+        "POST",
+        "/api/coworkers",
+        {
+            "action": "create",
+            "goal": "Handy gesucht",
+            "schedule": {"kind": "image", "rhythm": "hourly"},
+        },
+    )
     payload = json.loads(body)
     assert payload["ok"] is False and "Vision-Modell" in payload["error"]
 
@@ -4162,13 +4213,19 @@ def test_database_failure_removes_uploaded_job_image(
         raise error("database is locked")
 
     monkeypatch.setattr(media, "save_snapshot", save)
-    monkeypatch.setattr("aquaticy.jobs.JobStore.add", fail)
-    status, body = client("POST", "/api/jobs", {
-        "kind": "image", "question": "Handy gesucht",
-        "image_data": base64.b64encode(b"\x89PNG\r\n\x1a\nbild").decode(),
-        "image_type": "image/png",
-    })
-    assert status == 200 and json.loads(body)["ok"] is False
+    monkeypatch.setattr("aquaticy.coworker.CoworkerStore.add", fail)
+    status, body = client(
+        "POST",
+        "/api/coworkers",
+        {
+            "image_data": base64.b64encode(b"\x89PNG\r\n\x1a\nbild").decode(),
+            "image_type": "image/png",
+            "action": "create",
+            "goal": "Handy gesucht",
+            "schedule": {"kind": "image"},
+        },
+    )
+    assert status == 500 and json.loads(body)["ok"] is False
     assert len(saved) == 1
     assert media.snapshot_path(settings.data_dir, saved[0]) is None
 
@@ -4179,11 +4236,17 @@ def test_an_unsupported_picture_format_is_refused(
     import base64
 
     session.settings().vision_model = "ollama_chat/gemma4:12b"
-    _, body = client("POST", "/api/jobs", {
-        "action": "add", "kind": "image", "question": "Handy gesucht", "rhythm": "hourly",
-        "image_data": base64.b64encode(b"nicht-wirklich").decode(),
-        "image_type": "application/zip",
-    })
+    _, body = client(
+        "POST",
+        "/api/coworkers",
+        {
+            "image_data": base64.b64encode(b"nicht-wirklich").decode(),
+            "image_type": "application/zip",
+            "action": "create",
+            "goal": "Handy gesucht",
+            "schedule": {"kind": "image", "rhythm": "hourly"},
+        },
+    )
     payload = json.loads(body)
     assert payload["ok"] is False
     assert "Bildformat" in payload["error"]
@@ -4192,7 +4255,7 @@ def test_an_unsupported_picture_format_is_refused(
 def test_the_ui_offers_the_new_rhythms_and_the_image_job() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'value="minutes1"' in html and 'value="always"' in html
-    assert 'value="image"' in html and 'id="job-bild"' in html
+    assert 'value="image"' in html and 'id="cw-task-bild"' in html
 
 
 def test_a_body_that_is_not_an_object_is_an_empty_request(client) -> None:
@@ -4252,17 +4315,35 @@ def test_chats_jobs_and_memory_come_with_their_texts(
     assert chats[0]["group"] == "Heute"
     export = json.loads(client("GET", "/api/chatexport?session_id=s1")[1])
     assert export["filename"].endswith(".md") and "Größe" in export["filename"]
-    job = json.loads(client("POST", "/api/jobs", {"action": "add", "question": "Neues?",
-                                                   "rhythm": "weekly", "weekday": 2,
-                                                   "hour": 9, "minute": 5})[1])["job"]
-    liste = json.loads(client("GET", "/api/jobs")[1])["jobs"]
+    job = json.loads(
+        client(
+            "POST",
+            "/api/coworkers",
+            {
+                "action": "create",
+                "goal": "Neues?",
+                "schedule": {
+                    "rhythm": "weekly",
+                    "weekday": 2,
+                    "hour": 9,
+                    "minute": 5,
+                    "kind": "research",
+                },
+            },
+        )[1]
+    )["coworkers"][-1]
+    liste = json.loads(client("GET", "/api/coworkers")[1])["coworkers"]
     auftrag = next(j for j in liste if j["id"] == job["id"])
-    assert auftrag["title"] == "Recherche: Neues?"
-    assert auftrag["when_text"].startswith("wöchentlich, Mittwoch um 09:05 · nächstes Mal ")
-    assert auftrag["toggle_label"] == "Anhalten"
+    assert auftrag["schedule"]["title"] == "Recherche: Neues?"
+    assert auftrag["schedule"]["when_text"].startswith(
+        "wöchentlich, Mittwoch um 09:05 · nächstes Mal "
+    )
+    assert auftrag["schedule"]["toggle_label"] == "Anhalten"
     session.memory().remember("Mag Tee", topic="Vorliebe")
     speicher = json.loads(client("GET", "/api/memory")[1])
-    assert speicher["entries"][0]["when_text"] and "MB belegt" in speicher["usage"]["text"]
+    assert (
+        speicher["entries"][0]["when_text"] and "MB belegt" in speicher["usage"]["text"]
+    )
 
 
 def test_the_page_brings_its_texts_from_the_server() -> None:

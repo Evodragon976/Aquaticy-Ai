@@ -502,11 +502,12 @@ def test_a_refused_job_switches_itself_off(
 ) -> None:
     """Dieselbe Frage wird beim naechsten Takt wieder abgelehnt -- ohne
     Abschalten liefe der Auftrag ewig ins selbe Nein."""
-    from aquaticy import jobs
+    from aquaticy import coworker_schedule as jobs
 
     class Abgelehnt:
         def __init__(self, settings: Any, cache: Any = None) -> None:
             self.session_id = "c"
+            self.toolbox = SimpleNamespace(settings=settings, untrusted_seen=False)
 
         def ask(self, frage: str, **kwargs: Any) -> Any:
             return SimpleNamespace(answer="Das mache ich nicht.", guarded="name")
@@ -518,7 +519,7 @@ def test_a_refused_job_switches_itself_off(
     store = jobs.JobStore(tmp_path / "j.db")
     job = store.add("Eine Frage")
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = 1 WHERE id = ?", (job.id,))
+        conn.execute("UPDATE coworkers SET next_wake = 1 WHERE id = ?", (job.id,))
     settings = SimpleNamespace(db_path=tmp_path / "j.db", cache_ttl_hours=1)
 
     assert jobs.run_job(store.get(job.id), settings)[0].startswith(jobs.GUARD_STATE)
@@ -533,7 +534,7 @@ def test_an_outage_is_not_a_refusal(
 ) -> None:
     """Faellt das Pruefmodell nur kurz aus, bleibt ein Auftrag an: nicht
     geprueft ist nicht abgelehnt."""
-    from aquaticy import jobs
+    from aquaticy import coworker_schedule as jobs
 
     pruefer(RuntimeError("weg"))
     result = Agent(settings, cache=None).ask("Eine Anfrage", stream=False)
@@ -542,6 +543,7 @@ def test_an_outage_is_not_a_refusal(
     class Ausfall:
         def __init__(self, settings: Any, cache: Any = None) -> None:
             self.session_id = "c"
+            self.toolbox = SimpleNamespace(settings=settings, untrusted_seen=False)
 
         def ask(self, frage: str, **kwargs: Any) -> Any:
             return result
@@ -553,7 +555,7 @@ def test_an_outage_is_not_a_refusal(
     store = jobs.JobStore(tmp_path / "j.db")
     job = store.add("Eine Frage")
     with store._connect() as conn:
-        conn.execute("UPDATE jobs SET next_run = 1 WHERE id = ?", (job.id,))
+        conn.execute("UPDATE coworkers SET next_wake = 1 WHERE id = ?", (job.id,))
     ziel = SimpleNamespace(db_path=tmp_path / "j.db", cache_ttl_hours=1)
     assert jobs.Scheduler(lambda: ziel).tick() == 1
     danach = store.get(job.id)

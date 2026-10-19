@@ -232,7 +232,7 @@ def test_stopped_website_does_not_provision(tmp_path, monkeypatch):
 
 def test_parallel_first_requests_can_initialize_the_same_database(tmp_path):
     from aquaticy.cache import Cache
-    from aquaticy.jobs import JobStore
+    from aquaticy.coworker_schedule import JobStore
     from aquaticy.uistate import UIState
 
     for attempt in range(5):
