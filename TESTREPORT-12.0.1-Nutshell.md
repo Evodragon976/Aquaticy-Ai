@@ -48,8 +48,44 @@ Fenster zu nutzen (`FORCE_ASK_PROMPT`). Dazu kam es selten, und es reichte nicht
   - nie eine Schleife, denn sowohl der Anstoß als auch das selbst geöffnete Fenster gibt es
     höchstens einmal je Anfrage.
 
+## Nachtrag: Mit „Strukturiert“ fragt er jetzt auch
+
+Gemeldet: Mit eingeschaltetem „Strukturiert“ (Planung und Teilfragen vor der Recherche) fragte
+Aquaticy nicht nach, etwa nach dem Wohnort. Ohne „Strukturiert“ tat er es.
+
+### Warum
+
+Mit „Strukturiert“ plant ein kleines Modell ohne Denk-Modus vor der Recherche. Es soll im Feld
+„rueckfrage“ angeben, was fehlt, ließ es aber fast immer leer. Danach haben die Agenten schon
+Seiten gelesen, und das Hauptmodell fragt nicht mehr nach. Der Ort fehlt dann einfach, und die
+Recherche rät.
+
+### Was jetzt gilt
+
+Gilt nur mit „Strukturiert“, ohne bleibt alles wie oben.
+
+- Stellt der Planer selbst eine Rückfrage, gilt seine, mit ihren Vorschlägen. Es gibt keine
+  zweite Frage.
+- Fragt er nicht, prüft Aquaticy selbst, ob die Frage einen Ort braucht (`needs_place`):
+  - ausdrücklich der eigene Ort: „in meinem Ort“, „in meiner Stadt“, „in der Nähe“, „bei mir“,
+    „near me“ …;
+  - oder etwas, das nur an einem Ort Sinn hat (Wetter, Kino, Apotheke, Notdienst,
+    Öffnungszeiten, Veranstaltungen), ohne dass ein Ort genannt ist („in Bremen“,
+    „aus Hamburg“).
+- Fehlt der Ort, öffnet sich das Fenster „In welchem Ort soll ich nachsehen?“. Danach plant
+  Aquaticy mit der Antwort neu, damit die Teilfragen den Ort enthalten.
+- **Nicht gefragt wird**, wenn der Ort schon bekannt ist:
+  - als Ortsfilter in den Einstellungen;
+  - im Chat schon geklärt;
+  - im Speicher als Wohnort gemerkt.
+- Das gilt im Denken- und im Pro-Modus, nicht im Code-Modus. Gefragt wird nur, wenn jemand
+  antworten kann.
+
 ## Fehlersuche
 
+- Gefunden und mit behoben: Hätte Aquaticy vor dem Planer nach dem Ort gefragt, wäre bei
+  einer eigenen Ortsfrage des Planers das Fenster zweimal gekommen. Jetzt geht der Planer vor,
+  und Aquaticy fragt nur, wenn er schweigt.
 - Gefunden und mit behoben: Die alte Bedingung „noch kein Werkzeug benutzt“ verhinderte genau
   den gemeldeten Fall (erst suchen, dann nach dem Ort fragen).
 - Wird während der Rückfrage auf Stopp gedrückt, endet der Lauf sauber (`stopped`).
@@ -59,8 +95,9 @@ Fenster zu nutzen (`FORCE_ASK_PROMPT`). Dazu kam es selten, und es reichte nicht
 
 | Prüfung | Ergebnis |
 |---|---|
-| Vollständige Prüfkette (`python tools/pruefung.py`) | alle fünf Schritte ohne Beanstandung (Rückgabewert 0): **5247 bestanden, 31 übersprungen, keine Fehlschläge** (5278 Tests, Browser-Rundgang eingeschlossen) |
-| Neue Tests (`tests/test_v1201.py`) | 19, alle bestanden; darunter der gemeldete Fall Wort für Wort |
+| Vollständige Prüfkette (`python tools/pruefung.py`) | alle fünf Schritte ohne Beanstandung (Rückgabewert 0): **5267 bestanden, 31 übersprungen, keine Fehlschläge** (5298 Tests, Browser-Rundgang eingeschlossen) |
+| Neue Tests (`tests/test_v1201.py`) | 39, alle bestanden. Darunter beide gemeldeten Fälle: die Frage im Chat statt im Fenster und „Strukturiert“ ohne Rückfrage. |
+| Rückfragen des Planers (`tests/test_v1140_terra.py`) | unverändert bestanden |
 | Bisherige Tests zu Rückfragen (`tests/test_agent.py`) | bestanden |
 
 ## Geänderte Tests

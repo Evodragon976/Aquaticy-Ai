@@ -1110,6 +1110,45 @@ def text_question(text: str) -> tuple[str, list[str]] | None:
     return frage, [o[:80] for o in optionen if o][:4]
 
 
+#: Fragen, die einen Ort brauchen (12.0.1 Nutshell). Mit "Strukturiert" plant ein
+#: kleines Modell vor der Recherche -- und liess die Rueckfrage nach dem Ort fast
+#: immer weg. Danach hatten die Agenten schon Seiten gelesen, und das Hauptmodell
+#: fragte auch nicht mehr. Erstens: der eigene Ort, ausdruecklich.
+NEEDS_PLACE_RE = re.compile(
+    r"\b(?:in|aus|bei|um|für|fuer|rund um)\s+(?:meine[mnrs]?|unsere[mnrs]?)\s+"
+    r"(?:ort|stadt|gegend|nähe|naehe|umgebung|dorf|region|gemeinde|kreis|landkreis|"
+    r"viertel|stadtteil|heimat\w*)\b"
+    r"|\bin der n(?:ä|ae)he\b|\bhier in der gegend\b|\bbei mir\b|\bum mich herum\b"
+    r"|\b(?:near me|nearby|around me|in my (?:town|city|area|village|region))\b",
+    re.I,
+)
+#: Zweitens: was nur an einem Ort Sinn hat -- wenn kein Ort dasteht.
+_LOCAL_WORD_RE = re.compile(
+    r"\b(?:kino\w*|apotheke\w*|notdienst\w*|öffnungszeiten|oeffnungszeiten|"
+    r"veranstaltung\w*|wetter)\b", re.I)
+#: Ein genannter Ort: "in Bremen", "aus Lilienthal", "bei Hamburg", "nach Köln".
+_PLACE_NAMED_RE = re.compile(r"\b(?:in|aus|bei|nach|für|fuer)\s+[A-ZÄÖÜ][\wäöüß.-]+")
+#: Woran man in Rueckfragen und im Speicher erkennt, dass es um den Ort ging.
+_PLACE_HINT_RE = re.compile(
+    r"\b(?:ort\w*|stadt|wohn\w*|lebe|lebt|gegend|zuhause|zu hause|heimat\w*|where|"
+    r"town|city|live)\b", re.I)
+
+
+def needs_place(question: str) -> bool:
+    """Braucht *question* einen Ort, der nicht in ihr steht? (12.0.1 Nutshell)"""
+    text = " ".join(str(question or "").split())
+    if NEEDS_PLACE_RE.search(text):
+        return True
+    if not _LOCAL_WORD_RE.search(text):
+        return False
+    return not any(not _LOCAL_WORD_RE.fullmatch(treffer.group(0).split()[-1])
+                   for treffer in _PLACE_NAMED_RE.finditer(text))
+
+
+#: Die Rueckfrage, wenn der Ort fehlt.
+PLACE_QUESTION = "In welchem Ort soll ich nachsehen?"
+
+
 #: Dasselbe in kurz, wenn niemand da ist, der antworten koennte. Ohne
 #: Gegenueber waere eine Rueckfrage eine Sackgasse -- dann muss die fehlende
 #: Angabe wenigstens benannt werden, statt sie zu erfinden.
@@ -1555,6 +1594,28 @@ class Agent:
                 break
         return True
 
+    def _place_known(self) -> bool:
+        """Ist der Ort schon bekannt -- Ortsfilter, im Chat geklaert oder gemerkt?"""
+        if str(self.settings.location or "").strip():
+            return True
+        if any(_PLACE_HINT_RE.search(frage) for frage, _ in getattr(self, "clarified", [])):
+            return True
+        return bool(_PLACE_HINT_RE.search(self._person_prompt()))
+
+    def _ask_for_place(self, question: str) -> bool:
+        """Mit "Strukturiert": fehlt der Ort, erst fragen, dann planen (12.0.1 Nutshell).
+
+        Der Planer sollte das selbst tun, ein kleines Modell ohne Denk-Modus liess
+        es aber fast immer weg. Ohne "Strukturiert" fragt das Hauptmodell selbst.
+
+        Returns: True, wenn der Nutzer geantwortet hat.
+        """
+        if (self.toolbox.ask_handler is None or self.stopped
+                or clean_mode(self.mode) == "code" or not needs_place(question)
+                or self._place_known()):
+            return False
+        return self._ask_before_research(PLACE_QUESTION)
+
     def _clarify_first(self, question: str) -> None:
         """Pro-Modus: fehlt etwas Entscheidendes, erst fragen, dann den Master planen lassen.
 
@@ -1570,8 +1631,13 @@ class Agent:
             plan = plan_request(question, self.settings, context=self._planner_context(),
                                 limit=1)
         except Exception:
-            return
-        self._ask_before_research(getattr(plan, "rueckfrage", ""), getattr(plan, "optionen", ()))
+            plan = None
+        rueckfrage = str(getattr(plan, "rueckfrage", "") or "")
+        if rueckfrage:
+            self._ask_before_research(rueckfrage, getattr(plan, "optionen", ()))
+        else:
+            # Der Planer fragte nicht -- fehlt der Ort, fragt Aquaticy selbst (12.0.1).
+            self._ask_for_place(question)
 
     def _needs_research(self, question: str) -> bool:
         """Vorpruefung UND Planung in einem Schritt.
@@ -1609,8 +1675,12 @@ class Agent:
         )
         self._model_ready()
         needs, tasks = plan
-        if needs and self._ask_before_research(getattr(plan, "rueckfrage", ""),
-                                               getattr(plan, "optionen", ())):
+        rueckfrage = str(getattr(plan, "rueckfrage", "") or "")
+        # Fragte der Planer nicht, fehlt aber der Ort, fragt Aquaticy selbst (12.0.1
+        # Nutshell): das kleine Modell liess die Frage nach dem Ort fast immer weg.
+        if needs and ((rueckfrage and self._ask_before_research(
+                rueckfrage, getattr(plan, "optionen", ())))
+                or (not rueckfrage and self._ask_for_place(text))):
             # Mit der Antwort neu planen: die Teilfragen brauchen den Ort.
             needs, tasks = plan_request(text, self.settings, context=self._planner_context(),
                                         limit=max(1, self.agent_limit))
