@@ -1,4 +1,4 @@
-# Aquaticy AI 12.0.0 Luna
+# Aquaticy AI 12.0.0 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.0.0 Luna
+aquaticy --version            # 12.0.0 Terra
 
 # 2. Einrichten: Modell, Suche, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -863,6 +863,28 @@ der anderen.
 HSTS. Strenge Content-Security-Policy, Schreibzugriffe nur von der eigenen Seite, Grenzen für
 Anfragen und falsche Passwörter.
 
+**Anmeldeschutz gegen Bots.** Vor dem Passwort bekommt jede Anmeldung eine Risikozahl aus drei
+Hinweisen:
+
+| Hinweis | gut | schlecht |
+|---|---|---|
+| Fingerabdruck des Clients | passt zur App (+0) | wie ein Skript (+40) |
+| Fehlversuche dieses Clients in der letzten Stunde | keine (+0) | +4 je Versuch, höchstens +33 |
+| dieses Gerät | schon angemeldet (+0) | neu (+20) |
+
+Dazu kommt ein Grundwert von 6. Unter 34 geht es weiter zum Passwort. Von 34 bis 66 kommt
+„Bestätige kurz, dass du ein Mensch bist“, ein Regler, den man ganz nach rechts schiebt. Ab 67
+wird abgewiesen, ohne Passwortprüfung, und die Adresse eines Skripts ist 15 Minuten gesperrt.
+Beispiele: App, keine Fehlversuche, bekanntes Gerät = 6; App, 6 Fehlversuche, neues Gerät = 50;
+Skript, 40 Fehlversuche, neues Gerät = 99. Ein Browser, dessen Fingerabdruck passt, kommt
+höchstens auf 59 und wird nie abgewiesen.
+
+Den echten TLS-Fingerabdruck (JA3/JA4) sieht Aquaticy nicht: Hinter dem Cloudflare-Tunnel endet
+die Verschlüsselung bei Cloudflare, im Heimnetz gibt es keine. Als Fingerabdruck zählen deshalb
+User-Agent, `Accept-Language`, die Fetch-Metadaten des Browsers (`Sec-Fetch-Site`),
+`navigator.webdriver` und eine kleine Rechenaufgabe (SHA-256), die die Seite beim Besuch im
+Hintergrund löst. Alles liegt nur im Arbeitsspeicher, siehe `aquaticy/botguard.py`.
+
 **Rechts-Leitplanken.** Aquaticy prüft jede Frage gegen Grundgesetz und BGB – auch
 Personensuchen, Kamerabilder und Mail-Entwürfe. Die Regeln stehen unter *Dev settings →
 Welche Regeln gelten?*. Nach einer Person suchen ist erlaubt (öffentliche Angaben, Beruf).
@@ -1097,7 +1119,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.0.0-Luna.md).
+[Prüfbericht](TESTREPORT-12.0.0-Terra.md).
 
 ---
 

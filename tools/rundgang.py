@@ -719,6 +719,85 @@ def konto_loeschen(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     kontext.close()
 
 
+def anmeldeschutz(browser: Any, port: int, log: Protokoll, fehler: list[str]) -> None:
+    """12.0.0 Terra: Anmelden mit dem Schutz gegen Bots (aquaticy/botguard.py).
+
+    Ein normaler Browser merkt nichts -- die Rechenaufgabe loest die Seite im
+    Hintergrund. Ein ferngesteuerter (navigator.webdriver, HeadlessChrome) muss
+    erst den Regler ganz nach rechts schieben.
+    """
+    log.abschnitt("20d. Anmeldeschutz")
+    adresse = f"http://127.0.0.1:{port}/"
+
+    def anmeldeseite(kontext: Any, name: str) -> Any:
+        pg = kontext.new_page()
+        pg.on("pageerror", lambda e: fehler.append(f"Skriptfehler ({name}): {e}"))
+        pg.goto(adresse, wait_until="networkidle")
+        pg.wait_for_selector("#consent-card:not([hidden])", timeout=10_000)
+        pg.click("#consent-yes")
+        pg.wait_for_selector("#login-card:not([hidden])", timeout=10_000)
+        return pg
+
+    kontext = browser.new_context(viewport={"width": 1200, "height": 860})
+    pg = anmeldeseite(kontext, "schutz")
+    pg.click("#tab-register")
+    pg.fill("#auth-username", "Schutz")
+    pg.fill("#auth-email", "schutz@example.org")
+    pg.fill("#auth-password", "schutz-geheim-12")
+    pg.check("#auth-terms")
+    pg.click("#auth-submit")
+    pg.wait_for_selector("#auth-gate", state="hidden", timeout=15_000)
+    agent = str(pg.evaluate("navigator.userAgent"))
+    kontext.close()
+
+    def anmelden_als(pg: Any) -> None:
+        pg.click("#tab-login")
+        pg.fill("#auth-email", "schutz@example.org")
+        pg.fill("#auth-password", "schutz-geheim-12")
+
+    def ist_login(antwort: Any) -> bool:
+        return "/api/auth/login" in antwort.url
+
+    # Wie ein Mensch im Browser: normaler User-Agent, nicht ferngesteuert.
+    kontext = browser.new_context(viewport={"width": 1200, "height": 860},
+                                  user_agent=agent.replace("HeadlessChrome", "Chrome"))
+    kontext.add_init_script(
+        "Object.defineProperty(Navigator.prototype, 'webdriver', {get: () => false});")
+    pg = anmeldeseite(kontext, "browser")
+    anmelden_als(pg)
+    with pg.expect_response(ist_login) as antwort:
+        pg.click("#auth-submit")
+    log.pruefe(antwort.value.status == 200,
+               f"ein normaler Browser meldet sich ohne Regler an ({antwort.value.status})")
+    pg.wait_for_selector("#auth-gate", state="hidden", timeout=15_000)
+    kontext.close()
+
+    # Ferngesteuert: erst "Bestaetige kurz, dass du ein Mensch bist".
+    kontext = browser.new_context(viewport={"width": 1200, "height": 860})
+    pg = anmeldeseite(kontext, "ferngesteuert")
+    anmelden_als(pg)
+    with pg.expect_response(ist_login) as antwort:
+        pg.click("#auth-submit")
+    pg.wait_for_selector("#human-check:not([hidden])", timeout=8_000)
+    log.pruefe(antwort.value.status == 428 and pg.is_visible("#human-slider"),
+               f"ein ferngesteuerter Browser bekommt erst den Regler ({antwort.value.status})")
+    box = pg.locator("#human-slider").bounding_box()
+    y = box["y"] + box["height"] / 2
+    pg.mouse.move(box["x"] + 3, y)
+    pg.mouse.down()
+    for anteil, pause in ((0.06, 60), (0.15, 35), (0.3, 80), (0.42, 45), (0.58, 90),
+                          (0.7, 40), (0.83, 70), (0.93, 50), (1.0, 60)):
+        pg.mouse.move(box["x"] + box["width"] * anteil + (8 if anteil == 1.0 else 0), y,
+                      steps=2)
+        pg.wait_for_timeout(pause)
+    with pg.expect_response(ist_login, timeout=30_000) as antwort:
+        pg.mouse.up()
+    log.pruefe(antwort.value.status == 200,
+               f"mit dem Regler wie von Hand kommt er herein ({antwort.value.status})")
+    pg.wait_for_selector("#auth-gate", state="hidden", timeout=15_000)
+    kontext.close()
+
+
 def zweite_seite(browser: Any, quelle: Any, **optionen: Any) -> Any:
     """Ein weiteres Fenster -- angemeldet wie das erste.
 
@@ -2493,6 +2572,7 @@ def main() -> int:
         if not nur or "normal" in nur:
             normales_konto(browser, port, log, fehler)
             konto_loeschen(browser, port, log, fehler)
+            anmeldeschutz(browser, port, log, fehler)
 
         log.abschnitt("21. Die Konsole")
         log.pruefe(not fehler, f"keine Fehler im Browser ({fehler[:3]})")

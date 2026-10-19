@@ -13,6 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from aquaticy import cli, cluster, web
+from tests.anmeldung import AGENT, SPRACHE
 from tests.test_v965 import parallel_site as parallel_site
 
 
@@ -225,8 +226,8 @@ def test_mobile_and_desktop_chat_and_settings_remain_usable(parallel_site, width
         browser = pw.chromium.launch(executable_path=executable)
         try:
             context = browser.new_context(viewport={"width": width, "height": 800},
-                                          user_agent="Parallel-Test",
-                                          extra_http_headers={"Accept-Language": "de-DE"})
+                                          user_agent=AGENT,
+                                          extra_http_headers={"Accept-Language": SPRACHE})
             context.add_cookies([{"name": name, "value": value, "url": url}
                                 for name, value in client.cookies.items()])
             page = context.new_page()
@@ -267,8 +268,8 @@ def test_background_errors_keep_focus_and_foreground_errors_keep_dialog(parallel
     with playwright.sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=executable)
         try:
-            context = browser.new_context(user_agent="Parallel-Test",
-                                          extra_http_headers={"Accept-Language": "de-DE"})
+            context = browser.new_context(user_agent=AGENT,
+                                          extra_http_headers={"Accept-Language": SPRACHE})
             context.add_cookies([{"name": name, "value": value, "url": url}
                                 for name, value in client.cookies.items()])
             page = context.new_page()

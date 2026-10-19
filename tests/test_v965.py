@@ -18,6 +18,7 @@ from aquaticy import web
 from aquaticy.auth import AuthStore, pro_code_for, ultra_code_for
 from aquaticy.cache import Cache
 from aquaticy.config import Settings
+from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 from tests.test_web import FakeAgent
 
 
@@ -83,11 +84,12 @@ def parallel_site(tmp_path, monkeypatch):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}"
     client = httpx.Client(base_url=url, trust_env=False, timeout=5,
-                         headers={"User-Agent": "Parallel-Test", "Accept-Language": "de-DE"})
+                         headers={"User-Agent": AGENT, "Accept-Language": SPRACHE})
     try:
         client.post("/api/consent", json={"accepted": True})
-        response = client.post("/api/auth/login", json={"email": account.email,
-                                                      "password": "parallel-test-passwort"})
+        response = client.post("/api/auth/login", headers=FETCH,
+                               json=wie_die_app({"email": account.email,
+                                                 "password": "parallel-test-passwort"}))
         assert response.status_code == 200
         yield client, gates, started, made, account, url
     finally:
@@ -179,8 +181,8 @@ def test_browser_can_write_in_b_and_return_to_running_a(parallel_site, finish_ba
     client, gates, started, _, _, url = parallel_site
     with playwright.sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=chromium)
-        context = browser.new_context(user_agent="Parallel-Test",
-                                      extra_http_headers={"Accept-Language": "de-DE"})
+        context = browser.new_context(user_agent=AGENT,
+                                      extra_http_headers={"Accept-Language": SPRACHE})
         context.add_cookies([{"name": k, "value": v, "url": url}
                             for k, v in client.cookies.items()])
         page = context.new_page()

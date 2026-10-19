@@ -3,7 +3,6 @@ noch von Mistral, NVIDIA NIM oder vom Server selbst, Schluessel nur ueber Add-on
 
 from __future__ import annotations
 
-import re
 import sqlite3
 from pathlib import Path
 
@@ -264,5 +263,6 @@ def test_the_setup_wizard_asks_for_no_key() -> None:
 def test_twelve_is_the_version() -> None:
     import aquaticy
 
-    assert aquaticy.__version__ == "12.0.0" and aquaticy.__codename__ == "Luna"
-    assert re.search(r'window.__AQUATICY_VERSION__ \|\| "12\.0\.0 Luna"', _ui())
+    # Seit 12.0.0 Terra steht der Name in tests/test_version.py -- hier die Nummer.
+    assert aquaticy.__version__ == "12.0.0"
+    assert f'window.__AQUATICY_VERSION__ || "12.0.0 {aquaticy.__codename__}"' in _ui()

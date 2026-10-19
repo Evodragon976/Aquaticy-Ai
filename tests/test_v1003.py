@@ -21,6 +21,7 @@ from aquaticy.auth import ultra_code_for
 from aquaticy.config import Settings
 from aquaticy.injection import RULES
 from aquaticy.legal import LEGAL_VERSION
+from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 from tests.test_agent import _message
 from tests.test_upgrading import BASE, FAKTEN, Ollama
 from tests.test_v965 import parallel_site as parallel_site
@@ -38,15 +39,15 @@ def upgrade_page(parallel_site):
     account = web.AUTH.register("upgrading@example.org", "luna-upgrade-test-passwort", "ultra",
                                 pro_code=ultra_code_for(web.AUTH.data_dir),
                                 terms_accepted=True, terms_version="1")
-    assert client.post("/api/auth/login", json={
+    assert client.post("/api/auth/login", headers=FETCH, json=wie_die_app({
         "email": account.email, "password": "luna-upgrade-test-passwort",
-    }).status_code == 200
+    })).status_code == 200
     with playwright.sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=chromium)
         try:
             context = browser.new_context(viewport={"width": 390, "height": 800},
-                                          user_agent="Parallel-Test",
-                                          extra_http_headers={"Accept-Language": "de-DE"})
+                                          user_agent=AGENT,
+                                          extra_http_headers={"Accept-Language": SPRACHE})
             context.add_cookies([{"name": k, "value": v, "url": url}
                                 for k, v in client.cookies.items()])
             page = context.new_page()

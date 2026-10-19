@@ -1170,6 +1170,36 @@ class AuthStore:
                 return True
         return False
 
+    def seen_device_for_login(self, email: str, device: Any) -> bool:
+        """Hat sich dieses Geraet schon einmal bei dem Konto zu *email* angemeldet?
+
+        Fuer die Risikozahl beim Anmelden (12.0.0 Terra, aquaticy/botguard.py) --
+        anders als :meth:`is_known_device` ohne Ausnahme fuer das erste Geraet:
+        Ohne Konto oder ohne gespeichertes Geraet gilt es als neu. Verraet
+        nicht, ob es das Konto gibt: neu ist beides gleich.
+        """
+        from aquaticy.devices import DeviceInfo
+
+        if not isinstance(device, DeviceInfo):
+            return False
+        try:
+            schluessel = self._email_key(normalize_email(email))
+        except ValueError:
+            return False
+        geraet = self._keyed(device)
+        with self._connect() as conn:
+            zeile = conn.execute("SELECT id FROM users WHERE email = ?",
+                                 (schluessel,)).fetchone()
+            if zeile is None:
+                return False
+            rows = conn.execute("SELECT cookie_hash FROM account_devices WHERE user_id=?",
+                                (zeile["id"],)).fetchall()
+        # Nur die Kennung aus dem Cookie zaehlt: Hardware und Browser meldet der
+        # Client selbst, ein Bot koennte sie nachmachen und so "bekannt" wirken.
+        return bool(geraet.cookie_hash) and any(
+            hmac.compare_digest(str(geraet.cookie_hash), str(r["cookie_hash"] or ""))
+            for r in rows)
+
     def add_event(self, user_id: str, kind: str, detail: str) -> None:
         with suppress(sqlite3.Error), self._lock, self._connect() as conn:
             conn.execute("INSERT INTO account_events (user_id, at, kind, detail) "

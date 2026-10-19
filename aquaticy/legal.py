@@ -23,6 +23,16 @@ Installation entscheidet, wo sie läuft und welche optionalen Dienste eingeschal
   <li><strong>Sitzung:</strong> zufällige Sitzungsschlüssel sowie Hashes aus IP-Adresse und
     Browserangaben. Diese Werte schützen die Anmeldung und werden nicht für Werbung
     verwendet.</li>
+  <li><strong>Schutz der Anmeldung vor Bots:</strong> Beim Anmelden prüft Aquaticy vor dem
+    Passwort, ob ein Mensch im Browser oder ein Programm anfragt. Dafür nutzt es die
+    Browserkennung, die Sprache und die Kopfzeilen, die ein Browser bei jeder Anfrage
+    mitschickt, ob der Browser ferngesteuert wird, eine kleine Rechenaufgabe, die die Seite im
+    Hintergrund löst, die Zahl der Fehlversuche von deiner IP-Adresse und deiner
+    Geräte-Kennung in der letzten Stunde und ob sich dieses Gerät schon einmal bei dem Konto
+    angemeldet hat. Fällt die Prüfung knapp aus, schiebst du einen Regler; seine Bewegung
+    (Zeit und Stelle) wird nur geprüft, nicht gespeichert. Fehlversuche und Sperren
+    (15 Minuten) liegen nur im Arbeitsspeicher des Servers, unter der IP-Adresse oder dem Hash
+    der Geräte-Kennung, und sind nach einer Stunde oder einem Neustart weg.</li>
   <li><strong>Eigene Inhalte:</strong> Chats, Einstellungen, Aufträge, Uploads und – falls
     eingeschaltet – gespeicherte Erinnerungen. Jeder Account hat einen getrennten Ordner.</li>
   <li><strong>Nutzung:</strong> verbrauchte Token und belegter Speicher, damit Limits und die

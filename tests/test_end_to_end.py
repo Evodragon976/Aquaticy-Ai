@@ -21,6 +21,7 @@ import pytest
 
 from aquaticy import guardrails, web
 from tests import fake_llm
+from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 
 #: Der echte Rechtspruefer -- conftest ersetzt ihn sonst durch "zulaessig".
 ECHTER_PRUEFER = guardrails._ask_model
@@ -65,9 +66,14 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def _req(port: int, method: str, path: str, body: Any = None,
-         cookie: str = "") -> tuple[int, dict[str, str], bytes]:
+         cookie: str = "", browser: bool = False) -> tuple[int, dict[str, str], bytes]:
     conn = HTTPConnection("127.0.0.1", port, timeout=120)
-    headers = {"Content-Type": "application/json", "User-Agent": "E2E"}
+    # Wie ein Browser (12.0.0 Terra): die Sitzung haengt an User-Agent und Sprache,
+    # und zum Anmelden kommen die Fetch-Metadaten dazu.
+    headers = {"Content-Type": "application/json", "User-Agent": AGENT,
+               "Accept-Language": SPRACHE}
+    if browser:
+        headers.update(FETCH)
     if cookie:
         headers["Cookie"] = cookie
     conn.request(method, path, body=None if body is None else json.dumps(body), headers=headers)
@@ -216,8 +222,8 @@ def test_aiguard_bans_after_two_indicators(server: tuple[int, Path]) -> None:
     # zu sehen, warum und wie lange. Schreiben kann es nicht (oben).
     _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
     zustimmung = kopf["Set-Cookie"].split(";", 1)[0]
-    status, kopf, daten = _req(port, "POST", "/api/auth/login", {
-        "email": _LETZTE_MAIL[0], "password": "ein langes Passwort"}, zustimmung)
+    status, kopf, daten = _req(port, "POST", "/api/auth/login", wie_die_app({
+        "email": _LETZTE_MAIL[0], "password": "ein langes Passwort"}), zustimmung, browser=True)
     assert status == 200
     neu = zustimmung + "; " + kopf["Set-Cookie"].split(";", 1)[0]
     status, _, daten = _req(port, "GET", "/api/account", None, neu)
@@ -240,8 +246,9 @@ def test_malware_bans_at_once_and_a_banned_address_stays_out(
     try:
         _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
         zustimmung = kopf["Set-Cookie"].split(";", 1)[0]
-        status, _, daten = _req(port, "POST", "/api/auth/login", {
-            "email": _LETZTE_MAIL[0], "password": "ein langes Passwort"}, zustimmung)
+        status, _, daten = _req(port, "POST", "/api/auth/login", wie_die_app({
+            "email": _LETZTE_MAIL[0], "password": "ein langes Passwort"}), zustimmung,
+            browser=True)
         assert status == 403 and json.loads(daten)["code"] == "banned"
     finally:
         web.AIGUARD.unban_ip("127.0.0.1")

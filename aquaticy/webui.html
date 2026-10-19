@@ -1212,6 +1212,9 @@ input:focus,select:focus{border-color:var(--accent)}
 .auth-tabs button.active,.plan-choice label:has(input:checked){border-color:var(--accent);
   background:var(--accent-soft);color:var(--accent-text)}
 .plan-choice input{margin-right:6px}.auth-error{color:var(--err);min-height:1.5em}
+.human-check{border:1px solid var(--line-2);background:var(--surface-2);border-radius:10px;
+  padding:10px 12px;margin:12px 0 4px;color:var(--text-2)}
+.human-check p{margin:0 0 8px}.human-check input{width:100%;accent-color:var(--accent)}
 .pro-lock{border:1px solid var(--line-2);background:var(--surface-2);border-radius:10px;
   padding:10px 12px;margin:0 0 16px;color:var(--text-2)}
 .pro-lock[hidden]{display:none}.locked-feature{opacity:.62}
@@ -1708,6 +1711,11 @@ html.vv,html.vv body{height:var(--app-h)}
         <span>Ich stimme der <a href="/privacy" target="_blank" rel="noopener">Datenschutzerklärung</a>
           und den <a href="/terms" target="_blank" rel="noopener">Nutzungsbedingungen</a> zu.</span>
       </label>
+      <div class="human-check" id="human-check" hidden>
+        <p>Bestätige kurz, dass du ein Mensch bist: Schieb den Regler ganz nach rechts.</p>
+        <input type="range" id="human-slider" min="0" max="100" step="1" value="0"
+               aria-label="Regler ganz nach rechts schieben">
+      </div>
       <div class="auth-error" id="auth-error" role="alert"></div>
       <div class="auth-actions">
         <button type="submit" class="btn primary" id="auth-submit">Konto erstellen</button>
@@ -2887,7 +2895,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.0.0 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.0.0 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -3304,6 +3312,9 @@ function setAuthMode(mode){
   $("#auth-password").minLength = registering ? 12 : 1;
   $("#auth-password-hint").hidden = !registering;
   $("#auth-error").textContent = "";
+  // Der Regler gehoert zu einer Anmeldung -- beim Wechsel ist er weg.
+  $("#human-check").hidden = true;
+  menschAufgabe = null; menschNachweis = null;
   showProCode();
 }
 function showProCode(){
@@ -3322,7 +3333,7 @@ $("#tab-login").addEventListener("click", () => setAuthMode("login"));
 $("#consent-yes").addEventListener("click", async () => {
   const res = await api("/api/consent", {method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({accepted:true})});
-  if (res.ok) showAuth(loginCard);
+  if (res.ok){ showAuth(loginCard); frischerBesuchsNachweis(); }
 });
 $("#consent-no").addEventListener("click", async () => {
   await api("/api/consent", {method:"POST",headers:{"Content-Type":"application/json"},
@@ -3353,6 +3364,114 @@ function geraeteInfo(){
   return info;
 }
 
+/* ---------- Anmeldeschutz gegen Bots (12.0.0 Terra, aquaticy/botguard.py) ----------
+   Beim Besuch holt die Seite eine kleine Rechenaufgabe und loest sie im
+   Hintergrund, waehrend man tippt. Die Loesung geht mit der Anmeldung zum
+   Server -- ein Skript ohne Browser bringt sie nicht mit. Reines JS statt
+   crypto.subtle: das fehlt bei http im Heimnetz. */
+const SHA_K = new Uint32Array([
+  0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+const SHA_W = new Uint32Array(64);
+// Die ersten 32 Bit von SHA-256(text) -- text ist ASCII, mehr braucht die Aufgabe nicht.
+function sha256Kopf(text){
+  const n = text.length, bloecke = (n + 72) >> 6, m = new Uint32Array(bloecke * 16), w = SHA_W;
+  for (let i = 0; i < n; i++) m[i >> 2] |= text.charCodeAt(i) << (24 - (i & 3) * 8);
+  m[n >> 2] |= 0x80 << (24 - (n & 3) * 8);
+  m[bloecke * 16 - 1] = n * 8;
+  const hs = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,
+    0x5be0cd19];
+  for (let blk = 0; blk < bloecke; blk++){
+    for (let t = 0; t < 64; t++){
+      if (t < 16){ w[t] = m[blk * 16 + t]; continue; }
+      const x = w[t - 15], y = w[t - 2];
+      w[t] = ((x >>> 7 | x << 25) ^ (x >>> 18 | x << 14) ^ (x >>> 3)) + w[t - 7]
+        + ((y >>> 17 | y << 15) ^ (y >>> 19 | y << 13) ^ (y >>> 10)) + w[t - 16];
+    }
+    let [a, b, c, d, e, f, g, h] = hs;
+    for (let t = 0; t < 64; t++){
+      const t1 = (h + ((e >>> 6 | e << 26) ^ (e >>> 11 | e << 21) ^ (e >>> 25 | e << 7))
+        + ((e & f) ^ (~e & g)) + SHA_K[t] + w[t]) | 0;
+      const t2 = (((a >>> 2 | a << 30) ^ (a >>> 13 | a << 19) ^ (a >>> 22 | a << 10))
+        + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+    }
+    [a, b, c, d, e, f, g, h].forEach((v, i) => { hs[i] = (hs[i] + v) | 0; });
+  }
+  return hs[0] >>> 0;
+}
+// Sucht die Zahl, mit der SHA-256("samen:zahl") vorn genug Nullbits hat -- in
+// kleinen Happen, damit die Seite beim Tippen nicht haengt.
+function loeseAufgabe(aufgabe){
+  return new Promise((fertig) => {
+    const vorn = `${aufgabe.seed}:`, bits = Math.min(24, Math.max(1, aufgabe.bits | 0));
+    let zahl = 0;
+    const happen = () => {
+      for (const ende = zahl + 3000; zahl < ende; zahl++){
+        if (Math.clz32(sha256Kopf(vorn + zahl)) >= bits){
+          fertig({token: aufgabe.token, nonce: String(zahl)}); return;
+        }
+      }
+      setTimeout(happen, 0);
+    };
+    happen();
+  });
+}
+let besuchsNachweis = null, besuchsZeit = 0;
+function neuerBesuchsNachweis(){
+  besuchsZeit = Date.now();
+  besuchsNachweis = api("/api/auth/challenge", {quietErrors:true})
+    .then(res => res.ok ? res.json() : null)
+    .then(aufgabe => aufgabe && aufgabe.token ? loeseAufgabe(aufgabe) : null)
+    .catch(() => null);
+}
+// Der Nachweis gilt eine Viertelstunde und einmal -- nach zwoelf Minuten ein neuer.
+function frischerBesuchsNachweis(){
+  if (!besuchsNachweis || Date.now() - besuchsZeit > 12 * 60 * 1000) neuerBesuchsNachweis();
+  return besuchsNachweis;
+}
+// "Bestaetige kurz, dass du ein Mensch bist": der Regler und dazu eine groessere
+// Aufgabe. Der Weg des Reglers (Zeit, Stelle) geht mit -- ein Ruck ans Ende zaehlt nicht.
+let menschAufgabe = null, menschNachweis = null, reglerWeg = [], reglerStart = 0;
+function zeigeMenschCheck(aufgabe){
+  menschAufgabe = loeseAufgabe(aufgabe);
+  menschNachweis = null; reglerWeg = []; reglerStart = 0;
+  $("#human-slider").value = 0;
+  $("#human-check").hidden = false;
+  $("#human-slider").focus();
+}
+function reglerSchritt(){
+  const jetzt = performance.now();
+  if (!reglerStart){ reglerStart = jetzt; reglerWeg = []; }
+  if (reglerWeg.length < 400)
+    reglerWeg.push([Math.round(jetzt - reglerStart), Number($("#human-slider").value) / 100]);
+}
+$("#human-slider").addEventListener("pointerdown", () => {
+  if (!reglerStart){ reglerStart = performance.now(); reglerWeg = [[0, 0]]; }
+});
+$("#human-slider").addEventListener("input", reglerSchritt);
+$("#human-slider").addEventListener("change", async () => {
+  const regler = $("#human-slider");
+  if (Number(regler.value) < 95 || !menschAufgabe){
+    regler.value = 0; reglerStart = 0; reglerWeg = []; return;
+  }
+  regler.disabled = true;
+  $("#auth-error").textContent = "Einen Moment …";
+  const geloest = await menschAufgabe;
+  regler.disabled = false;
+  menschNachweis = {...geloest, track: reglerWeg.slice()};
+  menschAufgabe = null;
+  $("#human-check").hidden = true;
+  const formular = $("#auth-form");
+  if (formular.requestSubmit) formular.requestSubmit(); else $("#auth-submit").click();
+});
+
 $("#auth-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const error = $("#auth-error"); error.textContent = "";
@@ -3371,10 +3490,32 @@ $("#auth-form").addEventListener("submit", async (event) => {
     learning_version: learningVersion,
     device: geraeteInfo(),
   };
+  const anmelden = authMode === "login";
+  if (anmelden){
+    $("#auth-submit").disabled = true;
+    body.proof = await frischerBesuchsNachweis();
+    // Kam die Aufgabe nicht an (Netz kurz weg), einmal neu -- ohne Nachweis sieht
+    // die Anmeldung sonst wie ein Skript aus.
+    if (!body.proof){ neuerBesuchsNachweis(); body.proof = await besuchsNachweis; }
+    body.webdriver = navigator.webdriver === true;
+    if (menschNachweis){ body.human = menschNachweis; menschNachweis = null; }
+    $("#auth-submit").disabled = false;
+    // Jeder Nachweis gilt einmal: fuer den naechsten Versuch schon einen neuen rechnen.
+    neuerBesuchsNachweis();
+  }
   try {
     const res = await api(`/api/auth/${authMode}`, {method:"POST",
       headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
     const data = await res.json();
+    if (anmelden && res.status === 428 && data.challenge){
+      zeigeMenschCheck(data.challenge); return;
+    }
+    if (anmelden && res.status === 429 && data.code === "dropped"){
+      $("#human-check").hidden = true;
+      error.textContent = "Zu viele verdächtige Anmeldeversuche von hier. Bitte versuch es "
+        + "später noch einmal.";
+      return;
+    }
     if (!res.ok || !data.ok){ error.textContent = data.error || "Das hat nicht geklappt."; return; }
     location.reload();
   } catch { error.textContent = "Aquaticy ist gerade nicht erreichbar. Versuch es gleich noch einmal."; }
@@ -3385,7 +3526,12 @@ async function bootAuth(){
     const state = await (await api("/api/auth/status")).json();
     learningVersion = state.learning_version || "";
     if (!state.consent){ showAuth(consentCard); return; }
-    if (!state.authenticated){ setAuthMode("register"); showAuth(loginCard); return; }
+    if (!state.authenticated){
+      setAuthMode("register"); showAuth(loginCard);
+      // Im Hintergrund schon die Rechenaufgabe fuers Anmelden loesen (12.0.0 Terra).
+      neuerBesuchsNachweis();
+      return;
+    }
     currentUsername = state.account?.username || "";
     authGate.hidden = true;
     starteOberflaeche();
@@ -5914,6 +6060,9 @@ const EN = {
 "Angelegt.": "Created.",
 "Anlegen ging nicht.": "Couldn't create it.",
 "Aquaticy ist gerade nicht erreichbar. Versuch es gleich noch einmal.": "Aquaticy can't be reached right now. Try again in a moment.",
+"Bestätige kurz, dass du ein Mensch bist: Schieb den Regler ganz nach rechts.": "Quickly confirm you're human: slide the control all the way to the right.",
+"Regler ganz nach rechts schieben": "Slide the control all the way to the right",
+"Zu viele verdächtige Anmeldeversuche von hier. Bitte versuch es später noch einmal.": "Too many suspicious sign-in attempts from here. Please try again later.",
 "Bitte gib eine vollständige öffentliche http(s)-Quelladresse an.": "Please enter a complete public http(s) source address.",
 "Bitte wähle das Bild aus, nach dem gesucht werden soll.": "Please choose the image to search for.",
 "Das ging gerade nicht. Versuch es gleich noch einmal.": "That didn't work just now. Try again in a moment.",

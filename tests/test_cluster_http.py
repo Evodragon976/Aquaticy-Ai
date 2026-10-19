@@ -21,6 +21,7 @@ import pytest
 
 from aquaticy.auth import AuthStore, pro_code_for, ultra_code_for
 from aquaticy.cluster import _b64, _unb64, seal
+from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 
 PASSWORD = "connect-test-passwort-963"
 
@@ -87,12 +88,12 @@ class Server:
 
     def client(self):
         return httpx.Client(base_url=self.url, trust_env=False, timeout=15,
-                            headers={"User-Agent": "Aquaticy-Connect-Test",
-                                     "Accept-Language": "de-DE"})
+                            headers={"User-Agent": AGENT, "Accept-Language": SPRACHE})
 
     def login(self, client, email="admin@example.org"):
         assert client.post("/api/consent", json={"accepted": True}).status_code == 200
-        response = client.post("/api/auth/login", json={"email": email, "password": PASSWORD})
+        response = client.post("/api/auth/login", headers=FETCH,
+                               json=wie_die_app({"email": email, "password": PASSWORD}, client))
         assert response.status_code == 200, response.text
 
     def answer(self, invite_id, answer):

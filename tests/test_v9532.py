@@ -22,6 +22,7 @@ from aquaticy import privacy
 from aquaticy.auth import ARGON_PREFIX, AuthStore, _argon_params, _password_hash
 from aquaticy.devices import clean_device
 from aquaticy.memory import CipherError
+from tests.anmeldung import wie_die_app
 from tests.test_end_to_end import _req, server  # noqa: F401 -- Fixture
 
 TERMS = {"terms_accepted": True, "terms_version": "1"}
@@ -396,9 +397,9 @@ def test_deleting_the_account_needs_password_and_word(server: tuple[int, Path]) 
     status, _, _ = _req(port, "GET", "/api/account", None, keks)
     assert status == 401
     _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
-    status, _, _ = _req(port, "POST", "/api/auth/login", {
-        "email": "loesch1@example.org", "password": "ein langes Passwort"},
-        kopf["Set-Cookie"].split(";", 1)[0])
+    status, _, _ = _req(port, "POST", "/api/auth/login", wie_die_app({
+        "email": "loesch1@example.org", "password": "ein langes Passwort"}),
+        kopf["Set-Cookie"].split(";", 1)[0], browser=True)
     assert status == 401
 
 

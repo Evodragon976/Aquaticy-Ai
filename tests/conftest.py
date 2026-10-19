@@ -151,3 +151,6 @@ def _frische_anfragegrenze(monkeypatch):
     monkeypatch.setattr(web, "ADDRESS_LIMIT", web.RateLimiter(attempts=1200, window_seconds=60))
     monkeypatch.setattr(web, "AUTH_LIMIT", web.RateLimiter(attempts=8, window_seconds=60))
     monkeypatch.setattr(web, "LOGIN_FAILS", web.RateLimiter(attempts=10, window_seconds=15 * 60))
+    # Der Anmeldeschutz (12.0.0 Terra) zaehlt Fehlversuche je Adresse eine Stunde lang.
+    monkeypatch.setattr(web, "BOT_FAILS", web.botguard.Failures())
+    monkeypatch.setattr(web, "BOT_BANS", web.botguard.Bans())

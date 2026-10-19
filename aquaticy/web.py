@@ -19,6 +19,7 @@ import hmac
 import io
 import json
 import logging
+import math
 import os
 import queue
 import re
@@ -39,7 +40,7 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
-from aquaticy import INTERNAL, VERSION_LABEL, __version__, cluster, webview
+from aquaticy import INTERNAL, VERSION_LABEL, __version__, botguard, cluster, webview
 from aquaticy.auth import Account, AuthStore, RateLimiter, pro_code_for
 from aquaticy.cache import Cache
 from aquaticy.config import (
@@ -606,7 +607,8 @@ _CLUSTER_RESTART = threading.Event()
 #: Diese Pfade bedient jeder Server selbst, auch im Verbund: Anmeldung,
 #: Zustimmung, Logo, Rechtstexte und die Verbund-Einstellungen dieses Servers.
 CLUSTER_LOCAL = frozenset({"/api/auth/status", "/api/auth/login", "/api/auth/register",
-                           "/api/auth/logout", "/api/consent", "/api/cluster"})
+                           "/api/auth/logout", "/api/auth/challenge", "/api/consent",
+                           "/api/cluster"})
 
 #: Was ein gesperrtes Konto noch schicken darf (9.5.26): abmelden, das Design
 #: aendern, einen Lauf anhalten und die eigenen Chats ansehen, umbenennen oder
@@ -631,6 +633,10 @@ AUTH_LIMIT = RateLimiter(attempts=8, window_seconds=60)
 #: Fehlversuche je Konto (seit 9.5.22). AUTH_LIMIT zaehlt je Adresse -- wer
 #: von vielen Adressen aus EIN Konto durchprobiert, faellt erst hier auf.
 LOGIN_FAILS = RateLimiter(attempts=10, window_seconds=15 * 60)
+#: Anmeldeschutz gegen Bots (12.0.0 Terra, aquaticy/botguard.py): Fehlversuche je
+#: Client (Adresse, Geraete-Kennung) und die Sperren nach "abgewiesen".
+BOT_FAILS = botguard.Failures()
+BOT_BANS = botguard.Bans()
 #: So gross darf eine Anmeldung, Registrierung oder Zustimmung hoechstens sein.
 AUTH_BODY_BYTES = 16_384
 REQUEST_LIMIT = RateLimiter(attempts=240, window_seconds=60)
@@ -3774,6 +3780,9 @@ class Handler(BaseHTTPRequestHandler):
         """
         self.responded = False
         self.__dict__.pop("_pending_headers", None)
+        # Je Anfrage neu (12.0.0 Terra): bei Keep-Alive lebt der Handler weiter, und
+        # ein spaeteres 429 trug sonst das Retry-After einer frueheren Anfrage.
+        self._retry_after = 0
         route = self._route()
         client = self._client_ip()
         weitergereicht = bool(getattr(self, "_cluster_user", ""))
@@ -3797,6 +3806,8 @@ class Handler(BaseHTTPRequestHandler):
             "/api/consent",
             "/api/auth/register",
             "/api/auth/login",
+            # Die Rechenaufgabe fuer den Anmeldeschutz (12.0.0 Terra) -- vor der Anmeldung.
+            "/api/auth/challenge",
             # Abmelden geht auch mit abgelaufener Sitzung -- der Cookie soll weg
             # (9.5.34; vorher 401, und der alte Cookie blieb stehen).
             "/api/auth/logout",
@@ -4056,6 +4067,76 @@ class Handler(BaseHTTPRequestHandler):
     def _flush_headers(self) -> None:
         for name, wert in self.__dict__.pop("_pending_headers", None) or ():
             self.send_header(name, wert)
+
+    def _fetch_metadata_expected(self) -> bool:
+        """Schickt ein Browser hier ``Sec-Fetch-*``? Bei https und localhost ja --
+        bei http im Heimnetz nicht, dort zaehlt es fuer den Fingerabdruck nicht."""
+        if self._https():
+            return True
+        host = (self.headers.get("Host") or "").strip().lower()
+        name = host.split("]", 1)[0] + "]" if host.startswith("[") else host.rsplit(":", 1)[0]
+        return (name in {"localhost", "[::1]"} or name.startswith("127.")
+                or name.endswith(".localhost"))
+
+    def _bot_keys(self, geraet: Any, neue_kennung: bool) -> tuple[str, ...]:
+        """Woran ein Client fuer den Anmeldeschutz wiedererkannt wird: Adresse und,
+        wenn er schon eine hat, seine Geraete-Kennung (nur als Hash)."""
+        schluessel = [f"ip:{botguard.address_key(self._client_ip())}"]
+        kennung = str(getattr(geraet, "cookie_hash", "") or "")
+        if kennung and not neue_kennung:
+            schluessel.append(f"dev:{kennung}")
+        return tuple(schluessel)
+
+    def _bot_gate(self, payload: dict[str, Any], geraet: Any, neue_kennung: bool) -> bool:
+        """Die Risikozahl vor dem Passwort (12.0.0 Terra, aquaticy/botguard.py).
+
+        Returns: True -- weiter zum Passwort. False -- schon beantwortet: mit
+        einer Aufgabe "Bestaetige, dass du ein Mensch bist" (428) oder
+        abgewiesen (429, ohne Passwortpruefung).
+        """
+        schluessel = self._bot_keys(geraet, neue_kennung)
+        mensch = payload.get("human")
+        mensch_ok = (isinstance(mensch, dict) and botguard.check(mensch, ("human",))
+                     and botguard.human_track(mensch.get("track")))
+        # Ein bestandener Nachweis ersetzt den aus dem Hintergrund -- der ist beim
+        # ersten Versuch schon verbraucht.
+        beweis_ok = mensch_ok or botguard.check(payload.get("proof"), ("visit",))
+        skript = bool(botguard.fingerprint(self.headers, beweis_ok,
+                                           payload.get("webdriver") is True,
+                                           self._fetch_metadata_expected()))
+        # Gesperrt ist das Geraet -- die Adresse nur fuer Skripte: hinter derselben
+        # Adresse (Familie, Buero) kann ein Mensch sitzen, der nichts dafuer kann.
+        gesperrt = BOT_BANS.remaining(*schluessel[1:])
+        if skript:
+            gesperrt = max(gesperrt, BOT_BANS.remaining(schluessel[0]))
+        if gesperrt:
+            self._abgewiesen(gesperrt)
+            return False
+        neu = True
+        if AUTH is not None:
+            with contextlib.suppress(Exception):
+                neu = not AUTH.seen_device_for_login(str(payload.get("email", "")), geraet)
+        zahl = botguard.score(skript, BOT_FAILS.count(*schluessel), neu)
+        urteil = botguard.verdict(zahl)
+        if urteil == botguard.DROPPED:
+            BOT_FAILS.add(*schluessel)
+            BOT_BANS.ban(*schluessel)
+            self._abgewiesen(botguard.BAN_SECONDS)
+            return False
+        if urteil == botguard.CHALLENGE and not mensch_ok:
+            self._json({"ok": False, "challenge": botguard.issue("human"),
+                        "error": "Bitte bestätige kurz, dass du ein Mensch bist."}, 428)
+            return False
+        return True
+
+    def _abgewiesen(self, sekunden: int) -> None:
+        """429 fuer einen abgewiesenen Client -- mit der Zeit, bis er es wieder darf."""
+        self._retry_after = max(1, int(sekunden))
+        minuten = max(1, math.ceil(sekunden / 60))
+        wann = "einer Minute" if minuten == 1 else f"{minuten} Minuten"
+        self._json({"ok": False, "code": "dropped",
+                    "error": "Zu viele verdächtige Anmeldeversuche von hier. Versuch es in "
+                             f"{wann} noch einmal."}, 429)
 
     def _zu_viele(self, sekunden: int) -> None:
         """429 mit ``Retry-After``: die Seite wartet so lange und fragt dann noch einmal."""
@@ -4651,6 +4732,10 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                 }
             )
+        elif route == "/api/auth/challenge":
+            # Die Rechenaufgabe, die die Seite beim Besuch im Hintergrund loest
+            # (12.0.0 Terra, aquaticy/botguard.py). Sie verraet und speichert nichts.
+            self._json(botguard.issue("visit"))
         elif route == "/api/learning":
             from aquaticy.learning import Learning
 
@@ -5100,6 +5185,10 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": False, "error": str(exc)}, 400)
                     return
             else:
+                # Anmeldeschutz gegen Bots (12.0.0 Terra): erst die Risikozahl, dann --
+                # und nur dann -- das Passwort. Abgewiesen kostet keinen Hash.
+                if not self._bot_gate(payload, geraet, neue_kennung):
+                    return
                 konto_schluessel = "login:" + str(payload.get("email", "")).strip().lower()
                 if LOGIN_FAILS.full(konto_schluessel):
                     self._json({"ok": False, "error": (
@@ -5111,6 +5200,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 if account is None:
                     LOGIN_FAILS.allow(konto_schluessel)
+                    BOT_FAILS.add(*self._bot_keys(geraet, neue_kennung))
                     self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
                     return
             # Eine gesperrte ADRESSE kommt nicht herein (9.5.16 Lion). Ein

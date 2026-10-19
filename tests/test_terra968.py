@@ -15,6 +15,7 @@ import pytest
 from aquaticy import agent, auth, memory, netguard, subagents, web
 from aquaticy.auth import AuthStore
 from aquaticy.jsonutil import MAX_DEPTH, JsonDepthError, raw_decode
+from tests.anmeldung import BROWSER, wie_die_app
 from tests.test_v965 import parallel_site as parallel_site
 
 OLD, NEW = "old-password-123", "new-password-456"
@@ -172,8 +173,9 @@ def test_http_login_racing_password_change_returns_401_without_new_session(paral
     with httpx.Client(base_url=url, headers=dict(fixture_client.headers), trust_env=False,
                       timeout=15) as client, ThreadPoolExecutor(max_workers=1) as pool:
         assert client.post("/api/consent", json={"accepted": True}).status_code == 200
-        pending = pool.submit(client.post, "/api/auth/login", json={
-            "email": registered.email, "password": "parallel-test-passwort"})
+        pending = pool.submit(client.post, "/api/auth/login", headers=BROWSER,
+                              json=wie_die_app({"email": registered.email,
+                                                "password": "parallel-test-passwort"}))
         try:
             assert entered.wait(5)
             independent = AuthStore(web.AUTH.data_dir, "TESTCODE")
@@ -184,7 +186,8 @@ def test_http_login_racing_password_change_returns_401_without_new_session(paral
         assert response.status_code == 401
         assert web.AUTH.session_count(registered.id) == 0
         assert not scheduled and web.AUTH_COOKIE not in response.cookies
-        valid = client.post("/api/auth/login", json={"email": registered.email, "password": NEW})
+        valid = client.post("/api/auth/login", headers=BROWSER,
+                            json=wie_die_app({"email": registered.email, "password": NEW}))
         assert valid.status_code == 200 and scheduled == [registered.id]
         assert "_credential" not in valid.text
 

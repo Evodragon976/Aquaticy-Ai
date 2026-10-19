@@ -18,6 +18,7 @@ from aquaticy.legal import LEGAL_VERSION
 from aquaticy.models import PageResult
 from aquaticy.privacy import TEXT_PREFIX
 from aquaticy.tools import Toolbox
+from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 from tests.test_agent import ScriptedLLM, _message, _tool_call
 from tests.test_v965 import parallel_site as parallel_site
 
@@ -344,10 +345,12 @@ def test_login_only_grants_learning_with_separate_current_agreement(parallel_sit
     client, _, _, _, account, _ = parallel_site
     credentials = {"email": account.email, "password": "parallel-test-passwort",
                    "learning_accepted": True, "learning_version": "old"}
-    assert client.post("/api/auth/login", json=credentials).status_code == 200
+    assert client.post("/api/auth/login", headers=FETCH,
+                       json=wie_die_app(credentials)).status_code == 200
     assert not client.get("/api/learning").json()["enabled"]
     credentials["learning_version"] = LEGAL_VERSION
-    assert client.post("/api/auth/login", json=credentials).status_code == 200
+    assert client.post("/api/auth/login", headers=FETCH,
+                       json=wie_die_app(credentials)).status_code == 200
     assert client.get("/api/learning").json()["enabled"]
 
 
@@ -363,9 +366,9 @@ def test_learning_can_be_withdrawn_while_the_account_is_banned(parallel_site, mo
     assert client.post("/api/learning", json={
         "enabled": True, "version": LEGAL_VERSION}).status_code == 403
     assert client.post("/api/learning", json={"enabled": False}).json()["enabled"] is False
-    assert client.post("/api/auth/login", json={
+    assert client.post("/api/auth/login", headers=FETCH, json=wie_die_app({
         "email": "parallel@example.org", "password": "parallel-test-passwort",
-        "learning_accepted": True, "learning_version": LEGAL_VERSION}).status_code == 200
+        "learning_accepted": True, "learning_version": LEGAL_VERSION})).status_code == 200
     assert not client.get("/api/learning").json()["enabled"]
 
 
@@ -377,8 +380,8 @@ def test_browser_learning_controls_and_batched_renderer(parallel_site):
     client, _, _, _, _, url = parallel_site
     with playwright.sync_playwright() as pw:
         browser = pw.chromium.launch(executable_path=chromium)
-        context = browser.new_context(user_agent="Parallel-Test",
-                                      extra_http_headers={"Accept-Language": "de-DE"})
+        context = browser.new_context(user_agent=AGENT,
+                                      extra_http_headers={"Accept-Language": SPRACHE})
         context.add_cookies([{"name": k, "value": v, "url": url}
                             for k, v in client.cookies.items()])
         page = context.new_page()

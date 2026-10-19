@@ -36,6 +36,7 @@ from aquaticy import metering, web
 from aquaticy.config import Settings
 from aquaticy.quota import SESSION_TOKENS, Quota
 from aquaticy.usage import UsageLog
+from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 
 
 def _antwort(text: str = "ok") -> SimpleNamespace:
@@ -294,9 +295,14 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def _anfrage(port: int, method: str, path: str, body: Any = None,
-             cookie: str = "") -> tuple[int, dict[str, str], dict[str, Any]]:
+             cookie: str = "", browser: bool = False) -> tuple[int, dict[str, str], dict[str, Any]]:
     conn = HTTPConnection("127.0.0.1", port, timeout=10)
-    headers = {"Content-Type": "application/json", "User-Agent": "Sicherheitstest"}
+    # Wie ein Browser (12.0.0 Terra): die Sitzung haengt an User-Agent und Sprache,
+    # und zum Anmelden kommen die Fetch-Metadaten dazu.
+    headers = {"Content-Type": "application/json", "User-Agent": AGENT,
+               "Accept-Language": SPRACHE}
+    if browser:
+        headers.update(FETCH)
     if cookie:
         headers["Cookie"] = cookie
     conn.request(method, path, body=None if body is None else json.dumps(body), headers=headers)
@@ -431,8 +437,8 @@ def test_normal_accounts_cannot_blow_up_the_local_model(tmp_path: Path) -> None:
 def _mit_kopf(port: int, method: str, path: str, body: Any = None,
          headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], dict[str, Any]]:
     conn = HTTPConnection("127.0.0.1", port, timeout=10)
-    kopf = {"Content-Type": "application/json", "User-Agent": "Sicherheitstest",
-            **(headers or {})}
+    kopf = {"Content-Type": "application/json", "User-Agent": AGENT,
+            "Accept-Language": SPRACHE, **(headers or {})}
     conn.request(method, path, body=None if body is None else json.dumps(body), headers=kopf)
     antwort = conn.getresponse()
     roh = antwort.read()
@@ -462,13 +468,21 @@ def test_one_account_cannot_be_brute_forced_from_many_addresses(
     _anfrage(server, "POST", "/api/auth/register", {
         "email": "ziel@example.org", "username": "Ziel", "password": "ein langes Passwort",
         "plan": "normal", "terms_accepted": True}, zustimmung)
-    for _ in range(3):
+    # Jeder Versuch von einer anderen Adresse (12.0.0 Terra): sonst fragte schon der
+    # Anmeldeschutz je Adresse nach -- hier geht es um die Grenze je Konto.
+    adresse = ["203.0.113.1"]
+    monkeypatch.setattr(web.Handler, "_client_ip", lambda self: adresse[0])
+    for nummer in range(3):
+        adresse[0] = f"203.0.113.{10 + nummer}"
         status, _, _ = _anfrage(server, "POST", "/api/auth/login",
-                                {"email": "ziel@example.org", "password": "falsch"}, zustimmung)
+                                wie_die_app({"email": "ziel@example.org", "password": "falsch"}),
+                                zustimmung, browser=True)
         assert status == 401
+    adresse[0] = "203.0.113.99"
     status, _, daten = _anfrage(server, "POST", "/api/auth/login",
-                                {"email": "ZIEL@example.org ", "password": "ein langes Passwort"},
-                                zustimmung)
+                                wie_die_app({"email": "ZIEL@example.org ",
+                                             "password": "ein langes Passwort"}),
+                                zustimmung, browser=True)
     assert status == 429 and "Viertelstunde" in daten["error"]
 
 
