@@ -441,6 +441,7 @@ def test_a_crashed_runner_frees_memory_and_retries(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
     """Genau der Absturz aus der Praxis -- danach wird aufgeraeumt."""
+    settings.model = "ollama_chat/qwen3:8b"
     attempts = {"n": 0}
     freed: list[str] = []
 

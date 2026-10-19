@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import platform
 import re
 import shutil
@@ -21,6 +22,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -349,9 +351,55 @@ def unload_model(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool:
     return response.status_code == 200
 
 
+class _OllamaUse:
+    """Aktive Aufrufe und Bereinigung an EINEM Ollama-Endpunkt."""
+
+    def __init__(self) -> None:
+        self.lock = threading.RLock()
+        self.active = 0
+
+
+_USES: dict[str, _OllamaUse] = {}
+_USES_LOCK = threading.Lock()
+
+
+def _use_for(base_url: str) -> _OllamaUse:
+    with _USES_LOCK:
+        name = base_url.rstrip("/")
+        if name not in _USES:
+            _USES[name] = _OllamaUse()
+        return _USES[name]
+
+
+@contextmanager
+def model_use(model: str, base_url: str = "") -> Iterator[None]:
+    """Schuetzt Ollama vor einer Bereinigung waehrend anderer Modellaufrufe.
+
+    Bei Streams muss der Aufrufer den Schutz bis zum Schliessen des Streams
+    halten (Agent._completion). Die Aufrufe selbst laufen weiter parallel.
+    """
+    if not model.startswith(("ollama/", "ollama_chat/")):
+        yield
+        return
+    use = _use_for(base_url or os.environ.get("OLLAMA_API_BASE") or DEFAULT_OLLAMA_URL)
+    with use.lock:
+        use.active += 1
+    try:
+        yield
+    finally:
+        with use.lock:
+            use.active -= 1
+
+
 def free_memory(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
-    """Entlaedt alle laufenden Modelle. Gibt zurueck, was entladen wurde."""
-    return [name for name in loaded_models(base_url) if unload_model(name, base_url)]
+    """Entlaedt Modelle nur, wenn kein anderer Aufruf diesen Endpunkt benutzt."""
+    use = _use_for(base_url)
+    with use.lock:
+        if use.active:
+            return []
+        # Pruefen und Entladen bleiben atomar gegen neue Aufrufe. Andere
+        # Ollama-Endpunkte und Cloud-Aufrufe warten dabei nicht mit.
+        return [name for name in loaded_models(base_url) if unload_model(name, base_url)]
 
 
 def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None:

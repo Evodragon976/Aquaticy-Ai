@@ -1,4 +1,4 @@
-# Aquaticy AI 12.1.1 Luna
+# Aquaticy AI 12.1.1 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.1.1 Luna
+aquaticy --version            # 12.1.1 Terra
 
 # 2. Einrichten: Modell, Suche, auf Wunsch eine eigene Domain
 aquaticy setup
@@ -461,6 +461,20 @@ Ohne Domain bleibt alles wie bisher: `aquaticy web` läuft nur auf diesem Rechne
 
 Wer die Weboberfläche öffnet, legt zuerst ein Konto an. Jedes Konto hat eigene Chats,
 Einstellungen, Speicher und Schlüssel.
+
+**Gleichzeitige Chats mit Ollama.** Verschiedene Konten können gleichzeitig Fragen stellen
+und Antworten empfangen; im Test sind es zehn Konten mit zehn offenen Antwortstreams.
+Ein Stopp gilt nur für den ausgewählten Chat. Weitere Fragen im selben Chat warten auf
+dessen laufende Antwort. Bei 32 laufenden oder wartenden Anfragen in einem Chat kommt
+eine Meldung statt weiterer Hintergrundarbeit. Andere Chats bleiben nutzbar.
+
+Wie viele Antworten das Modell tatsächlich gleichzeitig berechnet, bestimmt Ollama.
+`OLLAMA_NUM_PARALLEL` wird beim Start des **Ollama-Dienstes** gesetzt; ein bereits
+laufender Dienst muss nach der Änderung neu gestartet werden. Mehr parallele Anfragen
+brauchen entsprechend mehr Kontextspeicher. Zehn angemeldete Nutzer benötigen daher
+nicht zwingend zehn Inferenzplätze: Ollama kann Anfragen auch intern nacheinander
+bearbeiten, während die Weboberfläche für alle Konten erreichbar bleibt. Für größere
+Last lassen sich zusätzliche Modellserver über den Server-Verbund einbinden.
 
 | | Normal | Pro | Ultra |
 |---|---|---|---|
@@ -1119,7 +1133,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.1.1-Luna.md).
+[Prüfbericht](TESTREPORT-12.1.1-Terra.md).
 
 ---
 

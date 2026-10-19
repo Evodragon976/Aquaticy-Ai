@@ -16,7 +16,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aquaticy import llmcall, metering
 from aquaticy.cache import Cache
@@ -65,6 +65,9 @@ from aquaticy.tools import (
     addon_schemas_for,
     vm_schemas_for,
 )
+
+if TYPE_CHECKING:
+    from aquaticy.learning import Learning
 
 SYSTEM_PROMPT = """\
 Du bist Aquaticy, ein Rechercheagent, gebaut von Jonas. Du beantwortest Fragen \
@@ -1401,6 +1404,7 @@ class Agent:
     ) -> None:
         self.settings = settings
         self.cache = cache
+        self.learning: Learning | None = None
         self.on_event = on_event
         #: Alle Fragen eines Chats teilen sich diese Kennung. Frueher war das
         #: die Objektadresse -- damit gehoerte jeder Neustart zu einem neuen
@@ -2831,7 +2835,8 @@ class Agent:
         try:
             from aquaticy.local_model import model_is_loaded
 
-            geladen = model_is_loaded(self.active_model)
+            geladen = model_is_loaded(
+                self.active_model, self.settings.ollama_base(self.active_model))
         except Exception:
             return
         if geladen is not False:
@@ -2888,7 +2893,10 @@ class Agent:
                 from aquaticy.local_model import free_memory, resource_problem
 
                 if resource_problem(detail):
-                    freed = free_memory()
+                    from aquaticy.config import provider_of
+
+                    freed = (free_memory(self.settings.ollama_base(self.active_model))
+                             if provider_of(self.active_model) in ("ollama", "ollama_chat") else [])
                     kleiner = self._shrink_context()
                     teile = [f"entladen: {', '.join(freed)}" if freed else "",
                              f"Kontext jetzt {kleiner} Token" if kleiner else ""]
@@ -2966,83 +2974,91 @@ class Agent:
 
     def _completion(self, messages: list[dict[str, Any]], *, stream: bool) -> dict[str, Any]:
         """Ein LLM-Aufruf; gibt eine Assistant-Nachricht als Dict zurueck."""
-        import litellm
+        from aquaticy.local_model import model_use
 
-        litellm.suppress_debug_info = True
-        # Durch den Taktgeber: der Anbieter hat ein Mass, und das haelt Aquaticy
-        # ein, statt es auszureizen und die Fehler zu wiederholen.
-        messages = metering.prepare_messages(self.settings, self.active_model, messages)
-        werkzeuge = self.tools
-        frage = next((t for t in (own_words(m.get("content")) for m in reversed(messages)
-                                  if m.get("role") == "user") if t), "")
-        buchung = self._reserve(messages, werkzeuge)
-        try:
-            with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
-                if self.settings.model_access is not None:
-                    self.settings.model_access(self.active_model)
-                # Ueber llmcall: LiteLLM 1.106.0 verlangte sonst das Paket `mcp`.
-                response = llmcall.completion(
-                    model=self.active_model,
-                    messages=messages,
-                    # Ohne Werkzeuge auch kein tool_choice -- manche Anbieter
-                    # lehnen das eine ohne das andere ab.
-                    **({"tools": werkzeuge, "tool_choice": "auto"} if werkzeuge else {}),
-                    stream=stream,
-                    **self._stream_usage(stream),
-                    **getattr(buchung, "kwargs", None) or self._llm_kwargs(),
+        # Bei Streams reicht der Schutz in llmcall nur bis zu den Kopfzeilen.
+        # Hier gilt er auch waehrend der Antwort und bis zum Verbindungsende.
+        with model_use(self.active_model, self.settings.ollama_base(self.active_model)):
+            import litellm
+
+            litellm.suppress_debug_info = True
+            # Durch den Taktgeber: der Anbieter hat ein Mass, und das haelt Aquaticy
+            # ein, statt es auszureizen und die Fehler zu wiederholen.
+            messages = metering.prepare_messages(self.settings, self.active_model, messages)
+            werkzeuge = self.tools
+            frage = next((t for t in (own_words(m.get("content")) for m in reversed(messages)
+                                      if m.get("role") == "user") if t), "")
+            buchung = self._reserve(messages, werkzeuge)
+            try:
+                with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
+                    if self.settings.model_access is not None:
+                        self.settings.model_access(self.active_model)
+                    # Ueber llmcall: LiteLLM 1.106.0 verlangte sonst das Paket `mcp`.
+                    response = llmcall.completion(
+                        model=self.active_model,
+                        messages=messages,
+                        # Ohne Werkzeuge auch kein tool_choice -- manche Anbieter
+                        # lehnen das eine ohne das andere ab.
+                        **({"tools": werkzeuge, "tool_choice": "auto"} if werkzeuge else {}),
+                        stream=stream,
+                        **self._stream_usage(stream),
+                        **getattr(buchung, "kwargs", None) or self._llm_kwargs(),
+                    )
+            except BaseException:
+                buchung.cancel()
+                raise
+            if not stream:
+                message = response.choices[0].message
+                content = message.content or ""
+                tool_calls = repair_tool_calls(
+                    _tool_calls_to_dicts(getattr(message, "tool_calls", None))
                 )
-        except BaseException:
-            buchung.cancel()
-            raise
-        if not stream:
-            message = response.choices[0].message
-            content = message.content or ""
-            tool_calls = repair_tool_calls(
-                _tool_calls_to_dicts(getattr(message, "tool_calls", None))
-            )
-            if not tool_calls and werkzeuge:
+                if not tool_calls and werkzeuge:
+                    aus_text = tool_calls_from_text(
+                        content, (t["function"]["name"] for t in werkzeuge), frage)
+                    if aus_text:
+                        tool_calls, content = aus_text, ""
+                # Kommentar VOR Werkzeugaufrufen ("Ich suche mal ...") ist keine
+                # Antwort: als answer_chunk gerendert wuerde er sich mit den
+                # [Suche]-Zeilen verhaken und spaeter vor der echten Antwort
+                # kleben bleiben.
+                if content and not tool_calls:
+                    self._emit("answer_chunk", text=content)
+                elif content.strip() and tool_calls:
+                    # Seit 9.6.0 sichtbar -- als Zwischennachricht, die verschwindet,
+                    # sobald die richtige Antwort da ist.
+                    self._emit("interim", text=content.strip())
+                fertig = {"role": "assistant", "content": content, "tool_calls": tool_calls}
+                self._note_usage(messages, fertig, buchung,
+                                 metering.usage_of(getattr(response, "usage", None)))
+                return fertig
+            self._stream_zahlen: tuple[int, int] | None = None
+            try:
+                gestreamt = self._consume_stream(response)
+            except BaseException:
+                # Abgebrochen: gezaehlt wird, was bis dahin sicher hinausging.
+                self._note_usage(messages, {}, buchung, self._stream_zahlen)
+                raise
+            finally:
+                with contextlib.suppress(Exception):
+                    llmcall.close_stream(response)
+            self._note_usage(messages, gestreamt, buchung, self._stream_zahlen)
+            if not gestreamt.get("tool_calls") and werkzeuge:
                 aus_text = tool_calls_from_text(
-                    content, (t["function"]["name"] for t in werkzeuge), frage)
+                    str(gestreamt.get("content") or ""), (t["function"]["name"] for t in werkzeuge),
+                    frage)
                 if aus_text:
-                    tool_calls, content = aus_text, ""
-            # Kommentar VOR Werkzeugaufrufen ("Ich suche mal ...") ist keine
-            # Antwort: als answer_chunk gerendert wuerde er sich mit den
-            # [Suche]-Zeilen verhaken und spaeter vor der echten Antwort
-            # kleben bleiben.
-            if content and not tool_calls:
-                self._emit("answer_chunk", text=content)
-            elif content.strip() and tool_calls:
-                # Seit 9.6.0 sichtbar -- als Zwischennachricht, die verschwindet,
-                # sobald die richtige Antwort da ist.
-                self._emit("interim", text=content.strip())
-            fertig = {"role": "assistant", "content": content, "tool_calls": tool_calls}
-            self._note_usage(messages, fertig, buchung,
-                             metering.usage_of(getattr(response, "usage", None)))
-            return fertig
-        self._stream_zahlen: tuple[int, int] | None = None
-        try:
-            gestreamt = self._consume_stream(response)
-        except BaseException:
-            # Abgebrochen: gezaehlt wird, was bis dahin sicher hinausging.
-            self._note_usage(messages, {}, buchung, self._stream_zahlen)
-            raise
-        self._note_usage(messages, gestreamt, buchung, self._stream_zahlen)
-        if not gestreamt.get("tool_calls") and werkzeuge:
-            aus_text = tool_calls_from_text(
-                str(gestreamt.get("content") or ""), (t["function"]["name"] for t in werkzeuge),
-                frage)
-            if aus_text:
-                # Schon gestreamt -- die Oberflaeche nimmt den Text als
-                # Zwischennachricht wieder aus der Antwort (wie unten).
-                self._emit("interim", text=str(gestreamt.get("content") or "").strip())
-                return {**gestreamt, "content": "", "tool_calls": aus_text}
-        if gestreamt.get("tool_calls") and str(gestreamt.get("content") or "").strip():
-            # Was vor einem Werkzeugaufruf gestreamt wurde ("Ich suche jetzt nach
-            # ..."), ist keine Antwort, sondern eine Zwischennachricht (9.6.0):
-            # die Oberflaeche nimmt sie aus der Antwort heraus und loescht sie,
-            # sobald die richtige Antwort steht.
-            self._emit("interim", text=str(gestreamt["content"]).strip())
-        return gestreamt
+                    # Schon gestreamt -- die Oberflaeche nimmt den Text als
+                    # Zwischennachricht wieder aus der Antwort (wie unten).
+                    self._emit("interim", text=str(gestreamt.get("content") or "").strip())
+                    return {**gestreamt, "content": "", "tool_calls": aus_text}
+            if gestreamt.get("tool_calls") and str(gestreamt.get("content") or "").strip():
+                # Was vor einem Werkzeugaufruf gestreamt wurde ("Ich suche jetzt nach
+                # ..."), ist keine Antwort, sondern eine Zwischennachricht (9.6.0):
+                # die Oberflaeche nimmt sie aus der Antwort heraus und loescht sie,
+                # sobald die richtige Antwort steht.
+                self._emit("interim", text=str(gestreamt["content"]).strip())
+            return gestreamt
 
     def _consume_stream(self, response: Any) -> dict[str, Any]:
         """Sammelt Text- und Tool-Call-Deltas eines Streams ein."""
@@ -3054,6 +3070,8 @@ class Agent:
             zahlen = metering.usage_of(getattr(chunk, "usage", None))
             if zahlen is not None:
                 self._stream_zahlen = zahlen
+            if self.stopped:
+                break
             choices = getattr(chunk, "choices", None)
             if not choices:
                 continue

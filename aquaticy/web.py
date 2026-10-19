@@ -200,6 +200,10 @@ class Run:
         }
 
 
+class RunCapacityError(RuntimeError):
+    """Der Chat hat bereits die hoechste Zahl laufender Anfragen."""
+
+
 class RunBook:
     """Die Laeufe eines Chats -- jeder ueber seine Kennung wiederzufinden (9.5.15).
 
@@ -224,6 +228,11 @@ class RunBook:
     def start(self, question: str) -> Run:
         """Ein neuer Lauf -- atomar angelegt und unter seiner Kennung abgelegt."""
         with self._lock:
+            if sum(not r.done for r in self._runs.values()) >= self.HARD:
+                # Nur das Buch zu kuerzen laesst die Arbeiter weiterlaufen. Dann
+                # waechst die Zahl wartender Threads trotz HARD ohne Grenze.
+                raise RunCapacityError("Zu viele laufende Anfragen in diesem Chat. "
+                                       "Bitte warte auf eine Antwort.")
             lauf = Run(secrets.token_hex(8), question)
             self._runs[lauf.id] = lauf
             # Aelteste fertige zuerst. Ein laufender bleibt (11.4.1 Luna): bis dahin
@@ -232,9 +241,7 @@ class RunBook:
             while len(self._runs) > self.KEEP:
                 alt = next((k for k, r in self._runs.items() if r.done), None)
                 if alt is None:
-                    if len(self._runs) <= self.HARD:
-                        break
-                    alt = next(iter(self._runs))
+                    break
                 self._runs.pop(alt)
             self.current = lauf
             return lauf
@@ -1307,6 +1314,9 @@ class ChatSession:
 
     def __init__(self, account: Account | None = None, profile: Path | None = None) -> None:
         self._lock = threading.Lock()
+        # Erstaufbau und Austausch des Agenten duerfen sich nicht ueberholen.
+        # Die Turn-Sperre ist hier ungeeignet: ask() haelt sie bereits.
+        self._agent_lock = threading.RLock()
         self._agent: Any = None
         self._settings: Settings | None = None
         self.account = account
@@ -1481,26 +1491,24 @@ class ChatSession:
     def agent(self) -> Any:
         from aquaticy.agent import Agent
 
-        if self._agent is None:
-            settings = self.settings()
-            cache = Cache(settings.db_path, settings.cache_ttl_hours)
-            self._agent = Agent(settings, cache=cache)
-            from aquaticy.learning import Learning
+        with self._agent_lock:
+            if self._agent is None:
+                settings = self.settings()
+                cache = Cache(settings.db_path, settings.cache_ttl_hours)
+                agent = Agent(settings, cache=cache)
+                from aquaticy.learning import Learning
 
-            self._agent.learning = Learning(settings.data_dir)
-            # Ein neu gebauter Agent faengt sonst einen neuen Chat an -- und
-            # das Modell zu wechseln haette das laufende Gespraech mitten
-            # entzweigeschnitten: die naechste Frage stuende als eigener
-            # Eintrag in der Leiste, und der Agent wuesste nichts mehr von
-            # dem, was vorher besprochen wurde.
-            if self._carry_over:
-                weiter, self._carry_over = self._carry_over, ""
-                vorher_fremd, self._carry_untrusted = self._carry_untrusted, False
-                with contextlib.suppress(Exception):
-                    entries = cache.chat_history(weiter)
-                    _resume(self._agent, weiter, entries,
-                            vorher_fremd or _chat_untrusted(entries))
-        return self._agent
+                agent.learning = Learning(settings.data_dir)
+                # Nach Modellwechsel denselben Chat samt Vertrauensgrenze
+                # wiederherstellen, bevor andere Anfragen den Agenten sehen.
+                if self._carry_over:
+                    weiter, self._carry_over = self._carry_over, ""
+                    vorher_fremd, self._carry_untrusted = self._carry_untrusted, False
+                    with contextlib.suppress(Exception):
+                        entries = cache.chat_history(weiter)
+                        _resume(agent, weiter, entries, vorher_fremd or _chat_untrusted(entries))
+                self._agent = agent
+            return self._agent
 
     def reset(self) -> None:
         """Beginnt einen neuen Chat. Der Merkzettel bleibt."""
@@ -1582,7 +1590,7 @@ class ChatSession:
             if self.profile is None:
                 reset_settings_cache()
             return
-        with self._lock:
+        with self._lock, self._agent_lock:
             old_settings = self._reload_old or self._settings
             workshop = workshop or self._reload_workshop
             self._reload_old, self._reload_workshop = None, False
@@ -6059,7 +6067,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         # sie ab, laeuft er weiter und kann spaeter zu Ende gesehen werden.
         session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
         session.chat_id()
-        lauf = current_runs().start(message)
+        try:
+            lauf = current_runs().start(message)
+        except RunCapacityError as exc:
+            self._json({"error": str(exc), "code": "busy"}, 429)
+            return
         if session.chat_id():
             lauf.chat = session.chat_id()
             lauf.add({"type": "chat", "session_id": session.chat_id()})

@@ -29,12 +29,47 @@ def _fehlt_mcp(exc: BaseException) -> bool:
     return isinstance(exc, ModuleNotFoundError) and (name == "mcp" or name.startswith("mcp."))
 
 
+def close_stream(response: Any) -> None:
+    """Schliesst synchrone Streams samt HTTP-Verbindung, auch hinter LiteLLM.
+
+    CustomStreamWrapper hat teils nur aclose(). Bei synchronem Ollama fehlt
+    zudem der Verweis http_response im inneren Iterator. Dessen iter_lines-
+    Generator haelt noch die echte httpx.Response. Die eng begrenzte
+    Kompatibilitaetshilfe schliesst nur Objekte dieses Typs, ohne Daten aus
+    dem Generator auszuwerten oder weiterzugeben.
+    """
+    import inspect
+
+    import httpx
+
+    for stream in (response, getattr(response, "completion_stream", None)):
+        if stream is None:
+            continue
+        raw = getattr(stream, "http_response", None)
+        lines = getattr(stream, "streaming_response", None)
+        if raw is None and inspect.isgenerator(lines):
+            raw = inspect.getgeneratorlocals(lines).get("self")
+        if isinstance(raw, httpx.Response):
+            raw.close()
+        close = getattr(stream, "close", None)
+        if callable(close) and not inspect.iscoroutinefunction(close):
+            close()
+        if inspect.isgenerator(lines):
+            lines.close()
+
+
 def completion(**kwargs: Any) -> Any:
     """Wie ``litellm.completion`` -- nur ohne den MCP-Umweg, wenn `mcp` fehlt."""
-    global _OHNE_MCP
     from aquaticy.config import check_allowed
+    from aquaticy.local_model import model_use
 
     check_allowed(str(kwargs.get("model") or ""), str(kwargs.get("api_base") or ""))
+    with model_use(str(kwargs.get("model") or ""), str(kwargs.get("api_base") or "")):
+        return _call(**kwargs)
+
+
+def _call(**kwargs: Any) -> Any:
+    global _OHNE_MCP
     import litellm
 
     if _OHNE_MCP and kwargs.get("tools"):

@@ -240,8 +240,8 @@ def test_connect_in_browser_preserves_code_during_polling(tmp_path, scenario):
             b.login(cb)
             action(cb, action="enable", on=True)
             browser = pw.chromium.launch(executable_path=chromium)
-            context = browser.new_context(user_agent="Aquaticy-Connect-Test",
-                                          extra_http_headers={"Accept-Language": "de-DE"})
+            context = browser.new_context(user_agent=AGENT,
+                                          extra_http_headers={"Accept-Language": SPRACHE})
             context.add_cookies([
                 {"name": key, "value": value, "url": a.url} for key, value in ca.cookies.items()
             ])

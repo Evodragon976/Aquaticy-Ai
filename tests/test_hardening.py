@@ -663,10 +663,14 @@ def test_every_run_is_found_by_its_id() -> None:
         buch.start(f"Frage {nummer}").finish()
     assert buch.get(erster.id) is None, "alte fertige Laeufe werden nicht ewig aufgehoben"
     assert len(buch._runs) == buch.KEEP
-    # Seit 11.4.1 Luna bleibt ein laufender Lauf -- aber nie mehr als HARD je Chat.
-    for nummer in range(buch.HARD + 10):
-        buch.start(f"laeuft {nummer}")
+    # 12.1.1 Terra: nicht bloss Kennungen entfernen, waehrend Threads weiter
+    # warten. Volle Chats lehnen neue Arbeit ab und behalten alle aktiven Laeufe.
+    laufende = [buch.start(f"laeuft {nummer}") for nummer in range(buch.HARD)]
+    for _ in range(10):
+        with pytest.raises(web.RunCapacityError):
+            buch.start("zu viel")
     assert len(buch._runs) == buch.HARD
+    assert all(buch.get(lauf.id) is lauf for lauf in laufende)
 
 
 # -- virtual machine: harte Platzgrenze auch ohne Quote der Laufzeit -----------------------------
