@@ -2351,6 +2351,13 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
             "() => document.body.classList.contains('collapsed') ? "
             "getComputedStyle(document.querySelector('aside')).boxShadow : 'none'")
         log.pruefe(schatten == "none", "die eingeklappte Seitenleiste wirft keinen Schatten")
+    # 12.0.0 Sol: Der Modell-Knopf endet gleich hinter dem Pfeil -- die Luecke bis
+    # zum Mikrofon ist kein Klickfeld.
+    if breite >= 340:
+        rand = pg.evaluate(
+            """() => document.querySelector("#btn-model").getBoundingClientRect().right
+                   - document.querySelector("#btn-model .caret").getBoundingClientRect().right""")
+        log.pruefe(rand <= 16, f"der Modell-Knopf endet hinter dem Pfeil ({rand:.0f}px)")
     # Die Kopfzeile und die Modellauswahl duerfen sich nicht schneiden.
     menue(pg)
     pg.wait_for_timeout(500)

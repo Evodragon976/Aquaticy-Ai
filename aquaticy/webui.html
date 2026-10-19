@@ -1578,10 +1578,12 @@ html.vv,html.vv body{height:var(--app-h)}
   .hello{padding:0 20px 12px}
   .hello p{margin-bottom:0}
   /* Eine Zeile fuer alles: Anhaengen, Modell, Mikrofon, Senden. Das Modell
-     nimmt sich den Rest der Breite statt fester 30 %. */
+     ist so breit wie sein Name -- der Knopf endet gleich hinter dem Pfeil
+     (12.0.0 Sol), die Luecke bis zum Mikrofon ist kein Klickfeld mehr. Ein
+     langer Name darf den Platz bis dahin nehmen und kuerzt sich dann mit "…". */
   .crow{gap:5px}
-  .crow .spacer{display:none}
-  .modelpick{flex:1 1 auto;max-width:none;justify-content:space-between}
+  .crow .spacer{display:block;flex:1 1 0;min-width:0}
+  .modelpick{flex:0 1 auto;max-width:none}
   .crow .tool{width:34px;height:34px;padding:0;justify-content:center}
   .crow .tool .wort{display:none}
   .composer{padding:8px 9px 7px}
@@ -2895,7 +2897,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.0.0 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.0.0 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
