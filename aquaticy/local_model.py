@@ -131,7 +131,17 @@ class LocalModelError(RuntimeError):
 # ---------------------------------------------------------------------------
 def ollama_binary() -> str | None:
     """Pfad zur `ollama`-Datei, oder `None`."""
-    return shutil.which("ollama")
+    found = shutil.which("ollama")
+    if found:
+        return found
+    # winget aktualisiert den PATH des bereits laufenden Setups nicht.
+    if platform.system() == "Windows":
+        local = os.environ.get("LOCALAPPDATA", "")
+        if local:
+            candidate = Path(local) / "Programs" / "Ollama" / "ollama.exe"
+            if candidate.is_file():
+                return str(candidate)
+    return None
 
 
 def install_command() -> list[str] | None:
@@ -142,13 +152,22 @@ def install_command() -> list[str] | None:
     """
     system = platform.system()
     if system == "Linux":
-        return ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
+        # Erst einen vollstaendigen HTTPS-Download pruefen, dann ausfuehren.
+        # Eine curl|sh-Pipeline konnte trotz Downloadfehler Erfolg melden und
+        # ein nur halb geladenes Skript bereits ausfuehren.
+        return ["sh", "-c", 'set -eu\n'
+                'installer=$(mktemp)\n'
+                'trap \'rm -f "$installer"\' EXIT\n'
+                'curl --proto "=https" --proto-redir "=https" --tlsv1.2 '
+                '-fsSL https://ollama.com/install.sh -o "$installer"\n'
+                'sh "$installer"']
     if system == "Darwin":
         if shutil.which("brew"):
             return ["brew", "install", "ollama"]
         return None
     if system == "Windows" and shutil.which("winget"):
-        return ["winget", "install", "--id", "Ollama.Ollama", "-e", "--accept-package-agreements"]
+        return ["winget", "install", "--id", "Ollama.Ollama", "-e", "--source", "winget",
+                "--accept-package-agreements", "--accept-source-agreements"]
     return None
 
 
@@ -169,9 +188,10 @@ def server_running(base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> 
     """Antwortet unter *base_url* ein Ollama-Server?"""
     try:
         response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=timeout)
-    except httpx.HTTPError:
+        payload = response.json() if response.status_code == 200 else None
+    except (httpx.HTTPError, ValueError):
         return False
-    return response.status_code == 200
+    return isinstance(payload, dict) and isinstance(payload.get("models"), list)
 
 
 def _tag_list(base_url: str) -> list[dict[str, Any]]:
@@ -198,6 +218,25 @@ def installed_models(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
 
 def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0) -> bool:
     """Startet `ollama serve` im Hintergrund und wartet, bis es antwortet."""
+    from urllib.parse import urlsplit
+
+    from aquaticy.ollama_setup import PARALLEL, _parallel
+
+    # Eine entfernte/custom URL ist kein Auftrag, auf diesem Rechner einen
+    # Dienst aufzumachen. Auch geerbtes OLLAMA_HOST darf keinen LAN-Port oeffnen.
+    try:
+        parsed = urlsplit(base_url)
+        if (parsed.scheme != "http" or parsed.hostname not in ("localhost", "127.0.0.1", "::1")
+                or parsed.username or parsed.password or parsed.path not in ("", "/")
+                or parsed.query or parsed.fragment or not parsed.port):
+            return False
+        host = "[::1]" if parsed.hostname == "::1" else "127.0.0.1"
+        environment = dict(os.environ, OLLAMA_HOST=f"{host}:{parsed.port}")
+    except ValueError:
+        return False
+    value = environment.get("OLLAMA_NUM_PARALLEL", "")
+    if not _parallel(value):
+        environment["OLLAMA_NUM_PARALLEL"] = str(PARALLEL)
     binary = ollama_binary()
     if binary is None:
         return False
@@ -221,11 +260,17 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
             [binary, "serve"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=environment,
             **extra,
         )
     except (OSError, ValueError):
         return False
 
+    return wait_for_server(base_url, wait_seconds)
+
+
+def wait_for_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0) -> bool:
+    """Wartet auch auf einen Dienststart, ohne einen zweiten Server zu erzeugen."""
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
         if server_running(base_url, timeout=1.5):
@@ -244,13 +289,18 @@ def install_ollama(runner: Callable[[list[str]], int] | None = None) -> bool:
 
 
 def _default_runner(command: list[str]) -> int:
-    return subprocess.run(command, check=False).returncode
+    try:
+        return subprocess.run(command, check=False, timeout=1800).returncode
+    except (OSError, subprocess.SubprocessError):
+        return 1
 
 
 # ---------------------------------------------------------------------------
 # Modell laden
 # ---------------------------------------------------------------------------
-def pull_model(name: str, binary: str | None = None) -> Iterator[str]:
+def pull_model(
+    name: str, binary: str | None = None, *, base_url: str = DEFAULT_OLLAMA_URL
+) -> Iterator[str]:
     """Laedt *name* per `ollama pull` und liefert die Fortschrittszeilen.
 
     Raises:
@@ -260,12 +310,15 @@ def pull_model(name: str, binary: str | None = None) -> Iterator[str]:
     if executable is None:
         raise LocalModelError("Ollama ist nicht installiert.")
 
+    if not name or name.startswith("-") or any(ord(char) < 32 for char in name):
+        raise LocalModelError("Ungültiger Ollama-Modellname.")
     process = subprocess.Popen(
         [executable, "pull", name],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
+        env=dict(os.environ, OLLAMA_HOST=base_url),
     )
     assert process.stdout is not None
     last_line = ""

@@ -1,4 +1,4 @@
-# Aquaticy AI 12.1.1 Terra
+# Aquaticy AI 12.1.1 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,9 +117,9 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.1.1 Terra
+aquaticy --version            # 12.1.1 Sol
 
-# 2. Einrichten: Modell, Suche, auf Wunsch eine eigene Domain
+# 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
 
 # 3. Loslegen – im Terminal …
@@ -145,12 +145,20 @@ aquaticy web
 
 | Was | Woher | Pflicht? |
 |---|---|---|
+| Ollama und Parallelbetrieb | Vorhandene Installation verwenden, sonst installieren; ein nötiger Dienstneustart wird vorher bestätigt | für lokale Modelle; Cloudbetrieb mit `--no-ollama` |
 | KI-Anbieter | Mistral oder NVIDIA NIM (den Schlüssel verknüpfst du danach in der Weboberfläche unter Add-ons) · oder lokal mit [Ollama](https://ollama.com), ohne Schlüssel | ja |
 | Suchmaschine | nichts – die offene Suche braucht keinen Schlüssel | nein |
 | Eigene Domain | eine Domain bei Cloudflare und ein API-Token ([so geht's](#eigene-website-mit-domain)) | nein |
 
 Aquaticy testet alles, bevor es speichert. Die Einstellungen liegen in
 `~/.config/aquaticy/.env` und sind nur für dich lesbar.
+
+Schon zu Beginn von `aquaticy setup` wird Ollama gesucht und bei Bedarf installiert.
+Installation und Dienstneustart werden angezeigt und bestätigt; `aquaticy setup --yes`
+bestätigt diese Schritte vorab und wählt bei lokalen Modellen die Empfehlung.
+Die Fragen zu Anbieter, Suche und allgemeinen Einstellungen bleiben interaktiv.
+`aquaticy setup --no-ollama` erhält die Einrichtung für reinen Cloudbetrieb.
+Der Python-Paketmanager selbst startet keine Installation mit Verwalterrechten.
 
 Eine einzelne Frage ohne Chat:
 
@@ -211,9 +219,11 @@ aquaticy install-model      # holt Ollama per winget und lädt die Modelle
 aquaticy install-model
 ```
 
-Der Befehl sucht Ollama und fragt, bevor er etwas installiert. Er schlägt ein Modell vor, das
+Der Befehl sucht Ollama, installiert es bei Bedarf und richtet Parallelbetrieb ein.
+Downloads und Dienstneustarts werden vorher bestätigt. Er schlägt ein Modell vor, das
 zu Arbeitsspeicher und Grafikkarte passt, lädt es und testet, ob es Werkzeuge bedienen kann.
-Nur ein Modell, das den Test besteht, wird eingetragen. Auf Wunsch kommt ein Bildmodell dazu.
+Bei fehlgeschlagener Prüfung warnt Aquaticy; die Übernahme erfordert eine ausdrückliche
+Bestätigung oder `--yes`. Auf Wunsch kommt ein Bildmodell dazu.
 
 ```bash
 aquaticy install-model --model qwen2.5:14b                    # nur Text
@@ -468,13 +478,28 @@ Ein Stopp gilt nur für den ausgewählten Chat. Weitere Fragen im selben Chat wa
 dessen laufende Antwort. Bei 32 laufenden oder wartenden Anfragen in einem Chat kommt
 eine Meldung statt weiterer Hintergrundarbeit. Andere Chats bleiben nutzbar.
 
-Wie viele Antworten das Modell tatsächlich gleichzeitig berechnet, bestimmt Ollama.
-`OLLAMA_NUM_PARALLEL` wird beim Start des **Ollama-Dienstes** gesetzt; ein bereits
-laufender Dienst muss nach der Änderung neu gestartet werden. Mehr parallele Anfragen
-brauchen entsprechend mehr Kontextspeicher. Zehn angemeldete Nutzer benötigen daher
-nicht zwingend zehn Inferenzplätze: Ollama kann Anfragen auch intern nacheinander
-bearbeiten, während die Weboberfläche für alle Konten erreichbar bleibt. Für größere
-Last lassen sich zusätzliche Modellserver über den Server-Verbund einbinden.
+`aquaticy setup` und `aquaticy install-model` setzen Ollamas `OLLAMA_NUM_PARALLEL`
+auf **2**; eine vorhandene gültige größere Einstellung bleibt erhalten.
+Weitere Anfragen warten in Ollamas vorhandener Warteschlange. Mehr Parallelität braucht
+mehr Kontextspeicher; die tatsächliche Rechenleistung hängt von Modell, RAM und GPU ab.
+Für größere Last lassen sich zusätzliche Modellserver über den Server-Verbund einbinden.
+
+- **Linux:** Ein vorhandener systemd-Dienst bekommt ein eigenes Drop-in; danach wird
+  der Dienst neu gestartet und die wirksame Einstellung geprüft. Andere Dienstregeln
+  bleiben erhalten. Für einen Systemdienst wird gegebenenfalls `sudo` benötigt.
+- **macOS:** Der Homebrew-LaunchAgent bekommt die Einstellung dauerhaft und wird neu
+  geladen. Bei einer laufenden nativen Ollama-App: App zuerst beenden und Setup erneut
+  starten. Ohne Homebrew bleibt die manuelle Installation über ollama.com möglich.
+- **Windows:** Installation über winget; die Einstellung wird für den Benutzer
+  gespeichert. Ein laufender Ollama-Prozess wird nur bei passendem Programmpfad und
+  demselben Windows-Benutzer beendet und anschließend neu gestartet.
+- **Eigene Starts:** Aquaticy startet `ollama serve` mit Parallelbetrieb und ausdrücklich
+  auf der lokalen Adresse. Das gilt auch beim nächsten Aquaticy-Start nach einem Neustart.
+  Ein unbekannter laufender Dienst wird mit einem Hinweis abgelehnt; erst beenden,
+  dann Setup erneut starten. Entfernte Modellserver werden hier nicht umkonfiguriert.
+
+Ein bestätigter Dienstneustart kann laufende Antworten abbrechen. Schlägt Installation,
+Konfiguration oder Start fehl, meldet Setup den Fehler und lädt kein Modell herunter.
 
 | | Normal | Pro | Ultra |
 |---|---|---|---|
@@ -1133,7 +1158,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.1.1-Terra.md).
+[Prüfbericht](TESTREPORT-12.1.1-Sol.md).
 
 ---
 

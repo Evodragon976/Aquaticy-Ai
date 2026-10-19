@@ -1381,9 +1381,19 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(pg.inner_text("#ask-count") == "1/3" and "Wo wohnst" in pg.inner_text("#ask-q"),
                    f"die erste Frage trägt 1/3 ({pg.inner_text('#ask-count')!r})")
         foto("05b-rueckfrage-reihe")
-        box = pg.locator("#ask-count").bounding_box()
-        sheet = pg.locator(".ask-sheet").first.bounding_box()
-        log.pruefe(box["x"] + box["width"] > sheet["x"] + sheet["width"] - 40,
+        # Die Pop-Animation skaliert das Fenster. Zwei getrennte Messungen
+        # konnten aus verschiedenen Frames stammen und eine korrekte Lage
+        # als Fehler melden. Nach der Animation beide Kanten zusammen lesen.
+        pg.wait_for_function("""() => {
+          const sheet = document.querySelector("#askbox .ask-sheet");
+          return sheet && sheet.getAnimations().every(a =>
+            a.playState === "finished" || a.playState === "idle");
+        }""")
+        kanten = pg.evaluate("""() => ({
+          zaehler: document.querySelector("#ask-count").getBoundingClientRect().right,
+          fenster: document.querySelector("#askbox .ask-sheet").getBoundingClientRect().right
+        })""")
+        log.pruefe(kanten["zaehler"] > kanten["fenster"] - 40,
                    "der Zähler steht oben rechts im Fenster")
         pg.click(".ask-opt >> nth=0")
         warte_auf_text(pg, "#ask-count", "2/3")

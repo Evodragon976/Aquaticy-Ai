@@ -78,6 +78,12 @@ def setup_command(
         None, "--env-file", help="Zieldatei für die .env (Default: ~/.config/aquaticy/.env)."
     ),
     no_probe: bool = typer.Option(False, "--no-probe", help="Keine Testanfragen schicken."),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Lokale Einrichtung ohne Rückfragen, auch beim Dienstneustart."
+    ),
+    ollama: bool = typer.Option(
+        True, "--ollama/--no-ollama", help="Ollama mit Parallelbetrieb direkt einrichten."
+    ),
 ) -> None:
     """Ersteinrichtung: Modell, Schlüssel und auf Wunsch eine eigene Domain."""
     load_env()
@@ -89,6 +95,13 @@ def setup_command(
             border_style="cyan",
         )
     )
+    ollama_ready = False
+    if ollama:
+        ollama_ready = _ensure_ollama(assume_yes=yes)
+        if not ollama_ready:
+            console.print("[yellow]Ollama-Einrichtung nicht abgeschlossen. "
+                          "Für reinen Cloudbetrieb: aquaticy setup --no-ollama.[/yellow]")
+            raise typer.Exit(code=1)
 
     # -- LLM ---------------------------------------------------------------
     console.print("\n[bold]1. LLM-Anbieter[/bold]")
@@ -108,7 +121,7 @@ def setup_command(
     elif choice.strip() == str(LOCAL_CHOICE):
         # Lokales Modell: installieren, laden, pruefen -- danach ist der
         # LLM-Teil erledigt und es geht direkt zur Suchmaschine weiter.
-        local_id = _run_local_setup()
+        local_id = _run_local_setup(assume_yes=yes, ollama_ready=ollama_ready)
         if not local_id:
             console.print("[yellow]Lokale Einrichtung abgebrochen.[/yellow]")
             raise typer.Exit(code=1)
@@ -262,6 +275,8 @@ def setup_command(
         "AQUATICY_COUNTRY": country,
         "AQUATICY_SUBAGENTS_AUTO": "true" if subagents_on else "false",
     }
+    if ollama_ready:
+        values["OLLAMA_NUM_PARALLEL"] = os.environ.get("OLLAMA_NUM_PARALLEL", "2")
     if backend_key_name and backend_key:
         values[backend_key_name] = backend_key
     if engines:
@@ -1629,13 +1644,17 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
             return False
         console.print("\n[bold]1. Ollama installieren[/bold]")
         console.print("  [dim]Ollama fehlt. Dieser Befehl würde ausgeführt:[/dim]")
-        shown = " ".join(command[2:]) if len(command) > 2 else " ".join(command)
+        shown = " ".join(command)
         console.print(f"  [cyan]{shown}[/cyan]")
         if not (assume_yes or typer.confirm("  Ausführen?", default=True)):
             console.print(f"  [dim]Abgebrochen. Von Hand: {lm.install_hint()}[/dim]")
             return False
         if not lm.install_ollama():
             console.print("[red]Installation fehlgeschlagen.[/red]")
+            return False
+        if lm.ollama_binary() is None:
+            console.print("[red]Ollama wurde nach der Installation nicht gefunden.[/red] "
+                          "Bitte den Programmpfad prüfen und die Einrichtung erneut starten.")
             return False
         console.print("  [green]Ollama installiert.[/green]")
     else:
@@ -1645,9 +1664,8 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
 
     # -- 2. Server ---------------------------------------------------------
     console.print("\n[bold]2. Server[/bold]")
-    if lm.server_running():
-        console.print("  [green]läuft bereits[/green]")
-        return True
+    if not _configure_ollama_parallel(assume_yes=assume_yes):
+        return False
     with console.status("  starte ollama serve ..."):
         started = lm.start_server()
     if not started:
@@ -1655,7 +1673,32 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
             "  [red]Server startet nicht.[/red] Starte ihn von Hand: [bold]ollama serve[/bold]"
         )
         return False
-    console.print("  [green]gestartet[/green]")
+    console.print("  [green]Ollama erreichbar, Parallelbetrieb eingerichtet.[/green]")
+    return True
+
+
+def _configure_ollama_parallel(*, assume_yes: bool = False) -> bool:
+    """Bestaetigter Dienstneustart; kein Konto in der Weboberflaeche darf das ausloesen."""
+    from aquaticy import local_model as lm
+    from aquaticy.ollama_setup import SetupError, _parallel, configure_parallel
+
+    console.print("  Mindestens zwei parallele Modellaufrufe; weitere Anfragen warten bei Ollama.")
+    console.print("  [yellow]Ein vorhandener Ollama-Dienst wird neu gestartet. "
+                  "Laufende Antworten können dadurch abbrechen.[/yellow]")
+    if not (assume_yes or typer.confirm("  Parallelbetrieb einrichten?", default=True)):
+        return False
+    try:
+        managed = configure_parallel(running=lm.server_running())
+        if managed and not lm.wait_for_server():
+            raise SetupError("Der konfigurierte Ollama-Dienst antwortet nicht. "
+                             "Bitte den Dienststatus prüfen; es wird kein zweiter gestartet.")
+    except (SetupError, OSError) as exc:
+        console.print(f"  [red]{exc}[/red]")
+        return False
+    # Eigene Starts nach dem Setup erhalten denselben sicheren Mindestwert.
+    value = os.environ.get("OLLAMA_NUM_PARALLEL", "")
+    if not _parallel(value):
+        os.environ["OLLAMA_NUM_PARALLEL"] = "2"
     return True
 
 
@@ -1873,7 +1916,9 @@ def _run_vision_setup(
     return ""
 
 
-def _run_local_setup(model_name: str = "", assume_yes: bool = False) -> str:
+def _run_local_setup(
+    model_name: str = "", assume_yes: bool = False, *, ollama_ready: bool = False
+) -> str:
     """Richtet ein lokales Modell ein. Gibt die Modell-ID zurueck, sonst "".
 
     Der Ablauf: Ollama finden oder installieren, Server starten, Modell laden,
@@ -1889,7 +1934,7 @@ def _run_local_setup(model_name: str = "", assume_yes: bool = False) -> str:
         )
     )
 
-    if not _ensure_ollama(assume_yes=assume_yes):
+    if not ollama_ready and not _ensure_ollama(assume_yes=assume_yes):
         return ""
 
     # -- 3. Modell waehlen -------------------------------------------------
@@ -2257,6 +2302,8 @@ def chat_command(
     _apply_overrides(settings, location, lang, country, model, max_calls)
     settings.download_images = download_images
     _warn_if_unconfigured(settings)
+    if settings.model.startswith(("ollama/", "ollama_chat/")):
+        _ollama_beim_start(settings)
 
     cache = Cache(settings.db_path, settings.cache_ttl_hours)
     renderer = ChatRenderer(console, show_images=show_images)

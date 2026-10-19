@@ -337,6 +337,8 @@ def _fake_ollama(monkeypatch: pytest.MonkeyPatch, *, tool_calling: bool = True) 
     from aquaticy import local_model as lm
 
     state: dict[str, Any] = {"pulled": []}
+    # Dienstkonfiguration und Neustart werden separat in test_v1211_sol geprueft.
+    monkeypatch.setattr(cli, "_configure_ollama_parallel", lambda **kwargs: True)
     monkeypatch.setattr(lm, "ollama_binary", lambda: "/usr/bin/ollama")
     monkeypatch.setattr(lm, "server_running", lambda *a, **k: True)
     monkeypatch.setattr(lm, "installed_models", lambda *a, **k: [])
