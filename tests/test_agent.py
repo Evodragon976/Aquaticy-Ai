@@ -1829,18 +1829,24 @@ def test_the_model_may_decide_against_asking(
 def test_the_nudge_happens_at_most_once(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
-    """Bleibt es bei der Frage, gilt sie. Eine Schleife wäre schlimmer."""
-    toolbox.ask_handler = lambda frage, optionen=None: "egal"
+    """Ein Anstoß, keine Schleife -- und bleibt es bei der Frage im Text, stellt
+    Aquaticy sie selbst im Fenster (12.0.1 Nutshell; bis dahin blieb sie im Chat)."""
+    gefragt: list[str] = []
+    toolbox.ask_handler = lambda frage, optionen=None: gefragt.append(frage) or "Bremen"
     llm = ScriptedLLM(
         _message(content="Für welchen Ort soll ich nachsehen?"),
         _message(content="Also, für welchen Ort denn?"),
+        _message(content="In Bremen wird es morgen 12 Grad."),
     )
     monkeypatch.setattr("litellm.completion", llm)
 
     agent = Agent(settings, cache=None, toolbox=toolbox)
     result = agent.ask("Wie wird das Wetter morgen?", stream=False)
-    assert result.answer == "Also, für welchen Ort denn?"
-    assert llm.responses == [], "genau zwei Aufrufe, kein dritter"
+    assert gefragt == ["Also, für welchen Ort denn?"]
+    assert result.answer == "In Bremen wird es morgen 12 Grad."
+    assert llm.responses == [], "genau drei Aufrufe, kein vierter"
+    angestossen = [m for m in agent.messages if "nur aus einer Frage" in str(m.get("content"))]
+    assert len(angestossen) == 1, "nur ein Anstoß"
 
 
 def test_nothing_is_sent_back_when_nobody_can_answer(

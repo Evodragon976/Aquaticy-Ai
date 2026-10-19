@@ -11,8 +11,8 @@ from pathlib import Path
 import aquaticy
 
 ROOT = Path(__file__).resolve().parents[1]
-NUMMER = "12.0.0"
-NAME = "Sol"
+NUMMER = "12.0.1"
+NAME = "Nutshell"
 LABEL = f"{NUMMER} {NAME}"
 
 

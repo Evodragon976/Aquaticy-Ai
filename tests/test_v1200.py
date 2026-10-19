@@ -263,6 +263,8 @@ def test_the_setup_wizard_asks_for_no_key() -> None:
 def test_twelve_is_the_version() -> None:
     import aquaticy
 
-    # Seit 12.0.0 Terra steht der Name in tests/test_version.py -- hier die Nummer.
-    assert aquaticy.__version__ == "12.0.0"
-    assert f'window.__AQUATICY_VERSION__ || "12.0.0 {aquaticy.__codename__}"' in _ui()
+    # Nummer und Name stehen seit 12.0.1 Nutshell nur in tests/test_version.py --
+    # hier: noch Fassung 12 und die Rueckfallangabe passt zu beidem.
+    assert aquaticy.__version__.startswith("12.")
+    label = f"{aquaticy.__version__} {aquaticy.__codename__}"
+    assert f'window.__AQUATICY_VERSION__ || "{label}"' in _ui()

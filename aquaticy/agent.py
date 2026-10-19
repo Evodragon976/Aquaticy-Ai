@@ -47,6 +47,7 @@ from aquaticy.tools import (
     LAN_SCHEMA,
     MAIL_READ_SCHEMA,
     MAIL_SEARCH_SCHEMA,
+    MAX_QUESTIONS,
     MEMORY_READ_SCHEMA,
     MEMORY_SCHEMA,
     MEMORY_WRITE_SCHEMA,
@@ -1045,6 +1046,68 @@ def is_only_a_question(text: str) -> bool:
     saetze = [teil.strip() for teil in re.split(r"(?<=[.!?])\s+", text) if teil.strip()]
     rest = " ".join(satz for satz in saetze if not satz.endswith("?"))
     return len(rest) < ANSWER_SUBSTANCE_CHARS
+
+
+#: Wie viel neben einer Rueckfrage noch stehen darf, damit sie eine Rueckfrage
+#: bleibt (12.0.1 Nutshell): "Gerne suche ich dir die neuesten Nachrichten
+#: heraus! Damit ich die richtigen finde:" ist ein Vorsatz, keine Antwort.
+#: Bis dahin galten 40 Zeichen -- fast jede hoefliche Rueckfrage war laenger.
+MAX_LEAD_CHARS = 220
+
+#: Ein Angebot am Ende ist keine Rueckfrage: "Soll ich auch das Wochenende
+#: nachsehen?" fragt nicht nach etwas, das zum Antworten fehlt.
+OFFER_RE = re.compile(
+    r"^(?:und |oder )?(?:soll(?:en)? (?:ich|wir)|möchtest du|moechtest du|willst du|magst du|"
+    r"brauchst du|kann ich|darf ich|hilft (?:dir )?das|passt das|reicht das|"
+    r"gibt es noch|hast du noch|shall i|should i|would you like|do you want|want me|"
+    r"can i|is there anything|anything else)\b",
+    re.I,
+)
+
+#: Vorschlaege als Liste unter der Frage ("- heute", "1. morgen").
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*•]|\d{1,2}[.)])\s+(.+?)\s*$")
+
+
+def _ohne_markdown(text: str) -> str:
+    return re.sub(r"[*_`]+", "", text).strip()
+
+
+def text_question(text: str) -> tuple[str, list[str]] | None:
+    """Die Rueckfrage in einem Antworttext -- (Frage, Vorschlaege) oder ``None``.
+
+    Weiter gefasst als :func:`is_only_a_question` (12.0.1 Nutshell): Ein kurzer
+    Vorsatz darf davorstehen, ein Emoji dahinter, und Vorschlaege als Liste
+    darunter werden zu Antwortknoepfen. Keine Rueckfrage ist ein Text mit
+    Code oder Links -- das ist eine Antwort -- und ein Angebot am Ende
+    ("Soll ich ...?").
+    """
+    text = (text or "").strip()
+    if (not text or len(text) > MAX_QUESTION_CHARS or "```" in text
+            or re.search(r"https?://", text)):
+        return None
+    zeilen = text.splitlines()
+    optionen: list[str] = []
+    while zeilen:
+        letzte = zeilen[-1].strip()
+        treffer = _LIST_ITEM_RE.match(letzte)
+        if not letzte and optionen:
+            zeilen.pop()
+            continue
+        if not treffer:
+            break
+        optionen.insert(0, _ohne_markdown(treffer.group(1)).rstrip("?.!,;").strip())
+        zeilen.pop()
+    # Hinter dem Fragezeichen duerfen nur noch Zeichen ohne Inhalt stehen (Emoji).
+    kern = re.sub(r"[^\w?]+$", "", "\n".join(zeilen).strip())
+    if not kern.endswith("?"):
+        return None
+    saetze = [_ohne_markdown(teil) for teil in re.split(r"(?<=[.!?:])\s+", kern) if teil.strip()]
+    fragen = [satz for satz in saetze if satz.endswith("?")]
+    rest = " ".join(satz for satz in saetze if not satz.endswith("?"))
+    if not fragen or len(rest) > MAX_LEAD_CHARS or OFFER_RE.match(fragen[-1]):
+        return None
+    frage = " ".join(fragen)[:300].strip()
+    return frage, [o[:80] for o in optionen if o][:4]
 
 
 #: Dasselbe in kurz, wenn niemand da ist, der antworten koennte. Ohne
@@ -3114,6 +3177,7 @@ class Agent:
         used = 0
         #: Hoechstens einmal je Anfrage zurueckschicken (siehe unten).
         genudged = False
+        selbst_gefragt = False
         #: Dasselbe fuer das fehlende Bild -- ebenfalls hoechstens einmal.
         gebildert = False
         #: Und fuer die gezielte Angabe, die nicht in der Antwort steht (11.4.0 Luna).
@@ -3203,16 +3267,29 @@ class Agent:
                 # Eine Frage gehoert in das Fenster, nicht in den Text. Das
                 # steht so im Systemtext -- aber ein Systemtext ist eine
                 # Bitte, und manche Modelle ueberlesen sie. Also einmal
-                # zurueckschicken. Nur einmal: entscheidet sich das Modell
-                # dann wieder dagegen, gilt seine Entscheidung. Eine
-                # Schleife waere schlimmer als die Frage im Text.
-                if not genudged and self._should_force_ask(antwort, used):
-                    genudged = True
-                    # Was schon auf dem Bildschirm steht, ist hinfaellig --
-                    # sonst klebte die Frage ueber der spaeteren Antwort.
-                    self._emit("answer_reset", reason="rueckfrage")
-                    self.messages.append({"role": "user", "content": FORCE_ASK_PROMPT})
-                    continue
+                # zurueckschicken; dann darf das Modell sich auch dagegen
+                # entscheiden und antworten. Schreibt es die Frage wieder in
+                # den Text, stellt Aquaticy sie selbst im Fenster (12.0.1
+                # Nutshell) -- bis dahin blieb sie im Chat stehen.
+                if self._should_force_ask(antwort, used):
+                    gefunden = text_question(antwort)
+                    if not genudged:
+                        genudged = True
+                        # Was schon auf dem Bildschirm steht, ist hinfaellig --
+                        # sonst klebte die Frage ueber der spaeteren Antwort.
+                        self._emit("answer_reset", reason="rueckfrage")
+                        self.messages.append({"role": "user", "content": FORCE_ASK_PROMPT})
+                        continue
+                    if (gefunden and not selbst_gefragt
+                            and self.toolbox.stats.questions < MAX_QUESTIONS):
+                        selbst_gefragt = True
+                        self._emit("answer_reset", reason="rueckfrage")
+                        used += 1
+                        self._ask_for_model(*gefunden)
+                        if self.stopped:
+                            result.stopped = True
+                            break
+                        continue
                 # Eingeschaltete Bildquellen ohne ein einziges Bild sind
                 # kein Ergebnis, sondern ein uebersehener Schalter. Einmal
                 # zurueckschicken, mit den Adressen, die schon dastehen --
@@ -3720,21 +3797,38 @@ class Agent:
 
         * **Es muss jemand da sein.** Ohne Rueckfrage-Empfaenger gibt es kein
           Fenster; dann waere der Anstoss eine Aufforderung ins Leere.
-        * **Es darf noch nichts getan worden sein.** Wer gesucht, gelesen und
-          dann noch etwas nachfragt, hat geantwortet -- das ist eine
-          Anschlussfrage und keine Ausweichbewegung.
-        * **Der Text muss im Kern eine Frage sein** (siehe
-          :func:`is_only_a_question`).
+        * **Es darf noch keine Seite gelesen sein.** Wer gelesen hat und dann
+          noch etwas nachfragt, hat geantwortet -- das ist eine Anschlussfrage.
+          Eine Suche allein zaehlt nicht (12.0.1 Nutshell): "neueste Nachrichten
+          in meinem Ort" sucht oft erst und merkt dann, dass der Ort fehlt.
+        * **Der Text muss im Kern eine Rueckfrage sein** (siehe
+          :func:`text_question`) -- kein Angebot am Ende einer Antwort.
         * **Und im Code-Modus gilt es nicht**: dort steht die Rueckfrage
           ohnehin als erster Punkt im Antwortformat, und eine Zeile
           "Annahme: Python 3.11" ist dort der uebliche, gewollte Weg.
         """
         return (
             self.toolbox.ask_handler is not None
-            and used == 0
+            and not self.toolbox.stats.fetched
             and self.mode != "code"
-            and is_only_a_question(answer)
+            and text_question(answer) is not None
         )
+
+    def _ask_for_model(self, frage: str, optionen: list[str]) -> None:
+        """Stellt die Rueckfrage aus dem Text selbst -- im Fenster (12.0.1 Nutshell).
+
+        Im Verlauf wird aus der Textantwort ein Aufruf von ``ask_user``: So steht
+        dort, was wirklich geschah, und das Modell arbeitet mit der Antwort weiter
+        wie nach einer eigenen Rueckfrage.
+        """
+        aufruf = {
+            "id": f"call_rueckfrage_{len(self.messages)}",
+            "type": "function",
+            "function": {"name": "ask_user", "arguments": json.dumps(
+                {"question": frage, "options": optionen}, ensure_ascii=False)},
+        }
+        self.messages[-1] = {"role": "assistant", "content": "", "tool_calls": [aufruf]}
+        self._run_round([aufruf])
 
     def _should_force_detail(self, question: str, answer: str = "") -> str:
         """Welche Angabe noch fehlt -- "" wenn die Antwort so bleiben darf.
