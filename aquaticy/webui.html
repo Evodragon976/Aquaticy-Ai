@@ -514,6 +514,11 @@ body.denken .trace.think .txt{white-space:pre-wrap;word-break:break-word;
 .ask-sheet{max-width:29rem;padding:22px 24px 20px}
 .ask-head{display:flex;align-items:center;gap:8px;font:600 calc(11.5px * var(--fs))/1 var(--mono);
   letter-spacing:.09em;text-transform:uppercase;color:var(--accent-text)}
+/* Mehrere Fragen hintereinander (12.1.1 Luna): oben rechts "2/3". */
+.ask-count{margin-left:auto;padding:3px 9px;border-radius:999px;background:var(--accent-soft);
+  color:var(--accent-text);letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.ask-sheet.wartet .ask-q,.ask-sheet.wartet .ask-opts,.ask-sheet.wartet .ask-free{opacity:.45;
+  pointer-events:none}
 .ask-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
   animation:pulse 1.6s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -1974,7 +1979,8 @@ html.vv,html.vv body{height:var(--app-h)}
 
 <div class="overlay ask" id="askbox">
   <div class="sheet ask-sheet" role="dialog" aria-modal="true" aria-labelledby="ask-q">
-    <div class="ask-head"><span class="ask-dot"></span>Aquaticy hat eine Frage</div>
+    <div class="ask-head"><span class="ask-dot"></span>Aquaticy hat eine Frage
+      <span class="ask-count" id="ask-count" hidden></span></div>
     <div class="ask-q" id="ask-q"></div>
     <div class="ask-opts" id="ask-opts"></div>
     <label class="ask-free">
@@ -2897,7 +2903,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.0.1 Nutshell";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.1.1 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -3206,7 +3212,8 @@ function restoreDraft(){
 // Die offene Rueckfrage. Steht hier oben und nicht bei ihren Funktionen:
 // setBusy() greift darauf zu und laeuft frueher -- eine spaetere let-Zeile
 // gaebe sonst einen ReferenceError.
-let asking = null;          // {bubble, question, sent}
+let asking = null;          // {bubble, question, sent, index, total}
+let askNaechste = 0;        // Zeitgeber: schliesst das Fenster, wenn keine weitere Frage kommt
 // Die laufende Spracheingabe (12.0.0 Luna). Aus demselben Grund hier oben.
 let hoeren = null;          // {rec, basis, fertig, vorlaeufig, senden, fehler}
 
@@ -4165,11 +4172,21 @@ input.addEventListener("paste", (e) => {
 // Antwort ohnehin nichts weitergeht.
 const askBox = $("#askbox");
 
-function openAsk(bubble, question, options){
+function openAsk(bubble, question, options, index, total){
   // Kommt wider Erwarten eine zweite Frage, waehrend die erste offen steht,
   // gilt die neue -- die alte wartet auf niemanden mehr.
   if (asking) finishAsk("", true);
-  asking = { bubble, question, sent: false };
+  clearTimeout(askNaechste);
+  // Mehrere Fragen hintereinander (12.1.1 Luna): oben rechts "2/3".
+  index = Number(index) || 1; total = Number(total) || 1;
+  asking = { bubble, question, sent: false, index, total };
+  const zaehler = $("#ask-count");
+  zaehler.hidden = total < 2;
+  zaehler.textContent = `${index}/${total}`;
+  zaehler.setAttribute("aria-label", sp(`Frage ${index} von ${total}`,
+                                        `Question ${index} of ${total}`));
+  askBox.querySelector(".ask-sheet").classList.remove("wartet");
+  $("#ask-skip").disabled = $("#ask-send").disabled = false;
 
   $("#ask-q").textContent = question;
   const box = $("#ask-opts");
@@ -4194,7 +4211,16 @@ async function finishAsk(text, quiet){
   if (!open || open.sent) return;
   open.sent = true;
   asking = null;
-  closeOverlay(askBox);
+  // Kommt noch eine Frage dieser Reihe, bleibt das Fenster offen -- ausgegraut,
+  // bis sie da ist. Kommt sie nicht (Abbruch, anderes Geraet), geht es nach 12 s zu.
+  if (open.index < open.total){
+    askBox.querySelector(".ask-sheet").classList.add("wartet");
+    $("#ask-skip").disabled = $("#ask-send").disabled = true;
+    clearTimeout(askNaechste);
+    askNaechste = setTimeout(() => { if (!asking) closeOverlay(askBox); }, 12000);
+  } else {
+    closeOverlay(askBox);
+  }
 
   // Was gefragt und geantwortet wurde, bleibt im Verlauf stehen -- sonst
   // versteht man die Antwort spaeter nicht mehr.
@@ -4703,7 +4729,7 @@ async function verfolge(hole, steps, bubble, text){
              ev.error ? "warn" : ""); break;
       case "waiting": step(steps, "[Warte]", sp(ev.reason, ev.reason_en || ev.reason)); break;
       case "upload": step(steps, "[Datei]", `${ev.name} (${prettySize(ev.bytes)})`); break;
-      case "ask": openAsk(bubble, ev.question, ev.options || []); break;
+      case "ask": openAsk(bubble, ev.question, ev.options || [], ev.index, ev.total); break;
       // Beantwortet (hier, auf einem anderen Geraet oder beim Abspielen eines
       // fertigen Laufs): das Fenster geht zu, die Antwort bleibt stehen. Bis
       // 11.3.2 blieb es beim Abspielen offen -- vor einer Frage, auf die niemand

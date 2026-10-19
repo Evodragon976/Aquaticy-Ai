@@ -47,6 +47,7 @@ from aquaticy.tools import (
     LAN_SCHEMA,
     MAIL_READ_SCHEMA,
     MAIL_SEARCH_SCHEMA,
+    MAX_BATCH,
     MAX_QUESTIONS,
     MEMORY_READ_SCHEMA,
     MEMORY_SCHEMA,
@@ -858,6 +859,11 @@ ASK_PROMPT = """\
 Du hast ausserdem `ask_user(question, options)` -- eine Rueckfrage an den Nutzer, auf \
 deren Antwort du wartest. Sie oeffnet bei ihm ein kleines Fenster.
 
+Fehlt MEHR als eine Angabe (der Ort UND was ihn interessiert, das Budget UND der \
+Zweck), stell sie alle in EINEM Aufruf: `ask_user(questions=[{"question": ..., \
+"options": [...]}, ...])`, bis zu fuenf. Er sieht sie nacheinander im selben Fenster \
+(1/3, 2/3, 3/3). Das zaehlt als eine Rueckfrage -- besser als drei einzelne.
+
 PFLICHT: Fehlt eine Angabe, ohne die die Antwort auf gut Glueck raten wuerde, FRAGST \
 DU. Du erfindest sie nicht und du waehlst auch nicht "das Naheliegende" fuer den \
 Nutzer aus. Das sind vor allem:
@@ -1147,6 +1153,26 @@ def needs_place(question: str) -> bool:
 
 #: Die Rueckfrage, wenn der Ort fehlt.
 PLACE_QUESTION = "In welchem Ort soll ich nachsehen?"
+
+
+def text_questions(text: str) -> list[dict[str, Any]]:
+    """Die Fragen in einem Antworttext, EINZELN -- fuer das Fenster mit "1/3" (12.1.1 Luna).
+
+    "Wo wohnst du? Und was interessiert dich?" sind zwei Fragen und kein langer
+    Satz. Vorschlaege unter dem Text gehoeren zur letzten Frage.
+    """
+    gefunden = text_question(text)
+    if gefunden is None:
+        return []
+    frage, optionen = gefunden
+    einzeln = [teil.strip() for teil in re.findall(r"[^?]+\?", frage) if teil.strip()]
+    # "Und welchen Zeitraum?" -> ohne das einleitende "Und".
+    einzeln = [re.sub(r"^(?:und|oder|außerdem|ausserdem)\s+", "", t, flags=re.I) for t in einzeln]
+    einzeln = [t[:1].upper() + t[1:] for t in einzeln if t][:MAX_BATCH]
+    if not einzeln:
+        return []
+    return [{"question": t, "options": optionen if i == len(einzeln) - 1 else []}
+            for i, t in enumerate(einzeln)]
 
 
 #: Dasselbe in kurz, wenn niemand da ist, der antworten koennte. Ohne
@@ -1565,32 +1591,46 @@ class Agent:
         modell = model or self.active_model
         return can(modell, "tools", self.settings.ollama_base(modell)) is not False
 
-    def _ask_before_research(self, frage: str, optionen: Any = ()) -> bool:
-        """Stellt die Rueckfrage des Planers, BEVOR gesucht wird (11.4.0 Terra).
+    def _ask_before_research(self, frage: str, optionen: Any = (),
+                             weitere: Any = ()) -> bool:
+        """Stellt die Rueckfragen des Planers, BEVOR gesucht wird (11.4.0 Terra).
 
         Im Denken- und Pro-Modus recherchierten die Agenten sofort los. Fehlte
         der Ort, suchten sie ins Blaue, und das Hauptmodell fragte danach nicht
         mehr -- es hatte ja schon Ergebnisse. Jetzt fragt der Planer zuerst.
 
-        Returns: True, wenn der Nutzer geantwortet hat.
+        Seit 12.1.1 Luna auch mehrere hintereinander (*weitere*: Paare aus Frage und
+        Optionen): ein Fenster, oben "1/3".
+
+        Returns: True, wenn der Nutzer mindestens eine Frage beantwortet hat.
         """
-        frage = str(frage or "").strip()
-        if not frage or self.toolbox.ask_handler is None or self.stopped:
+        fragen = [(str(frage or "").strip(), list(optionen or ()))]
+        fragen += [(str(f or "").strip(), list(o or ())) for f, o in (weitere or ())]
+        fragen = [(f, o) for f, o in fragen if f]
+        if not fragen or self.toolbox.ask_handler is None or self.stopped:
             return False
-        antwort = self.toolbox.ask_user(frage, list(optionen or ()))
+        if len(fragen) == 1:
+            antwort = self.toolbox.ask_user(fragen[0][0], fragen[0][1])
+        else:
+            antwort = self.toolbox.ask_user(
+                questions=[{"question": f, "options": o} for f, o in fragen])
         if not (isinstance(antwort, dict) and antwort.get("answered")):
             return False
-        paar = (str(antwort.get("question") or frage), str(antwort.get("answer") or ""))
-        self.remember_clarified([paar])
+        gegeben = [a for a in antwort.get("answers") or [] if isinstance(a, dict)]
+        paare = [(str(a.get("question") or ""), str(a.get("answer") or "")) for a in gegeben]
+        paare = paare or [(str(antwort.get("question") or fragen[0][0]),
+                           str(antwort.get("answer") or ""))]
+        self.remember_clarified(paare)
         if isinstance(getattr(self, "_turn_clarified", None), list):
-            self._turn_clarified.append(paar)
+            self._turn_clarified.extend(paare)
         # Die Antwort gehoert zu dieser Frage -- auch fuers Hauptmodell, das den
         # Verlauf liest. Gekuerzt und ohne Klammern wie alle geklaerten Angaben.
-        geklaert = self.clarified[-1] if self.clarified else paar
+        geklaert = self.clarified[-len(paare):] if self.clarified else paare
+        zeilen = "; ".join(f"{f} → {a}" for f, a in geklaert)
         for nachricht in reversed(self.messages):
             if nachricht.get("role") == "user" and own_words(nachricht.get("content")):
                 nachricht["content"] = (f"{nachricht['content']}\n\n[Rückfrage vor der "
-                                        f"Recherche: {geklaert[0]} → {geklaert[1]}]")
+                                        f"Recherche: {zeilen}]")
                 break
         return True
 
@@ -1602,6 +1642,12 @@ class Agent:
             return True
         return bool(_PLACE_HINT_RE.search(self._person_prompt()))
 
+    def _place_missing(self, question: str) -> bool:
+        """Braucht die Frage einen Ort, den noch niemand genannt hat?"""
+        return (self.toolbox.ask_handler is not None and not self.stopped
+                and clean_mode(self.mode) != "code" and needs_place(question)
+                and not self._place_known())
+
     def _ask_for_place(self, question: str) -> bool:
         """Mit "Strukturiert": fehlt der Ort, erst fragen, dann planen (12.0.1 Nutshell).
 
@@ -1610,11 +1656,24 @@ class Agent:
 
         Returns: True, wenn der Nutzer geantwortet hat.
         """
-        if (self.toolbox.ask_handler is None or self.stopped
-                or clean_mode(self.mode) == "code" or not needs_place(question)
-                or self._place_known()):
+        if not self._place_missing(question):
             return False
         return self._ask_before_research(PLACE_QUESTION)
+
+    def _ask_planned(self, frage: str, optionen: Any, weitere: Any, question: str) -> bool:
+        """Die Rueckfragen des Planers -- und fehlt dazu der Ort, steht er vorn (12.1.1 Luna).
+
+        Alles in EINEM Fenster: "In welchem Ort soll ich nachsehen?" als 1/3, dann
+        die Fragen des Planers. Fragt der Planer selbst nach dem Ort, bleibt es
+        bei seiner Frage -- nie zweimal derselbe Ort.
+        """
+        weitere = list(weitere or ())
+        alle = [str(frage or "")] + [f for f, _ in weitere]
+        if self._place_missing(question) and not any(_PLACE_HINT_RE.search(f) for f in alle):
+            if str(frage or "").strip():
+                weitere = [(frage, optionen), *weitere]
+            return self._ask_before_research(PLACE_QUESTION, (), weitere)
+        return self._ask_before_research(frage, optionen, weitere)
 
     def _clarify_first(self, question: str) -> None:
         """Pro-Modus: fehlt etwas Entscheidendes, erst fragen, dann den Master planen lassen.
@@ -1632,12 +1691,9 @@ class Agent:
                                 limit=1)
         except Exception:
             plan = None
-        rueckfrage = str(getattr(plan, "rueckfrage", "") or "")
-        if rueckfrage:
-            self._ask_before_research(rueckfrage, getattr(plan, "optionen", ()))
-        else:
-            # Der Planer fragte nicht -- fehlt der Ort, fragt Aquaticy selbst (12.0.1).
-            self._ask_for_place(question)
+        # Fragt der Planer nicht, aber der Ort fehlt, fragt Aquaticy selbst (12.0.1).
+        self._ask_planned(getattr(plan, "rueckfrage", ""), getattr(plan, "optionen", ()),
+                          getattr(plan, "weitere", ()), question)
 
     def _needs_research(self, question: str) -> bool:
         """Vorpruefung UND Planung in einem Schritt.
@@ -1675,12 +1731,11 @@ class Agent:
         )
         self._model_ready()
         needs, tasks = plan
-        rueckfrage = str(getattr(plan, "rueckfrage", "") or "")
         # Fragte der Planer nicht, fehlt aber der Ort, fragt Aquaticy selbst (12.0.1
         # Nutshell): das kleine Modell liess die Frage nach dem Ort fast immer weg.
-        if needs and ((rueckfrage and self._ask_before_research(
-                rueckfrage, getattr(plan, "optionen", ())))
-                or (not rueckfrage and self._ask_for_place(text))):
+        if needs and self._ask_planned(getattr(plan, "rueckfrage", ""),
+                                       getattr(plan, "optionen", ()),
+                                       getattr(plan, "weitere", ()), text):
             # Mit der Antwort neu planen: die Teilfragen brauchen den Ort.
             needs, tasks = plan_request(text, self.settings, context=self._planner_context(),
                                         limit=max(1, self.agent_limit))
@@ -3342,7 +3397,7 @@ class Agent:
                 # den Text, stellt Aquaticy sie selbst im Fenster (12.0.1
                 # Nutshell) -- bis dahin blieb sie im Chat stehen.
                 if self._should_force_ask(antwort, used):
-                    gefunden = text_question(antwort)
+                    gefunden = text_questions(antwort)
                     if not genudged:
                         genudged = True
                         # Was schon auf dem Bildschirm steht, ist hinfaellig --
@@ -3355,7 +3410,9 @@ class Agent:
                         selbst_gefragt = True
                         self._emit("answer_reset", reason="rueckfrage")
                         used += 1
-                        self._ask_for_model(*gefunden)
+                        self._ask_for_model(
+                            gefunden if len(gefunden) > 1 else gefunden[0]["question"],
+                            gefunden[0]["options"])
                         if self.stopped:
                             result.stopped = True
                             break
@@ -3779,10 +3836,13 @@ class Agent:
             self._emit("error", message=f"Werkzeug {name}: {exc}")
 
         if name == "ask_user" and isinstance(payload, dict) and payload.get("answered"):
-            paar = (payload.get("question", ""), payload.get("answer", ""))
-            self.remember_clarified([paar])
+            # Eine Antwort oder, seit 12.1.1 Luna, mehrere aus einem Fenster mit "1/3".
+            paare = [(a.get("question", ""), a.get("answer", ""))
+                     for a in payload.get("answers") or [] if isinstance(a, dict)]
+            paare = paare or [(payload.get("question", ""), payload.get("answer", ""))]
+            self.remember_clarified(paare)
             if isinstance(getattr(self, "_turn_clarified", None), list):
-                self._turn_clarified.append(paar)
+                self._turn_clarified.extend(paare)
         blob = json.dumps(payload, ensure_ascii=False)[: self.blob_limit()]
         self._emit("action_done", tool=name, result=blob[:TRACE_CHARS])
         return {
@@ -3884,18 +3944,23 @@ class Agent:
             and text_question(answer) is not None
         )
 
-    def _ask_for_model(self, frage: str, optionen: list[str]) -> None:
+    def _ask_for_model(self, frage: str | list[dict[str, Any]],
+                       optionen: list[str]) -> None:
         """Stellt die Rueckfrage aus dem Text selbst -- im Fenster (12.0.1 Nutshell).
 
         Im Verlauf wird aus der Textantwort ein Aufruf von ``ask_user``: So steht
         dort, was wirklich geschah, und das Modell arbeitet mit der Antwort weiter
         wie nach einer eigenen Rueckfrage.
         """
+        argumente: dict[str, Any] = {"question": frage, "options": optionen}
+        if isinstance(frage, list):
+            # Mehrere Fragen aus dem Text: jede einzeln, das Fenster zaehlt 1/N (12.1.1).
+            argumente = {"questions": frage}
         aufruf = {
             "id": f"call_rueckfrage_{len(self.messages)}",
             "type": "function",
             "function": {"name": "ask_user", "arguments": json.dumps(
-                {"question": frage, "options": optionen}, ensure_ascii=False)},
+                argumente, ensure_ascii=False)},
         }
         self.messages[-1] = {"role": "assistant", "content": "", "tool_calls": [aufruf]}
         self._run_round([aufruf])

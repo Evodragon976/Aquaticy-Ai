@@ -239,7 +239,12 @@ der Zeitraum, wenn mehrere passen, das Budget, wenn ausgewaehlt werden soll, und
 von mehreren gleichnamigen Dingen gemeint ist. Frag NICHT nach Kleinigkeiten oder nach \
 etwas, das sich selbst herausfinden laesst. Sonst "rueckfrage": "".
 
-Format: {"recherche": true, "teilfragen": ["...", "..."], "rueckfrage": "", "optionen": []}
+Fehlt MEHR als eine solche Angabe (etwa Ort UND Interessen), nenn die zweite und \
+dritte in "weitere_fragen": [{"frage": "...", "optionen": []}] -- hoechstens zwei, \
+und nur, wenn die Recherche ohne sie wirklich raten muesste.
+
+Format: {"recherche": true, "teilfragen": ["...", "..."], "rueckfrage": "", "optionen": [], \
+"weitere_fragen": []}
 Bei blosser Konversation: {"recherche": false, "teilfragen": [], "rueckfrage": ""}
 
 %(context)sNachricht: %(question)s"""
@@ -335,6 +340,12 @@ PLANNER_SCHEMA: dict[str, Any] = {
         # Fehlt eine entscheidende Angabe (11.4.0 Terra): erst fragen, dann suchen.
         "rueckfrage": {"type": "string"},
         "optionen": {"type": "array", "items": {"type": "string"}},
+        # Weitere Rueckfragen hinter der ersten (12.1.1 Luna): das Fenster zeigt 1/3, 2/3 ...
+        "weitere_fragen": {"type": "array", "maxItems": 2, "items": {
+            "type": "object",
+            "properties": {"frage": {"type": "string"},
+                           "optionen": {"type": "array", "items": {"type": "string"}}},
+            "required": ["frage"]}},
     },
     "required": ["recherche", "teilfragen"],
 }
@@ -349,32 +360,56 @@ class Plan(tuple):
 
     rueckfrage: str = ""
     optionen: tuple[str, ...] = ()
+    #: Weitere Rueckfragen hinter der ersten: [(frage, optionen), ...] (12.1.1 Luna).
+    weitere: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     def __new__(cls, needs: bool, tasks: list[str], rueckfrage: str = "",
-                optionen: Sequence[str] = ()) -> Plan:
+                optionen: Sequence[str] = (),
+                weitere: Sequence[tuple[str, Sequence[str]]] = ()) -> Plan:
         plan = super().__new__(cls, (needs, tasks))
         plan.rueckfrage = rueckfrage
         plan.optionen = tuple(optionen)
+        plan.weitere = tuple((f, tuple(o)) for f, o in weitere)
         return plan
 
 
 def _parse_question(raw: str) -> tuple[str, list[str]]:
     """Die Rueckfrage des Planers -- kurz, eine Zeile, ohne Klammern."""
+    frage, optionen, _ = _parse_questions(raw)
+    return frage, optionen
+
+
+def _parse_questions(raw: str) -> tuple[str, list[str], list[tuple[str, list[str]]]]:
+    """Die Rueckfragen des Planers: die erste mit Optionen, dazu bis zu zwei weitere."""
     start, end = (raw or "").find("{"), (raw or "").rfind("}")
     if start == -1 or end == -1:
-        return "", []
+        return "", [], []
     try:
         payload = bounded_json(raw[start : end + 1])
     except (ValueError, RecursionError):
-        return "", []
+        return "", [], []
     if not isinstance(payload, dict):
-        return "", []
+        return "", [], []
     sauber = str.maketrans({"[": "(", "]": ")"})
-    frage = " ".join(str(payload.get("rueckfrage") or "").translate(sauber).split())[:200]
-    roh = payload.get("optionen")
-    optionen = [" ".join(str(o).translate(sauber).split())[:80]
-                for o in (roh if isinstance(roh, list) else []) if str(o).strip()][:4]
-    return frage, optionen
+
+    def kurz(text: Any, grenze: int) -> str:
+        return " ".join(str(text or "").translate(sauber).split())[:grenze]
+
+    def optionen_aus(roh: Any) -> list[str]:
+        return [kurz(o, 80) for o in (roh if isinstance(roh, list) else [])
+                if str(o).strip()][:4]
+
+    frage = kurz(payload.get("rueckfrage"), 200)
+    weitere: list[tuple[str, list[str]]] = []
+    roh_weitere = payload.get("weitere_fragen")
+    for eintrag in (roh_weitere if isinstance(roh_weitere, list) else [])[:2]:
+        if isinstance(eintrag, dict) and kurz(eintrag.get("frage"), 200):
+            weitere.append((kurz(eintrag.get("frage"), 200), optionen_aus(eintrag.get("optionen"))))
+    # Ohne erste Frage ruecken die weiteren nach vorn.
+    optionen = optionen_aus(payload.get("optionen"))
+    if not frage and weitere:
+        (frage, optionen), weitere = weitere[0], weitere[1:]
+    return frage, optionen, weitere
 
 
 def plan_request(
@@ -423,8 +458,8 @@ def plan_request(
         return Plan(True, _located([question.strip()], settings.location))
 
     needs, tasks = _parse_plan(raw, question, limit)
-    frage, optionen = _parse_question(raw) if needs else ("", [])
-    return Plan(needs, _located(tasks, settings.location), frage, optionen)
+    frage, optionen, weitere = _parse_questions(raw) if needs else ("", [], [])
+    return Plan(needs, _located(tasks, settings.location), frage, optionen, weitere)
 
 
 def _located(tasks: list[str], location: str) -> list[str]:

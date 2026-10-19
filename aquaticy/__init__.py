@@ -6,11 +6,11 @@ import os as _os
 # Aquaticy braucht sie nicht; ohne Netz kostet der Versuch Sekunden.
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "12.0.1"
+__version__ = "12.1.1"
 
 #: Der Name dieser Fassung. Er steht ueberall hinter der Versionsnummer, wo
 #: Menschen sie lesen -- nicht in Paketangaben und Kennungen fuer Server.
-__codename__ = "Nutshell"
+__codename__ = "Luna"
 
 #: Interne oder Test-Fassung (seit 9.6.0): "Intern", "Test" -- leer fuer eine
 #: oeffentliche Fassung. Steht dann hinter dem Namen, und die Oberflaeche zeigt

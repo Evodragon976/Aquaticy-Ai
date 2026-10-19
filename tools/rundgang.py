@@ -239,7 +239,18 @@ class FakeAgent:
                 },
             )
             self.on_event("master_review", {"verdict": "gut", "missing": [], "round": 2})
-        if "frag" in text:
+        if "reihe" in text:
+            # 12.1.1 Luna: mehrere Fragen hintereinander, das Fenster zaehlt 1/3 ... 3/3.
+            reihe = [("Wo wohnst du?", ["Bremen", "Hamburg"]),
+                     ("Was interessiert dich?", ["Sport", "Politik"]),
+                     ("Wie viel Zeit hast du?", [])]
+            for nummer, (frage, optionen) in enumerate(reihe, start=1):
+                self.on_event("ask", {"question": frage, "options": optionen,
+                                      "index": nummer, "total": len(reihe)})
+                antwort = self.ask_handler(frage, optionen)
+                self.on_event("ask_done", {"question": frage, "answer": antwort,
+                                           "index": nummer, "total": len(reihe)})
+        elif "frag" in text:
             self.on_event("ask", {"question": "Welches Budget?", "options": ["bis 800 €"]})
             self.ask_handler("Welches Budget?", ["bis 800 €"])
         # Der Fall, in dem Aquaticy merkt, dass seine Antwort nur eine Frage
@@ -1361,6 +1372,32 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_timeout(900)
         log.pruefe(not pg.is_visible("#askbox.open"), "danach ist das Fenster zu")
         log.pruefe("Budget" in pg.inner_text("#thread"), "die Frage bleibt im Verlauf")
+        log.pruefe(not pg.is_visible("#ask-count"), "eine einzelne Frage hat keinen Zähler")
+        pg.wait_for_timeout(600)
+        # Mehrere Fragen hintereinander: oben rechts 1/3, 2/3, 3/3 (12.1.1 Luna).
+        pg.fill("#input", "Stell eine reihe Fragen")
+        pg.click("#send")
+        pg.wait_for_selector("#askbox.open", state="visible")
+        log.pruefe(pg.inner_text("#ask-count") == "1/3" and "Wo wohnst" in pg.inner_text("#ask-q"),
+                   f"die erste Frage trägt 1/3 ({pg.inner_text('#ask-count')!r})")
+        foto("05b-rueckfrage-reihe")
+        box = pg.locator("#ask-count").bounding_box()
+        sheet = pg.locator(".ask-sheet").first.bounding_box()
+        log.pruefe(box["x"] + box["width"] > sheet["x"] + sheet["width"] - 40,
+                   "der Zähler steht oben rechts im Fenster")
+        pg.click(".ask-opt >> nth=0")
+        warte_auf_text(pg, "#ask-count", "2/3")
+        log.pruefe(pg.is_visible("#askbox.open") and "interessiert" in pg.inner_text("#ask-q"),
+                   "mit der Antwort kommt 2/3 -- das Fenster bleibt offen")
+        pg.click(".ask-opt >> nth=1")
+        warte_auf_text(pg, "#ask-count", "3/3")
+        log.pruefe(pg.locator(".ask-opt").count() == 0 and pg.is_visible("#ask-free"),
+                   "die dritte Frage hat keine Vorschläge, nur das Feld")
+        pg.fill("#ask-free", "eine Stunde")
+        pg.press("#ask-free", "Enter")
+        pg.wait_for_timeout(900)
+        log.pruefe(not pg.is_visible("#askbox.open"), "nach 3/3 ist das Fenster zu")
+        log.pruefe(pg.locator(".askcard").count() >= 4, "alle Fragen bleiben im Verlauf")
 
     if dran("chats"):
         log.abschnitt("6. Letzte Chats")

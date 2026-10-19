@@ -49,6 +49,14 @@ VisualInspector = Callable[[str, str], str]
 #: Anfrage nicht verstanden -- dann ist eine begruendete Annahme besser.
 MAX_QUESTIONS = 2
 
+#: So viele Fragen darf EIN Aufruf von ask_user hintereinander stellen (12.1.1 Luna):
+#: "Wo wohnst du?", "Was interessiert dich?" -- das Fenster zeigt 1/3, 2/3, 3/3.
+MAX_BATCH = 5
+
+#: Eine leere Antwort nach so vielen Sekunden ist keine Entscheidung, sondern ein
+#: Ablauf der Wartezeit (web.py: ANSWER_TIMEOUT = 180) -- dann keine Frage mehr.
+ASK_GAVE_UP_AFTER = 120.0
+
 #: Was als "ja" gilt, wenn Aquaticy vor einer Wirkung nachfragt -- an jeder
 #: Stelle dasselbe (seit 9.5.16; vorher kannte ha_call "klar" nicht).
 YES_WORDS = frozenset({"ja", "j", "yes", "ok", "mach", "los", "klar", "ja, mach"})
@@ -519,7 +527,8 @@ ASK_SCHEMA: dict[str, Any] = {
     "function": {
         "name": "ask_user",
         "description": (
-            "Stellt dem Nutzer EINE Rueckfrage und wartet auf seine Antwort. Benutze "
+            "Stellt dem Nutzer eine Rueckfrage oder mehrere hintereinander und wartet auf "
+            "die Antworten. Benutze "
             "das nur, wenn die Anfrage ohne die Antwort in eine ganz andere Richtung "
             "laufen koennte -- wenn also Budget, Ort, Zweck, Zeitraum oder das gemeinte "
             "Produkt offen sind und die moeglichen Antworten zu voellig verschiedenen "
@@ -527,14 +536,36 @@ ASK_SCHEMA: dict[str, Any] = {
             "abzusichern und nicht nach etwas, das du selbst herausfinden kannst: dann "
             "triff lieber die naheliegende Annahme, sag sie dazu und arbeite weiter. "
             "Frag am besten VOR der Recherche, nicht mittendrin, und hoechstens zweimal "
-            "je Anfrage."
+            "je Anfrage. Brauchst du mehr als eine Angabe (Ort UND Interessen, Budget UND "
+            "Zweck), stell sie in EINEM Aufruf mit `questions` -- bis zu fuenf, jede mit "
+            "eigenen Antwortmoeglichkeiten; der Nutzer sieht sie nacheinander (1/3, 2/3 ...). "
+            "Nicht mehr Fragen als noetig."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "question": {
                     "type": "string",
-                    "description": "Die Rueckfrage, ein einzelner klarer Satz.",
+                    "description": (
+                        "Die Rueckfrage, ein einzelner klarer Satz. Bei mehreren Fragen "
+                        "`questions` benutzen und dies weglassen."
+                    ),
+                },
+                "questions": {
+                    "type": "array",
+                    "maxItems": 5,
+                    "description": (
+                        "Mehrere Rueckfragen hintereinander, wenn mehr als eine Angabe "
+                        "fehlt. Jede: {question, options}."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                            "options": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["question"],
+                    },
                 },
                 "options": {
                     "type": "array",
@@ -546,7 +577,7 @@ ASK_SCHEMA: dict[str, Any] = {
                     ),
                 },
             },
-            "required": ["question"],
+            "required": [],
         },
     },
 }
@@ -3125,7 +3156,8 @@ class Toolbox:
             )
         if name == "ask_user":
             return self.ask_user(
-                question=str(arguments.get("question", "")), options=arguments.get("options")
+                question=str(arguments.get("question", "")), options=arguments.get("options"),
+                questions=arguments.get("questions"),
             )
         if name == "research_subtasks":
             return self.research_subtasks(arguments.get("tasks") or [])
@@ -3761,14 +3793,19 @@ class Toolbox:
         }
 
     # -- Werkzeug 6: Rueckfrage (nur fuer den Hauptagenten) ---------------
-    def ask_user(self, question: str, options: Any = None) -> dict[str, Any]:
-        """Fragt beim Nutzer nach und wartet auf die Antwort.
+    def ask_user(self, question: str = "", options: Any = None,
+                 questions: Any = None) -> dict[str, Any]:
+        """Fragt beim Nutzer nach und wartet auf die Antwort -- auch auf mehrere.
 
         Bleibt die Antwort aus, ist das kein Fehler: das Modell soll dann eine
         Annahme treffen und weiterarbeiten, statt stehenzubleiben.
+
+        Mehrere Fragen (12.1.1 Luna): ``questions`` ist eine Liste aus ``{question,
+        options}``. Sie werden nacheinander gestellt, das Fenster zeigt "1/3". Der
+        ganze Aufruf zaehlt einmal gegen :data:`MAX_QUESTIONS`.
         """
-        question = (question or "").strip()
-        if not question:
+        fragen = self._ask_list(question, options, questions)
+        if not fragen:
             return {"error": "Leere Rueckfrage."}
         if self.ask_handler is None:
             return {
@@ -3787,15 +3824,26 @@ class Toolbox:
                 ),
             }
 
-        choices = [str(item).strip() for item in (options or []) if str(item).strip()][:4]
         self.stats.questions += 1
-        self._emit("ask", question=question, options=choices)
-        try:
-            answer = (self.ask_handler(question, choices) or "").strip()
-        except Exception as exc:
-            return {"answered": False, "note": f"Rueckfrage fehlgeschlagen: {exc}"}
-        self._emit("ask_done", question=question, answer=answer)
-        if not answer:
+        gesamt = len(fragen)
+        antworten: list[dict[str, str]] = []
+        for nummer, (frage, choices) in enumerate(fragen, start=1):
+            # Zaehler nur bei einer Reihe: eine einzelne Frage bleibt, wie sie war.
+            zaehler = {"index": nummer, "total": gesamt} if gesamt > 1 else {}
+            self._emit("ask", question=frage, options=choices, **zaehler)
+            begonnen = time.monotonic()
+            try:
+                antwort = (self.ask_handler(frage, choices) or "").strip()
+            except Exception as exc:
+                if not antworten:
+                    return {"answered": False, "note": f"Rueckfrage fehlgeschlagen: {exc}"}
+                break
+            self._emit("ask_done", question=frage, answer=antwort, **zaehler)
+            antworten.append({"question": frage, "answer": antwort})
+            if not antwort and time.monotonic() - begonnen >= ASK_GAVE_UP_AFTER:
+                break  # Wartezeit abgelaufen: nicht auch noch die naechste Frage stellen
+        gegeben = [a for a in antworten if a["answer"]]
+        if not gegeben:
             return {
                 "answered": False,
                 "note": (
@@ -3803,7 +3851,37 @@ class Toolbox:
                     "und arbeite weiter."
                 ),
             }
-        return {"answered": True, "question": question, "answer": answer}
+        offen = [a["question"] for a in antworten if not a["answer"]]
+        offen += [frage for frage, _ in fragen[len(antworten):]]
+        if gesamt == 1:
+            return {"answered": True, "question": gegeben[0]["question"],
+                    "answer": gegeben[0]["answer"]}
+        ergebnis: dict[str, Any] = {"answered": True, "answers": gegeben}
+        if offen:
+            ergebnis["unanswered"] = offen
+            ergebnis["note"] = ("Bei den unbeantworteten Fragen triff die naheliegende "
+                                "Annahme und nenne sie.")
+        return ergebnis
+
+    @staticmethod
+    def _ask_list(question: Any, options: Any, questions: Any) -> list[tuple[str, list[str]]]:
+        """Aus den Argumenten die Liste der Fragen -- bereinigt, hoechstens MAX_BATCH."""
+        def optionen(roh: Any) -> list[str]:
+            return [str(o).strip() for o in (roh if isinstance(roh, list) else [])
+                    if str(o).strip()][:4]
+
+        liste: list[tuple[str, list[str]]] = []
+        text = str(question or "").strip()
+        if text:
+            liste.append((text, optionen(options)))
+        for eintrag in questions if isinstance(questions, list) else []:
+            if isinstance(eintrag, dict):
+                text, wahl = str(eintrag.get("question") or "").strip(), eintrag.get("options")
+            else:
+                text, wahl = str(eintrag or "").strip(), None
+            if text and text not in [f for f, _ in liste]:
+                liste.append((text, optionen(wahl)))
+        return liste[:MAX_BATCH]
 
     # -- Werkzeug 7 (nur fuer den Hauptagenten) ---------------------------
     def research_subtasks(self, tasks: Any) -> dict[str, Any]:
