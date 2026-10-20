@@ -152,11 +152,11 @@ def sitzung(konto):
 def test_a_plugin_turn_keeps_the_typed_line_in_the_history(sitzung, konto) -> None:
     _an(konto, "code-review")
     sitzung.ask("/code-review def f(): pass", lambda *_: None, mode="normal",
-                structured=True, recheck=True, image_mode=True)
+                structured=True, recheck=True)
     frage, optionen = sitzung._agent.gefragt
     assert frage == "/code-review def f(): pass"
     assert optionen["mode"] == "code" and optionen["structured"] is False
-    assert optionen["recheck"] is False and optionen["image_mode"] is False
+    assert optionen["recheck"] is False and "image_mode" not in optionen
     assert "Plugin Code-Review" in optionen["plugin_prompt"]
     assert optionen["plugin_prompt"].endswith("Zu prüfen:\ndef f(): pass")
 

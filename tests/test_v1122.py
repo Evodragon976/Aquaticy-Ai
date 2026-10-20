@@ -680,6 +680,8 @@ def test_run_phases_and_step_tags_have_english() -> None:
     # "Modell laden", "Agenten arbeiten" ... standen beim Schreiben auf Deutsch da.
     phasen = re.findall(r'\w+: "([^"]+)"', _js_block("const PHASEN = {", "};"))
     assert "Modell laden" in phasen and len(phasen) >= 15
+    assert "Bild ansehen" in phasen
+    assert "Bild erstellen" not in phasen  # Bilderstellung wurde in 12.2.1 Sol entfernt.
     for name in [*phasen, "Gedacht", "Keine Einzelheiten.",
                  "Das Modell hat seine Gedanken hier nicht offengelegt."]:
         assert name in en, name

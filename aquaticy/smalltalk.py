@@ -207,7 +207,7 @@ ARTEN: tuple[Art, ...] = (
             "Ich kann für dich im Web recherchieren, Seiten lesen und alles mit Quellen "
             "zusammenfassen. Außerdem schreibe ich Texte und Code. Tipp: /help zeigt die Befehle.",
             "Eine ganze Menge: Fragen recherchieren, Produkte vergleichen, Texte schreiben, Code "
-            "bauen und ausprobieren, Bilder erstellen. Was brauchst du?",
+            "bauen und ausprobieren. Was brauchst du?",
             "Ich suche im Internet, lese die passenden Seiten und gebe dir eine Antwort mit "
             "Quellen. Im Code-Modus programmiere ich für dich. Womit fangen wir an?",
             "Recherche ist meine Stärke — mit Quellen an jeder Angabe. Dazu kommen Texte, Code, "

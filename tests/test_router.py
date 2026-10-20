@@ -1,23 +1,20 @@
-"""Automatische Modellwahl und Bilder erstellen (9.5.10).
+"""Automatische Modellwahl und entfernte Bilderstellung (12.2.1 Sol).
 
 Die Wahl kommt ohne Modellaufruf aus -- also laesst sie sich ohne Attrappe
-fuer ein Modell pruefen. Die Bildanbieter antworten aus einem MockTransport:
-echte Schluessel gibt es in den Tests nicht.
+fuer ein Modell pruefen. Entfernte Bildanbieter duerfen nicht mehr aufgerufen werden.
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import httpx
 import pytest
 
-from aquaticy import images, router
+from aquaticy import router
 from aquaticy.config import Settings
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
@@ -31,11 +28,11 @@ def _frisch() -> None:
 @pytest.mark.parametrize(
     ("frage", "erwartet"),
     [
-        ("Erstelle mir ein Bild von einem Hund am Strand", "bild"),
-        ("Kannst du mir ein Logo für meine Bäckerei entwerfen?", "bild"),
-        ("male ein Bild von einem Sonnenuntergang", "bild"),
-        ("Generate an image of a red bicycle", "bild"),
-        ("Ein Poster für das Sommerfest gestalten", "bild"),
+        ("Erstelle mir ein Bild von einem Hund am Strand", "recherche"),
+        ("Kannst du mir ein Logo für meine Bäckerei entwerfen?", "recherche"),
+        ("male ein Bild von einem Sonnenuntergang", "recherche"),
+        ("Generate an image of a red bicycle", "recherche"),
+        ("Ein Poster für das Sommerfest gestalten", "recherche"),
         ("Zeig mir ein Bild vom Eiffelturm", "recherche"),
         ("Such mir ein Foto vom Brandenburger Tor", "recherche"),
         ("mach mal eine Liste mit Ideen", "recherche"),
@@ -85,8 +82,8 @@ def test_the_choice_per_drawer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         "mistral/codestral-latest")
     assert router.choose(settings, "Hallo").model == "mistral/mistral-small-latest"
     wahl = router.choose(settings, "Erstelle ein Bild von einem Leuchtturm")
-    assert wahl.kategorie == "bild" and wahl.model == "mistral/mistral-large-latest"
-    assert wahl.bild_modell == images.BACKENDS["mistral"].model
+    assert wahl.kategorie == "recherche" and wahl.model == "mistral/mistral-large-latest"
+    assert not hasattr(wahl, "bild_modell")
     assert router.choose(settings, "Wie wird das Wetter?").model == "mistral/mistral-large-latest"
 
 
@@ -99,7 +96,7 @@ def test_no_image_backend_is_said_honestly(
     monkeypatch.delenv("NVIDIA_NIM_API_KEY", raising=False)
     monkeypatch.setattr(system, "strongest_model", lambda s, purpose="work": "")
     wahl = router.choose(_settings(tmp_path), "Male ein Bild von einer Katze")
-    assert wahl.bild_modell == "" and "kein Bildmodell" in wahl.grund
+    assert wahl.kategorie == "recherche" and not hasattr(wahl, "bild_modell")
     assert wahl.model == "mistral/mistral-large-latest", "ohne Liste bleibt das eingestellte"
 
 
@@ -116,114 +113,30 @@ def test_the_list_of_models_is_remembered(tmp_path: Path,
     assert aufrufe == ["work"], "einmal nachgesehen, dann gemerkt"
 
 
-# -- Bildanbieter --------------------------------------------------------------------
-def test_backends_follow_the_keys_and_the_own_provider(tmp_path: Path,
-                                                       monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-    monkeypatch.delenv("NVIDIA_NIM_API_KEY", raising=False)
-    settings = _settings(tmp_path)
-    assert images.available(settings) == []
-    settings.api_keys.update({"MISTRAL_API_KEY": "m", "NVIDIA_NIM_API_KEY": "n"})
-    assert [b.provider for b in images.available(settings)] == ["mistral", "nvidia_nim"]
-    settings.model = "nvidia_nim/meta/llama-3.3-70b-instruct"
-    assert images.available(settings)[0].provider == "nvidia_nim", "erst der eigene Anbieter"
+# Die entfernten Anbieter haben keinen Import- oder Ausfuehrungspfad mehr.
+@pytest.mark.parametrize("arguments", [
+    {}, {"prompt": "a lighthouse"}, {"prompt": "", "format": "quer"},
+    {"prompt": "x", "format": "hoch"}, {"prompt": "x", "format": "quadrat"},
+    {"prompt": "x", "model": "mistral/mistral-medium-latest"},
+    {"prompt": "x", "model": "nvidia_nim/black-forest-labs/flux.1-schnell"},
+    {"prompt": "x", "url": "http://127.0.0.1/"},
+    {"prompt": "x", "file_id": "../../etc"}, {"prompt": "x", "file_id": "a\r\nHost: x"},
+    {"prompt": "x", "data": "<html>"}, {"prompt": "x", "api_key": "secret"},
+])
+def test_retired_image_tool_has_no_provider_or_dispatch_path(settings, arguments):
+    import importlib.util
 
+    from aquaticy.tools import Toolbox
 
-def test_nvidia_flux_request_and_answer(tmp_path: Path) -> None:
-    gefragt: list[httpx.Request] = []
-
-    def handler(anfrage: httpx.Request) -> httpx.Response:
-        gefragt.append(anfrage)
-        return httpx.Response(200, json={"artifacts": [
-            {"base64": base64.b64encode(PNG).decode(), "finishReason": "SUCCESS"}]})
-
-    settings = _settings(tmp_path, model="nvidia_nim/meta/llama-3.3-70b-instruct")
-    settings.api_keys["NVIDIA_NIM_API_KEY"] = "nv-key"
-    bild = images.generate(settings, "a lighthouse at dawn", "quer",
-                           client=httpx.Client(transport=httpx.MockTransport(handler)))
-    assert bild["bytes"] == PNG and bild["mime"] == "image/png"
-    anfrage = gefragt[0]
-    assert str(anfrage.url) == images.NVIDIA_FLUX_URL
-    assert anfrage.headers["authorization"] == "Bearer nv-key"
-    body = json.loads(anfrage.content)
-    assert (body["width"], body["height"]) == (1344, 768)
-    assert body["prompt"] == "a lighthouse at dawn"
-
-
-def test_nvidia_content_filter_is_an_error(tmp_path: Path) -> None:
-    settings = _settings(tmp_path, model="nvidia_nim/x")
-    settings.api_keys["NVIDIA_NIM_API_KEY"] = "k"
-    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={
-        "artifacts": [{"base64": "", "finishReason": "CONTENT_FILTERED"}]})))
-    with pytest.raises(images.ImageError, match="Inhaltsregeln"):
-        images.generate(settings, "x", client=client)
-
-
-def test_mistral_conversation_then_file(tmp_path: Path) -> None:
-    gefragt: list[httpx.Request] = []
-
-    def handler(anfrage: httpx.Request) -> httpx.Response:
-        gefragt.append(anfrage)
-        if anfrage.url.path == "/v1/conversations":
-            return httpx.Response(200, json={"outputs": [
-                {"type": "tool.execution", "name": "image_generation"},
-                {"type": "message.output", "content": [
-                    {"type": "text", "text": "Hier ist dein Bild"},
-                    {"type": "tool_file", "tool": "image_generation", "file_id": "f-123",
-                     "file_type": "png"}]}]})
-        if anfrage.url.path == "/v1/files/f-123/content":
-            return httpx.Response(200, content=PNG)
-        return httpx.Response(404)
-
-    settings = _settings(tmp_path)
-    settings.api_keys["MISTRAL_API_KEY"] = "mi-key"
-    bild = images.generate(settings, "ein Leuchtturm", "hoch",
-                           client=httpx.Client(transport=httpx.MockTransport(handler)))
-    assert bild["bytes"] == PNG and bild["modell"] == "Mistral Bildgenerierung"
-    body = json.loads(gefragt[0].content)
-    assert body["tools"] == [{"type": "image_generation"}] and "Hochformat" in body["inputs"]
-    assert all(a.headers["authorization"] == "Bearer mi-key" for a in gefragt)
-
-
-@pytest.mark.parametrize(
-    ("antwort", "fehler"),
-    [
-        (httpx.Response(401), "Schluessel"),
-        (httpx.Response(429), "zu viele"),
-        (httpx.Response(200, json={"outputs": []}), "kein Bild"),
-        (httpx.Response(200, json={"outputs": [{"content": [
-            {"type": "tool_file", "file_id": "../../etc"}]}]}), "kein Bild"),
-        (httpx.Response(200, json={"outputs": [{"content": [
-            {"type": "tool_file", "file_id": "a\r\nHost: x"}]}]}), "kein Bild"),
-        (httpx.Response(200, text="kein json"), "unerwartet"),
-    ],
-)
-def test_mistral_failures_are_readable(tmp_path: Path, antwort: httpx.Response,
-                                       fehler: str) -> None:
-    settings = _settings(tmp_path)
-    settings.api_keys["MISTRAL_API_KEY"] = "k"
-    client = httpx.Client(transport=httpx.MockTransport(lambda r: antwort))
-    with pytest.raises(images.ImageError, match=fehler):
-        images.generate(settings, "x", client=client)
-
-
-def test_images_are_checked_to_be_images(tmp_path: Path) -> None:
-    settings = _settings(tmp_path, model="nvidia_nim/x")
-    settings.api_keys["NVIDIA_NIM_API_KEY"] = "k"
-    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={
-        "artifacts": [{"base64": base64.b64encode(b"<html>").decode()}]})))
-    with pytest.raises(images.ImageError, match="unerwartet"):
-        images.generate(settings, "x", client=client)
-
-
-def test_without_a_key_there_is_an_honest_no(tmp_path: Path,
-                                             monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-    monkeypatch.delenv("NVIDIA_NIM_API_KEY", raising=False)
-    with pytest.raises(images.ImageError, match="Schluessel fuer NVIDIA oder Mistral"):
-        images.generate(_settings(tmp_path), "x")
-    with pytest.raises(images.ImageError, match="Beschreibung"):
-        images.generate(_settings(tmp_path), "   ")
+    assert importlib.util.find_spec("aquaticy.images") is None
+    box = Toolbox(settings)
+    try:
+        assert not hasattr(box, "create_image")
+        assert box.call("create_image", arguments)["error"]
+        assert box.stats.visuals == []
+        assert not (settings.data_dir / "media").exists()
+    finally:
+        box.close()
 
 
 # -- Im Agenten ----------------------------------------------------------------------
@@ -271,43 +184,29 @@ def test_switched_off_changes_nothing(settings: Settings,
     assert modelle == ["mistral/mistral-large-latest"] and "model_auto" not in ereignisse
 
 
-def test_the_image_tool_saves_a_labelled_ai_image(settings: Settings,
-                                                  monkeypatch: pytest.MonkeyPatch) -> None:
-    from aquaticy import system
+def test_a_model_cannot_call_the_retired_tool_even_with_provider_keys(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from aquaticy.agent import Agent
-    from aquaticy.media import snapshot_path
 
-    monkeypatch.setattr(system, "strongest_model", lambda s, purpose="work": "")
-    settings.auto_model = True
     settings.api_keys["MISTRAL_API_KEY"] = "k"
-    gebeten: list[tuple[str, str, str]] = []
-    monkeypatch.setattr(images, "generate", lambda s, prompt, fmt, model="": gebeten.append(
-        (prompt, fmt, model)) or {"bytes": PNG, "mime": "image/png", "modell": "Test-Maler"})
     aufruf = SimpleNamespace(id="c1", type="function", function=SimpleNamespace(
         name="create_image", arguments=json.dumps({"prompt": "a lighthouse", "format": "quer"})))
-    antworten = [_antwort(tool_calls=[aufruf]), _antwort("Hier ist dein KI-Bild.")]
-    angebot: list[list[str]] = []
+    antworten = [_antwort(tool_calls=[aufruf]), _antwort("Das Werkzeug ist nicht verfügbar.")]
+    angebot = []
 
     def llm(**kw: Any) -> Any:
-        angebot.append([t["function"]["name"] for t in kw.get("tools") or []])
+        angebot.extend(t["function"]["name"] for t in kw.get("tools") or [])
         return antworten.pop(0)
 
     monkeypatch.setattr("litellm.completion", llm)
     agent = Agent(settings, cache=None)
-    ergebnis = agent.ask("Erstelle mir ein Bild von einem Leuchtturm", stream=False)
-    assert "create_image" in angebot[0]
-    assert gebeten == [("a lighthouse", "quer", images.BACKENDS["mistral"].model)]
-    bild = ergebnis.visuals[0]
-    assert bild["kind"] == "erstellt" and "KI-Bild" in bild["title"]
-    assert bild["caption"] == "a lighthouse"
-    datei = snapshot_path(settings.data_dir, bild["media_id"])
-    # Seit 9.5.32 verschluesselt auf der Platte -- lesbar ueber read_private.
-    from aquaticy.privacy import read_private
-
-    assert datei is not None and datei.read_bytes() != PNG and read_private(datei) == PNG
-    # Seit 9.5.15 ein KI-Bild: es gehoert zu seinem Chat und geht mit ihm --
-    # nicht mehr "fest" fuer immer.
-    assert bild["media_id"].endswith("-ki.png"), "als KI-Bild abgelegt"
+    result = agent.ask("Erstelle mir ein Bild von einem Leuchtturm", stream=False)
+    assert "create_image" not in angebot and not result.visuals
+    assert not (settings.data_dir / "media").exists()
+    replies = [m for m in agent.messages if m["role"] == "tool"]
+    assert replies and "error" in str(replies[0]["content"])
+    agent.close()
 
 
 def test_no_image_tool_without_a_provider(settings: Settings,

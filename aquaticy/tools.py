@@ -1447,31 +1447,6 @@ def addon_schemas_for(settings: Any, pro: bool = True) -> list[dict[str, Any]]:
     return schemas
 
 
-IMAGE_SCHEMA: dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "create_image",
-        "description": (
-            "Erstellt ein neues Bild aus einer Beschreibung (KI-Bildmodell bei NVIDIA oder "
-            "Mistral). Nur, wenn der Nutzer ein Bild, Logo, eine Illustration o. ae. "
-            "ERSTELLT haben will -- zum Finden vorhandener Bilder nimm die Suche. "
-            "Schreib die Beschreibung auf Englisch, konkret: Motiv, Stil, Licht, "
-            "Bildaufbau. Keine echten Personen blossstellen, keine Faelschungen, die als "
-            "echt gelten sollen, keine geschuetzten Figuren/Marken nachbauen. Das Bild "
-            "steht danach unter deiner Antwort -- beschreib es nicht noch einmal lang."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "prompt": {"type": "string", "description": "Die Bildbeschreibung."},
-                "format": {"type": "string", "description": "quadrat, quer oder hoch."},
-            },
-            "required": ["prompt"],
-        },
-    },
-}
-
-
 # ---------------------------------------------------------------------------
 # Einstellungen aus dem Gespraech heraus
 # ---------------------------------------------------------------------------
@@ -1538,7 +1513,6 @@ class ToolStats:
     #: Aufrufe in der virtual machine -- ausfuehren, schreiben, lesen.
     vm_calls: int = 0
     addon_calls: int = 0
-    images_created: int = 0
 
     @property
     def tool_calls(self) -> int:
@@ -1560,7 +1534,6 @@ class ToolStats:
             + self.settings_changed
             + self.vm_calls
             + self.addon_calls
-            + self.images_created
         )
 
     def reset(self) -> None:
@@ -1587,7 +1560,6 @@ class ToolStats:
         self.settings_changed = 0
         self.vm_calls = 0
         self.addon_calls = 0
-        self.images_created = 0
 
 
 #: Gruende, die meist gleich wieder vorbei sind. Sie werden nie gemerkt: ein
@@ -1687,9 +1659,6 @@ class Toolbox:
             settings, baseline=not getattr(settings, "legal_guard", True))
         #: Ersetzt im User mode das Vision-Modell (Tests). None = das echte.
         self.screen_reader: Callable[[bytes, str], str] | None = None
-        #: Welches Bildmodell create_image nimmt -- setzt die automatische
-        #: Modellwahl je Nachricht. Leer = das passendste verfuegbare.
-        self.image_model = ""
         #: Eine Pruefung vor jedem Aufruf (11.0.0 Luna, aquaticy/coworker.py): gibt
         #: sie ein Ergebnis zurueck, laeuft das Werkzeug nicht. Coworker setzen
         #: hier ihre Regeln durch -- erlauben, fragen, sperren.
@@ -2550,59 +2519,6 @@ class Toolbox:
                 )
         return answer
 
-    def create_image(self, prompt: str, fmt: str = "quadrat") -> dict[str, Any]:
-        """Erstellt ein Bild und legt es wie jedes Bild im Chat ab -- als KI-Bild."""
-        from aquaticy import images, metering
-        from aquaticy.media import save_snapshot
-
-        fmt = fmt.strip().lower() if isinstance(fmt, str) else "quadrat"
-        wer = images.backend_for(self.settings, self.image_model)
-        bildmodell = wer.model if wer is not None else ""
-        try:
-            # Ein Bild zaehlt pauschal -- und nur, wenn das Kontingent es noch
-            # traegt. Mit eigenem Bildschluessel nur das Ablegen (9.5.14 Seashell).
-            metering.check_image(self.settings, bildmodell)
-        except metering.QuotaExceeded as exc:
-            anteil = (metering.share_of_session(metering.work_cost("bild"))
-                      if metering.is_own(self.settings, bildmodell)
-                      else metering.share_of_session(metering.IMAGE_TOKENS))
-            return {"error": str(exc) + f" (Ein Bild braucht {anteil} einer Sitzung.)"}
-        self._emit("image_create", prompt=prompt[:160])
-        try:
-            bild = images.generate(self.settings, prompt, fmt, model=self.image_model)
-        except images.ImageError as exc:
-            self._emit("image_created", error=str(exc))
-            return {"error": str(exc)}
-        try:
-            # Ein KI-Bild gehoert zu seinem Chat und geht mit ihm (9.5.15) --
-            # bis 9.5.14 blieb es "fest" fuer immer liegen.
-            media_id = save_snapshot(self.settings.data_dir, bild["bytes"], bild["mime"],
-                                     ai=True)
-        except (OSError, ValueError) as exc:
-            return {"error": f"Das Bild liess sich nicht ablegen: {exc}"}
-        # Abgerechnet wird nach der Kennung, nicht nach dem Anzeigenamen -- nur
-        # so ist klar, ob der Schluessel des Kontos oder des Betreibers malte.
-        metering.charge_image(self.settings, str(bild.get("model_id") or bildmodell))
-        self.stats.images_created += 1
-        self.stats.visuals.append(
-            {
-                "kind": "erstellt",
-                "media_id": media_id,
-                "mime_type": bild["mime"],
-                "title": "KI-Bild (" + bild["modell"] + ")",
-                "caption": " ".join(prompt.split())[:300],
-                "captured_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            }
-        )
-        self._emit("image_created", media_id=media_id, modell=bild["modell"])
-        return {
-            "erstellt": True,
-            "modell": bild["modell"],
-            "hinweis": (
-                "Das Bild steht unter deiner Antwort. Sag in einem Satz, was darauf zu sehen "
-                "sein soll, und dass es KI-erstellt ist -- beschreib es nicht lang."
-            ),
-        }
 
     def _addon_call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Die Werkzeuge der Add-ons. Ausgeschaltet heisst: gibt es nicht."""
@@ -3048,10 +2964,6 @@ class Toolbox:
             return self.vm_read(path=str(arguments.get("path", "")))
         if name == "vm_files":
             return self.vm_files(path=str(arguments.get("path", "") or ""))
-        if name == "create_image":
-            return self.create_image(
-                str(arguments.get("prompt") or ""), str(arguments.get("format") or "quadrat")
-            )
         if name in ADDON_TOOLS:
             return self._addon_call(name, arguments)
         if name == "blender_run":

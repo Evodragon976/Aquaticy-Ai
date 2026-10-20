@@ -271,15 +271,9 @@ body.hat-neues #btn-side::after{content:"";position:absolute;top:5px;right:5px;
   border-radius:16px;box-shadow:var(--shadow);
   display:flex;flex-direction:column;max-height:calc(100vh - 140px);
   overflow-y:auto;overscroll-behavior:contain}
-/* Bilderstellung und die beiden Knoepfe darunter -- untereinander, gross genug zum Treffen. */
-.picker-image{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;
-  background:transparent;border:0;border-top:1px solid var(--line);padding:12px 16px;cursor:pointer;
-  font-size:calc(13px * var(--fs));color:var(--text)}
-@media (hover:hover){.picker-image:hover{background:var(--surface-2)}}
-.picker-image.on{background:var(--accent-soft)}
-.picker-image .pi-icon{font-size:calc(18px * var(--fs));line-height:1.2}
-.picker-image .why,.picker-act .why{display:block;color:var(--text-3);
-  font-size:calc(11.5px * var(--fs));line-height:1.45;margin-top:2px}
+/* Zwei gut erreichbare Einstellungsgruppen im Chat. */
+.picker-act .why{display:block;color:var(--text-3);font-size:calc(11.5px * var(--fs));
+  line-height:1.45;margin-top:2px}
 .picker-actions{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .picker-act{display:flex;flex-direction:column;align-items:flex-start;gap:0;width:100%;
   text-align:left;background:transparent;border:0;padding:11px 16px;cursor:pointer;
@@ -1632,6 +1626,23 @@ html.vv,html.vv body{height:var(--app-h)}
 @media (hover:hover){.btn.upgrade-go.bereit:hover{background:var(--go-hover)}}
 .pick .neu{font:600 calc(10px * var(--fs))/1 var(--mono);color:var(--accent-text);
   background:var(--accent-soft);border-radius:999px;padding:3px 7px;margin-left:6px}
+/* 12.2.1 Sol: mehr Chatflaeche am Handy, mit erreichbaren Bedienelementen. */
+#chat-details{display:none}
+@media (max-width:599px){
+  .topbar{transition:padding .28s var(--ease-out)}
+  .topbar .where{max-height:64px;opacity:1;
+    transition:max-height .28s var(--ease-out),opacity .2s ease,padding .28s ease}
+  .topbrand{transition:font-size .28s ease,gap .28s ease}
+  .topbrand img{transition:width .28s ease,height .28s ease}
+  body:not(.start) #chat-details{display:inline-flex;order:2;font-size:calc(12px * var(--fs))}
+  body.chat-compact .topbar{padding-top:max(2px, env(safe-area-inset-top));padding-bottom:2px}
+  body.chat-compact .topbrand{font-size:calc(13px * var(--fs));gap:5px}
+  body.chat-compact .topbrand img{width:18px;height:18px}
+  body.chat-compact:not(.chat-details-open) .topbar .where{
+    max-height:0;opacity:0;padding-top:0;padding-bottom:0;pointer-events:none}
+  body.chat-compact.chat-details-open #chat-details{color:var(--accent);
+    background:var(--accent-soft)}
+}
 </style>
 </head>
 <body class="start">
@@ -1776,6 +1787,8 @@ html.vv,html.vv body{height:var(--app-h)}
           alt="">Aquaticy</span>
     <span class="where" id="status" role="status" aria-live="polite"></span>
     <span class="spacer"></span>
+    <button class="iconbtn" id="chat-details" type="button" aria-controls="status"
+            aria-expanded="false" aria-label="Chat-Infos anzeigen">Infos</button>
     <button class="iconbtn" id="btn-vmfiles" title="Dateien in der virtual machine"
             aria-label="Dateien in der virtual machine" hidden>Dateien</button>
     <button class="iconbtn topnew" id="btn-new-top" title="Neuer Chat"
@@ -1792,11 +1805,6 @@ html.vv,html.vv body{height:var(--app-h)}
       <span class="why" id="ctx-why">Wie viel vom Gespräch das lokale Modell auf einmal
         überblickt. Höchstens 5 GB Arbeitsspeicher.</span>
     </div>
-    <button type="button" class="picker-image" id="btn-imagemode" aria-pressed="false">
-      <span><b>Bilderstellung</b>
-        <span class="why">Aquaticy malt ein Bild nach deiner Beschreibung. Es geht sofort in
-          den Standard-Modus und wählt selbst ein Modell, das Bilder erstellen kann.</span></span>
-    </button>
     <div class="picker-actions">
       <button type="button" class="picker-act" id="btn-aufwand">
         <span><b>Aufwand</b></span><span class="why">Denktiefe und Zahl der Agenten</span></button>
@@ -1804,8 +1812,8 @@ html.vv,html.vv body{height:var(--app-h)}
         <span><b>Weitere Einstellungen</b></span><span class="why">virtual machine, Suche, Strukturieren
           und mehr</span></button>
     </div>
-    <div class="picker-foot">Anderes Modell oder eigener Schlüssel? Das geht in den
-      <button class="linkish" id="picker-settings">Einstellungen</button>.</div>
+    <div class="picker-foot">Eigene Modelle und Anbieter richtest du hier ein:
+      <button class="linkish" id="picker-settings">Modelle und Verbindungen</button>.</div>
   </div>
 
   <!-- Kleine Fenster zum Modellmenue (seit 9.5.34). Die Bedienelemente behalten
@@ -2311,6 +2319,64 @@ html.vv,html.vv body{height:var(--app-h)}
   </div>
 </div>
 
+<div class="overlay" id="modelbox">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="model-title">
+    <div class="sheet-head">
+      <div class="sheet-titel">
+        <button type="button" class="sheet-back" id="model-close" aria-label="Zurück">‹ Zurück</button>
+        <h2 id="model-title">Modelle und Verbindungen</h2>
+      </div>
+      <p class="lead">Wähle dein Chat-Modell unten im Chat. Hier kannst du eigene Modelle und
+        Verbindungen einrichten.</p>
+    </div>
+    <form id="model-settings">
+      <fieldset><legend>Modell</legend>
+        <label><span class="lbl">Hauptmodell <span class="why">Welche KI dir antwortet. Schreibweise: Anbieter/Name, z. B. mistral/mistral-large-latest</span></span>
+          <input type="text" name="AQUATICY_MODEL" placeholder="ollama_chat/gemma4:12b"></label>
+        <div class="row">
+          <label><span class="lbl">Vision-Modell
+            <span class="why">Für Fotos und Bilder. Leer lassen = das Hauptmodell übernimmt, wenn es Bilder versteht</span></span>
+            <input type="text" name="AQUATICY_VISION_MODEL"></label>
+          <label><span class="lbl">Helfer-Modell
+            <span class="why">Für die Helfer, die nebenbei suchen. Leer lassen = ein schnelles, kleines Modell</span></span>
+            <input type="text" name="AQUATICY_SUBAGENT_MODEL"></label>
+        </div>
+        <div class="row">
+          <label><span class="lbl">Code-Modell
+            <span class="why">Für den Code-Modus. Leer lassen = Aquaticy nimmt das stärkste,
+              das es hat</span></span>
+            <input type="text" name="AQUATICY_CODE_MODEL"></label>
+        </div>
+        <label><span class="lbl">Eigene Adresse <span class="why">Nur nötig, wenn das Modell bei dir selbst läuft, z. B. mit Ollama</span></span>
+          <input type="text" name="AQUATICY_API_BASE" placeholder="http://localhost:11434"></label>
+        <div class="row">
+          <label><span class="lbl">Anbieter</span>
+            <select id="provider">
+              <option value="">— automatisch erkennen —</option>
+            </select></label>
+        </div>
+        <div class="note" id="provider-note">Mistral und NVIDIA NIM brauchen einen Schlüssel. Den
+          verknüpfst du unter Add-ons. Alles andere muss auf dem Server laufen (Ollama, LM
+          Studio, vLLM).</div>
+        <div class="inline">
+          <button type="button" class="btn" id="btn-addons-modell">Add-ons: NVIDIA NIM und
+            Mistral</button>
+        </div>
+        <div class="actions section">
+          <span class="note" id="model-note"></span>
+          <button type="button" class="btn primary" id="save-model">Modell speichern</button>
+        </div>
+      </fieldset>
+
+      <fieldset id="sec-schluessel" hidden><legend>Eigene Modelle</legend>
+        <p class="lead">Hier stehen die Modelle, die du oben selbst eingetragen hast.</p>
+        <ul class="own-models" id="own-models"></ul>
+      </fieldset>
+
+    </form>
+  </div>
+</div>
+
 <div class="overlay" id="voicebox">
   <div class="sheet voice-sheet" role="dialog" aria-modal="true" aria-labelledby="voice-title">
     <h2 id="voice-title">Spracheingabe</h2>
@@ -2393,49 +2459,6 @@ html.vv,html.vv body{height:var(--app-h)}
         <a href="/privacy" target="_blank" rel="noopener">Details zum Datenschutz</a>
         <p class="note" id="learning-status" role="status" aria-live="polite"></p>
       </fieldset>
-      <fieldset><legend>Modell</legend>
-        <label><span class="lbl">Hauptmodell <span class="why">Welche KI dir antwortet. Schreibweise: Anbieter/Name, z. B. mistral/mistral-large-latest</span></span>
-          <input type="text" name="AQUATICY_MODEL" placeholder="ollama_chat/gemma4:12b"></label>
-        <div class="row">
-          <label><span class="lbl">Vision-Modell
-            <span class="why">Für Fotos und Bilder. Leer lassen = das Hauptmodell übernimmt, wenn es Bilder versteht</span></span>
-            <input type="text" name="AQUATICY_VISION_MODEL"></label>
-          <label><span class="lbl">Helfer-Modell
-            <span class="why">Für die Helfer, die nebenbei suchen. Leer lassen = ein schnelles, kleines Modell</span></span>
-            <input type="text" name="AQUATICY_SUBAGENT_MODEL"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Code-Modell
-            <span class="why">Für den Code-Modus. Leer lassen = Aquaticy nimmt das stärkste,
-              das es hat</span></span>
-            <input type="text" name="AQUATICY_CODE_MODEL"></label>
-        </div>
-        <label><span class="lbl">Eigene Adresse <span class="why">Nur nötig, wenn das Modell bei dir selbst läuft, z. B. mit Ollama</span></span>
-          <input type="text" name="AQUATICY_API_BASE" placeholder="http://localhost:11434"></label>
-        <div class="row">
-          <label><span class="lbl">Anbieter</span>
-            <select id="provider">
-              <option value="">— automatisch erkennen —</option>
-            </select></label>
-        </div>
-        <div class="note" id="provider-note">Mistral und NVIDIA NIM brauchen einen Schlüssel. Den
-          verknüpfst du unter Add-ons. Alles andere muss auf dem Server laufen (Ollama, LM
-          Studio, vLLM).</div>
-        <div class="inline">
-          <button type="button" class="btn" id="btn-addons-modell">Add-ons: NVIDIA NIM und
-            Mistral</button>
-        </div>
-        <div class="actions section">
-          <span class="note" id="model-note"></span>
-          <button type="button" class="btn primary" id="save-model">Modell speichern</button>
-        </div>
-      </fieldset>
-
-      <fieldset id="sec-schluessel" hidden><legend>Eigene Modelle</legend>
-        <p class="lead">Hier stehen die Modelle, die du oben selbst eingetragen hast.</p>
-        <ul class="own-models" id="own-models"></ul>
-      </fieldset>
-
       <fieldset id="workshop-settings"><legend>virtual machine</legend>
         <div class="pro-lock" id="vm-plus-lock" hidden>„Plus“ gibt es nur mit Ultra.
           Die Größe „Normal“ kannst du trotzdem nutzen.</div>
@@ -2892,7 +2915,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.2.1 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.2.1 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -3142,7 +3165,6 @@ document.querySelectorAll("#modes .mode").forEach(button =>
     // passt nicht mehr zu dem, was jetzt gefragt ist. Steht schon nichts
     // im Chat, gibt es auch nichts anzufangen.
     const anders = button.dataset.mode !== mode;
-    if (imageMode) setImageMode(false);
     setMode(button.dataset.mode);
     greet();
     if (anders && thread.children.length) neuerChat({ leiste: false });
@@ -3605,9 +3627,23 @@ function md(text){
 }
 
 /* ---------- Nachrichten ---------- */
-function leaveStart(){ document.body.classList.remove("start"); }
+function chatDetails(open){
+  document.body.classList.toggle("chat-details-open", open);
+  $("#chat-details").setAttribute("aria-expanded", String(open));
+  $("#chat-details").setAttribute("aria-label", sp(
+    open ? "Chat-Infos verbergen" : "Chat-Infos anzeigen",
+    open ? "Hide chat details" : "Show chat details"));
+}
+$("#chat-details").addEventListener("click", () =>
+  chatDetails(!document.body.classList.contains("chat-details-open")));
+function leaveStart(){
+  if (document.body.classList.contains("start")) chatDetails(false);
+  document.body.classList.remove("start");
+  document.body.classList.add("chat-compact");
+}
 function addUser(text, files = []){
   leaveStart();
+  chatDetails(false);
   const el = document.createElement("div");
   el.className = "msg user";
   el.innerHTML = `<div class="bubble"></div>`;
@@ -3843,7 +3879,7 @@ function step(box, tag, text, kind){
 const WICHTIGE_SCHRITTE = new Set(["[Fehler]", "[Limit]", "[Ai-guard]", "[Verbindung]",
   "[Abgebrochen]", "[Weiter]", "[Rechtsrahmen]", "[Schutz]"]);
 const PHASEN = { think: "Denken", web: "Websuche", code: "Code ausführen",
-  bild: "Bild erstellen", rechnen: "Rechnen", agenten: "Agenten arbeiten", pruefen: "Prüfen",
+  bild: "Bild ansehen", rechnen: "Rechnen", agenten: "Agenten arbeiten", pruefen: "Prüfen",
   netz: "Netzwerk", haus: "Smart Home", mail: "E-Mail", termine: "Kalender", lager: "Lager",
   erinnern: "Erinnern", modell: "Modell laden", work: "Arbeiten" };
 // Was der Server deutsch schickt und hier fuer Englisch nachgeschlagen wird (11.2.2 Sol).
@@ -3851,12 +3887,11 @@ const VM_GRUENDE_EN = { "seit 20 Minuten unbenutzt": "unused for 20 minutes",
   "aufgeräumt": "cleaned up", "Programm beendet": "program closed",
   "neu aufgebaut": "rebuilt", "Installation fertig": "installation finished",
   "Coworker beendet": "coworker finished" };
-const KATEGORIEN_EN = { bild: "creating an image", code: "programming",
+const KATEGORIEN_EN = { code: "programming",
   schnell: "short chat", schreiben: "writing", recherche: "research and questions" };
 function autoGrundEn(ev){
   const grund = KATEGORIEN_EN[ev.kategorie] || ev.grund || "";
-  return String(ev.grund || "").includes("kein Bildmodell")
-    ? grund + " (no image model reachable)" : grund;
+  return grund;
 }
 const CODE_WOERTER = ["Noodling", "Aquaticing", "Pondering", "Schlepping", "Booping",
   "Tinkering", "Brewing", "Percolating", "Mulling", "Cogitating", "Wrangling", "Doodling",
@@ -4320,7 +4355,6 @@ async function ask(text){
       method: "POST", headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         message: text, attachments, mode, structured, recheck, effort, sandbox, agents,
-        image_mode: imageMode,
         visual_sources: mode === "code" ? false : visualSources,
         // Im Code-Modus gibt es den Web-Schalter nicht -- also darf er dort
         // auch nichts abschalten. Sonst haette ein "aus" aus dem
@@ -4692,14 +4726,7 @@ async function verfolge(hole, steps, bubble, text){
         step(steps, "[Modell]",
              sp("automatisch: ", "automatic: ") + String(ev.model || "").split("/").pop()
              + ` — ${sprache === "en" ? autoGrundEn(ev) : ev.grund || ""}`
-             + (ev.bild ? sp(" · Bild: ", " · image: ") + ev.bild : "")); break;
-      case "image_mode": step(steps, "[Bild]", ev.modell
-        ? sp("Bilderstellung mit ", "Creating images with ") + ev.modell
-        : sp("Bilderstellung mit einem Bildmodell", "Creating images with an image model")); break;
-      case "image_create": step(steps, "[Bild]", "wird erstellt …"); break;
-      case "image_created":
-        step(steps, "[Bild]", ev.error ? ev.error : sp("erstellt mit ", "made with ") + ev.modell,
-             ev.error ? "warn" : ""); break;
+             ); break;
       case "code_model":
         // Im Code- wie im Pro-Modus zaehlt das staerkste Modell, nicht das
         // eingestellte. Die Marke sagt, aus welchem der beiden Gruende --
@@ -5294,6 +5321,7 @@ async function neuerChat({ leiste = true } = {}){
     return;
   }
   thread.innerHTML = "";
+  document.body.classList.remove("chat-compact", "chat-details-open");
   document.body.classList.add("start");
   greet();
   loadRecents();
@@ -5747,7 +5775,7 @@ const EN = {
 "Prüft die Antwort danach auf anderen Seiten nach. So fallen Zahlen aus nur einer Quelle auf. Dauert etwa doppelt so lang.": "Checks the answer on other pages afterwards. Numbers from only one source stand out. Takes about twice as long.",
 "Vier Prüfer": "Four checkers",
 "lesen jedes Ergebnis auf anderen Seiten gegen, während die übrigen Helfer noch suchen. Das kostet kaum extra Zeit. Aus: Aquaticy entscheidet allein, ob etwas nachgeprüft werden muss.": "cross-check every result on other pages while the other helpers are still searching. That costs hardly any extra time. Off: Aquaticy decides on its own whether something needs checking.",
-"Anderes Modell oder eigener Schlüssel? Das geht in den": "Different model or your own key? That's done in the",
+
 "Einstellungen": "Settings",
 "Guten Tag": "Hello",
 "Ich suche selbst im Web, lese die Seiten und nenne zu jeder Angabe die Quelle.": "I search the web myself, read the pages and give the source for every detail.",
@@ -6133,7 +6161,7 @@ const EN = {
 "Unbegrenzt": "Unlimited",
 "Websuche": "Web search",
 "Code ausführen": "Running code",
-"Bild erstellen": "Creating image",
+
 "Rechnen": "Calculating",
 "Agenten arbeiten": "Agents at work",
 "Prüfen": "Checking",
@@ -6192,7 +6220,7 @@ const EN = {
 "Eine Quelle enthielt Anweisungen an die KI — ignoriert.": "A source contained instructions for the AI — ignored.",
 "Internet an, Heimnetz gesperrt": "Internet on, home network blocked",
 "Desktop bereit (User mode)": "Desktop ready (User mode)",
-"wird erstellt …": "being created …",
+
 "nichts gefunden — ich mache selbst weiter": "nothing found — I'll carry on myself",
 "beschrieben": "described",
 "Das Modell antwortet gerade nicht — ein anderes übernimmt.": "The model isn't answering right now — another one takes over.",
@@ -6206,9 +6234,9 @@ const EN = {
 "Da ist bei Aquaticy etwas schiefgelaufen. Bitte versuch es gleich noch einmal.": "Something went wrong at Aquaticy. Please try again in a moment.",
 "Keine Verbindung zu Aquaticy. Bitte prüfe die Verbindung und versuch es gleich noch einmal.": "No connection to Aquaticy. Please check the connection and try again in a moment.",
 "Wenn Auto-Upgrading aktiv ist, können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte eingehen. Dort liegen öffentliche Auszüge unverschlüsselt. Bei Ablauf oder fehlender Bestätigung werden betroffene Fassungen zurückgezogen und gelöscht. Einzelheiten stehen im Datenschutz.": "When Auto-Upgrading is active, excerpts confirmed several times can also go into local Ollama model texts. Public excerpts are stored there unencrypted. When they expire or are no longer confirmed, the affected versions are withdrawn and deleted. Details are in the privacy policy.",
-"Bilderstellung": "Image creation",
-"Bilderstellung": "Image creation",
-"Aquaticy malt ein Bild nach deiner Beschreibung. Es geht sofort in den Standard-Modus und wählt selbst ein Modell, das Bilder erstellen kann.": "Aquaticy paints a picture from your description. It switches to Standard mode right away and picks a model that can create images by itself.",
+
+
+
 "Aufwand": "Effort",
 "Denktiefe und Zahl der Agenten": "Thinking depth and number of agents",
 "Weitere Einstellungen": "More settings",
@@ -6266,7 +6294,7 @@ const EN = {
 "Kein Modell gefunden.": "No model found.",
 "Dein Schlüssel": "Your key",
 "Das Modell ließ sich nicht umstellen.": "The model couldn't be switched.",
-"Beschreibe das Bild, das Aquaticy malen soll …": "Describe the image Aquaticy should paint …",
+
 "Aquaticy antwortet gerade nicht. Versuch es gleich noch einmal.": "Aquaticy isn't answering right now. Try again in a moment.",
 "Diese Adresse legt der Betreiber fest (nur Ultra ändert sie).": "The operator sets this address (only Ultra can change it).",
 "Verstoß gegen die Nutzungsregeln": "Violation of the terms of use",
@@ -6361,7 +6389,7 @@ const EN = {
 "Zurückziehen": "Withdraw",
 "Stärkstes Code-Modell wählen": "Choose the strongest code model",
 "Stärkstes Modell wählen": "Choose the strongest model",
-"Kein Modell gefunden. Trag unter Einstellungen → Modell einen eigenen Schlüssel ein, oder installiere eins mit aquaticy install-model.": "No model found. Enter your own key under Settings → Model, or install one with aquaticy install-model.",
+"Kein Modell gefunden. Trag unter Chat → Modelle und Verbindungen einen eigenen Schlüssel ein, oder installiere eins mit aquaticy install-model.": "No model found. Set up your model under Chat → Models and connections, or install one with aquaticy install-model.",
 "Mit deinem Schlüssel": "With your key",
 "zählt nicht in dein Limit": "doesn't count toward your limit",
 "auf deine Rechnung beim Anbieter": "billed to you by the provider",
@@ -6503,7 +6531,15 @@ const EN = {
 "Erlauben braucht Ultra und eine verbundene, zum Schalten freigegebene Home-Assistant-Verbindung.": "Allow requires Ultra and a configured Home Assistant connection with control enabled.",
 "Bitte die Regel „Im Haus etwas schalten“ verwenden.": "Please use the Switch things at home rule.",
 "Rhythmus geändert": "Frequency changed",
-"gewählter Rhythmus": "selected frequency"
+"gewählter Rhythmus": "selected frequency",
+"Modelle und Verbindungen": "Models and connections",
+"Wähle dein Chat-Modell unten im Chat. Hier kannst du eigene Modelle und Verbindungen einrichten.": "Choose your chat model below the chat. Set up your own models and connections here.",
+"Eigene Modelle und Anbieter richtest du hier ein:": "Set up your own models and providers here:",
+"Chat-Infos anzeigen": "Show chat details",
+"Chat-Infos verbergen": "Hide chat details",
+"Infos": "Details",
+"Der angeforderte Modus wird nicht mehr unterstützt.": "The requested mode is no longer supported.",
+"Bild ansehen": "Viewing image"
 };
 const SPRACHEN = ["de", "en"];
 const ATTRIBUTE = ["placeholder", "title", "aria-label"];
@@ -7035,7 +7071,8 @@ async function deleteChat(chat){
   if (chat.session_id === currentChat){
     currentChat = "";
     thread.innerHTML = "";
-    document.body.classList.add("start");   // zurueck zum Begruessungsbild
+    document.body.classList.remove("chat-compact", "chat-details-open");
+  document.body.classList.add("start");   // zurueck zum Begruessungsbild
     await loadRecents();
     return;
   }
@@ -7321,19 +7358,28 @@ $("#ctx-regler").addEventListener("change", async (e) => {
   }
 });
 
+let modelChanging = false;
 async function chooseModel(model, feld){
+  if (modelChanging) return;
+  modelChanging = true;
   closePicker();
-  if (imageMode) setImageMode(false);
-  $("#model-name").textContent = model.label;
+  $("#btn-model").disabled = true;
   // Welches Feld die Wahl setzt, hat der Server mit der Liste gesagt.
   const wunsch = { [feld === "AQUATICY_CODE_MODEL" ? "AQUATICY_CODE_MODEL" : "AQUATICY_MODEL"]: model.id };
-  const res = await api("/api/config", {
-    method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(wunsch)
-  });
-  const data = await res.json();
-  if (data.ok){ currentModel = model.id; refreshHeader(); }
-  else hinweis(data.error || "Das Modell ließ sich nicht umstellen.");
+  try {
+    const res = await api("/api/config", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(wunsch)
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Das Modell ließ sich nicht umstellen.");
+    currentModel = model.id;
+    await refreshHeader();
+  } catch (error){ hinweis(nutzerFehler(error.message, "Das Modell ließ sich nicht umstellen.")); }
+  finally {
+    modelChanging = false;
+    $("#btn-model").disabled = false;
+  }
 }
 
 $("#btn-model").addEventListener("click", () => pickerOpen() ? closePicker() : openPicker());
@@ -7367,36 +7413,7 @@ $("#btn-weitere").addEventListener("click", () => minwinOeffnen("win-weitere"));
 document.querySelectorAll("[data-minwin-close]").forEach(knopf =>
   knopf.addEventListener("click", minwinSchliessen));
 
-/* ---------- Bilderstellung (9.5.34) ---------- */
-// Wer "Bilderstellung" waehlt, landet sofort im Standard-Modus; welches Modell
-// das Bild malt, sucht der Server selbst (aquaticy/images.py).
-let imageMode = false;
-function setImageMode(on){
-  imageMode = !!on;
-  const knopf = $("#btn-imagemode");
-  knopf.classList.toggle("on", imageMode);
-  knopf.setAttribute("aria-pressed", imageMode ? "true" : "false");
-  document.body.classList.toggle("image-mode", imageMode);
-  if (imageMode){
-    if (mode !== "normal"){
-      setMode("normal");
-      greet();
-      if (thread.children.length) neuerChat({ leiste: false });
-    }
-    $("#model-name").textContent = "Bilderstellung";
-    $("#input").placeholder = "Beschreibe das Bild, das Aquaticy malen soll …";
-  } else {
-    $("#input").placeholder = PLATZHALTER[mode] || PLATZHALTER.normal;
-    refreshHeader();
-  }
-}
-$("#btn-imagemode").addEventListener("click", () => {
-  closePicker();
-  setImageMode(!imageMode);
-});
-$("#picker-settings").addEventListener("click", () => {
-  closePicker(); $("#btn-settings").click();
-});
+$("#picker-settings").addEventListener("click", openModelSettings);
 // Escape schliesst, was gerade oben liegt: erst die Modellliste, dann die
 // Einstellungen. Sonst bleibt das Fenster offen und die Auslastung fragt weiter.
 document.addEventListener("keydown", (e) => {
@@ -7413,11 +7430,39 @@ document.addEventListener("keydown", (e) => {
   if (vmBox.classList.contains("open")) { closeOverlay(vmBox); return; }
   if (memBox.classList.contains("open")) { closeOverlay(memBox); return; }
   if (themeBox.classList.contains("open")) { closeTheme(); return; }
+  if (modelOverlay.classList.contains("open")) { closeModelSettings(); return; }
   if (overlay.classList.contains("open")) closeSettings();
 });
 
 /* ---------- Einstellungen ---------- */
 const overlay = $("#overlay"), form = $("#settings");
+const modelOverlay = $("#modelbox"), modelForm = $("#model-settings");
+function closeModelSettings(){
+  closeOverlay(modelOverlay, () => $("#btn-model").focus({preventScroll:true}));
+}
+async function openModelSettings(){
+  closePicker();
+  try {
+    const res = await api("/api/config"), cfg = await res.json();
+    if (!res.ok || !cfg?.values) throw new Error(cfg?.error || "");
+    fill(cfg.values, modelForm);
+    fillProviders(cfg.providers);
+    eigeneModelle = Array.isArray(cfg.own_models) ? cfg.own_models : [];
+    modellStart = (modelForm.elements["AQUATICY_MODEL"].value || "").trim();
+    modelForm.elements["AQUATICY_API_BASE"].readOnly = cfg.account?.ultra !== true;
+    $("#provider").value = "";
+    $("#provider-note").textContent = "";
+    $("#model-note").textContent = "";
+    eigeneModelleZeigen();
+    openOverlay(modelOverlay);
+    $("#model-close").focus({preventScroll:true});
+  } catch (error){ hinweis(nutzerFehler(error.message)); }
+}
+modelForm.addEventListener("submit", e => { e.preventDefault(); $("#save-model").click(); });
+$("#model-close").addEventListener("click", closeModelSettings);
+modelOverlay.addEventListener("click", e => {
+  if (e.target === modelOverlay) closeModelSettings();
+});
 
 // Das Formular ist lang. Die Marken oben nehmen ihre Namen aus den
 // Abschnitten selbst -- wer unten einen Abschnitt ergaenzt, bekommt die
@@ -7434,7 +7479,7 @@ function buildSectionNav(){
     // Von Hand gerechnet statt scrollIntoView: der stehende Kopf ist je nach
     // Fensterbreite unterschiedlich hoch und verdeckt sonst die Ueberschrift.
     chip.addEventListener("click", () => {
-      const sheet = form.closest(".sheet"), head = $(".sheet-head");
+      const sheet = form.closest(".sheet"), head = sheet.querySelector(".sheet-head");
       const delta = section.getBoundingClientRect().top - sheet.getBoundingClientRect().top;
       sheet.scrollTo({ top: sheet.scrollTop + delta - head.offsetHeight - 10,
                        behavior: "smooth" });
@@ -7470,9 +7515,9 @@ new IntersectionObserver((eintraege) => {
   upgradeLaden();
   kontenLaden();
 }, { root: form.closest(".sheet") }).observe($("#dev-settings"));
-function fill(values){
+function fill(values, target = form){
   for (const [k, v] of Object.entries(values)){
-    const field = form.elements[k];
+    const field = target.elements[k] || (target === form ? modelForm.elements[k] : null);
     if (!field) continue;
     if (field.type === "checkbox") field.checked = (v === "true" || v === true);
     else field.value = v ?? "";
@@ -7491,7 +7536,7 @@ $("#btn-settings").addEventListener("click", async () => {
   fill(cfg.values);
   fillProviders(cfg.providers);
   eigeneModelle = Array.isArray(cfg.own_models) ? cfg.own_models : [];
-  modellStart = (form.elements["AQUATICY_MODEL"]?.value || "").trim();
+  modellStart = (modelForm.elements["AQUATICY_MODEL"]?.value || "").trim();
   $("#provider").value = "";
   $("#provider-note").textContent = "";
   $("#model-note").textContent = "";
@@ -7591,7 +7636,7 @@ async function loadAccount(account){
   // Eigene Modell-/Suchadressen gibt es nur mit Ultra -- sonst legt sie der
   // Betreiber fest.
   for (const name of ["AQUATICY_API_BASE", "AQUATICY_SEARXNG_URL"]){
-    const feld = form.elements[name];
+    const feld = form.elements[name] || modelForm.elements[name];
     if (!feld) continue;
     feld.readOnly = !ultra;
     feld.title = ultra ? "" : "Diese Adresse legt der Betreiber fest (nur Ultra ändert sie).";
@@ -9412,7 +9457,7 @@ let modellStart = "";        // das Hauptmodell beim Öffnen der Einstellungen
 function eigeneModelleZeigen(){
   const sec = $("#sec-schluessel");
   if (!sec) return;
-  const modell = (form.elements["AQUATICY_MODEL"]?.value || "").trim();
+  const modell = (modelForm.elements["AQUATICY_MODEL"]?.value || "").trim();
   const liste = $("#own-models");
   liste.innerHTML = "";
   const eintraege = [...eigeneModelle];
@@ -9426,7 +9471,7 @@ function eigeneModelleZeigen(){
     li.querySelector("code").textContent = e.model;
     liste.appendChild(li);
   }
-  const adresse = (form.elements["AQUATICY_API_BASE"]?.value || "").trim();
+  const adresse = (modelForm.elements["AQUATICY_API_BASE"]?.value || "").trim();
   sec.hidden = !(eintraege.length || adresse);
   // Auch die Sprungmarke oben verschwindet, solange der Abschnitt weg ist.
   const marke = document.querySelector('#secnav button[data-section="sec-schluessel"]');
@@ -9820,7 +9865,7 @@ function fillProviders(liste){
   select.addEventListener("change", () => {
     const found = anbieter.find(eintrag => eintrag.id === select.value);
     if (!found) return;
-    const model = form.elements["AQUATICY_MODEL"];
+    const model = modelForm.elements["AQUATICY_MODEL"];
     if (!model.value.startsWith(select.value + "/")) model.value = found.example;
     $("#provider-note").textContent = found.note;
   });
@@ -9842,36 +9887,41 @@ const MODEL_FIELDS = ["AQUATICY_MODEL", "AQUATICY_VISION_MODEL", "AQUATICY_SUBAG
 $("#provider").addEventListener("change", () => setTimeout(eigeneModelleZeigen, 0));
 
 $("#save-model").addEventListener("click", async () => {
-  const note = $("#model-note");
+  const button = $("#save-model"), note = $("#model-note");
+  if (button.disabled) return;
+  button.disabled = true;
   note.className = "note"; note.textContent = "Speichere …";
   const values = {};
-  MODEL_FIELDS.forEach(name => { values[name] = form.elements[name].value; });
-
-  let data;
+  MODEL_FIELDS.forEach(name => { values[name] = modelForm.elements[name].value; });
+  let savedOnServer = false;
   try {
     const res = await api("/api/config", {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify(values)
     });
-    data = await res.json();
-  } catch (err){
-    note.className = "note bad"; note.textContent = nutzerFehler(err && err.message); return;
-  }
-  if (!data.ok){
-    note.className = "note bad"; note.textContent = data.error || "Das hat nicht geklappt.";
-    return;
-  }
-  note.className = "note ok";
-  // Der Server ergaenzt ein fehlendes Anbieter-Praefix -- das soll man sehen.
-  const fresh = await (await api("/api/config")).json();
-  if (!fresh?.values){ note.textContent = nutzerFehler(fresh?.error); return; }
-  const saved = fresh.values.AQUATICY_MODEL;
-  const vision = fresh.values.AQUATICY_VISION_MODEL || saved;
-  form.elements["AQUATICY_MODEL"].value = saved;
-  note.textContent = (saved !== values.AQUATICY_MODEL
-    ? `Gespeichert als ${saved} — das Anbieter-Kürzel hat gefehlt.`
-    : `${saved} ist jetzt aktiv.`) + ` Bildanalyse: ${vision}.`;
-  refreshHeader();
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Das hat nicht geklappt.");
+    savedOnServer = true;
+    const refreshed = await api("/api/config"), fresh = await refreshed.json();
+    if (!refreshed.ok || !fresh?.values) throw new Error(fresh?.error || "");
+    const saved = fresh.values.AQUATICY_MODEL;
+    const vision = fresh.values.AQUATICY_VISION_MODEL || saved;
+    fill(fresh.values, modelForm);
+    modellStart = saved;
+    eigeneModelle = Array.isArray(fresh.own_models) ? fresh.own_models : [];
+    eigeneModelleZeigen();
+    note.textContent = (saved !== values.AQUATICY_MODEL
+      ? `Gespeichert als ${saved} — das Anbieter-Kürzel hat gefehlt.`
+      : `${saved} ist jetzt aktiv.`) + ` Bildanalyse: ${vision}.`;
+    note.className = "note ok";
+    await refreshHeader();
+  } catch (error){
+    note.className = "note bad";
+    note.textContent = savedOnServer ? sp(
+      "Gespeichert. Der aktuelle Stand ließ sich gerade nicht laden. Bitte öffne dieses Fenster erneut.",
+      "Saved. The current settings could not be loaded. Please reopen this window.")
+      : nutzerFehler(error.message);
+  } finally { button.disabled = false; }
 });
 
 /* ---------- Mitlesen ---------- */
@@ -10128,8 +10178,8 @@ $("#probe").addEventListener("click", async () => {
   note.className = "note"; note.textContent = "Teste Modell und Suche …";
   button.disabled = true;
   const body = {
-    AQUATICY_MODEL: form.elements["AQUATICY_MODEL"].value.trim(),
-    AQUATICY_API_BASE: form.elements["AQUATICY_API_BASE"].value.trim(),
+    AQUATICY_MODEL: modelForm.elements["AQUATICY_MODEL"].value.trim(),
+    AQUATICY_API_BASE: modelForm.elements["AQUATICY_API_BASE"].value.trim(),
     AQUATICY_SEARCH_BACKEND: form.elements["AQUATICY_SEARCH_BACKEND"].value,
     AQUATICY_SEARCH_ENGINES: form.elements["AQUATICY_SEARCH_ENGINES"].value.trim(),
     AQUATICY_SEARXNG_URL: form.elements["AQUATICY_SEARXNG_URL"].value.trim(),
@@ -10304,7 +10354,7 @@ async function kopfNeuZeichnen(){
     // staerkste), "Auto · ..." bei automatischer Wahl und die Statuszeile:
     // alles fertig vom Server (aquaticy/webview.py).
     currentModel = kopf.model || "";
-    flash($("#model-name"), imageMode ? "Bilderstellung" : (kopf.model_label || "Modell wählen"));
+    flash($("#model-name"), kopf.model_label || "Modell wählen");
     flash($("#status"), kopf.status || "");
     $("#status").title = kopf.status_title || "";
   } catch { /* Server weg -- die Oberflaeche bleibt trotzdem bedienbar */ }

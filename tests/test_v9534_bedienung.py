@@ -14,7 +14,6 @@ from aquaticy import web
 from aquaticy.agent import Agent
 from aquaticy.aiguard import ANSWER_REFUSAL, answer_problem
 from aquaticy.config import Settings
-from aquaticy.images import Backend
 
 
 # -- Attrappen (wie in test_agent.py) ---------------------------------------------------
@@ -217,57 +216,12 @@ def test_the_judge_prompt_for_answers_allows_education() -> None:
     assert "Bildung" in text and "Im Zweifel: kein Problem" in text
 
 
-# -- Bilderstellung -------------------------------------------------------------------------
-def test_image_mode_without_a_model_says_what_to_do(monkeypatch: pytest.MonkeyPatch,
-                                                    settings: Settings) -> None:
-    monkeypatch.setattr("aquaticy.images.available", lambda s: [])
-    llm = ScriptedLLM()
-    monkeypatch.setattr("litellm.completion", llm)
-    agent, _ = _agent(settings)
-    result = agent.ask("Male einen Leuchtturm", stream=False, image_mode=True)
-    assert "Schlüssel" in result.answer and "Bilderstellung" in result.answer
-    assert not llm.calls, "ohne Bildmodell kein einziger Modellaufruf"
+# -- Entfernte Bilderstellung (12.2.1 Sol) ----------------------------------------------
+def test_the_removed_mode_is_not_in_the_agent_or_server_signature() -> None:
+    import inspect
 
-
-def test_image_mode_picks_an_image_model_and_offers_the_tool(
-        monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
-    flux = Backend("nvidia_nim", "nvidia_nim/black-forest-labs/flux.1-schnell",
-                   "FLUX.1 schnell (NVIDIA)", "NVIDIA_NIM_API_KEY")
-    monkeypatch.setattr("aquaticy.images.available", lambda s: [flux])
-    llm = ScriptedLLM(_message(content="Ein Leuchtturm."))
-    monkeypatch.setattr("litellm.completion", llm)
-    agent, ereignisse = _agent(settings)
-    # Web aus -- das Bild kommt vom Bildmodell, nicht aus dem Netz.
-    result = agent.ask("Male einen Leuchtturm", stream=False, image_mode=True,
-                       online=False, mode="pro", structured=True, sandbox=True)
-    namen = [t["function"]["name"] for t in llm.calls[0]["tools"]]
-    assert "create_image" in namen
-    assert agent.toolbox.image_model == flux.model
-    assert agent.mode == "normal", "Bilderstellung landet im Standard-Modus"
-    assert not agent.structured and not agent.sandbox
-    assert any(n == "image_mode" and p["modell"] == flux.label for n, p in ereignisse)
-    letzte_frage = next(m for m in reversed(llm.calls[0]["messages"]) if m["role"] == "user")
-    assert "create_image" in letzte_frage["content"]
-    assert result.answer == "Ein Leuchtturm."
-
-
-def test_image_mode_is_only_for_one_turn(monkeypatch: pytest.MonkeyPatch,
-                                         settings: Settings) -> None:
-    flux = Backend("nvidia_nim", "nvidia_nim/x", "FLUX", "NVIDIA_NIM_API_KEY")
-    monkeypatch.setattr("aquaticy.images.available", lambda s: [flux])
-    llm = ScriptedLLM(_message(content="Bild."), _message(content="Ein normaler Text."))
-    monkeypatch.setattr("litellm.completion", llm)
-    agent, _ = _agent(settings)
-    agent.ask("Male etwas", stream=False, image_mode=True)
-    agent.ask("Erkläre mir bitte etwas", stream=False)
-    zweite = next(m for m in reversed(llm.calls[1]["messages"]) if m["role"] == "user")
-    assert "Bilderstellung ist gewählt" not in zweite["content"]
-
-
-def test_the_server_passes_image_mode_on(monkeypatch: pytest.MonkeyPatch) -> None:
-    quelle = Path(web.__file__).read_text(encoding="utf-8")
-    assert 'payload.get("image_mode") is True' in quelle
-    assert "image_mode=image_mode" in quelle and 'wunsch["mode"] = "normal"' in quelle
+    assert "image_mode" not in inspect.signature(Agent.ask).parameters
+    assert "image_mode" not in inspect.signature(web.ChatSession.ask).parameters
 
 
 # -- Oberflaeche ----------------------------------------------------------------------------
@@ -279,10 +233,10 @@ def test_the_model_button_sits_next_to_the_send_button() -> None:
     assert 'id="btn-model"' in crow, "unten steht sie links neben Senden"
 
 
-def test_the_menu_has_image_mode_effort_and_more_settings() -> None:
+def test_the_menu_has_effort_and_more_settings_without_image_creation() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     menue = html[html.index('id="picker-models"'): html.index('id="win-aufwand"')]
-    assert 'id="btn-imagemode"' in menue and "Bilderstellung" in menue
+    assert 'id="btn-imagemode"' not in html and "Bilderstellung" not in menue
     assert menue.index('id="btn-aufwand"') < menue.index('id="btn-weitere"')
     aufwand = html[html.index('id="win-aufwand"'): html.index('id="win-weitere"')]
     assert 'id="efforts"' in aufwand and 'id="agents"' in aufwand
@@ -291,10 +245,10 @@ def test_the_menu_has_image_mode_effort_and_more_settings() -> None:
         assert f'id="{schalter}"' in weitere, schalter
 
 
-def test_the_browser_sends_image_mode() -> None:
+def test_the_browser_cannot_send_the_removed_image_mode() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "image_mode: imageMode" in html
-    assert 'if (imageMode) setImageMode(false);' in html
+    assert "image_mode: imageMode" not in html
+    assert "setImageMode" not in html
 
 
 def test_the_lan_switch_exists_for_ultra() -> None:

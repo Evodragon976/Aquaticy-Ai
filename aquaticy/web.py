@@ -1659,7 +1659,6 @@ class ChatSession:
         sandbox: bool | None = None,
         agents: int | None = None,
         visual_sources: bool | None = None,
-        image_mode: bool = False,
     ) -> Any:
         """Fuehrt eine Anfrage aus und meldet jeden Zwischenschritt an *emit*.
 
@@ -1705,8 +1704,8 @@ class ChatSession:
                     if plugin is not None:
                         mode = plugin.mode or mode
                         structured, recheck = False, False
-                        # Ein Plugin malt nicht und beobachtet keine Webcams.
-                        image_mode, visual_sources = False, False
+                        # Ein Plugin beobachtet keine Webcams.
+                        visual_sources = False
                         if plugin.online is not None:
                             online = plugin.online
                         if plugin.sandbox is not None:
@@ -1761,7 +1760,6 @@ class ChatSession:
                     from aquaticy.agent import Agent as BuiltinAgent
                     if isinstance(agent, BuiltinAgent):
                         ask_options["visual_sources"] = visual_sources
-                        ask_options["image_mode"] = image_mode
                         if plugin_prompt:
                             ask_options["plugin_prompt"] = plugin_prompt
                         # Sprache aus dem Design-Fenster (9.5.25).
@@ -3312,7 +3310,8 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 if (timing.get("kind") in ("visual", "image")
                         and not selected_vision_model(settings)):
                     raise coworker_mod.CoworkerError(
-                        "Die Bildbeobachtung braucht ein Vision-Modell unter Modell.")
+                        "Die Bildbeobachtung braucht ein Vision-Modell unter Modelle und "
+                        "Verbindungen im Chat.")
                 if timing.get("kind") == "image":
                     image_id, error = coworker_image(payload, settings)
                     if error:
@@ -5892,11 +5891,10 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         }
         if "structured" not in wunsch and "thinking" in payload:
             wunsch["structured"] = payload["thinking"]
-        # Bilderstellung (9.5.34): landet sofort im Standard-Modus -- auch im
-        # gespeicherten Stand, damit die Oberflaeche danach dort bleibt.
-        image_mode = payload.get("image_mode") is True
-        if image_mode:
-            wunsch["mode"] = "normal"
+        # Alte Clients duerfen den entfernten Modus nicht wieder aktivieren.
+        if payload.get("image_mode") not in (None, False):
+            self._json({"error": "Der angeforderte Modus wird nicht mehr unterstützt."}, 400)
+            return
         # Ein Schalter, den der gewaehlte Modus gar nicht zeigt, ist kein
         # Wunsch: er darf den gespeicherten Stand nicht ueberschreiben. Sonst
         # kaeme man aus dem Code-Modus zurueck und das abgeschaltete Web waere
@@ -5942,7 +5940,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         if visual_sources and not selected_vision_model(SESSION.settings()):
             self._json(
                 {"error": "Webcams und Satellitenbilder brauchen ein bildfähiges "
-                 "Hauptmodell oder ein Vision-Modell unter Einstellungen → Modell."}, 400
+                 "Hauptmodell oder ein Vision-Modell unter Chat → Modelle und Verbindungen."}, 400
             )
             return
         if not message and not attachments:
@@ -6077,7 +6075,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     sandbox=sandbox,
                     agents=agents,
                     visual_sources=visual_sources,
-                    image_mode=image_mode,
                 )
             except Exception as exc:
                 # Absichtliche Hinweise (etwa "/image: das ist kein Bild") sind

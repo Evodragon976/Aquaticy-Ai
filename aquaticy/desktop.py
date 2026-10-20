@@ -173,7 +173,7 @@ YES = frozenset({"ja", "j", "yes", "ok", "mach", "los", "klar", "ja, mach"})
 
 NO_VISION = (
     "Fuer den User mode braucht es ein Vision-Modell -- ohne sieht Aquaticy den "
-    "Bildschirm nicht. Einstellungen -> Modell -> Vision-Modell (oder ein "
+    "Bildschirm nicht. Chat -> Modelle und Verbindungen -> Vision-Modell (oder ein "
     "bildfaehiges Hauptmodell)."
 )
 

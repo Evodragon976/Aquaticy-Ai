@@ -301,6 +301,6 @@ def test_what_each_account_is_offered(tour: Tour) -> None:
     ultra = tour("GET", "/api/account")[1]["ultra"]
     assert ("lan_check" in angeboten) is ultra, "das Heimnetz gehoert zu Ultra"
     # Nicht eingerichtet -> nicht angeboten: kein Werkzeug, das nur scheitern kann.
-    for name in ("github", "read_feeds", "create_image", "ha_states", "ha_call",
+    for name in ("github", "read_feeds", "ha_states", "ha_call",
                  "storage_find", "mail_search", "calendar_events", "desktop_open"):
         assert name not in angeboten, name

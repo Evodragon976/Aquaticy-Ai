@@ -1,4 +1,4 @@
-# Aquaticy AI 12.2.1 Terra
+# Aquaticy AI 12.2.1 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.2.1 Terra
+aquaticy --version            # 12.2.1 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -393,7 +393,9 @@ die Frage noch einmal.
   der tatsächliche Speicherbedarf ist dann unbekannt. Der Expertenwert `0` überlässt das
   Fenster weiterhin Ollama und unterliegt dieser Begrenzung nicht. Die Auswahl zeigt das
   ausdrücklich als „Ollama-Standard“. Modellgewichte kommen zum Kontextspeicher hinzu.
-- **🎨 Bilderstellung:** Aquaticy nimmt ein Modell, das Bilder kann (NVIDIA FLUX oder Mistral).
+- **Modelle und Verbindungen:** Die Modellauswahl gibt es ausschließlich im Chat. Über den
+  gleichnamigen Knopf im Modellmenü richtest du Haupt-, Vision-, Helfer- und Code-Modell
+  sowie die eigene Modelladresse ein. Anbieter-Schlüssel bleiben im jeweiligen Add-on.
 - **⚡ Aufwand:** Denktiefe Low, Medium oder High und die Zahl der Helfer (Normal und Code
   1–12, Pro 1–50).
 - **⚙ Weitere Einstellungen:** Websuche, Webcams und Satellitenbilder, Denken, Strukturieren,
@@ -404,9 +406,14 @@ die Frage noch einmal.
 Ultra darf, trägt ein 🔒.
 - **Konto:** Name, E-Mail, Kontotyp, Nutzung, Abmelden. **Sicherheit** mit deinen Geräten,
   Passwort ändern, überall sonst abmelden. **Daten und Konto löschen**.
-- Dazu: Gemeinsames Lernen, Modell, Eigene Modelle, virtual machine, Speicher, Mitlesen,
+- Dazu: Gemeinsames Lernen, virtual machine, Speicher, Mitlesen,
   Auslastung (Ultra), Nutzung, Gmail & Kalender, Zuhause & Netz (Ultra), Suche,
   Ort & Sprache, Helfer & Grenzen, **Dev settings** (Ultra).
+
+**Auf dem Handy** wird die Kopfzeile nach dem Senden mit einer kurzen Animation kompakter.
+„Infos“ klappt Ortsfilter und Chat-Status wieder auf. Seitenleiste, Einstellungen und neuer
+Chat bleiben erreichbar; die Tasten behalten ihre mindestens 44 Pixel große Trefferfläche.
+Ein neuer Chat zeigt die volle Kopfzeile. Bei reduzierter Bewegung entfällt die Animation.
 
 **Design** (links unten): Hell, Dunkel oder wie das System. Standard, Schlicht oder eigene
 Farben. Dazu Schriftgröße, **Auto-Scroll** (an: der Chat läuft beim Schreiben mit, aus: er
@@ -555,8 +562,8 @@ ist gegen gestohlene Datenbanken und Sicherungen und gegen andere Konten.
 
 ## Add-ons
 
-*Einstellungen → Modell oder virtual machine → 🧩 Add-ons.* Jedes Add-on lässt sich
-installieren, an- und ausschalten und entfernen. Aus dem Chat heraus geht das nicht. Anmelden musst du dich selbst –
+*Im Chat unter Modelle und Verbindungen → Add-ons oder unter Einstellungen → virtual machine → Add-ons.* Jedes Add-on lässt sich
+installieren, an- und ausschalten und entfernen. Anbieter und Schlüssel verwaltest du im jeweiligen Add-on. Anmelden musst du dich selbst –
 Aquaticy kennt keine Passwörter. Unter **Rechte** stellst du ein, was Aquaticy damit darf.
 
 ### KI-Modelle: NVIDIA NIM und Mistral
@@ -1182,7 +1189,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.2.1-Terra.md).
+[Prüfbericht](TESTREPORT-12.2.1-Sol.md).
 
 ---
 

@@ -133,21 +133,10 @@ class ChatRenderer:
         """Automatische Modellwahl (Dev settings): welches Modell, warum."""
         self._flush_reading()
         modell = str(payload.get("model", "")).split("/")[-1]
-        bild = f" · Bild: {payload['bild']}" if payload.get("bild") else ""
         self.console.print(
             Text.assemble(("  [Modell] ", "bold cyan"),
-                          (f"automatisch: {modell} — {payload.get('grund', '')}{bild}", "white"))
+                          (f"automatisch: {modell} — {payload.get('grund', '')}", "white"))
         )
-
-    def _on_image_created(self, payload: dict[str, Any]) -> None:
-        self._flush_reading()
-        if payload.get("error"):
-            self.console.print(Text.assemble(("  [Bild] ", "bold yellow"),
-                                             (str(payload["error"]), "white")))
-            return
-        self.console.print(Text.assemble(("  [Bild] ", "bold cyan"),
-                                         (f"erstellt mit {payload.get('modell', '')} "
-                                          "(liegt im Datenordner unter media/)", "white")))
 
     def _on_desktop(self, payload: dict[str, Any]) -> None:
         """Was Aquaticy im User mode auf dem Desktop der virtual machine tut."""

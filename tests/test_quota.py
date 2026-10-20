@@ -207,7 +207,7 @@ def test_metering_records_into_statistics_and_quota(tmp_path: Path,
     metering.completion(settings, model="mistral/m", messages=[])
     assert UsageLog(settings.db_path).total_tokens() == 60_000
     assert kontingent.status()["session"]["percent"] == 20
-    metering.charge_image(settings, "bild")
+    metering.record(settings, "mistral/m", 0, 5000)
     assert kontingent.status()["session"]["percent"] == 22  # 65.000 von 300.000
 
 
@@ -217,8 +217,8 @@ def test_without_a_quota_nothing_is_limited(tmp_path: Path) -> None:
     assert metering.remaining(settings) is None
 
 
-def test_the_image_share_is_said_in_percent() -> None:
-    assert metering.share_of_session(metering.IMAGE_TOKENS) == "1,7 %"  # 5.000 von 300.000
+def test_a_work_share_is_said_in_percent() -> None:
+    assert metering.share_of_session(5000) == "1,7 %"  # 5.000 von 300.000
 
 
 def test_timezone_is_restored() -> None:

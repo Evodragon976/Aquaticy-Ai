@@ -143,19 +143,15 @@ class FakeAgent:
                 {"kind": "desktop", "media_id": self.bildschirm,
                  "title": "Bildschirm der virtual machine"}]})
             return type("R", (), {"answer": antwort, "stopped": False})()
-        if "bild-probe" in text:
-            # Automatische Modellwahl + ein erstelltes Bild (9.5.10).
+        if "altbild-probe" in text:
+            # Historische Medien bleiben lesbar; es wird kein Bild erzeugt.
             self.on_event("model_auto", {"model": "mistral/mistral-large-latest",
-                                         "kategorie": "bild", "grund": "Bild erstellen",
-                                         "bild": "Mistral Bildgenerierung"})
-            self.on_event("image_create", {"prompt": "a lighthouse"})
-            self.on_event("image_created", {"media_id": self.bildschirm,
-                                            "modell": "Mistral Bildgenerierung"})
-            antwort = "Hier ist dein Leuchtturm -- KI-erstellt."
+                                         "kategorie": "recherche", "grund": "Recherche und Fragen"})
+            antwort = "Dieses gespeicherte Bild stammt aus einem früheren Chat."
             self.on_event("answer_chunk", {"text": antwort})
-            self.on_event("done", {"tool_calls": 1, "hit_limit": False, "visuals": [
+            self.on_event("done", {"tool_calls": 0, "hit_limit": False, "visuals": [
                 {"kind": "erstellt", "media_id": self.bildschirm,
-                 "title": "KI-Bild (Mistral Bildgenerierung)", "caption": "a lighthouse"}]})
+                 "title": "KI-Bild (Altbestand)", "caption": "a lighthouse"}]})
             return type("R", (), {"answer": antwort, "stopped": False})()
         if "zwischen-probe" in text:
             # Die neue Laufanzeige (9.6.0): Denken, Zwischennachricht, Websuche,
@@ -343,6 +339,11 @@ def starte_server(agent: FakeAgent) -> int:
                     agent.abgebrochen = True
 
                 self._agent.cancel = cancel
+            if self._carry_over:
+                # Wie ChatSession.agent: ein Modellwechsel behaelt Chat und Vertrauensgrenze.
+                self._agent.resume(self._carry_over, [])
+                self._agent.untrusted_seen = self._carry_untrusted
+                self._carry_over, self._carry_untrusted = "", False
         return self._agent
 
     web.ChatSession.agent = _gestellter_agent            # type: ignore[method-assign]
@@ -496,10 +497,15 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     # 9.5.17: "Eigene Modelle" -- erst da, wenn man oben selbst etwas eintraegt.
     log.pruefe(pg.is_hidden("#sec-schluessel"),
                "Eigene Modelle ist nicht da, solange nichts Eigenes eingetragen ist")
-    log.pruefe(pg.locator('#secnav button[data-section="sec-schluessel"]').is_hidden(),
+    log.pruefe(pg.locator('#secnav button[data-section="sec-schluessel"]').count() == 0,
                "und hat oben auch keine Sprungmarke")
-    pg.click('#secnav button:has-text("Modell")')
-    pg.wait_for_timeout(500)
+    pg.click("#cancel")
+    pg.wait_for_selector("#overlay.open", state="hidden")
+    menue(pg)
+    pg.click("#picker-settings")
+    pg.wait_for_selector("#modelbox.open", state="visible")
+    log.pruefe(pg.eval_on_selector('[name="AQUATICY_API_BASE"]', "e => e.readOnly"),
+               "die Modelladresse ist auch im Chat für Normal schreibgeschützt")
     # Seit 12.0.0 Luna: Schluessel gibt es nur noch ueber die Add-ons NVIDIA NIM und Mistral.
     log.pruefe(pg.locator("#keys").count() == 0 and pg.locator("#linked-quick-key").count() == 0,
                "kein Schlüsselfeld in den Einstellungen und kein Sammelfeld")
@@ -544,6 +550,10 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
                          timeout=10_000)
     pg.click("#addon-close")
     pg.wait_for_selector("#addonbox", state="hidden")
+    pg.click("#model-close")
+    pg.wait_for_selector("#modelbox.open", state="hidden")
+    pg.click("#btn-settings")
+    pg.wait_for_selector("#overlay.open", state="visible")
     log.pruefe(
         pg.is_checked("#legalguard") and pg.is_enabled("#legalguard"),
         "der Schalter ist an und nicht ausgegraut",
@@ -1008,7 +1018,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                    "und der Fuss ist erreichbar")
         log.pruefe(pg.is_visible("#btn-aufwand") and pg.is_visible("#btn-weitere"),
                    "Aufwand und Weitere Einstellungen sind erreichbar")
-        log.pruefe(pg.is_visible("#btn-imagemode"), "Bilderstellung steht zur Wahl")
+        log.pruefe(pg.locator("#btn-imagemode").count() == 0,
+                   "keine Bilderstellung im Modellmenü")
         # Seit 9.5.34: die Modellauswahl sitzt unten, links neben dem Senden-Knopf.
         modell = pg.locator("#btn-model").bounding_box()
         senden = pg.locator("#send").bounding_box()
@@ -1050,31 +1061,69 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_timeout(300)
         log.pruefe(not pg.is_visible("#win-weitere"), "ein Klick daneben schließt es")
 
-        # Bilderstellung: landet sofort im Standard-Modus, der Server bekommt das Kennzeichen.
-        anfragen: list[str] = []
-        pg.on("request", lambda r: anfragen.append(r.post_data or "")
-              if r.url.endswith("/api/chat") else None)
-        pg.click('#modes .mode[data-mode="pro"]')
-        pg.wait_for_timeout(500)
+        # Modellverbindungen sind nur ueber die Modellauswahl im Chat erreichbar.
         menue(pg)
-        pg.click("#btn-imagemode")
-        pg.wait_for_timeout(500)
-        log.pruefe(pg.eval_on_selector('#modes .mode[data-mode="normal"]',
-                                       "e => e.classList.contains('on')"),
-                   "Bilderstellung wechselt sofort in den Standard-Modus")
-        log.pruefe("Bilderstellung" in pg.inner_text("#btn-model"),
-                   "und steht als Auswahl unten")
-        foto("04d-bilderstellung")
-        pg.fill("#input", "Male einen Leuchtturm bei Sonnenuntergang")
-        pg.click("#send")
-        pg.wait_for_timeout(1200)
-        log.pruefe(any('"image_mode":true' in a.replace(" ", "") for a in anfragen),
-                   "der Server bekommt image_mode")
-        menue(pg)
-        pg.click("#btn-imagemode")
-        pg.wait_for_timeout(500)
-        log.pruefe("Bilderstellung" not in pg.inner_text("#btn-model"),
-                   "ein zweiter Klick schaltet sie wieder aus")
+        pg.click("#picker-settings")
+        pg.wait_for_selector("#modelbox.open", state="visible")
+        log.pruefe(pg.is_visible('#model-settings [name="AQUATICY_MODEL"]'),
+                   "eigene Modelle werden im Chat eingerichtet")
+        log.pruefe(pg.locator('#settings [name="AQUATICY_MODEL"]').count() == 0,
+                   "keine Modellauswahl in den allgemeinen Einstellungen")
+        chat_vorher = pg.evaluate("async () => (await (await api('/api/chats')).json()).current")
+        model_writes = []
+        pg.on("request", lambda request: model_writes.append(request.post_data_json)
+              if request.url.endswith("/api/config") and request.method == "POST" else None)
+        pg.click("#save-model")
+        pg.wait_for_function("() => document.querySelector('#model-note').classList.contains('ok')")
+        log.pruefe("aktiv" in pg.inner_text("#model-note") or
+                   "Gespeichert" in pg.inner_text("#model-note"),
+                   "die Modellverbindung lässt sich separat speichern")
+        log.pruefe(bool(model_writes) and set(model_writes[-1]) == {
+            "AQUATICY_MODEL", "AQUATICY_CODE_MODEL", "AQUATICY_VISION_MODEL",
+            "AQUATICY_SUBAGENT_MODEL", "AQUATICY_API_BASE"},
+            "Modellspeichern sendet ausschließlich die fünf Modellfelder")
+        chat_nachher = pg.evaluate("async () => (await (await api('/api/chats')).json()).current")
+        log.pruefe(bool(chat_vorher) and chat_vorher == chat_nachher,
+                   "Modellspeichern behält den offenen Chat und seine Kennung")
+
+        def fail_settings_refresh(route):
+            if route.request.method == "GET":
+                route.fulfill(json={"error": "Test: Aktueller Stand nicht erreichbar."})
+            else:
+                route.continue_()
+
+        pg.route("**/api/config", fail_settings_refresh)
+        try:
+            pg.click("#save-model")
+            pg.wait_for_selector("#model-note.bad", state="visible")
+            log.pruefe(pg.inner_text("#model-note").startswith("Gespeichert.") and
+                       pg.is_enabled("#save-model"),
+                       "ein fehlgeschlagenes Nachladen zeigt den gespeicherten Stand ehrlich an")
+        finally:
+            pg.unroute("**/api/config", fail_settings_refresh)
+        pg.click("#model-close")
+        pg.wait_for_selector("#modelbox.open", state="hidden")
+        vorher = pg.inner_text("#model-name")
+
+        def reject_model_change(route):
+            if route.request.method == "POST":
+                route.fulfill(json={"ok": False, "error": "Test: Modellwechsel abgelehnt."})
+            else:
+                route.continue_()
+
+        pg.route("**/api/config", reject_model_change)
+        try:
+            pg.evaluate("() => chooseModel({id:'mistral/mistral-small-latest',"
+                        "label:'Darf nicht erscheinen'}, 'AQUATICY_MODEL')")
+            pg.wait_for_selector("#guardbox.open", state="visible")
+            log.pruefe(pg.inner_text("#model-name") == vorher and
+                       pg.is_enabled("#btn-model"),
+                       "ein abgelehnter Modellwechsel verändert die Anzeige nicht")
+            pg.click("#guard-ok")
+            pg.wait_for_selector("#guardbox.open", state="hidden")
+        finally:
+            pg.unroute("**/api/config", reject_model_change)
+
 
         pg.click('#modes .mode[data-mode="pro"]')
         pg.wait_for_timeout(700)
@@ -1511,15 +1560,15 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         )
         pg.click("#btn-new")
         pg.wait_for_timeout(700)
-        log.abschnitt("6d. Automatische Modellwahl und KI-Bild")
-        pg.fill("#input", "bild-probe: Erstelle mir ein Bild von einem Leuchtturm")
+        log.abschnitt("6d. Automatische Modellwahl und historische Bilder")
+        pg.fill("#input", "altbild-probe: Zeige mein früher gespeichertes Bild")
         pg.click("#send")
         pg.wait_for_selector("#stop", state="hidden", timeout=25000)
         pg.wait_for_timeout(900)
         schritte = schritte_lesen(pg)
-        log.pruefe("[Modell]" in schritte and "Bild erstellen" in schritte,
+        log.pruefe("[Modell]" in schritte and "Recherche und Fragen" in schritte,
                    f"die Wahl steht im Verlauf: {schritte[-140:]!r}")
-        log.pruefe("erstellt mit Mistral Bildgenerierung" in schritte, "und wer gemalt hat")
+        log.pruefe("erstellt mit" not in schritte, "keine neue Bilderstellung im Verlauf")
         karte = pg.locator(".result-card.visual").filter(has_text="KI-Bild")
         log.pruefe(karte.count() == 1, "das Bild steht als Karte unter der Antwort")
         log.pruefe("KI-erstellt" in karte.inner_text(), "beschriftet als KI-erstellt")
@@ -1648,7 +1697,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             log.pruefe(pg.locator(f'[name="{feld}"]').count() == 1, f"{feld} im Formular")
         pg.click('#secnav button:has-text("Suche")')
         pg.wait_for_timeout(900)
-        kopf = pg.eval_on_selector(".sheet-head", "e => e.getBoundingClientRect().bottom")
+        kopf = pg.eval_on_selector("#overlay .sheet-head", "e => e.getBoundingClientRect().bottom")
         ziel = pg.eval_on_selector(
             '#settings fieldset:has(legend:text-is("Suche"))',
             "e => e.getBoundingClientRect().top",
@@ -1764,13 +1813,17 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         # Schlicht: hell weiß mit schwarzer Schrift, dunkel genau umgekehrt.
         pg.click('[data-tmode="light"]')
         pg.click('.pal[data-palette="mono"]')
-        pg.wait_for_timeout(400)
+        pg.wait_for_function("() => getComputedStyle(document.body).backgroundColor === "
+                             "'rgb(255, 255, 255)' && getComputedStyle(document.body).color === "
+                             "'rgb(0, 0, 0)'")
         hell = pg.eval_on_selector("body", "e => [getComputedStyle(e).backgroundColor,"
                                            " getComputedStyle(e).color]")
         log.pruefe(hell == ["rgb(255, 255, 255)", "rgb(0, 0, 0)"],
                    f"Schlicht hell: weiß mit schwarzer Schrift {hell}")
         pg.click('[data-tmode="dark"]')
-        pg.wait_for_timeout(400)
+        pg.wait_for_function("() => getComputedStyle(document.body).backgroundColor === "
+                             "'rgb(18, 18, 18)' && getComputedStyle(document.body).color === "
+                             "'rgb(242, 242, 242)'")
         dunkel = pg.eval_on_selector("body", "e => [getComputedStyle(e).backgroundColor,"
                                              " getComputedStyle(e).color]")
         # Seit 9.5.32 fast schwarz (#121212) statt reinem Schwarz -- weisse
@@ -2302,8 +2355,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                    "Aufgabe ändern bietet alle acht Rhythmen und den bisherigen Zeitplan")
         auswahl.select_option("30")
         aendern.get_by_role("button", name="Speichern", exact=True).click()
-        pg.wait_for_function("document.querySelector('.cw-rhythmus')?.value === '30'")
-        pg.wait_for_function("document.querySelector('.cw-karte')?.innerText"
+        pg.wait_for_function("() => document.querySelector('.cw-rhythmus')?.value === '30'")
+        pg.wait_for_function("() => document.querySelector('.cw-karte')?.innerText"
                              ".includes('Alle 30 Sekunden')")
         gespeichert = pg.evaluate("async () => (await (await fetch('/api/coworkers'))"
                                  ".json()).coworkers[0].interval_seconds")
@@ -2423,6 +2476,40 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
     log.abschnitt(f"{nummer}. {name}")
     breite = pg.evaluate("() => window.innerWidth")
 
+    if breite < 600:
+        pg.click("#btn-new-top")
+        pg.wait_for_timeout(350)
+        vorher = pg.locator(".topbar").bounding_box()["height"]
+        pg.fill("#input", "Hallo")
+        pg.click("#send")
+        pg.wait_for_selector("body.chat-compact")
+        pg.wait_for_selector("#stop", state="hidden", timeout=25000)
+        pg.wait_for_timeout(400)
+        nachher = pg.locator(".topbar").bounding_box()["height"]
+        log.pruefe(nachher < vorher - 10,
+                   f"die Handy-Kopfzeile schrumpft nach dem Senden "
+                   f"({vorher:.0f} → {nachher:.0f}px)")
+        if bilder:
+            pg.screenshot(path=str(bilder / f"{nummer}-chat-kompakt.png"))
+        log.pruefe(pg.get_attribute("#chat-details", "aria-expanded") == "false",
+                   "Chat-Infos sind kompakt eingeklappt")
+        pg.click("#chat-details")
+        pg.wait_for_timeout(350)
+        log.pruefe(pg.get_attribute("#chat-details", "aria-expanded") == "true" and
+                   pg.locator(".topbar").bounding_box()["height"] > nachher + 10,
+                   "Chat-Infos lassen sich wieder aufklappen")
+        if bilder:
+            pg.screenshot(path=str(bilder / f"{nummer}-chat-infos.png"))
+        for control in ("#btn-side", "#btn-new-top", "#chat-details"):
+            box = pg.locator(control).bounding_box()
+            log.pruefe(box is not None and box["width"] >= 44 and box["height"] >= 44,
+                       f"{control} behält mindestens 44px große Trefferfläche")
+        pg.click("#btn-new-top")
+        pg.wait_for_timeout(350)
+        log.pruefe(pg.locator("body.start").count() == 1 and
+                   not pg.locator("body.chat-compact").count(),
+                   "ein neuer Chat stellt die volle Kopfzeile wieder her")
+
     log.pruefe(
         pg.eval_on_selector("body", "e => e.scrollWidth <= window.innerWidth + 1"),
         f"nichts steht seitlich ueber ({breite}px breit)",
@@ -2468,7 +2555,7 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
         "und passt in die Breite",
     )
     # Die beiden Knoepfe im Menue muessen sich mit dem Daumen treffen lassen.
-    for knopf in ("#btn-aufwand", "#btn-weitere", "#btn-imagemode"):
+    for knopf in ("#btn-aufwand", "#btn-weitere"):
         kh = pg.eval_on_selector(knopf, "e => e.getBoundingClientRect().height")
         log.pruefe(kh >= 40, f"{knopf} ist {kh:.0f}px hoch")
     pg.keyboard.press("Escape")

@@ -1,7 +1,7 @@
 """Was zaehlt -- und das Kontingent gilt auch mitten im Lauf.
 
 Bis 9.5.10 wurde nur das Hauptmodell mitgezaehlt. Agenten, Master, Planer,
-Rechtspruefer, Bildmodell und die Bildbeschreibung liefen am Zaehler vorbei --
+Rechtspruefer und Bildbeschreibung liefen am Zaehler vorbei --
 und das Kontingent eines normalen Kontos wurde nur VOR einer Anfrage
 geprueft. Eine einzige Anfrage mit vielen Agenten konnte es so weit
 ueberschreiten.
@@ -26,9 +26,6 @@ Jetzt gilt:
 * Hat das Konto ein Kontingent (``settings.quota``, Normal und Pro), wird
   VOR jedem gestellten Aufruf und vor jeder Serverarbeit geprueft. Ist
   Sitzung oder Woche aufgebraucht, kommt ``QuotaExceeded``.
-* Ein erstelltes Bild zaehlt pauschal ``IMAGE_TOKENS`` -- ein Bildmodell
-  rechnet nicht in Token ab, kostet aber trotzdem. Mit eigenem Bildschluessel
-  zaehlt nur das Ablegen auf dem Server.
 
 Seit 9.5.15:
 
@@ -56,13 +53,10 @@ from typing import Any
 from aquaticy.quota import SESSION_TOKENS, QuotaExceeded
 
 __all__ = [
-    "IMAGE_TOKENS",
     "WORK_COSTS",
     "QuotaExceeded",
-    "charge_image",
     "charge_work",
     "check",
-    "check_image",
     "check_work",
     "completion",
     "is_own",
@@ -80,9 +74,6 @@ LOG = logging.getLogger("aquaticy.metering")
 
 #: So viel reserviert ein Aufruf fuer die Antwort, wenn er selbst keine Grenze nennt.
 DEFAULT_OUTPUT_RESERVE = 4_096
-
-#: So viel zaehlt ein erstelltes Bild (mit dem Schluessel des Betreibers).
-IMAGE_TOKENS = 5_000
 
 #: Was Arbeit auf dem Server kostet -- in Token gerechnet, damit sie mit den
 #: Modellaufrufen in dasselbe Kontingent passt. (Einheit, Token je Einheit)
@@ -447,20 +438,3 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
     rein, raus = _counted(kwargs.get("messages"), response)
     buchung.settle(rein, raus)
     return response
-
-
-def check_image(settings: Any, model: str) -> None:
-    """Vor einem Bild: gestellt kostet es IMAGE_TOKENS, mit eigenem Schluessel nur das Ablegen."""
-    if is_own(settings, model):
-        check_work(settings, "bild")
-    else:
-        check(settings, need=IMAGE_TOKENS)
-
-
-def charge_image(settings: Any, model: str) -> None:
-    """Bucht ein erstelltes Bild -- je nachdem, wessen Schluessel es gemalt hat."""
-    if is_own(settings, model):
-        charge_work(settings, "bild")
-        _statistik(settings, model, 0, IMAGE_TOKENS)
-    else:
-        record(settings, model, 0, IMAGE_TOKENS)

@@ -42,7 +42,6 @@ from aquaticy.tools import (
     GOOGLE_WRITE_SCHEMAS,
     HA_CALL_SCHEMA,
     HA_STATES_SCHEMA,
-    IMAGE_SCHEMA,
     LAN_HOST_SCHEMA,
     LAN_SCHEMA,
     MAIL_READ_SCHEMA,
@@ -1459,8 +1458,6 @@ class Agent:
         #: Frage lang -- die volle Mannschaft ist eine Entscheidung, keine
         #: Einstellung.
         self.max_run = False
-        #: Bilderstellung gewaehlt (9.5.34) -- gilt genau fuer die eine Frage.
-        self._image_turn = False
         self.toolbox = toolbox or Toolbox(
             settings,
             cache=cache,
@@ -1544,14 +1541,6 @@ class Agent:
         # und nur mit Web, denn alle drei fragen einen Dienst im Internet.
         if self.online:
             extra.extend(addon_schemas_for(self.settings))
-        # Bilder erstellen -- nur, wenn ein Anbieter dafuer erreichbar ist. Ist
-        # "Bilderstellung" gewaehlt, geht es auch ohne Web-Suche (9.5.34): das
-        # Bild kommt vom Bildmodell, nicht aus dem Netz.
-        if self.online or getattr(self, "_image_turn", False):
-            from aquaticy.images import available as image_backends
-
-            if image_backends(self.settings):
-                extra.append(IMAGE_SCHEMA)
         # Subagenten bekommen diese Liste nie -- sie arbeiten mit TOOL_SCHEMAS
         # allein. Einstellungen aendert also nur der Hauptagent, und das ist
         # genau richtig so.
@@ -1870,7 +1859,7 @@ class Agent:
         """
         from aquaticy.news import news_request
 
-        if getattr(self, "_plugin_turn", "") or getattr(self, "_image_turn", False):
+        if getattr(self, "_plugin_turn", ""):
             return 0
         if clean_mode(self.mode) == "code":
             return 0
@@ -2662,28 +2651,6 @@ class Agent:
             + "\n".join(f"- {line}" for line in lines[:8])
         )
 
-    def _image_unavailable(self) -> str:
-        """Gibt es ein Modell, das Bilder erstellen kann? Sonst: was zu tun ist."""
-        from aquaticy.images import available
-
-        if available(self.settings):
-            return ""
-        return (
-            "Bilder erstellen geht noch nicht: Dafür braucht Aquaticy einen Schlüssel für "
-            "NVIDIA (FLUX) oder Mistral — den trägst du in den Einstellungen unter Modell "
-            "ein. Danach wählst du „Bilderstellung“ einfach noch einmal."
-        )
-
-    def _choose_image_model(self) -> None:
-        """Bilderstellung: Aquaticy nimmt selbst ein Modell, das Bilder erstellen kann (9.5.34)."""
-        from aquaticy.images import available
-
-        wahl = available(self.settings)
-        if not wahl:
-            return
-        self.toolbox.image_model = wahl[0].model
-        self._emit("image_mode", modell=wahl[0].label, model=wahl[0].model)
-
     def _auto_choose(self, question: str) -> None:
         """Automatische Modellwahl -- ohne Modellaufruf, vor der ersten Runde.
 
@@ -2692,7 +2659,6 @@ class Agent:
         an der Nachricht, und das Ergebnis steht im Verlauf.
         """
         self._auto_pick = ""
-        self.toolbox.image_model = ""
         if not getattr(self.settings, "auto_model", False):
             return
         if clean_mode(self.mode) in ("code", "pro"):
@@ -2705,13 +2671,11 @@ class Agent:
             return
         if wahl.model and wahl.model != self.settings.model:
             self._auto_pick = wahl.model
-        self.toolbox.image_model = wahl.bild_modell
         self._emit(
             "model_auto",
             model=wahl.model or self.settings.model,
             kategorie=wahl.kategorie,
             grund=wahl.grund,
-            bild=wahl.bild_label,
         )
 
     def _addon_prompt(self) -> str:
@@ -3138,7 +3102,6 @@ class Agent:
         online: bool | None = None,
         sandbox: bool | None = None,
         visual_sources: bool | None = None,
-        image_mode: bool = False,
         plugin_prompt: str = "",
     ) -> AgentResult:
         """Beantwortet *question* -- sucht, liest und wertet aus.
@@ -3158,8 +3121,6 @@ class Agent:
             sandbox: virtual machine im Code-Modus. `None` laesst den bisherigen
                 Stand stehen.
             visual_sources: Öffentliche Webcams und Satellitenbilder zusätzlich prüfen.
-            image_mode: Bilderstellung (9.5.34): die Frage laeuft im Standard-Modus,
-                und Aquaticy malt mit einem Bildmodell statt zu suchen.
             plugin_prompt: Ein Plugin-Befehl (11.0.0 Luna, aquaticy/plugins.py): Das
                 Modell bekommt fuer genau diesen Turn diesen Text statt der Frage --
                 im Verlauf steht weiter, was der Nutzer getippt hat.
@@ -3172,11 +3133,6 @@ class Agent:
         if learning is not None:
             with contextlib.suppress(Exception):
                 self.toolbox.learning_ticket = learning.ticket()
-        self._image_turn = bool(image_mode)
-        if self._image_turn:
-            # Bilderstellung landet immer im Standard-Modus -- ohne Struktur und
-            # ohne virtual machine.
-            mode, structured, sandbox = "normal", False, False
         # `/max` gehoert zur Frage, nicht zu den Einstellungen: es gilt genau
         # diesen einen Turn. Ausserhalb des Pro-Modus wird es abgetrennt und
         # ignoriert -- ohne Master gibt es nichts zu erzwingen.
@@ -3261,15 +3217,7 @@ class Agent:
         if abgelehnt is not None:
             return abgelehnt
 
-        if self._image_turn:
-            kein_bild = self._image_unavailable()
-            if kein_bild:
-                self.messages.append({"role": "user", "content": question})
-                self.messages.append({"role": "assistant", "content": kein_bild})
-                self._type_out(kein_bild, stream)
-                return self._finish(AgentResult(answer=kein_bild), question)
-
-        if getattr(self.settings, "council", False) and not self._image_turn:
+        if getattr(self.settings, "council", False):
             beantwortet = self._council_turn(question, stream)
             if beantwortet is not None:
                 return beantwortet
@@ -3294,8 +3242,6 @@ class Agent:
             self._touch_workshop()
             self._warm_workshop()
         self._auto_choose(question)
-        if self._image_turn:
-            self._choose_image_model()
         if clean_mode(self.mode) in ("code", "pro"):
             if stark_suche is not None:
                 stark_suche.join(timeout=STRONG_LOOKUP_WAIT)
@@ -4237,12 +4183,6 @@ class Agent:
             # Ein Plugin-Befehl gilt fuer diesen einen Turn (11.0.0 Luna).
             question = self._plugin_turn
         question = self._shared_context(question)
-        if getattr(self, "_image_turn", False):
-            return (
-                f"{question}\n\n[Bilderstellung ist gewählt: Erstelle jetzt mit dem Werkzeug "
-                "create_image ein Bild zu dieser Nachricht (Beschreibung auf Englisch, "
-                "konkret). Suche nicht im Web. Antworte danach mit einem kurzen Satz.]"
-            )
         if self._vm_ready():
             question = f"{question}\n\n{VM_TURN_HINT}"
         geklaert = self._clarified_note()

@@ -2,8 +2,7 @@
 
 Ist der Schalter an, muss der Nutzer nur noch schreiben: Aquaticy sieht sich
 die Nachricht an und nimmt als Hauptmodell (Master) das, das dafuer am besten
-passt -- fuer Code das Code-Modell, fuer ein Bild das Arbeitspferd plus ein
-Bildmodell, fuer ein "Hallo" das schnelle kleine. Die Agenten (Subagenten)
+passt -- fuer Code das Code-Modell, fuer ein "Hallo" das schnelle kleine. Die Agenten (Subagenten)
 bleiben, wie sie sind: sie haengen am eingestellten Modell, nicht an dieser
 Wahl.
 
@@ -24,33 +23,11 @@ from typing import Any
 
 #: Die Schubladen -- mit dem Satz, der im Verlauf steht.
 KATEGORIEN: dict[str, str] = {
-    "bild": "Bild erstellen",
     "code": "Programmieren",
     "schnell": "kurze Unterhaltung",
     "schreiben": "Texte schreiben",
     "recherche": "Recherche und Fragen",
 }
-
-_VERB_BILD = (
-    r"(?:erstell\w*|generier\w*|erzeug\w*|zeichne\w*|zeichnen|male|malen|malt|"
-    r"entw[iu]rf\w*|entwerfen|gestalt\w*|designe?\w*|kreier\w*|"
-    r"create|generate|draw|paint|design|make)"
-)
-_NOMEN_BILD = (
-    r"(?:bild(?:er|chen)?|foto|fotos|logo\w*|illustration\w*|grafik\w*|zeichnung\w*|"
-    r"poster\w*|plakat\w*|icon\w*|wallpaper\w*|hintergrundbild\w*|image|images|picture|"
-    r"avatar\w*|comic\w*|gem[aä]lde\w*|artwork|sticker\w*|emoji-bild|cover\w*)"
-)
-BILD_RE = re.compile(
-    rf"\b{_VERB_BILD}\b[^.?!\n]{{0,60}}\b{_NOMEN_BILD}\b"
-    rf"|\b{_NOMEN_BILD}\b[^.?!\n]{{0,60}}\b{_VERB_BILD}\b",
-    re.IGNORECASE,
-)
-#: "Zeig/such/find mir ein Bild von ..." ist eine Suche, kein Auftrag zum Malen.
-SUCHE_BILD_RE = re.compile(
-    r"\b(zeig\w*|such\w*|find\w*|gibt es|wo (?:finde|gibt)|show me|find me|search)\b",
-    re.IGNORECASE,
-)
 
 CODE_WORT_RE = re.compile(
     r"\b(python|javascript|typescript|java|kotlin|swift|c\+\+|c#|rust|golang|go-code|php|ruby|"
@@ -95,8 +72,6 @@ def kategorie(frage: str, mode: str = "normal") -> str:
         return "code"
     if not text:
         return "recherche"
-    if BILD_RE.search(text) and not SUCHE_BILD_RE.search(text.split(",")[0][:40]):
-        return "bild"
     if CODE_ZEICHEN_RE.search(text) or (CODE_WORT_RE.search(text) and CODE_VERB_RE.search(text)):
         return "code"
     if SCHNELL_RE.match(text):
@@ -113,8 +88,6 @@ class Wahl:
     kategorie: str
     model: str
     grund: str
-    bild_modell: str = ""
-    bild_label: str = ""
     extra: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -167,11 +140,5 @@ def choose(settings: Any, frage: str, mode: str = "normal") -> Wahl:
     if art == "schnell":
         return Wahl(art, fast_model(settings) or eingestellt, grund)
     arbeit = _staerkstes(settings, "work") or eingestellt
-    if art == "bild":
-        from aquaticy.images import backend_for
 
-        backend = backend_for(settings)
-        if backend is None:
-            return Wahl(art, arbeit, grund + " (kein Bildmodell erreichbar)")
-        return Wahl(art, arbeit, grund, bild_modell=backend.model, bild_label=backend.label)
     return Wahl(art, arbeit, grund)

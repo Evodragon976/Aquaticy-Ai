@@ -155,18 +155,23 @@ def test_subagents_stop_when_the_quota_is_gone(knapp: Settings,
     assert all(e.error for e in ergebnisse)
 
 
-def test_an_image_counts_and_needs_room(knapp: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
-    from aquaticy import images
+def test_removed_image_tool_cannot_consume_quota_or_create_files(
+    knapp: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from aquaticy.tools import Toolbox
 
-    _voll(knapp, bis_auf=metering.IMAGE_TOKENS + 100)
-    monkeypatch.setattr(images, "generate", lambda *a, **k: {
-        "bytes": b"\x89PNG\r\n\x1a\n" + b"0" * 32, "mime": "image/png", "modell": "T"})
+    _voll(knapp)
+    before = UsageLog(knapp.db_path).total_tokens()
+    calls = []
+    monkeypatch.setattr("litellm.completion", lambda **kw: calls.append(kw) or _antwort())
     box = Toolbox(knapp)
-    assert box.create_image("ein Hund")["erstellt"] is True
-    assert UsageLog(knapp.db_path).total_tokens() >= metering.IMAGE_TOKENS
-    fehler = box.create_image("noch ein Hund")["error"]
-    assert "Kontingent" in fehler and "1,7 %" in fehler, "in Prozent, nicht in Token"
+    try:
+        assert not hasattr(box, "create_image")
+        assert box.call("create_image", {"prompt": "ein Hund"})["error"]
+        assert not calls and UsageLog(knapp.db_path).total_tokens() == before
+        assert not (knapp.data_dir / "media").exists()
+    finally:
+        box.close()
 
 
 # -- Konto-Einstellungen: normale Konten -----------------------------------------------

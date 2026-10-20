@@ -284,7 +284,7 @@ def test_at_the_limit_own_keys_still_answer_but_server_work_stops(
         with pytest.raises(QuotaExceeded):
             metering.check_work(settings, art)
     with pytest.raises(QuotaExceeded):
-        metering.check_image(settings, "mistral/pixtral-large-latest")
+        metering.check_work(settings, "datei")
 
 
 def test_server_work_is_charged_in_tokens(tmp_path: Path, kontingent: Quota) -> None:
@@ -300,16 +300,18 @@ def test_server_work_is_charged_in_tokens(tmp_path: Path, kontingent: Quota) -> 
     metering.charge_work(_eigen(quota=None), "werkstatt", 100)
 
 
-def test_an_image_with_an_own_key_only_costs_the_filing(
+def test_own_model_usage_is_recorded_without_charging_the_operator_quota(
     tmp_path: Path, kontingent: Quota
 ) -> None:
     settings = _eigen(data_dir=tmp_path / "profil", quota=kontingent,
                       api_keys={"NVIDIA_NIM_API_KEY": EIGEN_NVIDIA},
                       own_key_names=frozenset({"NVIDIA_NIM_API_KEY"}))
-    metering.charge_image(settings, "nvidia_nim/stabilityai/stable-diffusion-3-medium")
-    assert _verbraucht(kontingent) == metering.work_cost("bild")
-    metering.charge_image(settings, "gemini/imagen-3.0-generate-002")
-    assert _verbraucht(kontingent) == metering.work_cost("bild") + metering.IMAGE_TOKENS
+    metering.record(settings, "nvidia_nim/meta/llama-3.3-70b-instruct", 500, 100)
+    assert _verbraucht(kontingent) == 0
+    metering.charge_work(settings, "datei")
+    assert _verbraucht(kontingent) == metering.work_cost("datei")
+    metering.record(settings, "mistral/mistral-large-latest", 500, 100)
+    assert _verbraucht(kontingent) == metering.work_cost("datei") + 600
 
 
 def test_tools_book_their_server_work_and_refuse_at_the_limit(

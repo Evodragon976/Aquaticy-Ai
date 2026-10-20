@@ -352,7 +352,7 @@ def test_the_picker_has_the_context_slider() -> None:
     from pathlib import Path
 
     html = (Path(web.__file__).parent / "webui.html").read_text(encoding="utf-8")
-    regler = html[html.index('id="picker-ctx"'):html.index('id="btn-imagemode"')]
+    regler = html[html.index('id="picker-ctx"'):html.index('<div class="picker-actions">')]
     assert 'type="range" id="ctx-regler"' in regler and "5 GB" in regler
     oeffnen = html[html.index("async function openPicker"):html.index("async function chooseModel")]
     assert "zeigeKontext(currentModel)" in oeffnen
