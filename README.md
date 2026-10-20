@@ -1,4 +1,4 @@
-# Aquaticy AI 12.2.1 Luna
+# Aquaticy AI 12.2.1 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.2.1 Luna
+aquaticy --version            # 12.2.1 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -707,21 +707,30 @@ Aufgabe und entscheiden selbst, wann sie daran weiterarbeiten:
   *Erlauben*, *Fragen* oder *Sperren*. Das gilt für Termine, Mail-Entwürfe, Speicher und (Ultra)
   Lager, Home Assistant und Heimnetz. Bei „Fragen“ siehst du genau, was passieren würde.
   Ausgeführt wird genau das, vom Code und nicht noch einmal vom Modell. Hat er Webseiten oder
-  Mails gelesen, fragt er auch bei „Erlauben“. So kann ihn ein fremder Text zu nichts
-  überreden.
-- **Gezielte Home-Assistant-Dauerfreigaben (Ultra).** In der Karte des Coworkers kannst du
-  einzelne Geräte und `turn_on`/`turn_off` ausdrücklich vorab freigeben. Danach darf genau diese
-  Aktion ohne erneute Nachfrage laufen, auch nach gelesenen Inhalten. Keine Gruppen, Platzhalter
-  oder Zusatzdaten. Schlösser, Alarme, Garagentore, Skripte, Szenen und andere geschützte Geräte
-  behalten ihre Bestätigungen. Die Verbindung muss Schalten erlauben; ein geänderter Token oder
-  eine andere Adresse erfordert neue Freigaben. „Sperren“ hat Vorrang. Du kannst Freigaben
-  jederzeit löschen.
+  Mails gelesen, fragt er vor Änderungen auch bei „Erlauben“; ausgenommen sind die begrenzten,
+  ausdrücklich erlaubten Haus-Schaltaktionen.
+- **„Im Haus etwas schalten“ (Ultra).** „Erlauben“ steht direkt in dieser Regelzeile.
+  Es erlaubt `turn_on`/`turn_off` für einzelne Lichter, Schalter, Lüfter, Eingabeschalter und
+  Mediengeräte, auch nach gelesenen Inhalten. Keine Gruppen, Platzhalter oder Zusatzdaten.
+  Schlösser, Alarme, Garagentore, Skripte, Szenen und andere geschützte Aktionen brauchen
+  weiterhin eine einzelne Bestätigung. Schalten muss in der Verbindung eingeschaltet sein;
+  nach einem Token- oder Adresswechsel musst du erneut „Erlauben“ anklicken. „Fragen“ widerruft
+  die automatische Freigabe, „Sperren“ blockiert die Kategorie. Der separate Bereich mit
+  Geräte-Dauerfreigaben entfällt; alte Einzelfreigaben werden nicht automatisch ausgeweitet.
+- **Rhythmus unter „Aufgabe ändern“.** Wähle 30 Sekunden, 1, 5, 10 oder 20 Minuten, 1 oder
+  4 Stunden oder einmal täglich. Der Abstand zählt ab dem Ende des letzten Laufs; laufende
+  Arbeit und Warteschlange können ihn verlängern. „Automatisch“ bzw. „Bisheriger Zeitplan“
+  stellt die ursprüngliche Planung wieder her. Häufige Recherchen nutzen denselben Chat.
+  Tagesgrenzen, Kontingentpausen und der Schutz vor doppelten Läufen gelten weiterhin.
+- **Aufgeräumte Oberfläche.** Dekorative Emojis entfallen außerhalb von Coworkern; der
+  Coworker-Button hat keinen Handschlag mehr. Merkzettel erreichst du weiter über `/notes`,
+  der separate Button über Einstellungen entfällt.
 - **Ultra: eigener Rechner.** Jeder Coworker bekommt eine eigene virtual machine ohne Desktop.
 
 | | Pro | Ultra |
 |---|---|---|
 | Coworker | bis zu 2 | bis zu 5 |
-| Frühestens wieder wach nach | 15 Minuten | 5 Minuten |
+| Frühestens automatisch wieder wach nach | 15 Minuten | 5 Minuten |
 | Arbeitsschritte je Coworker und Tag | 48 | 288 |
 | Eigene virtual machine | – | ✔ (mit Docker oder Podman) |
 
@@ -1173,7 +1182,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.2.1-Luna.md).
+[Prüfbericht](TESTREPORT-12.2.1-Terra.md).
 
 ---
 

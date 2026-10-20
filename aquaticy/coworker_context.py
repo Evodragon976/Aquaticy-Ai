@@ -1,4 +1,4 @@
-"""Gezielte Dauerfreigaben und freiwilliger Kontext fuer Coworker (12.2.1 Luna)."""
+"""Begrenzte Haus-Regeln und freiwilliger Kontext fuer Coworker (12.2.1 Terra)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ import re
 from typing import Any
 
 NOTE_LIMITS = (6000, 12000, 24000)
-MAX_GRANTS = 20
 AUTO_DOMAINS = frozenset({"light", "switch", "fan", "input_boolean", "media_player"})
 AUTO_SERVICES = frozenset({"turn_on", "turn_off"})
 MAX_CONTEXT = 8000
@@ -30,45 +29,15 @@ def connection_key(settings: Any) -> str:
     return hashlib.sha256((url + "\x00" + token).encode()).hexdigest()
 
 
-def clean_grants(raw: Any, *, settings: Any = None) -> list[dict[str, str]]:
-    """Nur konkrete, einzeln benannte harmlose Schaltaktionen; niemals Platzhalter."""
-    from aquaticy.homeassistant import ENTITY_RE, PROTECTED_DOMAINS
-
-    if not isinstance(raw, list) or len(raw) > MAX_GRANTS:
-        raise ValueError(f"Höchstens {MAX_GRANTS} einzelne Dauerfreigaben sind möglich.")
-    binding = connection_key(settings) if settings is not None else ""
-    if settings is not None and raw and not binding:
-        raise ValueError("Home Assistant muss verbunden und Schalten freigegeben sein.")
-    result = []
-    seen = set()
-    for item in raw:
-        if not isinstance(item, dict):
-            raise ValueError("Eine Dauerfreigabe braucht Gerät und Dienst.")
-        entity, service = item.get("entity_id"), item.get("service")
-        if (not isinstance(entity, str) or not ENTITY_RE.fullmatch(entity)
-                or entity.split(".", 1)[0] not in AUTO_DOMAINS
-                or entity.split(".", 1)[0] in PROTECTED_DOMAINS
-                or not isinstance(service, str) or service not in AUTO_SERVICES):
-            raise ValueError("Dauerfreigaben gibt es nur für einzelne Lichter, Schalter, "
-                             "Lüfter und Mediengeräte: einschalten oder ausschalten.")
-        key = (entity, service)
-        if key in seen:
-            continue
-        seen.add(key)
-        fingerprint = binding or str(item.get("connection") or "")
-        if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
-            raise ValueError("Die Dauerfreigabe ist keiner Home-Assistant-Verbindung zugeordnet.")
-        result.append({"entity_id": entity, "service": service, "connection": fingerprint})
-    return result
-
-
-def permits(grants: list[dict[str, str]], arguments: dict[str, Any], settings: Any,
+def permits(binding: str, arguments: dict[str, Any], settings: Any,
             *, ultra: bool) -> bool:
-    """Nur der vom Nutzer vorab bestaetigte konkrete Aufruf darf automatisch laufen.
+    """Die Haus-Regel erlaubt nur einzelne, risikoarme Ein-/Ausschaltaktionen.
 
     Keine Zusatzdaten, Zielgruppen, geschuetzten Bereiche oder anderen Dienste.
     Die unveraenderten HA-Pruefungen laufen danach zusaetzlich im Werkzeug.
     """
+    from aquaticy.homeassistant import ENTITY_RE, PROTECTED_DOMAINS
+
     if not ultra or set(arguments) - {"domain", "service", "entity_id", "data"}:
         return False
     if arguments.get("data") not in (None, {}):
@@ -79,12 +48,11 @@ def permits(grants: list[dict[str, str]], arguments: dict[str, Any], settings: A
             or not isinstance(service, str) or domain not in AUTO_DOMAINS
             or service not in AUTO_SERVICES):
         return False
-    if not entity.startswith(str(domain) + "."):
+    if (not ENTITY_RE.fullmatch(entity) or not entity.startswith(domain + ".")
+            or domain in PROTECTED_DOMAINS):
         return False
-    binding = connection_key(settings)
-    return bool(binding) and any(
-        grant["entity_id"] == entity and grant["service"] == service
-        and hmac.compare_digest(grant["connection"], binding) for grant in grants)
+    current = connection_key(settings)
+    return bool(current and binding) and hmac.compare_digest(binding, current)
 
 
 def relevant_context(cw: Any, store: Any, settings: Any) -> str:

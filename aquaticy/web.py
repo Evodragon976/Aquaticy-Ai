@@ -2110,7 +2110,7 @@ class ChatSession:
         except Exception:
             return ""
         if not liste:
-            return ("\n\n### Plugins\nNoch keins eingeschaltet — unter 🧩 **Add-ons** gibt "
+            return ("\n\n### Plugins\nNoch keins eingeschaltet — unter **Add-ons** gibt "
                     "es zum Beispiel Code-Review und Security-Review.")
         zeilen = "\n".join(f"- `/{eintrag['name']}` — {eintrag['label']}" for eintrag in liste)
         return f"\n\n### Deine Plugins\n{zeilen}"
@@ -3189,6 +3189,7 @@ def _coworker_scheduler(session: Any) -> Any:
 def coworkers_view(session: Any, *, badge_only: bool = False) -> dict[str, Any]:
     """Was der Browser von den Coworkern sieht -- ohne ein einziges Geheimnis."""
     from aquaticy import coworker as coworker_mod
+    from aquaticy.coworker_context import connection_key
 
     plan = session.plan
     erlaubt = plan in coworker_mod.MAX_COWORKERS
@@ -3210,7 +3211,9 @@ def coworkers_view(session: Any, *, badge_only: bool = False) -> dict[str, Any]:
         "connections": coworker_mod.connections(settings, session.ultra),
         "min_sleep": coworker_mod.MIN_SLEEP_MINUTES.get(plan, 15),
         "daily": coworker_mod.DAILY_RUNS.get(plan, 0),
-        "coworkers": [coworker_mod.view(store, cw) for cw in store.all()],
+        "coworkers": [{**coworker_mod.view(store, cw),
+                       "home_approval_valid": bool(cw.ha_binding) and cw.ha_binding ==
+                       connection_key(settings)} for cw in store.all()],
     })
     return antwort
 
@@ -3410,7 +3413,8 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 store.wake(kollege.id, "vom Nutzer geweckt")
                 hinweis = f"{kollege.name} legt gleich los."
             elif action == "rules":
-                store.set_rules(kollege.id, payload.get("rules"))
+                store.set_rules(kollege.id, payload.get("rules"), settings=settings,
+                                ultra=session.ultra)
                 hinweis = "Regeln gespeichert."
             elif action == "edit":
                 neuer_name = payload.get("name")
@@ -3419,10 +3423,16 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                                         f"coworker:{kollege.id}")
                 if nein:
                     return {"ok": False, "error": nein}, 400
+                if "interval_seconds" in payload and (
+                    type(payload["interval_seconds"]) is not int
+                    or payload["interval_seconds"] not in coworker_mod.INTERVAL_SECONDS
+                ):
+                    raise ValueError("Bitte einen angebotenen Rhythmus auswählen.")
                 store.update(kollege.id, name=None if neuer_name is None else str(neuer_name),
                              goal=None if neue_aufgabe is None else str(neue_aufgabe),
                              avatar=None if payload.get("avatar") is None
-                             else str(payload.get("avatar")))
+                             else str(payload.get("avatar")),
+                             interval_seconds=payload.get("interval_seconds"))
                 hinweis = "Gespeichert."
             elif action == "preferences":
                 store.set_preferences(kollege.id, payload, settings=settings, ultra=session.ultra)

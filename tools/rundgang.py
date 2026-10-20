@@ -1942,7 +1942,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         except Exception as exc:  # der Rundgang meldet, statt abzubrechen
             log.pruefe(False, f"/export lädt die Datei herunter ({type(exc).__name__})")
         pg.wait_for_timeout(300)
-        pg.click("#btn-notes")
+        pg.fill("#input", "/notes")
+        pg.click("#send")
         pg.wait_for_timeout(900)
         log.pruefe(
             "erkzettel" in pg.inner_text("#thread") or "otiz" in pg.inner_text("#thread"),
@@ -2291,6 +2292,33 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(pg.locator(".cw-karte").count() == 1,
                    f"der Coworker steht in der Liste ({pg.locator('.cw-karte').count()})")
         log.pruefe("wöchentlich" in pg.inner_text(".cw-karte"), "mit seinem Rhythmus")
+        karte = pg.locator(".cw-karte").first
+        aendern = karte.locator("details").filter(
+            has=pg.locator("summary", has_text="Aufgabe ändern"))
+        aendern.evaluate("e => e.open = true")
+        auswahl = aendern.locator(".cw-rhythmus")
+        log.pruefe(auswahl.locator("option").evaluate_all("els => els.map(e => e.value)") ==
+                   ["0", "30", "60", "300", "600", "1200", "3600", "14400", "86400"],
+                   "Aufgabe ändern bietet alle acht Rhythmen und den bisherigen Zeitplan")
+        auswahl.select_option("30")
+        aendern.get_by_role("button", name="Speichern", exact=True).click()
+        pg.wait_for_function("document.querySelector('.cw-rhythmus')?.value === '30'")
+        pg.wait_for_function("document.querySelector('.cw-karte')?.innerText"
+                             ".includes('Alle 30 Sekunden')")
+        gespeichert = pg.evaluate("async () => (await (await fetch('/api/coworkers'))"
+                                 ".json()).coworkers[0].interval_seconds")
+        log.pruefe(gespeichert == 30, "der gewählte Rhythmus wird serverseitig gespeichert")
+        karte.locator("details").filter(
+            has=pg.locator("summary", has_text="Regeln — was")).evaluate("e => e.open = true")
+        haus = karte.locator(".recht").filter(has_text="Im Haus etwas schalten")
+        log.pruefe(haus.get_by_role("radio").all_text_contents() ==
+                   ["Erlauben", "Fragen", "Sperren"],
+                   "Erlauben steht direkt in der Haus-Regel")
+        log.pruefe("Home-Assistant-Dauerfreigaben" not in karte.inner_text(),
+                   "der separate Bereich für Dauerfreigaben entfällt")
+        log.pruefe(pg.locator("#btn-notes").count() == 0 and
+                   pg.inner_text("#btn-coworker").strip() == "Coworker",
+                   "kein Merkzettel-Button und kein Handschlag in der Seitenleiste")
         pg.locator("#coworker-new").evaluate("e => e.open = true")
         pg.select_option("#cw-task-rhythm", "hourly")
         pg.wait_for_timeout(200)

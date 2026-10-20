@@ -490,7 +490,8 @@ def describe_job_image(agent: Any, job: Job, settings: Any) -> str:
 
 
 def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
-            agent_factory: Any = None, context: str = "", active: Any = None) -> tuple[str, str]:
+            agent_factory: Any = None, context: str = "", active: Any = None,
+            chat_id: str = "") -> tuple[str, str]:
     """Fuehrt einen Auftrag aus. Returns: (Zustand, Chat-Kennung).
 
     Der Agent ist ein eigener: das laufende Gespraech des Nutzers bleibt
@@ -525,6 +526,8 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
 
     factory = agent_factory or Agent
     agent = factory(settings, cache=None if monitoring else cache)
+    if chat_id:
+        agent.session_id = chat_id
     if on_abuse is not None:
         agent.on_event = ereignis
     try:

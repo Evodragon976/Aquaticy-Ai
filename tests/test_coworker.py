@@ -557,7 +557,9 @@ def test_account_deletion_stops_the_coworkers(monkeypatch, settings, tmp_path: P
     assert "takt" in gestoppt and konto.id not in web.USER_COWORKERS
 
 
-def test_new_preferences_require_explicit_owner_confirmation(client, session) -> None:  # noqa: F811
+def test_house_permission_uses_the_owner_rule_and_keeps_context_preferences(
+    client, session  # noqa: F811
+):
     settings = session.settings()
     settings.ha_url = "http://100.72.1.2:8123"
     settings.ha_token = "owner-token-123456789"
@@ -566,20 +568,25 @@ def test_new_preferences_require_explicit_owner_confirmation(client, session) ->
     assert status == 200
     colleague = data["coworkers"][0]
     assert not colleague["sharing_chats"] and not colleague["sharing_coworkers"]
-    assert colleague["notes_limit"] == 6000 and colleague["ha_grants"] == []
-    grants = [{"entity_id": "light.room", "service": "turn_on"}]
+    assert colleague["notes_limit"] == 6000 and colleague["rules"]["zuhause"] == "fragen"
+    assert not colleague["home_approval_valid"] and "ha_grants" not in colleague
     status, _ = _post(client, {"action": "preferences", "id": colleague["id"],
-                             "ha_grants": grants})
-    assert status == 400
+                             "ha_grants": [], "confirmed": True})
+    assert status == 400  # Die entfernte Oberflaeche darf keine Rechte mehr setzen.
+    status, data = _post(client, {"action": "rules", "id": colleague["id"],
+                                 "rules": {"zuhause": "erlauben"}})
+    assert status == 200
+    updated = data["coworkers"][0]
+    assert updated["rules"]["zuhause"] == "erlauben" and updated["home_approval_valid"]
+    assert "ha_binding" not in updated
     status, data = _post(client, {"action": "preferences", "id": colleague["id"],
-                                 "ha_grants": grants, "confirmed": True,
                                  "sharing_chats": True, "sharing_coworkers": True,
                                  "notes_limit": 24000})
     assert status == 200
     updated = data["coworkers"][0]
-    assert updated["ha_grants"] == grants and updated["notes_limit"] == 24000
+    assert updated["notes_limit"] == 24000
     assert updated["sharing_chats"] and updated["sharing_coworkers"]
-    assert all("connection" not in grant for grant in updated["ha_grants"])
+    assert updated["rules"]["zuhause"] == "erlauben" and updated["home_approval_valid"]
     for invalid in ({"notes_limit": 999999}, {"sharing_chats": "true"},
                     {"ha_grants": [{"entity_id": "lock.front", "service": "unlock"}],
                      "confirmed": True}):
@@ -590,3 +597,20 @@ def test_new_preferences_require_explicit_owner_confirmation(client, session) ->
 def test_old_job_routes_are_gone(client) -> None:  # noqa: F811
     for method in ("GET", "POST", "DELETE"):
         assert client(method, "/api/jobs")[0] == 404
+
+
+def test_edit_interval_is_strict_and_atomic_in_the_account_api(client):  # noqa: F811
+    status, data = _post(client, {"action": "create", "goal": "Suche neue Lastenrad Angebote."})
+    assert status == 200
+    colleague = data["coworkers"][0]
+    for invalid in (None, True, "30", 30.0, -1, 10, [], {}):
+        status, _ = _post(client, {"action": "edit", "id": colleague["id"],
+                                 "goal": "Eine andere Aufgabe.", "interval_seconds": invalid})
+        assert status == 400
+    status, data = client("GET", "/api/coworkers")
+    assert status == 200 and json.loads(data)["coworkers"][0]["goal"] == colleague["goal"]
+    for seconds in (30, 60, 300, 600, 1200, 3600, 14400, 86400, 0):
+        status, data = _post(client, {"action": "edit", "id": colleague["id"],
+                                     "goal": "Suche neue Lastenrad Angebote.",
+                                     "interval_seconds": seconds})
+        assert status == 200 and data["coworkers"][0]["interval_seconds"] == seconds

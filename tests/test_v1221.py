@@ -11,7 +11,7 @@ import pytest
 
 from aquaticy import coworker as cw
 from aquaticy.cache import Cache
-from aquaticy.coworker_context import clean_grants, permits, relevant_context
+from aquaticy.coworker_context import connection_key, permits, relevant_context
 from aquaticy.coworker_schedule import SCHEMA, JobStore
 from aquaticy.tools import Toolbox
 from tests.test_agent import ScriptedLLM, _message, _tool_call
@@ -129,17 +129,15 @@ def test_sharing_is_optional_relevant_bounded_and_stays_in_this_account(settings
 ])
 def test_standing_permissions_never_include_protected_or_ambiguous_calls(settings, entity, service):
     configured(settings)
-    with pytest.raises(ValueError):
-        clean_grants([{"entity_id": entity, "service": service}], settings=settings)
+    assert not permits(connection_key(settings), {"domain": "light", "entity_id": entity,
+                                                  "service": service}, settings, ultra=True)
 
 
-def test_standing_permissions_are_exact_connection_bound_and_immediately_revocable(settings):
+def test_house_rule_is_limited_connection_bound_and_immediately_revocable(settings):
     configured(settings)
     store = cw.CoworkerStore(settings.db_path)
     colleague = store.add("Licht", "Schalte das Wohnzimmerlicht bei Bedarf.", plan="ultra")
-    values = {"ha_grants": [{"entity_id": "light.room", "service": "turn_on"}],
-              "confirmed": True}
-    store.set_preferences(colleague.id, values, settings=settings, ultra=True)
+    store.set_rules(colleague.id, {"zuhause": "erlauben"}, settings=settings, ultra=True)
     session = cw.Session(store=store, cw=store.get(colleague.id), vm=False, plan="ultra")
     args = {"domain": "light", "service": "turn_on", "entity_id": "light.room"}
     box = Toolbox(settings)
@@ -147,17 +145,17 @@ def test_standing_permissions_are_exact_connection_bound_and_immediately_revocab
     box.coworker_ha_approval = lambda a: session.ha_approved(box, a)
     assert session.gate(box, "ha_call", args) is None
     assert box._untrusted_gate("ha_call", args) is None
-    grants = store.get(colleague.id).ha_grants
-    for changed in ({"entity_id": "light.other"}, {"service": "turn_off"},
-                    {"data": {"brightness": 200}}, {"target": {"area_id": "all"}},
+    binding = store.get(colleague.id).ha_binding
+    for changed in ({"entity_id": "light.other"}, {"service": "turn_off"}):
+        assert permits(binding, {**args, **changed}, settings, ultra=True)
+    for changed in ({"data": {"brightness": 200}}, {"target": {"area_id": "all"}},
                     {"domain": []}, {"service": []}, {"entity_id": ["light.room"]}):
-        assert not permits(grants, {**args, **changed}, settings, ultra=True)
+        assert not permits(binding, {**args, **changed}, settings, ultra=True)
     settings.ha_token = "replacement-token-123456789"
-    assert not permits(grants, args, settings, ultra=True)
+    assert not permits(binding, args, settings, ultra=True)
     settings.ha_token = "owner-token-123456789"
-    assert not permits(grants, args, settings, ultra=False)
-    store.set_preferences(colleague.id, {"ha_grants": [], "confirmed": True}, settings=settings,
-                          ultra=True)
+    assert not permits(binding, args, settings, ultra=False)
+    store.set_rules(colleague.id, {"zuhause": "fragen"})
     assert session.gate(box, "ha_call", args)["wartet_auf_freigabe"]
     assert box._untrusted_gate("ha_call", args)["bestaetigung"] is False
     box.close()
@@ -243,9 +241,7 @@ def test_permissions_check_current_plan_and_connection_during_a_run(settings):
     configured(settings)
     store = cw.CoworkerStore(settings.db_path)
     colleague = store.add("Licht", "Schalte ein einzelnes Licht.", plan="ultra")
-    store.set_preferences(colleague.id, {"ha_grants": [{"entity_id": "light.room",
-                           "service": "turn_on"}], "confirmed": True}, settings=settings,
-                           ultra=True)
+    store.set_rules(colleague.id, {"zuhause": "erlauben"}, settings=settings, ultra=True)
     box = Toolbox(settings)
     plan = ["ultra"]
     current = [settings]
@@ -304,9 +300,7 @@ def test_preferences_lock_the_fresh_read_against_concurrent_revocation(settings,
     configured(settings)
     store = cw.CoworkerStore(settings.db_path)
     colleague = store.add("Licht", "Schalte das einzelne Wohnzimmerlicht.", plan="ultra")
-    store.set_preferences(colleague.id, {"ha_grants": [{"entity_id": "light.room",
-                           "service": "turn_on"}], "confirmed": True}, settings=settings,
-                           ultra=True)
+    store.set_rules(colleague.id, {"zuhause": "erlauben"}, settings=settings, ultra=True)
     editing = cw.CoworkerStore(settings.db_path)
     entered, release = Event(), Event()
     original = editing._row
@@ -330,7 +324,7 @@ def test_preferences_lock_the_fresh_read_against_concurrent_revocation(settings,
         finally:
             release.set()
         future.result(timeout=5)
-    store.set_preferences(colleague.id, {"ha_grants": [], "confirmed": True}, settings=settings,
-                          ultra=True)
+    store.set_rules(colleague.id, {"zuhause": "fragen"})
     editing.set_preferences(colleague.id, {"notes_limit": 12000})
-    assert store.get(colleague.id).ha_grants == []
+    assert store.get(colleague.id).rule("zuhause") == "fragen"
+    assert store.get(colleague.id).ha_binding == ""

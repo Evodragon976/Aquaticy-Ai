@@ -1756,9 +1756,8 @@ html.vv,html.vv body{height:var(--app-h)}
   </div>
   <div class="recents" id="recents"></div>
   <div class="side-foot">
-    <button class="side-btn" id="btn-coworker" title="Coworker: arbeiten die ganze Zeit für dich">🤝 Coworker<span class="side-badge" id="coworker-badge" hidden></span></button>
-    <button class="side-btn" id="btn-notes">☰ Merkzettel</button>
-    <button class="side-btn" id="btn-settings">⚙ Einstellungen</button>
+    <button class="side-btn" id="btn-coworker" title="Coworker: arbeiten die ganze Zeit für dich">Coworker<span class="side-badge" id="coworker-badge" hidden></span></button>
+    <button class="side-btn" id="btn-settings">Einstellungen</button>
     <button class="side-btn" id="btn-theme">◐ Design</button>
     <nav class="legal-links" aria-label="Rechtliches">
       <a href="/privacy" target="_blank" rel="noopener">Datenschutz</a>
@@ -1778,7 +1777,7 @@ html.vv,html.vv body{height:var(--app-h)}
     <span class="where" id="status" role="status" aria-live="polite"></span>
     <span class="spacer"></span>
     <button class="iconbtn" id="btn-vmfiles" title="Dateien in der virtual machine"
-            aria-label="Dateien in der virtual machine" hidden>🗀</button>
+            aria-label="Dateien in der virtual machine" hidden>Dateien</button>
     <button class="iconbtn topnew" id="btn-new-top" title="Neuer Chat"
             aria-label="Neuer Chat">＋</button>
   </div>
@@ -1794,16 +1793,15 @@ html.vv,html.vv body{height:var(--app-h)}
         überblickt. Höchstens 5 GB Arbeitsspeicher.</span>
     </div>
     <button type="button" class="picker-image" id="btn-imagemode" aria-pressed="false">
-      <span class="pi-icon" aria-hidden="true">🎨</span>
       <span><b>Bilderstellung</b>
         <span class="why">Aquaticy malt ein Bild nach deiner Beschreibung. Es geht sofort in
           den Standard-Modus und wählt selbst ein Modell, das Bilder erstellen kann.</span></span>
     </button>
     <div class="picker-actions">
       <button type="button" class="picker-act" id="btn-aufwand">
-        <span>⚡ <b>Aufwand</b></span><span class="why">Denktiefe und Zahl der Agenten</span></button>
+        <span><b>Aufwand</b></span><span class="why">Denktiefe und Zahl der Agenten</span></button>
       <button type="button" class="picker-act" id="btn-weitere">
-        <span>⚙ <b>Weitere Einstellungen</b></span><span class="why">virtual machine, Suche, Strukturieren
+        <span><b>Weitere Einstellungen</b></span><span class="why">virtual machine, Suche, Strukturieren
           und mehr</span></button>
     </div>
     <div class="picker-foot">Anderes Modell oder eigener Schlüssel? Das geht in den
@@ -1923,7 +1921,11 @@ html.vv,html.vv body{height:var(--app-h)}
       <input type="file" id="picker" multiple hidden aria-label="Dateien anhängen"
              accept="image/*,.pdf,.txt,.md,.csv,.json,.log,.yaml,.yml">
       <div class="crow">
-        <button class="tool" id="clip" title="Bild oder PDF anhängen">📎 <span class="wort">Anhängen</span></button>
+        <button class="tool" id="clip" title="Bild oder PDF anhängen" aria-label="Bild oder PDF anhängen">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" aria-hidden="true" style="vertical-align:middle">
+            <path d="M8 13l7-7a3 3 0 014 4L9 20a5 5 0 01-7-7L13 2m-7 14l9-9"/>
+          </svg> <span class="wort">Anhängen</span></button>
         <button class="tool stop" id="stop" title="Anfrage abbrechen" hidden>◼ <span class="wort">Abbrechen</span></button>
         <button class="modelpick" id="btn-model" title="Modell wechseln" aria-haspopup="true" aria-expanded="false" aria-controls="picker-models">
           <span id="model-name">Modell</span><span class="caret">▴</span>
@@ -2089,7 +2091,7 @@ html.vv,html.vv body{height:var(--app-h)}
     <h2 id="coworker-title">Coworker</h2>
     <p class="lead">Ein Coworker arbeitet dauerhaft an einer Aufgabe: Er recherchiert, liest
       Gmail, Kalender und GitHub und meldet Neues. Er arbeitet mit festem Zeitplan oder wacht
-      selbst auf. Änderungen brauchen deine Freigabe oder eine passende Dauerfreigabe.</p>
+      selbst auf. Änderungen richten sich nach deinen Regeln; geschützte Aktionen brauchen deine Freigabe.</p>
     <div class="note" id="coworker-note" role="status" aria-live="polite"></div>
     <div class="coworker-lock" id="coworker-lock" hidden>Feste Zeitpläne und Beobachtungen stehen allen Konten zur Verfügung. Dauerhafte Coworker
       gibt es mit Pro und Ultra; mit Ultra auch mit eigener virtual machine.</div>
@@ -2214,7 +2216,7 @@ html.vv,html.vv body{height:var(--app-h)}
       <input type="password" id="screen-text" autocomplete="off" spellcheck="false"
              placeholder="Text für das angeklickte Feld" aria-label="Text zum Tippen">
       <button type="button" class="btn" id="screen-show" title="Text zeigen oder verbergen"
-              aria-pressed="false">👁</button>
+              aria-pressed="false">Zeigen</button>
       <button type="button" class="btn primary" id="screen-send">Tippen</button>
     </div>
     <div class="screen-keys" role="group" aria-label="Tasten">
@@ -2255,9 +2257,9 @@ html.vv,html.vv body{height:var(--app-h)}
     <div class="group">Helligkeit</div>
     <div class="tmodes" id="tmodes" role="group" aria-label="Helligkeit">
       <button type="button" class="tmode" data-tmode="light">
-        <span class="glyph">☀</span>Hell</button>
+        <span class="glyph">○</span>Hell</button>
       <button type="button" class="tmode" data-tmode="dark">
-        <span class="glyph">☾</span>Dunkel</button>
+        <span class="glyph">●</span>Dunkel</button>
       <button type="button" class="tmode" data-tmode="system">
         <span class="glyph">◐</span>Wie das System</button>
     </div>
@@ -2420,7 +2422,7 @@ html.vv,html.vv body{height:var(--app-h)}
           verknüpfst du unter Add-ons. Alles andere muss auf dem Server laufen (Ollama, LM
           Studio, vLLM).</div>
         <div class="inline">
-          <button type="button" class="btn" id="btn-addons-modell">🧩 Add-ons: NVIDIA NIM und
+          <button type="button" class="btn" id="btn-addons-modell">Add-ons: NVIDIA NIM und
             Mistral</button>
         </div>
         <div class="actions section">
@@ -2435,7 +2437,7 @@ html.vv,html.vv body{height:var(--app-h)}
       </fieldset>
 
       <fieldset id="workshop-settings"><legend>virtual machine</legend>
-        <div class="pro-lock" id="vm-plus-lock" hidden>🔒 „Plus“ gibt es nur mit Ultra.
+        <div class="pro-lock" id="vm-plus-lock" hidden>„Plus“ gibt es nur mit Ultra.
           Die Größe „Normal“ kannst du trotzdem nutzen.</div>
         <label><span class="lbl">Größe <span class="why">Gilt ab der nächsten virtual machine — eine
           laufende bleibt, wie sie ist</span></span>
@@ -2450,20 +2452,20 @@ html.vv,html.vv body{height:var(--app-h)}
                  name="AQUATICY_VM_USER_MODE">
           <label for="usermode" style="margin:0">User mode — Aquaticy bedient die virtual machine
             wie ein Mensch <span class="ultra-tag">Ultra</span>
-            <span class="lock-tag" data-lock hidden>🔒 Mit Ultra verfügbar</span>
+            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
             <span class="why">Die virtual machine wird ein Desktop mit Internet, den Aquaticy
               wie ein Mensch bedient. Dein Heimnetz bleibt tabu. Absenden, Kaufen und Löschen
               nur nach deinem Ja. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“
               fasst Aquaticy nie an.</span></label>
           <button type="button" class="btn addon-btn" id="btn-addons"
-                  title="Add-ons: NVIDIA NIM, Mistral, GitHub, WhatsApp Web, Blender …">🧩 Add-ons</button>
+                  title="Add-ons: NVIDIA NIM, Mistral, GitHub, WhatsApp Web, Blender …">Add-ons</button>
         </div>
         <div class="check usermode-row">
           <input type="checkbox" role="switch" class="schalter" id="vminternet"
                  name="AQUATICY_VM_INTERNET">
           <label for="vminternet" style="margin:0">Internet für die virtual machine
             <span class="ultra-tag">Ultra</span>
-            <span class="lock-tag" data-lock hidden>🔒 Mit Ultra verfügbar</span>
+            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
             <span class="why">Im Code-Modus darf die virtual machine dann ins Internet —
               etwa für pip install oder um eine Seite abzurufen; dein Heimnetz bleibt
               dabei gesperrt. Bei Normal- und Pro-Konten hat sie gar kein Netz.</span></label>
@@ -2473,7 +2475,7 @@ html.vv,html.vv body{height:var(--app-h)}
                  name="AQUATICY_VM_LAN">
           <label for="vmlan" style="margin:0">Auch ins lokale Netz
             <span class="ultra-tag">Ultra</span>
-            <span class="lock-tag" data-lock hidden>🔒 Mit Ultra verfügbar</span>
+            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
             <span class="why">Nur mit Ultra: Die virtual machine erreicht dann zusätzlich
               Geräte in deinem Heimnetz (Router, Lager, Home Assistant …), nicht nur das
               Internet. Die Sperre fällt weg — schalte das nur ein, wenn du es
@@ -2520,7 +2522,7 @@ html.vv,html.vv body{height:var(--app-h)}
       </fieldset>
 
       <fieldset id="pro-system" hidden><legend>Auslastung · Ultra</legend>
-        <div class="pro-lock" id="system-lock" hidden>🔒 Die Auslastungsanzeige
+        <div class="pro-lock" id="system-lock" hidden>Die Auslastungsanzeige
           gehört zu Ultra.</div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="showload">
@@ -2605,7 +2607,7 @@ html.vv,html.vv body{height:var(--app-h)}
       </fieldset>
 
       <fieldset id="pro-features"><legend>Zuhause &amp; Netz</legend>
-        <div class="pro-lock" id="pro-lock" hidden>🔒 Diese Funktionen gehören zu Ultra:
+        <div class="pro-lock" id="pro-lock" hidden>Diese Funktionen gehören zu Ultra:
           Geräte im Heimnetz finden, Home Assistant und die Lagerverwaltung.</div>
         <div class="inline">
           <label><span class="lbl">Home Assistant</span>
@@ -2771,7 +2773,7 @@ html.vv,html.vv body{height:var(--app-h)}
                 wird „Upgraden“ grün (gemma3:4b → 1.1), ab 30 % gibt es eine ganze Version
                 (→ 2). Gilt für jedes Konto.</span></label>
           </div>
-          <p class="note" id="upgrade-lock" hidden>🔒 Auto-Upgrading gehört zu Ultra.</p>
+          <p class="note" id="upgrade-lock" hidden>Auto-Upgrading gehört zu Ultra.</p>
           <div class="note" id="upgrade-status" role="status"></div>
           <div id="upgrade-panel" hidden>
             <ul class="device-list upgrade-list" id="upgrade-tracks"></ul>
@@ -2787,7 +2789,7 @@ html.vv,html.vv body{height:var(--app-h)}
               <span class="why">Bis zu 10 Server teilen sich die Arbeit, jeder mit der ganzen
                 Datenbank. Der einladende Server wird Master.</span></label>
           </div>
-          <p class="note" id="cluster-lock" hidden>🔒 Der Server-Verbund gehört zu Ultra.</p>
+          <p class="note" id="cluster-lock" hidden>Der Server-Verbund gehört zu Ultra.</p>
           <div class="note" id="cluster-status" role="status"></div>
           <div id="cluster-panel" hidden>
             <ul class="device-list cluster-list" id="cluster-members"></ul>
@@ -2890,7 +2892,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.2.1 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.2.1 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5049,7 +5051,7 @@ function slashZeigen(){
     b.setAttribute("aria-selected", String(i === slashAuswahl));
     b.innerHTML = '<span class="icon" aria-hidden="true"></span><span class="wort"></span>'
       + '<span class="was"></span>';
-    b.querySelector(".icon").textContent = t.icon || "/";
+    b.querySelector(".icon").textContent = "/";
     b.querySelector(".wort").textContent = "/" + t.name;
     b.querySelector(".was").textContent = t.was;
     b.addEventListener("click", () => slashNehmen(i));
@@ -5302,10 +5304,6 @@ async function neuerChat({ leiste = true } = {}){
 $("#btn-new").addEventListener("click", () => neuerChat());
 // Auf dem Handy liegt "Neuer Chat" auch oben -- ohne erst die Leiste zu oeffnen.
 $("#btn-new-top").addEventListener("click", () => neuerChat());
-$("#btn-notes").addEventListener("click", () => {
-  if (narrow()) document.body.classList.add("collapsed");
-  ask("/notes");
-});
 /* ---------- Erscheinungsbild ---------- */
 // Zwei Dinge, die unabhaengig voneinander sind: wie hell es ist und in
 // welchen Farben. Beides steht als Attribut am <html>, den Rest erledigen
@@ -5554,9 +5552,9 @@ const EN = {
   "6.000 Zeichen": "6,000 characters",
   "12.000 Zeichen": "12,000 characters",
   "24.000 Zeichen": "24,000 characters",
-  "Ein Coworker arbeitet dauerhaft an einer Aufgabe: Er recherchiert, liest Gmail, Kalender und GitHub und meldet Neues. Er arbeitet mit festem Zeitplan oder wacht selbst auf. Änderungen brauchen deine Freigabe oder eine passende Dauerfreigabe.": "A coworker works on a task: it researches, reads Gmail, Calendar and GitHub and reports updates. It follows a fixed schedule or wakes itself. Changes require your approval or a matching standing permission.",
+  "Ein Coworker arbeitet dauerhaft an einer Aufgabe: Er recherchiert, liest Gmail, Kalender und GitHub und meldet Neues. Er arbeitet mit festem Zeitplan oder wacht selbst auf. Änderungen richten sich nach deinen Regeln; geschützte Aktionen brauchen deine Freigabe.": "A coworker works on a task: it researches, reads Gmail, Calendar and GitHub and reports updates. It follows a fixed schedule or wakes itself. Changes follow your rules; protected actions require your approval.",
   "Feste Zeitpläne und Beobachtungen stehen allen Konten zur Verfügung. Dauerhafte Coworker gibt es mit Pro und Ultra; mit Ultra auch mit eigener virtual machine.": "Fixed schedules and monitoring are available to all accounts. Continuous coworkers require Pro or Ultra; Ultra includes a personal virtual machine.",
-  "Diese Notizen enthalten fremde Inhalte. Vor Änderungen fragt er nach, außer bei deinen passenden Home-Assistant-Dauerfreigaben.": "These notes contain external content. Changes require approval, except for your matching Home Assistant standing permissions.",
+  "Diese Notizen enthalten fremde Inhalte. Vor Änderungen fragt er nach; die begrenzte Haus-Regel „Erlauben“ gilt weiterhin.": "These notes contain external content. Changes require approval; the limited Allow at home rule still applies.",
 
 "Dieses Modell braucht mehr Kontextspeicher als erlaubt.":
   "This model needs more context memory than allowed.",
@@ -5586,7 +5584,7 @@ const EN = {
 "Schriftgröße": "Font size",
 "KI-Modelle, Dienste, Konten und Programme für Aquaticy: installieren, an- und ausschalten, entfernen. Anmelden musst du dich selbst, deine Passwörter kennt Aquaticy nie. Aus dem Chat lässt sich hier nichts ändern.": "AI models, services, accounts and programs for Aquaticy: install, turn on and off, remove. You sign in yourself; Aquaticy never knows your passwords. Nothing here can be changed from the chat.",
 "Mistral und NVIDIA NIM brauchen einen Schlüssel. Den verknüpfst du unter Add-ons. Alles andere muss auf dem Server laufen (Ollama, LM Studio, vLLM).": "Mistral and NVIDIA NIM need a key. You link it under Add-ons. Everything else has to run on the server (Ollama, LM Studio, vLLM).",
-"🧩 Add-ons: NVIDIA NIM und Mistral": "🧩 Add-ons: NVIDIA NIM and Mistral",
+"Add-ons: NVIDIA NIM und Mistral": "Add-ons: NVIDIA NIM and Mistral",
 "Hier stehen die Modelle, die du oben selbst eingetragen hast.": "These are the models you entered above yourself.",
 "Brave Search (Schlüssel vom Betreiber)": "Brave Search (key from the operator)",
 "Tavily (Schlüssel vom Betreiber)": "Tavily (key from the operator)",
@@ -5663,7 +5661,7 @@ const EN = {
   "The Google connection has changed. Please try again.",
 "Ungültige Kennung für Mail oder Termin.": "Invalid message or event ID.",
 "Bitte bestätigen": "Please confirm",
-"🔒 Mit Ultra verfügbar": "🔒 Available with Ultra",
+"Mit Ultra verfügbar": "Available with Ultra",
 "↻ Erneut versuchen": "↻ Try again",
 "Noch kein Gerät vermerkt.": "No device recorded yet.",
 "Dein Passwort": "Your password",
@@ -5715,8 +5713,8 @@ const EN = {
 "Letzte Chats": "Recent chats",
 "Chats durchsuchen": "Search chats",
 "Suche beenden": "End search",
-"☰ Merkzettel": "☰ Notes",
-"⚙ Einstellungen": "⚙ Settings",
+
+"Einstellungen": "Settings",
 "Rechtliches": "Legal",
 "Bedingungen": "Terms",
 "Seitenleiste": "Sidebar",
@@ -5875,7 +5873,7 @@ const EN = {
 "Noch keine — die schreibt er nach dem ersten Arbeitsschritt.": "None yet — it writes them after its first work step.",
 "Notizen löschen": "Delete notes",
 "Notizen löschen?": "Delete notes?",
-"„Fragen“: Er legt die Aktion hier zur Freigabe ab. Nach Webseiten oder Mails fragt er auch bei „Erlauben“, damit ihn kein fremder Text zu etwas überredet.": "“Ask”: it puts the action here for your approval. After reading web pages or emails it asks even with “Allow”, so no outside text can talk it into anything.",
+
 "Termine eintragen und ändern": "Add and change appointments",
 "Mail-Entwürfe anlegen": "Create email drafts",
 "Sich etwas dauerhaft merken": "Remember something permanently",
@@ -5887,7 +5885,7 @@ const EN = {
 "Ungültiger Port. Erlaubt sind ganze Zahlen von 1 bis 65535.": "Invalid port. Enter a whole number from 1 to 65535.",
 "Der Verbundstatus ließ sich nicht laden.": "The cluster status could not be loaded.",
 "Bis zu 10 Server teilen sich die Arbeit, jeder mit der ganzen Datenbank. Der einladende Server wird Master.": "Up to 10 servers share the work, each with the whole database. The inviting server becomes the master.",
-"🔒 Der Server-Verbund gehört zu Ultra.": "🔒 The server cluster is part of Ultra.",
+"Der Server-Verbund gehört zu Ultra.": "The server cluster is part of Ultra.",
 "Server im lokalen Netz": "Servers in the local network",
 "Nur eigene Server verbinden: Der andere bekommt eine Kopie aller Daten. Dort im Terminal mit „yes“ zustimmen und hier den angezeigten Code eingeben.": "Only connect your own servers: the other one gets a copy of all data. Confirm there with “yes” in the terminal and enter the code it shows here.",
 "Gespeichert": "Saved",
@@ -5912,7 +5910,7 @@ const EN = {
 "— automatisch erkennen —": "— detect automatically —",
 "Eigene Modelle": "Own models",
 "Modell speichern": "Save model",
-"🔒 „Plus“ gibt es nur mit Ultra. Die Größe „Normal“ kannst du trotzdem nutzen.": "🔒 “Plus” is only available with Ultra. You can still use the “Normal” size.",
+"„Plus“ gibt es nur mit Ultra. Die Größe „Normal“ kannst du trotzdem nutzen.": "“Plus” is only available with Ultra. You can still use the “Normal” size.",
 "Größe": "Size",
 "Gilt ab der nächsten virtual machine — eine laufende bleibt, wie sie ist": "Applies from the next virtual machine — a running one stays as it is",
 "Normal — 1 Kern, 1 GB Arbeitsspeicher, 4 GB Speicher": "Normal — 1 core, 1 GB RAM, 4 GB storage",
@@ -5935,7 +5933,7 @@ const EN = {
 "Zeigt dir genau, wonach Aquaticy gesucht und welche Seiten es geöffnet hat. Gilt sofort, auch für die Antwort, die schon dasteht. Die Gedanken selbst siehst du mit": "Shows you exactly what Aquaticy searched for and which pages it opened. Applies right away, including to the answer that's already there. You see the thoughts themselves with",
 "in der Modellauswahl.": "in the model picker.",
 "Auslastung · Ultra": "Load · Ultra",
-"🔒 Die Auslastungsanzeige gehört zu Ultra.": "🔒 The load display is part of Ultra.",
+"Die Auslastungsanzeige gehört zu Ultra.": "The load display is part of Ultra.",
 "Auslastung des Rechners anzeigen": "Show the computer's load",
 "Wie stark Prozessor, Speicher, Platte und Grafikkarte arbeiten. Läuft, solange das Fenster offen ist.": "How hard processor, memory, disk and graphics card are working. Runs while this window is open.",
 "Wie viel du fragen kannst, zählt in zwei Zeiträumen: einer": "How much you can ask is counted in two periods: a",
@@ -6011,7 +6009,7 @@ const EN = {
 ", dann auf": ", then click",
 "Deine Zugangsdaten liegen verschlüsselt und verlassen diesen Rechner nie. „Trennen“ löscht sie.": "Your credentials are stored encrypted and never leave this computer. “Disconnect” deletes them.",
 "Zuhause & Netz": "Home & network",
-"🔒 Diese Funktionen gehören zu Ultra: Geräte im Heimnetz finden, Home Assistant und die Lagerverwaltung.": "🔒 These features are part of Ultra: finding devices in your home network, Home Assistant and the storage manager.",
+"Diese Funktionen gehören zu Ultra: Geräte im Heimnetz finden, Home Assistant und die Lagerverwaltung.": "These features are part of Ultra: finding devices in your home network, Home Assistant and the storage manager.",
 "Suchen": "Search",
 "Zugangsschlüssel (Token)": "Access key (token)",
 "Testen": "Test",
@@ -6209,7 +6207,7 @@ const EN = {
 "Keine Verbindung zu Aquaticy. Bitte prüfe die Verbindung und versuch es gleich noch einmal.": "No connection to Aquaticy. Please check the connection and try again in a moment.",
 "Wenn Auto-Upgrading aktiv ist, können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte eingehen. Dort liegen öffentliche Auszüge unverschlüsselt. Bei Ablauf oder fehlender Bestätigung werden betroffene Fassungen zurückgezogen und gelöscht. Einzelheiten stehen im Datenschutz.": "When Auto-Upgrading is active, excerpts confirmed several times can also go into local Ollama model texts. Public excerpts are stored there unencrypted. When they expire or are no longer confirmed, the affected versions are withdrawn and deleted. Details are in the privacy policy.",
 "Bilderstellung": "Image creation",
-"🎨 Bilderstellung": "🎨 Image creation",
+"Bilderstellung": "Image creation",
 "Aquaticy malt ein Bild nach deiner Beschreibung. Es geht sofort in den Standard-Modus und wählt selbst ein Modell, das Bilder erstellen kann.": "Aquaticy paints a picture from your description. It switches to Standard mode right away and picks a model that can create images by itself.",
 "Aufwand": "Effort",
 "Denktiefe und Zahl der Agenten": "Thinking depth and number of agents",
@@ -6229,7 +6227,7 @@ const EN = {
 "Auch ins lokale Netz": "Also into the local network",
 "Nur mit Ultra: Die virtual machine erreicht dann zusätzlich Geräte in deinem Heimnetz (Router, Lager, Home Assistant …), nicht nur das Internet. Die Sperre fällt weg — schalte das nur ein, wenn du es brauchst.": "Ultra only: the virtual machine then also reaches devices in your home network (router, storage, Home Assistant …), not just the internet. The block is lifted — only turn this on if you need it.",
 "Aquaticy baut lokale Modelle mit Wissen weiter, das mehrere Konten unabhängig bestätigt haben (aus öffentlichen Quellen; Kontokennungen stehen nicht im Modelltext), und misst den Gewinn im Lückentext-Test. Ab 5 % wird „Upgraden“ grün (gemma3:4b → 1.1), ab 30 % gibt es eine ganze Version (→ 2). Gilt für jedes Konto.": "Aquaticy keeps building local models with knowledge that several accounts confirmed independently (from public sources; account IDs are not in the model text) and measures the gain in a fill-in-the-gap test. From 5 % “Upgrade” turns green (gemma3:4b → 1.1), from 30 % there is a whole new version (→ 2). Applies to every account.",
-"🔒 Auto-Upgrading gehört zu Ultra.": "🔒 Auto-Upgrading is part of Ultra.",
+"Auto-Upgrading gehört zu Ultra.": "Auto-Upgrading is part of Ultra.",
 "Jetzt trainieren": "Train now",
 "Modell, das verteilt laufen soll": "Model to run distributed",
 "IP-Adresse": "IP address",
@@ -6297,7 +6295,7 @@ const EN = {
 "Schlüssel kopiert? Dann auf „Einfügen“ klicken.": "Key copied? Then click “Paste”.",
 "verknüpft": "linked",
 "Der Schlüssel wird gelöscht, die Modelle verschwinden aus der Auswahl.": "The key is deleted and the models disappear from the picker.",
-"Die virtual machine läuft gerade nicht. Öffne oben eine Adresse — oder starte eine Login-App über 🧩 Add-ons → Anmelden.": "The virtual machine isn't running right now. Open an address above — or start a login app via 🧩 Add-ons → Sign in.",
+"Die virtual machine läuft gerade nicht. Öffne oben eine Adresse — oder starte eine Login-App über Add-ons → Anmelden.": "The virtual machine isn't running right now. Open an address above — or start a login app via Add-ons → Sign in.",
 "Login-Apps laufen in der virtual machine im User mode — und der gehört zu Ultra.": "Login apps run in the virtual machine in User mode — and that's part of Ultra.",
 "Unbekannter Browser": "Unknown browser",
 "unbekanntes Gerät": "unknown device",
@@ -6499,7 +6497,13 @@ const EN = {
 "Prozessor": "Processor",
 "Arbeitsspeicher": "Memory (RAM)",
 "Festplatte": "Disk",
-"Grafikkarte": "Graphics card"
+"Grafikkarte": "Graphics card",
+"Zeigen": "Show",
+"Bitte einen angebotenen Rhythmus auswählen.": "Please select one of the available frequencies.",
+"Erlauben braucht Ultra und eine verbundene, zum Schalten freigegebene Home-Assistant-Verbindung.": "Allow requires Ultra and a configured Home Assistant connection with control enabled.",
+"Bitte die Regel „Im Haus etwas schalten“ verwenden.": "Please use the Switch things at home rule.",
+"Rhythmus geändert": "Frequency changed",
+"gewählter Rhythmus": "selected frequency"
 };
 const SPRACHEN = ["de", "en"];
 const ATTRIBUTE = ["placeholder", "title", "aria-label"];
@@ -7379,7 +7383,7 @@ function setImageMode(on){
       greet();
       if (thread.children.length) neuerChat({ leiste: false });
     }
-    $("#model-name").textContent = "🎨 Bilderstellung";
+    $("#model-name").textContent = "Bilderstellung";
     $("#input").placeholder = "Beschreibe das Bild, das Aquaticy malen soll …";
   } else {
     $("#input").placeholder = PLATZHALTER[mode] || PLATZHALTER.normal;
@@ -7931,7 +7935,7 @@ function addonKarte(a){
   kopf.className = "addon-head";
   kopf.innerHTML = '<span class="addon-icon" aria-hidden="true"></span><div class="addon-body">'
     + '<div><span class="addon-name"></span></div><div class="addon-summary"></div></div>';
-  kopf.querySelector(".addon-icon").textContent = a.icon;
+  kopf.querySelector(".addon-icon").hidden = true;
   kopf.querySelector(".addon-name").textContent = a.name;
   if (a.vorschlag){
     const badge = document.createElement("span");
@@ -8306,7 +8310,14 @@ function coworkerKarte(cw, d){
     kopf.appendChild(zahl);
   }
   karte.append(kopf, cwElement("div", "cw-aufgabe", cw.goal));
-  if (cw.schedule?.when_text)
+  if (cw.interval_seconds){
+    const seconds = cw.interval_seconds;
+    const label = seconds < 60 ? sp("Alle 30 Sekunden", "Every 30 seconds") : seconds < 3600
+      ? sp(`Alle ${seconds / 60} Minuten`, `Every ${seconds / 60} minutes`)
+      : seconds < 86400 ? sp(`Alle ${seconds / 3600} Stunden`, `Every ${seconds / 3600} hours`)
+      : sp("Einmal täglich", "Once daily");
+    karte.appendChild(cwElement("p", "note", label));
+  } else if (cw.schedule?.when_text)
     karte.appendChild(cwElement("p", "note", cw.schedule.when_text));
 
   // Freigaben: genau das, was ausgeführt würde -- dann Erlauben oder Ablehnen.
@@ -8408,14 +8419,21 @@ function coworkerKarte(cw, d){
       b.setAttribute("role", "radio");
       b.setAttribute("aria-checked", String(an));
       b.addEventListener("click", () => {
-        if (!an) coworkerTun({ action: "rules", id: cw.id, rules: { [kat.key]: option.value } }, b);
+        if (!an || (kat.key === "zuhause" && option.value === "erlauben" && !cw.home_approval_valid))
+          coworkerTun({ action: "rules", id: cw.id, rules: { [kat.key]: option.value } }, b);
       });
       gruppe.appendChild(b);
     }
     zeile.appendChild(gruppe);
     regeln.appendChild(zeile);
   }
-  regeln.appendChild(cwElement("div", "addon-hint", "„Fragen“: Er legt die Aktion hier zur Freigabe ab. Nach Webseiten oder Mails fragt er auch bei „Erlauben“, damit ihn kein fremder Text zu etwas überredet."));
+  regeln.appendChild(cwElement("div", "addon-hint", sp(
+    "„Fragen“ legt Aktionen hier zur Freigabe ab. „Erlauben“ im Haus gilt für einzelne Lichter, Schalter, Lüfter und Mediengeräte: ein- oder ausschalten ohne Zusatzdaten. Geschützte Aktionen fragen weiterhin nach. Bei anderen Änderungen fragt er nach fremden Inhalten auch bei „Erlauben“.",
+    "Ask queues actions here for approval. Allow at home covers individual lights, switches, fans and media players: on or off without extra data. Protected actions still ask. Other changes also ask after external content, even when allowed.")));
+  if (cw.rules.zuhause === "erlauben" && !cw.home_approval_valid)
+    regeln.appendChild(cwElement("p", "note", sp(
+      "Die Home-Assistant-Verbindung hat sich geändert. Zum erneuten Freigeben „Erlauben“ anklicken.",
+      "The Home Assistant connection has changed. Click Allow to approve it again.")));
   karte.appendChild(cwAufklapp(cw, "regeln", `Regeln — was ${cw.name} ohne dich darf`, regeln));
 
   const prefs = cwElement("div", "");
@@ -8443,30 +8461,6 @@ function coworkerKarte(cw, d){
   karte.appendChild(cwAufklapp(cw, "kontext", sp("Notizspeicher und Informationsaustausch",
     "Note capacity and information sharing"), prefs));
 
-  if (d.plan === "ultra"){
-    const ha = cwElement("div", "");
-    ha.appendChild(cwElement("p", "note", sp(
-      "Einzelne Lichter, Schalter, Lüfter oder Mediengeräte ohne Rückfrage schalten. Pro Zeile: Gerät und turn_on oder turn_off. Keine Zusatzdaten. Geschützte Geräte brauchen weiter deine Freigabe. Eine neue Verbindung oder ein neuer Token erfordert neue Dauerfreigaben. Sperren hat Vorrang.",
-      "Switch individual lights, switches, fans or media players without asking. One device and turn_on or turn_off per line. No extra data. Protected devices still require approval. A changed connection or token requires new grants. Blocking takes priority.")));
-    const grants = cwElement("textarea", "");
-    grants.rows = 4; grants.maxLength = 5000;
-    grants.placeholder = "light.wohnzimmer turn_on\nlight.wohnzimmer turn_off";
-    grants.setAttribute("aria-label", sp("Home-Assistant-Dauerfreigaben", "Home Assistant standing permissions"));
-    grants.value = (cw.ha_grants || []).map(g => `${g.entity_id} ${g.service}`).join("\n");
-    ha.append(grants, cwKnopf("Speichern", "primary", async b => {
-      const list = grants.value.split(/\n/).map(t => t.trim()).filter(Boolean).map(line => {
-        const [entity_id, service, ...extra] = line.split(/\s+/);
-        return {entity_id, service: extra.length ? "invalid" : service};
-      });
-      const review = list.map(g => `${g.entity_id}: ${g.service}`).join("\n");
-      if (!await frage(sp("Dauerfreigaben bestätigen?", "Confirm standing permissions?"),
-        sp("Diese Aktionen darf dieser Coworker künftig ohne Rückfrage ausführen:\n",
-           "This coworker may perform these actions without asking again:\n") + (review || sp("Keine — alle widerrufen.", "None — revoke all.")))) return;
-      coworkerTun({action:"preferences", id:cw.id, ha_grants:list, confirmed:true}, b);
-    }));
-    karte.appendChild(cwAufklapp(cw, "ha", sp("Home-Assistant-Dauerfreigaben",
-      "Home Assistant standing permissions"), ha));
-  }
   if (cw.schedule?.kind){
     const schedule = cwElement("div", ""), rhythm = cwElement("select", "");
     rhythm.setAttribute("aria-label", sp("Rhythmus", "Schedule"));
@@ -8518,7 +8512,7 @@ function coworkerKarte(cw, d){
   if (cw.notes){
     // Stammen sie aus einem Schritt mit fremdem Text, fragt er auch bei „Erlauben“ nach.
     if (cw.tainted) notizen.appendChild(cwElement("div", "addon-hint",
-      "Diese Notizen enthalten fremde Inhalte. Vor Änderungen fragt er nach, außer bei deinen passenden Home-Assistant-Dauerfreigaben."));
+      "Diese Notizen enthalten fremde Inhalte. Vor Änderungen fragt er nach; die begrenzte Haus-Regel „Erlauben“ gilt weiterhin."));
     const reihe = cwElement("div", "cw-knoepfe");
     reihe.appendChild(cwKnopf("Notizen löschen", "", async (b) => {
       if (await frage("Notizen löschen?", `${cw.name} fängt beim nächsten Schritt ohne sein bisheriges Gedächtnis an.`))
@@ -8532,8 +8526,26 @@ function coworkerKarte(cw, d){
   const ziel = cwElement("textarea", "");
   ziel.maxLength = 2000; ziel.value = cw.goal;
   ziel.setAttribute("aria-label", `Aufgabe von ${cw.name}`);
-  aendern.append(ziel, cwKnopf("Speichern", "primary",
-    (b) => coworkerTun({ action: "edit", id: cw.id, goal: ziel.value }, b)));
+  const takt = cwElement("select", "cw-rhythmus");
+  takt.setAttribute("aria-label", sp("Rhythmus", "Frequency"));
+  for (const [value, de, en] of [
+    [0, cw.schedule?.kind ? "Bisheriger Zeitplan" : "Automatisch",
+      cw.schedule?.kind ? "Existing schedule" : "Automatic"],
+    [30, "Alle 30 Sekunden", "Every 30 seconds"], [60, "Jede Minute", "Every minute"],
+    [300, "Alle 5 Minuten", "Every 5 minutes"], [600, "Alle 10 Minuten", "Every 10 minutes"],
+    [1200, "Alle 20 Minuten", "Every 20 minutes"], [3600, "Jede Stunde", "Every hour"],
+    [14400, "Alle 4 Stunden", "Every 4 hours"], [86400, "Einmal täglich", "Once daily"]]){
+    const opt = cwElement("option", "", sp(de, en)); opt.value = value; takt.appendChild(opt);
+  }
+  takt.value = cw.interval_seconds || 0;
+  const taktLabel = cwElement("label", "block", sp("Rhythmus", "Frequency"));
+  taktLabel.appendChild(takt);
+  aendern.append(ziel, taktLabel, cwElement("p", "note", sp(
+    "Der nächste Lauf beginnt nach diesem Abstand zum Ende des letzten Laufs. Laufzeit und Warteschlange können ihn verzögern. Tages- und Kontingentgrenzen gelten weiterhin; häufige Recherchen bleiben im selben Chat.",
+    "The interval starts when the previous run finishes. Run time and queued work may delay it. Daily and usage limits still apply; frequent research stays in the same chat.")),
+    cwKnopf("Speichern", "primary", (b) => coworkerTun({
+      action: "edit", id: cw.id, goal: ziel.value, interval_seconds: Number(takt.value),
+    }, b)));
   karte.appendChild(cwAufklapp(cw, "aufgabe", "Aufgabe ändern", aendern));
   return karte;
 }
@@ -8742,7 +8754,7 @@ function addonKonto(a){
     if (k.tokens) zeilen.push(`Tokens frei: ${zahl(k.tokens.remaining)} von ${zahl(k.tokens.limit)} je ${k.tokens.per}`);
     if ((k.models || []).length) zeilen.push(`Modelle: ${k.models.join(", ")}`);
     if (k.note) zeilen.push(k.note);
-    if (k.warning) zeilen.push("⚠ " + k.warning);
+    if (k.warning) zeilen.push("" + k.warning);
     if (k.checked) zeilen.push(`Stand: ${k.checked}`);
     info.textContent = zeilen.join("\n");
     reihe.appendChild(knopf("Aktualisieren", "", (b) =>
@@ -8814,7 +8826,7 @@ function bildNeu(){
   bild.onerror = () => {
     bild.hidden = true; leer.hidden = false;
     leer.textContent = "Die virtual machine läuft gerade nicht. Öffne oben eine Adresse — oder "
-      + "starte eine Login-App über 🧩 Add-ons → Anmelden.";
+      + "starte eine Login-App über Add-ons → Anmelden.";
   };
   bild.src = "/api/werkstatt/bildschirm?leise=1&t=" + Date.now();
 }
@@ -10292,7 +10304,7 @@ async function kopfNeuZeichnen(){
     // staerkste), "Auto · ..." bei automatischer Wahl und die Statuszeile:
     // alles fertig vom Server (aquaticy/webview.py).
     currentModel = kopf.model || "";
-    flash($("#model-name"), imageMode ? "🎨 Bilderstellung" : (kopf.model_label || "Modell wählen"));
+    flash($("#model-name"), imageMode ? "Bilderstellung" : (kopf.model_label || "Modell wählen"));
     flash($("#status"), kopf.status || "");
     $("#status").title = kopf.status_title || "";
   } catch { /* Server weg -- die Oberflaeche bleibt trotzdem bedienbar */ }

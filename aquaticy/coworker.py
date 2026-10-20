@@ -57,6 +57,7 @@ MIN_SLEEP_MINUTES = {"pro": 15, "ultra": 5}
 #: Hoechstens so viele Arbeitsschritte je Coworker und Tag.
 DAILY_RUNS = {"pro": 48, "ultra": 288}
 DEFAULT_SLEEP_MINUTES = 60
+INTERVAL_SECONDS = (0, 30, 60, 300, 600, 1200, 3600, 14400, 86400)
 MAX_SLEEP_MINUTES = 7 * 24 * 60
 MAX_SCHEDULED = 20
 #: Nach dem Kontingent oder einem Fehler: so lange Pause (Minuten).
@@ -100,9 +101,8 @@ CATEGORIES: tuple[Kategorie, ...] = (
     Kategorie("speicher", "Sich etwas dauerhaft merken", ("save_memory",)),
     Kategorie("lager", "Die Lagerverwaltung ändern", ("storage_add", "storage_edit"),
               ultra=True),
-    # Im Haus schalten und das Heimnetz abfragen laesst sich nicht blind erlauben.
-    Kategorie("zuhause", "Im Haus etwas schalten", ("ha_call",),
-              options=("fragen", "sperren"), ultra=True),
+    # Erlauben gilt im Haus nur fuer die eng begrenzten risikoarmen Schaltaktionen.
+    Kategorie("zuhause", "Im Haus etwas schalten", ("ha_call",), ultra=True),
     Kategorie("heimnetz", "Das Heimnetz abfragen", ("lan_scan", "lan_check"),
               options=("fragen", "sperren"), ultra=True),
     Kategorie("werkstatt", "In seiner virtual machine arbeiten",
@@ -151,6 +151,9 @@ CREATE TABLE IF NOT EXISTS coworkers (
     notes_limit INTEGER NOT NULL DEFAULT 6000,
     notes_version INTEGER NOT NULL DEFAULT 0,
     ha_grants   TEXT    NOT NULL DEFAULT '[]',
+    ha_binding  TEXT    NOT NULL DEFAULT '',
+    interval_seconds INTEGER NOT NULL DEFAULT 0,
+    timing_version INTEGER NOT NULL DEFAULT 0,
     legacy_job_id INTEGER
 );
 CREATE TABLE IF NOT EXISTS coworker_log (
@@ -215,7 +218,9 @@ class Coworker:
     sharing_coworkers: bool = False
     notes_version: int = 0
     notes_limit: int = MAX_NOTES
-    ha_grants: list[dict[str, str]] = field(default_factory=list)
+    ha_binding: str = ""
+    interval_seconds: int = 0
+    timing_version: int = 0
 
     def rule(self, key: str) -> str:
         return clean_rules(self.rules).get(key, "fragen")
@@ -279,6 +284,12 @@ class CoworkerStore:
                 ("notes_version", "ALTER TABLE coworkers ADD COLUMN notes_version INTEGER "
                  "NOT NULL DEFAULT 0"),
                 ("legacy_job_id", "ALTER TABLE coworkers ADD COLUMN legacy_job_id INTEGER"),
+                ("ha_binding", "ALTER TABLE coworkers ADD COLUMN ha_binding TEXT NOT NULL "
+                 "DEFAULT ''"),
+                ("interval_seconds", "ALTER TABLE coworkers ADD COLUMN interval_seconds INTEGER "
+                 "NOT NULL DEFAULT 0"),
+                ("timing_version", "ALTER TABLE coworkers ADD COLUMN timing_version INTEGER "
+                 "NOT NULL DEFAULT 0"),
             )
             for name, statement in changes:
                 if name not in spalten:
@@ -292,6 +303,10 @@ class CoworkerStore:
                          "ON coworkers(legacy_job_id) WHERE legacy_job_id IS NOT NULL")
             self._migrate_jobs(conn)
             self._seal_existing(conn)
+            if not conn.execute("SELECT 1 FROM coworker_privacy WHERE version = 3").fetchone():
+                # Die entfernten Einzelfreigaben niemals in eine breitere Regel umdeuten.
+                conn.execute("UPDATE coworkers SET ha_grants = ''")
+                conn.execute("INSERT INTO coworker_privacy VALUES (3)")
             conn.commit()
             if not conn.execute("SELECT 1 FROM coworker_privacy WHERE version = 2").fetchone():
                 conn.execute("VACUUM")
@@ -400,7 +415,7 @@ class CoworkerStore:
             regeln = json.loads(row["rules"] or "{}")
         except ValueError:
             regeln = {}
-        from aquaticy.coworker_context import NOTE_LIMITS, clean_grants
+        from aquaticy.coworker_context import NOTE_LIMITS
 
         try:
             schedule = json.loads(self._open(row["schedule"], "coworkers.schedule") or "{}")
@@ -408,11 +423,6 @@ class CoworkerStore:
                 schedule = {}
         except ValueError:
             schedule = {}
-        try:
-            grants = clean_grants(json.loads(self._open(row["ha_grants"],
-                                                       "coworkers.ha_grants") or "[]"))
-        except ValueError:
-            grants = []
         goal = self._open(row["goal"], "coworkers.goal")
         return Coworker(
             id=int(row["id"]), name=self._open(row["name"], "coworkers.name"),
@@ -431,7 +441,10 @@ class CoworkerStore:
             sharing_coworkers=bool(row["sharing_coworkers"]),
             notes_version=int(row["notes_version"] or 0),
             notes_limit=row["notes_limit"] if row["notes_limit"] in NOTE_LIMITS else MAX_NOTES,
-            ha_grants=grants,
+            ha_binding=str(row["ha_binding"] or ""),
+            interval_seconds=row["interval_seconds"] if row["interval_seconds"] in
+            INTERVAL_SECONDS else 0,
+            timing_version=int(row["timing_version"] or 0),
         )
 
     # -- Coworker ------------------------------------------------------------------
@@ -492,19 +505,29 @@ class CoworkerStore:
         return self._row(row)
 
     def update(self, coworker_id: int, *, name: str | None = None, goal: str | None = None,
-               avatar: str | None = None) -> Coworker | None:
-        cw = self.get(coworker_id)
+               avatar: str | None = None, interval_seconds: int | None = None) -> Coworker | None:
+        from aquaticy.coworker_schedule import next_time
+
+        if interval_seconds is not None and (type(interval_seconds) is not int
+                                             or interval_seconds not in INTERVAL_SECONDS):
+            raise CoworkerError("Bitte einen angebotenen Rhythmus auswählen.")
         felder: dict[str, Any] = {}
         if name is not None:
             felder["name"] = " ".join(_clean_text(name, 200).split())[:MAX_NAME] or "Coworker"
         if goal is not None:
             aufgabe = _clean_text(goal, MAX_GOAL)
-            if len(aufgabe) < (1 if cw and cw.schedule else 8):
-                raise CoworkerError("Beschreib die Aufgabe in ein, zwei Sätzen.")
             felder["goal"] = aufgabe
         if avatar is not None and avatar in AVATARS:
             felder["avatar"] = avatar
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM coworkers WHERE id = ?",
+                               (int(coworker_id),)).fetchone()
+            if row is None:
+                return None
+            cw = self._row(row)
+            if "goal" in felder and len(felder["goal"]) < (1 if cw.schedule else 8):
+                raise CoworkerError("Beschreib die Aufgabe in ein, zwei Sätzen.")
             for spalte, wert in felder.items():
                 if spalte == "name":
                     conn.execute("UPDATE coworkers SET name = ? WHERE id = ?",
@@ -515,10 +538,22 @@ class CoworkerStore:
                 elif spalte == "avatar":
                     conn.execute("UPDATE coworkers SET avatar = ? WHERE id = ?",
                                  (wert, int(coworker_id)))
+            if interval_seconds is not None and interval_seconds != cw.interval_seconds:
+                wake = time.time() + (interval_seconds or DEFAULT_SLEEP_MINUTES * 60)
+                if not interval_seconds and cw.schedule:
+                    wake = next_time(cw.schedule["rhythm"], cw.schedule["hour"],
+                                     cw.schedule["minute"], cw.schedule["weekday"])
+                conn.execute("UPDATE coworkers SET interval_seconds = ?, next_wake = ?,"
+                             " timing_version = timing_version + 1, wake_reason = ? WHERE id = ?",
+                             (interval_seconds, max(wake, cw.hold_until),
+                              "Rhythmus geändert", cw.id))
         return self.get(coworker_id)
 
-    def set_rules(self, coworker_id: int, werte: Any) -> dict[str, str]:
+    def set_rules(self, coworker_id: int, werte: Any, *, settings: Any = None,
+                  ultra: bool = False) -> dict[str, str]:
         """Setzt Regeln. Nur bekannte Kategorien, nur erlaubte Werte."""
+        from aquaticy.coworker_context import connection_key
+
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT * FROM coworkers WHERE id = ?",
@@ -535,14 +570,22 @@ class CoworkerStore:
                 if kat is None or str(wert) not in kat.options:
                     raise CoworkerError(f"'{wert}' gibt es bei '{key}' nicht.")
                 neu[kat.key] = str(wert)
-            conn.execute("UPDATE coworkers SET rules = ? WHERE id = ?",
-                         (json.dumps(neu), int(coworker_id)))
+            binding = cw.ha_binding
+            if "zuhause" in werte:
+                binding = ""
+                if neu["zuhause"] == "erlauben":
+                    binding = connection_key(settings)
+                    if not ultra or not binding:
+                        raise CoworkerError("Erlauben braucht Ultra und eine verbundene, zum "
+                                            "Schalten freigegebene Home-Assistant-Verbindung.")
+            conn.execute("UPDATE coworkers SET rules = ?, ha_binding = ? WHERE id = ?",
+                         (json.dumps(neu), binding, int(coworker_id)))
         return neu
 
     def set_preferences(self, coworker_id: int, values: dict[str, Any], *,
                         settings: Any = None, ultra: bool = False) -> None:
         """Nur der authentifizierte Besitzer setzt diese Werte, kein Modellwerkzeug."""
-        from aquaticy.coworker_context import NOTE_LIMITS, clean_grants
+        from aquaticy.coworker_context import NOTE_LIMITS
         from aquaticy.coworker_schedule import clean_schedule, next_time
 
         with self._lock, self._connect() as conn:
@@ -558,11 +601,8 @@ class CoworkerStore:
             limit = values.get("notes_limit", cw.notes_limit)
             if type(limit) is not int or limit not in NOTE_LIMITS:
                 raise CoworkerError("Der Notizspeicher darf 6000, 12000 oder 24000 Zeichen haben.")
-            grants = cw.ha_grants
             if "ha_grants" in values:
-                if values.get("confirmed") is not True or (values["ha_grants"] and not ultra):
-                    raise CoworkerError("Dauerfreigaben brauchen Ultra und deine Bestätigung.")
-                grants = clean_grants(values["ha_grants"], settings=settings)
+                raise CoworkerError("Bitte die Regel „Im Haus etwas schalten“ verwenden.")
             timing = cw.schedule
             if "schedule" in values:
                 if not cw.schedule:
@@ -576,18 +616,19 @@ class CoworkerStore:
                                          "image_id": cw.schedule.get("image_id", ""),
                                          "image_note": cw.schedule.get("image_note", "")})
             conn.execute("UPDATE coworkers SET sharing_chats = ?, sharing_coworkers = ?,"
-                         " notes_limit = ?, ha_grants = ?, schedule = ? WHERE id = ?",
+                         " notes_limit = ?, schedule = ? WHERE id = ?",
                          (int(values.get("sharing_chats", cw.sharing_chats)),
                           int(values.get("sharing_coworkers", cw.sharing_coworkers)), limit,
-                          self._seal(json.dumps(grants), "coworkers.ha_grants"),
                           self._seal(json.dumps(timing), "coworkers.schedule"), cw.id))
             if limit < len(cw.notes):
                 conn.execute("UPDATE coworkers SET notes = ? WHERE id = ?",
                              (self._seal(cw.notes[:limit], "coworkers.notes"), cw.id))
             if "schedule" in values:
-                conn.execute("UPDATE coworkers SET next_wake = ?, hold_until = 0 WHERE id = ?",
-                             (next_time(timing["rhythm"], timing["hour"], timing["minute"],
-                                        timing["weekday"]), cw.id))
+                conn.execute("UPDATE coworkers SET next_wake = ?, interval_seconds = 0,"
+                             " timing_version = timing_version + 1 WHERE id = ?",
+                             (max(cw.hold_until, next_time(timing["rhythm"], timing["hour"],
+                                                          timing["minute"], timing["weekday"])),
+                              cw.id))
 
     def set_image_note(self, coworker_id: int, text: str) -> None:
         with self._lock, self._connect() as conn:
@@ -639,24 +680,34 @@ class CoworkerStore:
 
     def note_run(self, coworker_id: int, *, state: str, notes: str | None,
                  next_wake: float, reason: str, tainted: bool | None = None,
-                 chat: str = "", notes_version: int | None = None) -> None:
+                 chat: str = "", notes_version: int | None = None,
+                 timing_version: int | None = None) -> None:
         """Haelt das Ende eines Arbeitsschritts fest."""
         heute = _today()
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute(
-                "SELECT runs_day, runs_today, notes_limit, notes_version FROM coworkers"
+                "SELECT runs_day, runs_today, notes_limit, notes_version, interval_seconds,"
+                " timing_version, next_wake, hold_until FROM coworkers"
                 " WHERE id = ?",
                 (int(coworker_id),),
             ).fetchone()
             if row is None:
                 return
+            if row["interval_seconds"] in INTERVAL_SECONDS and row["interval_seconds"]:
+                next_wake = time.time() + row["interval_seconds"]
+                reason = "gewählter Rhythmus"
+            elif timing_version is not None and timing_version != row["timing_version"]:
+                next_wake = row["next_wake"]
+                reason = "Rhythmus geändert"
+            next_wake = max(next_wake, row["hold_until"])
             heute_schon = int(row["runs_today"] or 0) if row["runs_day"] == heute else 0
             conn.execute(
                 "UPDATE coworkers SET last_run = ?, last_state = ?, next_wake = ?,"
                 " wake_reason = ?, runs = runs + 1, runs_day = ?, runs_today = ?,"
-                " hold_until = 0 WHERE id = ?",
+                " hold_until = ? WHERE id = ?",
                 (time.time(), str(state)[:300], float(next_wake), str(reason)[:200], heute,
-                 heute_schon + 1, int(coworker_id)))
+                 heute_schon + 1, max(0, row["hold_until"]), int(coworker_id)))
             same_notes = notes_version is None or notes_version == row["notes_version"]
             if notes is not None and same_notes:
                 conn.execute("UPDATE coworkers SET notes = ? WHERE id = ?",
@@ -1042,9 +1093,9 @@ class Session:
             self.sleep_minutes = minuten
             self.sleep_reason = _clean_text(arguments.get("grund"), 200)
             return {"ok": True}
-        if ((name in FORBIDDEN and not (name == "inspect_public_visual"
-                and aktuell.schedule.get("kind") == "visual")) or (name == "research_subtasks"
-                and aktuell.schedule.get("kind") == "research")) or name.startswith("desktop_"):
+        special = ((name == "inspect_public_visual" and aktuell.schedule.get("kind") == "visual")
+                   or (name == "research_subtasks" and aktuell.schedule.get("kind") == "research"))
+        if (name in FORBIDDEN and not special) or name.startswith("desktop_"):
             return {"error": "Dieses Werkzeug gibt es für Coworker nicht."}
         kat = CATEGORY_OF.get(name)
         if kat is None:
@@ -1056,10 +1107,11 @@ class Session:
         if regel == "sperren" or (kat.key == "werkstatt" and not self.vm):
             return {"error": f"„{kat.label}“ hat der Nutzer für Coworker gesperrt.",
                     "gesperrt": True}
-        if name == "ha_call" and self.ha_approved(toolbox, arguments):
-            return None
-        if regel == "erlauben" and (kat.key == "werkstatt"
-                                    or not getattr(toolbox, "untrusted_seen", False)):
+        if name == "ha_call":
+            if self.ha_approved(toolbox, arguments):
+                return None
+        elif regel == "erlauben" and (kat.key == "werkstatt"
+                                     or not getattr(toolbox, "untrusted_seen", False)):
             return None
         # Fragen -- oder erlaubt, aber nach fremdem Text: dann entscheidet der Mensch.
         try:
@@ -1095,8 +1147,8 @@ class Session:
             same_connection
             and cw
             and cw.enabled
-            and cw.rule("zuhause") != "sperren"
-            and permits(cw.ha_grants, arguments, settings, ultra=plan == "ultra")
+            and cw.rule("zuhause") == "erlauben"
+            and permits(cw.ha_binding, arguments, settings, ultra=plan == "ultra")
         )
 
     def _report(self, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1432,7 +1484,7 @@ def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
     store.note_run(cw.id, state=zustand, notes=session.notes,
                    next_wake=time.time() + minuten * 60, reason=grund,
                    tainted=cw.tainted or (session.notes is not None and fremd),
-                   notes_version=cw.notes_version)
+                   notes_version=cw.notes_version, timing_version=cw.timing_version)
     return zustand
 
 
@@ -1442,11 +1494,18 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
     """Fester Zeitplan mit denselben Werkzeugregeln wie jeder andere Coworker."""
     from aquaticy import coworker_schedule as schedule
     from aquaticy.coworker_context import relevant_context
+    from aquaticy.guardrails import UNAVAILABLE
 
     current = store.get(cw.id)
     if current is None or not current.enabled:
         return "angehalten"
     cw = current
+    if cw.interval_seconds and cw.schedule.get("kind") == "research" and \
+            store.runs_today(cw) >= DAILY_RUNS.get(plan, 48):
+        bis_morgen = (datetime.fromtimestamp(time.time()).replace(hour=23, minute=59)
+                      .timestamp() - time.time()) / 60 + 2
+        store.postpone(cw.id, max(5.0, bis_morgen), "Tagespensum erreicht — morgen geht es weiter")
+        return "Tagespensum erreicht"
     session = Session(store=store, cw=cw, vm=False, plan=plan, cancelled=cancelled,
                       current_plan=current_plan, current_settings=current_settings)
     context = relevant_context(cw, store, settings)
@@ -1481,7 +1540,8 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
     callback = (lambda job, payload: on_abuse(cw, payload)) if on_abuse is not None else None
     state, chat = schedule.run_job(schedule.JobStore._row(cw), settings,
                                    on_abuse=callback, agent_factory=factory,
-                                   context=intro, active=alive)
+                                   context=intro, active=alive,
+                                   chat_id=cw.chat if cw.interval_seconds else "")
     if not alive():
         return "angehalten"
     store.mark_read([n["id"] for n in messages])
@@ -1495,9 +1555,13 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
                    reason="Zeitplan", next_wake=schedule.next_time(
                        job.rhythm, job.hour, job.minute, job.weekday),
                    tainted=cw.tainted or (session.notes is not None and bool(box)
-                                         and box[0].untrusted_seen), notes_version=cw.notes_version)
+                                         and box[0].untrusted_seen), notes_version=cw.notes_version,
+                   timing_version=cw.timing_version)
     if state == "erfüllt" or state.startswith(schedule.GUARD_STATE):
         store.disable(cw.id, state)
+    elif state in (schedule.TOKEN_LIMIT_STATE, UNAVAILABLE) or state.startswith("Fehler:"):
+        # Auch ein sehr kurzer Rhythmus darf nicht gegen Kontingent/Fehler anlaufen.
+        store.postpone(cw.id, RETRY_MINUTES, state)
     return state
 
 
@@ -1577,8 +1641,7 @@ def view(store: CoworkerStore, cw: Coworker, *, log_limit: int = 25) -> dict[str
         "schedule": timing,
         "sharing_chats": cw.sharing_chats, "sharing_coworkers": cw.sharing_coworkers,
         "notes_limit": cw.notes_limit,
-        "ha_grants": [{k: v for k, v in grant.items() if k != "connection"}
-                      for grant in cw.ha_grants],
+        "interval_seconds": cw.interval_seconds,
         "created_at": cw.created_at, "next_wake": cw.next_wake, "wake_reason": cw.wake_reason,
         "last_run": cw.last_run, "last_state": cw.last_state, "runs": cw.runs,
         "runs_today": store.runs_today(cw), "chat": cw.chat, "tainted": cw.tainted,
