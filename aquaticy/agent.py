@@ -1472,6 +1472,11 @@ class Agent:
         self.guard: Guard | None = getattr(self.toolbox, "guard", None)
         if self.guard is None and settings.legal_guard:
             self.guard = Guard(settings)
+        if self.guard is not None:
+            # Fallen Haupt- und schnelles Modell aus (lokal, Ollama aus), prueft das
+            # Modell, mit dem der Chat gerade arbeitet -- etwa eins ueber den
+            # API-Schluessel (12.2.2 Sol). Bis dahin lehnte die Pruefung dann ab.
+            self.guard.fallback = self._guard_models
         #: Die letzte Absage nach dem Rechtsrahmen in diesem Chat (9.5.25):
         #: (Frage, Urteil). Ein "bitte" oder Draengen danach bleibt abgelehnt.
         self._absage: tuple[str, Any] | None = None
@@ -2650,6 +2655,17 @@ class Agent:
             "beruecksichtigen ohne es aufzuzaehlen):\n"
             + "\n".join(f"- {line}" for line in lines[:8])
         )
+
+    def _guard_models(self) -> list[str]:
+        """Womit der Chat in diesem Durchlauf wirklich arbeitet -- fuer den Rechtspruefer.
+
+        Das Modell dieses Durchlaufs (Pro und Code: das staerkste, sonst das
+        gewaehlte oder automatisch gewaehlte) und, im Code-Modus, das Code-Modell.
+        """
+        modelle = [self.active_model]
+        if clean_mode(self.mode) == "code":
+            modelle.append(str(getattr(self.settings, "code_model", "") or ""))
+        return [m for m in modelle if m]
 
     def _auto_choose(self, question: str) -> None:
         """Automatische Modellwahl -- ohne Modellaufruf, vor der ersten Runde.

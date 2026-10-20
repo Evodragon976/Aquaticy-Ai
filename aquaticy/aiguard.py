@@ -1789,14 +1789,31 @@ def judge_prompt(text: str, context: str = "") -> str:
 
 
 def _ask_model(prompt: str, settings: Settings) -> str:
-    """Ein Aufruf beim schnellen Modell -- die einzige Stelle mit Netz."""
+    """Ein Aufruf beim schnellen Modell -- die einzige Stelle mit Netz.
+
+    Faellt es aus (lokal, Ollama aus) und arbeitet der Chat mit einem anderen
+    Hauptmodell -- etwa ueber den API-Schluessel --, fragt Ai-guard das (12.2.2
+    Sol). Bis dahin blieb die Einschaetzung dann einfach aus.
+    """
+    modelle = list(dict.fromkeys(m for m in (_fast_model(settings),
+                                             str(getattr(settings, "model", "") or ""))
+                                 if m))
+    for nummer, model in enumerate(modelle):
+        try:
+            return _ask_one(prompt, settings, model)
+        except Exception:
+            if nummer == len(modelle) - 1:
+                raise
+    raise RuntimeError("Kein Modell für Ai-guard eingestellt.")
+
+
+def _ask_one(prompt: str, settings: Settings, model: str) -> str:
     import litellm
 
     from aquaticy import metering
     from aquaticy.pace import key_of as pace_key_of
     from aquaticy.pace import paced
 
-    model = _fast_model(settings)
     litellm.suppress_debug_info = True
     with paced(model, pace_key_of(settings, model)):
         response = metering.completion(

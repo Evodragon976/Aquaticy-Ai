@@ -48,7 +48,7 @@ from aquaticy import judgecache, metering
 from aquaticy.jsonutil import loads
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from aquaticy.config import Settings
 
@@ -623,12 +623,18 @@ def judge(
     topic: str = "",
     ask: Callable[[str, str, Settings], str] | None = None,
     baseline: bool = False,
+    fallback: Callable[[], Sequence[str]] | None = None,
 ) -> Verdict:
     """Fragt den Rechtspruefer. Im Zweifel: abgelehnt.
 
     Erst das schnelle Modell, dann das Hauptmodell. Liefert keines von
     beiden ein lesbares Urteil, ist die Anfrage abgelehnt -- siehe
     Moduldokumentation, warum das nicht andersherum sein darf.
+
+    *fallback* (12.2.2 Sol): die Modelle, mit denen der Chat gerade wirklich
+    arbeitet -- etwa ein Modell ueber den API-Schluessel, waehrend Haupt- und
+    schnelles Modell lokal sind und Ollama nicht laeuft. Erst gefragt, wenn
+    keines der beiden ein Urteil liefert; ihr Urteil wird nicht gemerkt.
     """
     if not (text or "").strip():
         return ALLOWED
@@ -653,7 +659,24 @@ def judge(
     unklar = False
     #: Ein Urteil des kleinen Modells, das erst das Hauptmodell bestaetigen muss.
     vorlaeufig: Verdict | None = None
-    for index, model in enumerate(modelle):
+    #: Ab hier stammen die Modelle aus *fallback* -- ihr Urteil wird nicht gemerkt.
+    gemerkt_bis = len(modelle)
+    index = -1
+    while True:
+        index += 1
+        if index == len(modelle):
+            ersatz: list[str] = []
+            if fallback is not None and len(modelle) == gemerkt_bis:
+                try:
+                    ersatz = [m for m in dict.fromkeys(str(m or "").strip()
+                                                       for m in fallback())
+                              if m and m not in modelle]
+                except Exception:
+                    ersatz = []
+            if not ersatz:
+                break
+            modelle.extend(ersatz)
+        model = modelle[index]
         try:
             raw = fragen(prompt, model, settings)
         except Exception:
@@ -677,7 +700,8 @@ def judge(
         # zweite, zutreffende Pruefung unterdruecken.
         if baseline:
             verdict = Guard._baseline(tool, verdict)
-        _merken(key, verdict, generation)
+        if index < gemerkt_bis:
+            _merken(key, verdict, generation)
         return verdict
     if vorlaeufig is not None:
         from aquaticy.aiguard import normalize_category
@@ -796,6 +820,9 @@ class Guard:
         self.settings = settings
         self._ask = ask
         self.baseline = baseline
+        #: Die Modelle, mit denen der Chat gerade wirklich arbeitet (12.2.2 Sol).
+        #: Setzt der Agent; gefragt erst, wenn Haupt- und schnelles Modell ausfallen.
+        self.fallback: Callable[[], Sequence[str]] | None = None
         #: Die Anfrage, um die es gerade geht. Der Pruefer liest einen
         #: Werkzeugaufruf zusammen mit ihr -- "suche Profile zu Anna Schmidt"
         #: ist bei einer Firmenrecherche etwas anderes als nach der Bitte,
@@ -805,7 +832,8 @@ class Guard:
     def check_request(self, question: str, context: str = "") -> Verdict:
         if self.baseline:
             return ALLOWED
-        return judge(question, self.settings, context=context, ask=self._ask)
+        return judge(question, self.settings, context=context, ask=self._ask,
+                     fallback=self.fallback)
 
     def check_call(self, tool: str, arguments: dict[str, Any]) -> Verdict:
         if tool not in SENSITIVE_TOOLS:
@@ -851,7 +879,8 @@ class Guard:
                        f"{len(text)} Zeichen; Auftrag {digest}. Kann Teil eines JSON sein."
                        if len(text) > JUDGE_CHARS else "")
             verdict = judge(teil, self.settings, tool=tool, topic=self.topic,
-                            context=context, ask=self._ask, baseline=self.baseline)
+                            context=context, ask=self._ask, baseline=self.baseline,
+                            fallback=self.fallback)
             from aquaticy.aiguard import normalize_category
 
             if not verdict.allowed or (verdict.abuse and normalize_category(
