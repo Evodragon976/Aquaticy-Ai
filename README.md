@@ -1,4 +1,4 @@
-# Aquaticy AI 12.2.2 Sol
+# Aquaticy AI 12.2.2 Astra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.2.2 Sol
+aquaticy --version            # 12.2.2 Astra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -1189,7 +1189,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.2.2-Sol.md).
+[Prüfbericht](TESTREPORT-12.2.2-Astra.md).
 
 ---
 

@@ -1,4 +1,4 @@
-# Aquaticy 12.2.2 Sol -- feste Abhaengigkeiten fuer reproduzierbare Builds.
+# Aquaticy 12.2.2 Astra -- feste Abhaengigkeiten fuer reproduzierbare Builds.
 #
 # Reproduzierbar installieren:
 #   pip install -c constraints.txt -e ".[browser,dev]"

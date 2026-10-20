@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import threading
 import time
@@ -46,6 +47,8 @@ from typing import TYPE_CHECKING, Any
 
 from aquaticy import judgecache, metering
 from aquaticy.jsonutil import loads
+
+LOG = logging.getLogger("aquaticy.guardrails")
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -564,6 +567,42 @@ def parse_verdict(raw: str, *, require_abuse: bool = False,
                    abuse_severity=schwere)
 
 
+#: Fehler, nach denen ein zweiter Versuch ohne erzwungenes Schema nichts aendert:
+#: Modell nicht erreichbar, Schluessel abgelehnt, Zeit abgelaufen, Grenze erreicht.
+_NOCHMAL_SINNLOS = ("Timeout", "Connection", "Authentication", "PermissionDenied",
+                    "RateLimit", "NotFound", "ServiceUnavailable", "QuotaExceeded")
+
+
+def schema_retry_useful(exc: BaseException) -> bool:
+    """Lohnt ein zweiter Versuch ohne ``response_format``? (12.2.2 Astra)
+
+    Manche Anbieter oder Modelle nehmen das erzwungene JSON-Schema nicht an und
+    antworten mit 400/422. Dann fragt der Pruefer dasselbe Modell noch einmal
+    ohne Schema -- der Prompt verlangt ohnehin reines JSON.
+    """
+    name = type(exc).__name__
+    return not any(teil in name for teil in _NOCHMAL_SINNLOS)
+
+
+def error_text(exc: BaseException, settings: Any, model: str) -> str:
+    """Der Fehler eines Pruefaufrufs fuer Absage und Protokoll -- ohne Geheimnisse.
+
+    Schluessel (eigene und gestellte), "Bearer ..." und Adressen fallen heraus:
+    die Absage sieht jedes Konto, die Adresse eines Servers geht es nichts an.
+    """
+    text = " ".join(str(exc).split())
+    try:
+        geheim = list(settings.secrets())
+    except Exception:
+        geheim = []
+    for wert in geheim:
+        text = text.replace(wert, "***")
+    text = re.sub(r"(?i)\b(bearer|api[_-]?key|key|token)([\s=:\"']+)[^\s,;\"']+", r"\1\2***",
+                  text)
+    text = re.sub(r"https?://\S+", "<Adresse>", text).replace("`", "'")
+    return f"{model}: {type(exc).__name__}: {text}"[:240]
+
+
 def _ask_model(prompt: str, model: str, settings: Settings) -> str:
     """Ein Aufruf beim Modell -- die einzige Stelle mit Netz in diesem Modul."""
     import litellm
@@ -572,22 +611,31 @@ def _ask_model(prompt: str, model: str, settings: Settings) -> str:
     from aquaticy.pace import paced
 
     litellm.suppress_debug_info = True
-    with paced(model, pace_key_of(settings, model)):
-        response = metering.completion(
-            settings,
-            enforce=False,
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=160,
-            # Grosszuegiger als der Planer: ein lokales Modell, das erst
-            # geladen wird, soll nicht zu einer Absage werden.
-            timeout=max(15.0, float(settings.planner_timeout) * 2),
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "urteil", "schema": JUDGE_SCHEMA},
-            },
-            **settings.fast_kwargs_for(model),
-        )
+    schema = {"type": "json_schema", "json_schema": {"name": "urteil", "schema": JUDGE_SCHEMA}}
+
+    def aufruf(**extra: Any) -> Any:
+        with paced(model, pace_key_of(settings, model)):
+            return metering.completion(
+                settings,
+                enforce=False,
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=160,
+                # Grosszuegiger als der Planer: ein lokales Modell, das erst
+                # geladen wird, soll nicht zu einer Absage werden.
+                timeout=max(15.0, float(settings.planner_timeout) * 2),
+                **extra,
+                **settings.fast_kwargs_for(model),
+            )
+
+    try:
+        response = aufruf(response_format=schema)
+    except Exception as exc:
+        if not schema_retry_useful(exc):
+            raise
+        LOG.warning("Rechtsprüfung: %s -- nochmal ohne Schema",
+                    error_text(exc, settings, model))
+        response = aufruf()
     return str(response.choices[0].message.content or "").strip()
 
 
@@ -657,6 +705,7 @@ def judge(
     fragen = ask or _ask_model
     prompt = judge_prompt(text, context=context, tool=tool, topic=topic)
     unklar = False
+    fehler = ""
     #: Ein Urteil des kleinen Modells, das erst das Hauptmodell bestaetigen muss.
     vorlaeufig: Verdict | None = None
     #: Ab hier stammen die Modelle aus *fallback* -- ihr Urteil wird nicht gemerkt.
@@ -679,7 +728,11 @@ def judge(
         model = modelle[index]
         try:
             raw = fragen(prompt, model, settings)
-        except Exception:
+        except Exception as exc:
+            # Was schiefging, steht in Protokoll und Absage (12.2.2 Astra) -- bis dahin
+            # hiess es nur "hat nicht geantwortet", und niemand wusste, warum.
+            fehler = error_text(exc, settings, model)
+            LOG.warning("Rechtsprüfung: %s", fehler)
             continue
         verdict = parse_verdict(raw, require_abuse=tool in BASELINE_VM_TOOLS,
                                 require_rule=baseline and tool == "create_image")
@@ -717,7 +770,7 @@ def judge(
     if unklar:
         return Verdict(False, GENERIC, "Die Prüfung hat keine eindeutige Antwort ergeben.",
                        "unklar")
-    return Verdict(False, GENERIC, "Das Modell für die Prüfung hat nicht geantwortet.",
+    return Verdict(False, GENERIC, fehler or "Das Modell für die Prüfung hat nicht geantwortet.",
                    "ausfall")
 
 
@@ -744,11 +797,16 @@ def refusal_text(verdict: Verdict, language: str = "de") -> str:
 def _refusal_de(verdict: Verdict) -> str:
     rule = verdict.rule or GENERIC
     if verdict.source == "ausfall":
-        return (
+        text = (
             "Ich konnte die Anfrage gerade nicht gegen den Rechtsrahmen prüfen — das "
             "Modell für die Prüfung hat nicht geantwortet. Solange das nicht geht, "
             "bearbeite ich sie nicht. Versuch es gleich noch einmal."
         )
+        # Der Grund, wenn einer bekannt ist (12.2.2 Astra) -- ohne Schluessel und Adressen.
+        if verdict.reason and verdict.reason != "Das Modell für die Prüfung hat nicht " \
+                "geantwortet.":
+            text += f"\n\nFehler: `{verdict.reason}`"
+        return text
     if verdict.source == "unklar":
         return (
             "Die Prüfung gegen den Rechtsrahmen hat keine eindeutige Antwort ergeben — "

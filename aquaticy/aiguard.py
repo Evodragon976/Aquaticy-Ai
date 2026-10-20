@@ -1811,24 +1811,35 @@ def _ask_one(prompt: str, settings: Settings, model: str) -> str:
     import litellm
 
     from aquaticy import metering
+    from aquaticy.guardrails import error_text, schema_retry_useful
     from aquaticy.pace import key_of as pace_key_of
     from aquaticy.pace import paced
 
     litellm.suppress_debug_info = True
-    with paced(model, pace_key_of(settings, model)):
-        response = metering.completion(
-            settings,
-            enforce=False,
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=120,
-            timeout=max(15.0, float(getattr(settings, "planner_timeout", 20)) * 2),
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "aiguard", "schema": JUDGE_SCHEMA},
-            },
-            **settings.fast_kwargs_for(model),
-        )
+    schema = {"type": "json_schema", "json_schema": {"name": "aiguard", "schema": JUDGE_SCHEMA}}
+
+    def aufruf(**extra: Any) -> Any:
+        with paced(model, pace_key_of(settings, model)):
+            return metering.completion(
+                settings,
+                enforce=False,
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=120,
+                timeout=max(15.0, float(getattr(settings, "planner_timeout", 20)) * 2),
+                **extra,
+                **settings.fast_kwargs_for(model),
+            )
+
+    try:
+        response = aufruf(response_format=schema)
+    except Exception as exc:
+        # Nimmt der Anbieter das Schema nicht an, ohne -- wie beim Rechtspruefer (12.2.2).
+        if not schema_retry_useful(exc):
+            LOG.warning("Ai-guard: %s", error_text(exc, settings, model))
+            raise
+        LOG.warning("Ai-guard: %s -- nochmal ohne Schema", error_text(exc, settings, model))
+        response = aufruf()
     return str(response.choices[0].message.content or "").strip()
 
 
