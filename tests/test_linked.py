@@ -122,7 +122,7 @@ def test_picker_and_roles_only_for_own_linked_keys(tmp_path: Path) -> None:
         {"id": "mistral/mistral-large-latest", "label": "Large"},
         {"id": "mistral/mistral-small-latest"}]})
     linked.save(tmp_path, "nvidia_nim", {"models": [
-        {"id": "nvidia_nim/meta/llama-3.3-70b-instruct"}]})
+        {"id": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"}]})
     # NVIDIA ist ausgelesen, aber der Schluessel gehoert nicht dem Konto.
     s = _settings(tmp_path, {"MISTRAL_API_KEY": "k1"})
     assert {m["id"] for m in linked.picker_models(s)} == {
@@ -131,14 +131,15 @@ def test_picker_and_roles_only_for_own_linked_keys(tmp_path: Path) -> None:
     beide = _settings(tmp_path, {"MISTRAL_API_KEY": "k1", "NVIDIA_NIM_API_KEY": "k2"})
     arbeiter, pruefer = linked.council_roles(beide)
     assert arbeiter == [("mistral", "mistral/mistral-large-latest")]
-    assert pruefer == ("nvidia_nim", "nvidia_nim/meta/llama-3.3-70b-instruct"), "der letzte prueft"
+    assert pruefer == ("nvidia_nim", "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"), \
+        "der letzte prueft"
 
 
 def test_council_iterates_until_the_judge_agrees(tmp_path: Path,
                                                  monkeypatch: pytest.MonkeyPatch) -> None:
     linked.save(tmp_path, "mistral", {"models": [{"id": "mistral/mistral-large-latest"}]})
     linked.save(tmp_path, "nvidia_nim", {"models": [
-        {"id": "nvidia_nim/meta/llama-3.3-70b-instruct"}]})
+        {"id": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"}]})
     s = _settings(tmp_path, {"MISTRAL_API_KEY": "a", "NVIDIA_NIM_API_KEY": "b"})
     urteile = iter(['{"ok": false, "feedback": "Zahl prüfen"}', '{"ok": true}'])
     aufrufe: list[tuple[str, str]] = []
@@ -159,7 +160,8 @@ def test_council_iterates_until_the_judge_agrees(tmp_path: Path,
     assert [e["ok"] for e in urteile_gesehen] == [False, True], "zweite Runde nach Einwand"
     bearbeiter = {m for m, sys in aufrufe if sys.startswith(linked.WORKER_PROMPT[:20])}
     assert bearbeiter == {"mistral/mistral-large-latest"}
-    assert ("nvidia_nim/meta/llama-3.3-70b-instruct", linked.CHECK_PROMPT[:20]) in aufrufe
+    assert ("nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            linked.CHECK_PROMPT[:20]) in aufrufe
     assert aufrufe[-1][0] == s.model, "der Richter ist das Hauptmodell"
 
 
@@ -172,7 +174,7 @@ def test_council_reports_judge_failure_as_unverified(tmp_path: Path,
                                                      monkeypatch: pytest.MonkeyPatch) -> None:
     linked.save(tmp_path, "mistral", {"models": [{"id": "mistral/mistral-large-latest"}]})
     linked.save(tmp_path, "nvidia_nim", {"models": [
-        {"id": "nvidia_nim/meta/llama-3.3-70b-instruct"}]})
+        {"id": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"}]})
     s = _settings(tmp_path, {"MISTRAL_API_KEY": "a", "NVIDIA_NIM_API_KEY": "b"})
     verdicts: list[bool] = []
     final_request: list[str] = []
@@ -197,7 +199,7 @@ def test_stopped_council_makes_no_further_model_call(tmp_path: Path,
 
     linked.save(tmp_path, "mistral", {"models": [{"id": "mistral/mistral-large-latest"}]})
     linked.save(tmp_path, "nvidia_nim", {"models": [
-        {"id": "nvidia_nim/meta/llama-3.3-70b-instruct"}]})
+        {"id": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"}]})
     s = _settings(tmp_path, {"MISTRAL_API_KEY": "a", "NVIDIA_NIM_API_KEY": "b"})
     stop = threading.Event()
     stop.set()

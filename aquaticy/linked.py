@@ -297,15 +297,19 @@ def linked_providers(settings: Any) -> list[str]:
 
 def picker_models(settings: Any) -> list[dict[str, str]]:
     """Die verknuepften Modelle fuer die Modellauswahl."""
+    from aquaticy.system import provider_models
+
     stand = load(settings.data_dir)
     out: list[dict[str, str]] = []
     for provider in linked_providers(settings):
         d = PROVIDERS[provider]
-        for m in (stand.get(provider) or {}).get("models", []):
-            mid = str(m.get("id", ""))
-            if not mid.startswith(d["prefix"]):
-                continue
-            out.append({"id": mid, "label": str(m.get("label") or mid.split("/", 1)[1]),
+        info = stand.get(provider)
+        models = info.get("models") if isinstance(info, dict) else None
+        if not isinstance(models, list):
+            continue
+        labels = {str(m.get("id") or ""): m.get("label") for m in models if isinstance(m, dict)}
+        for mid in provider_models(settings, provider):
+            out.append({"id": mid, "label": str(labels.get(mid) or mid.split("/", 1)[1]),
                         "kind": f"{d['label']} (verknüpft)",
                         "note": f"Dein {d['company']}-Konto", "source": "own"})
     return out
@@ -319,8 +323,9 @@ _BEST = {
 
 def best_model(settings: Any, provider: str) -> str:
     """Das staerkste verknuepfte Modell eines Anbieters (fuer den Council)."""
-    modelle = [str(m.get("id", "")) for m in (load(settings.data_dir).get(provider) or {})
-               .get("models", [])]
+    from aquaticy.system import live_models
+
+    modelle = live_models(settings, provider) or []
     for muster in _BEST.get(provider, ()):
         treffer = [m for m in modelle if re.search(muster, m)]
         if treffer:
@@ -359,14 +364,31 @@ FINAL_PROMPT = (
 
 def _ask(settings: Any, model: str, system: str, user: str, *, json_mode: bool = False) -> str:
     from aquaticy import metering
+    from aquaticy.system import is_gone_error, mark_retired, replacement
 
-    kwargs = dict(settings.llm_kwargs_for(model))
-    kwargs.setdefault("timeout", 120.0)
-    kwargs.setdefault("drop_params", True)
-    if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
-    antwort = metering.completion(settings, model=model, messages=[
-        {"role": "system", "content": system}, {"role": "user", "content": user}], **kwargs)
+    model = replacement(settings, model)
+    versucht: set[str] = set()
+    while True:
+        versucht.add(model)
+        kwargs = dict(settings.llm_kwargs_for(model))
+        kwargs.setdefault("timeout", 120.0)
+        kwargs.setdefault("drop_params", True)
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        try:
+            antwort = metering.completion(settings, model=model, messages=[
+                {"role": "system", "content": system}, {"role": "user", "content": user}],
+                **kwargs)
+        except Exception as exc:
+            if not is_gone_error(exc):
+                raise
+            mark_retired(model, settings)
+            nachfolger = replacement(settings, model)
+            if nachfolger in versucht:
+                raise
+            model = nachfolger
+        else:
+            break
     return str(antwort.choices[0].message.content or "").strip()
 
 

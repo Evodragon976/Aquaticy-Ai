@@ -1,4 +1,4 @@
-# Aquaticy AI 12.2.3 Astra
+# Aquaticy AI 12.2.4 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -117,7 +117,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.2.3 Astra
+aquaticy --version            # 12.2.4 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -1017,7 +1017,11 @@ Je Anbieter wählt Aquaticy das passende Modell:
 | Code-Modus | `codestral-latest` | `qwen/qwen2.5-coder-32b-instruct` |
 
 Hat ein Anbieter ein Modell abgeschaltet (Antwort „410 Gone“), merkt Aquaticy sich das. Die
-Modellwahl zeigt dann nur noch, was der Anbieter dem Konto beim Einrichten des Add-ons genannt
+Beobachtung gilt nur für das betroffene Konto mit seinem Schlüssel und Endpunkt; Fehler
+eines Kontos sperren keine Modelle anderer Konten. Der Ersatz greift auch bei automatischer
+Modellwahl sowie im Pro- und Code-Modus. Ist eine bekannte Anbieterliste leer oder enthält
+sie keine verbleibenden nutzbaren Modelle, werden keine unbestätigten Standardmodelle ergänzt.
+Die Modellwahl zeigt nur noch, was der Anbieter dem Konto beim Einrichten des Add-ons genannt
 hat, bei NVIDIA die Nemotron-Modelle zuerst. Ein abgeschaltetes Modell ersetzt Aquaticy durch
 eines aus dieser Liste. NVIDIA hat `meta/llama-3.3-70b-instruct` und `meta/llama-3.1-8b-instruct`
 am 26.08.2026 abgeschaltet.
@@ -1195,7 +1199,7 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
 Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.2.3-Astra.md).
+[Prüfbericht](TESTREPORT-12.2.4-Luna.md).
 
 ---
 

@@ -439,7 +439,7 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
         from aquaticy.system import is_gone_error, mark_retired
 
         if isinstance(exc, Exception) and is_gone_error(exc):
-            mark_retired(modell)
+            mark_retired(modell, settings)
         raise
     rein, raus = _counted(kwargs.get("messages"), response)
     buchung.settle(rein, raus)

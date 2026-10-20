@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -76,7 +77,11 @@ RETIRED_MODELS = frozenset({
     "nvidia_nim/meta/llama-3.3-70b-instruct",
     "nvidia_nim/meta/llama-3.1-8b-instruct",
 })
-_retired_seen: set[str] = set()
+# Laufzeitbeobachtungen gehoeren zur Verbindung des Kontos, nie allen Konten.
+# Nur gehashte Bereiche; beide Ebenen sind gegen unbegrenztes Wachstum begrenzt.
+MAX_RETIRED_MODELS = 256
+MAX_RETIRED_SCOPES = 64
+_retired_seen: OrderedDict[str, OrderedDict[str, None]] = OrderedDict()
 _retired_lock = threading.Lock()
 
 #: Ersatz je Anbieter und Rolle -- nur genommen, wenn der Anbieter das Modell dem Konto
@@ -102,39 +107,71 @@ PREFERRED_MODELS: dict[tuple[str, str], tuple[str, ...]] = {
 _KLEIN = re.compile(r"nano|mini|small|\b(?:[1-9]|1[0-4])b\b|-[1-9]b-", re.IGNORECASE)
 
 
-def is_retired(model: str) -> bool:
-    """Hat der Anbieter dieses Modell abgeschaltet?"""
+def is_retired(model: str, settings: Any = None) -> bool:
+    """Bekannt abgeschaltet oder fuer genau diese Verbindung mit 410 abgelehnt."""
+    if model in RETIRED_MODELS:
+        return True
     with _retired_lock:
-        return model in RETIRED_MODELS or model in _retired_seen
+        if model not in _retired_seen or settings is None:
+            return False
+    from aquaticy.judgecache import scope
+
+    bereich = scope(settings, [model])
+    with _retired_lock:
+        return bereich is not None and bereich in _retired_seen.get(model, {})
 
 
-def mark_retired(model: str) -> None:
-    """Merkt sich ein Modell, das der Anbieter mit 410 Gone abgelehnt hat."""
-    if model:
-        with _retired_lock:
-            _retired_seen.add(model)
+def mark_retired(model: str, settings: Any) -> None:
+    """Merkt 410 nur fuer Konto, Schluessel, Endpunkt und aktuelle Modellfreigabe."""
+    from aquaticy.judgecache import scope
+
+    if not model or model in RETIRED_MODELS:
+        return
+    bereich = scope(settings, [model])
+    if bereich is None:
+        return
+    with _retired_lock:
+        verbindungen = _retired_seen.setdefault(model, OrderedDict())
+        verbindungen[bereich] = None
+        verbindungen.move_to_end(bereich)
+        _retired_seen.move_to_end(model)
+        while len(verbindungen) > MAX_RETIRED_SCOPES:
+            verbindungen.popitem(last=False)
+        while len(_retired_seen) > MAX_RETIRED_MODELS:
+            _retired_seen.popitem(last=False)
 
 
 def is_gone_error(exc: BaseException) -> bool:
     """Sagt der Fehler, dass das Modell abgeschaltet ist (410 Gone, end of life)?"""
-    if getattr(exc, "status_code", None) == 410:
-        return True
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status == 410
     text = str(exc).lower()
-    return ("410" in text and "gone" in text) or "end of life" in text \
-        or "reached its end" in text
+    return bool(re.search(r"\b410\b", text) and re.search(r"\bgone\b", text)) or bool(
+        re.search(r"\bmodel\b.{0,160}\b(?:end of life|reached its end)\b", text, re.S))
 
 
-def live_models(settings: Any, provider: str) -> list[str]:
-    """Was der Anbieter diesem Konto anbietet (seine Liste beim Einrichten), ohne Abgeschaltete."""
+def live_models(settings: Any, provider: str) -> list[str] | None:
+    """Anbieterliste ohne Abgeschaltete; None heisst unbekannt, [] bekannt leer."""
     try:
         from aquaticy import linked
 
-        stand = linked.load(settings.data_dir).get(provider) or {}
+        stand = linked.load(settings.data_dir).get(provider)
     except Exception:
+        return None
+    if stand is None:
+        return None
+    if not isinstance(stand, dict):
         return []
-    ids = [str(m.get("id") or "") for m in stand.get("models", []) or []
+    if "models" not in stand:
+        return None
+    models = stand["models"]
+    if not isinstance(models, list):
+        return []
+    ids = [str(m.get("id") or "") for m in models
            if isinstance(m, dict)]
-    return [i for i in dict.fromkeys(ids) if i.startswith(provider + "/") and not is_retired(i)]
+    return [i for i in dict.fromkeys(ids)
+            if i.startswith(provider + "/") and not is_retired(i, settings)]
 
 
 def provider_choice(settings: Any, provider: str, kind: str = "main") -> str:
@@ -146,8 +183,9 @@ def provider_choice(settings: Any, provider: str, kind: str = "main") -> str:
     tabelle = {"main": PROVIDER_MODELS, "fast": FAST_MODELS, "code": CODING_MODELS}[kind]
     wunsch = tabelle.get(provider, "")
     live = live_models(settings, provider)
-    if wunsch and not is_retired(wunsch) and (not live or wunsch in live):
+    if wunsch and not is_retired(wunsch, settings) and (live is None or wunsch in live):
         return wunsch
+    live = live or []
     for kandidat in PREFERRED_MODELS.get((provider, kind), ()):
         if kandidat in live:
             return kandidat
@@ -164,14 +202,19 @@ def replacement(settings: Any, model: str) -> str:
     Getauscht wird nur, wenn der Anbieter einen Ersatz anbietet (seine Liste). Sonst
     bleibt das Modell -- und die Fehlermeldung sagt, dass es abgeschaltet ist.
     """
-    if not model or not is_retired(model):
+    if not model or not is_retired(model, settings):
         return model
     from aquaticy.config import provider_of
 
     anbieter = provider_of(model)
     if not live_models(settings, anbieter):
         return model
-    rolle = "fast" if model in FAST_MODELS.values() or _KLEIN.search(model) else "main"
+    if model in CODING_MODELS.values() or re.search(r"coder|codestral", model, re.IGNORECASE):
+        rolle = "code"
+    elif model in FAST_MODELS.values() or _KLEIN.search(model):
+        rolle = "fast"
+    else:
+        rolle = "main"
     return provider_choice(settings, anbieter, rolle) or \
         provider_choice(settings, anbieter, "main") or model
 
@@ -431,13 +474,16 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
         return is_installed(name, _ollama_liste(settings, model_id) if installed is None
                             else installed)
     provider = provider_of(model_id)
-    if not provider or is_retired(model_id):
+    if not provider or is_retired(model_id, settings):
         # Abgeschaltet (12.2.2 Astra): beim Anklicken kaeme nur "410 Gone".
         return False
     try:
         weg = getattr(settings, "route", None)
         adresse = weg(model_id)[0] if callable(weg) else ""
         if not model_allowed(model_id, adresse):
+            return False
+        live = live_models(settings, provider)
+        if live is not None and model_id not in live:
             return False
         if adresse:
             return True
@@ -575,9 +621,30 @@ def fast_model(settings: Any) -> str:
 
     eigen = str(getattr(settings, "subagent_model", "") or "").strip()
     if eigen:
-        return eigen
+        return replacement(settings, eigen)
     anbieter = provider_of(str(getattr(settings, "model", "") or ""))
     return provider_choice(settings, anbieter, "fast") if anbieter in FAST_MODELS else ""
+
+
+def provider_models(settings: Any, provider: str) -> list[str]:
+    """Gemeinsame Auswahl fuer Hauptliste und Add-ons, hoechstens acht je Anbieter."""
+    from aquaticy.config import provider_of
+
+    current = str(getattr(settings, "model", "") or "")
+    live = live_models(settings, provider)
+    if live is not None:
+        nemotron = [i for i in live if "nemotron" in i]
+        ids = nemotron + [i for i in live if i not in nemotron]
+        if current in ids and ids.index(current) >= MAX_PICKER_MODELS:
+            ids.remove(current)
+            ids.insert(0, current)
+        return ids[:MAX_PICKER_MODELS]
+    model = provider_choice(settings, provider, "main")
+    schnell = provider_choice(settings, provider, "fast")
+    if (provider_of(current) == provider and current != schnell
+            and not is_retired(current, settings)):
+        model = current
+    return [m for m in dict.fromkeys((model, schnell)) if m]
 
 
 def available_models(settings: Any) -> list[dict[str, str]]:
@@ -626,24 +693,9 @@ def available_models(settings: Any) -> list[dict[str, str]]:
         # Nur, was der Anbieter diesem Konto wirklich anbietet und nicht abgeschaltet
         # hat (12.2.2 Astra) -- bei NVIDIA die Nemotron-Modelle vorn. Ohne Liste
         # (Schluessel des Betreibers) das Arbeitspferd und das schnelle Modell.
-        live = live_models(settings, provider)
-        if live:
-            nemotron = [i for i in live if "nemotron" in i]
-            ids = (nemotron + [i for i in live if i not in nemotron])[:MAX_PICKER_MODELS]
-            if provider_of(current) == provider and current in live and current not in ids:
-                ids.insert(0, current)
-        else:
-            model_id = provider_choice(settings, provider, "main")
-            # Laeuft gerade ein anderes Modell dieses Anbieters, ist das gemeint --
-            # ausser es ist das schnelle: dann blieb das grosse nicht mehr waehlbar
-            # (bis 9.5.34 ging es nur ueber die Einstellungen zurueck).
-            schnell = provider_choice(settings, provider, "fast")
-            if (provider_of(current) == provider and current != schnell
-                    and not is_retired(current)):
-                model_id = current
-            ids = [m for m in dict.fromkeys((model_id, schnell)) if m]
-        for model_id in ids:
-            klein = model_id == provider_choice(settings, provider, "fast")
+        schnell = provider_choice(settings, provider, "fast")
+        for model_id in provider_models(settings, provider):
+            klein = model_id == schnell
             found.append(_mit_herkunft(
                 {
                     "id": model_id,

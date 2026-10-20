@@ -608,11 +608,11 @@ def error_text(exc: BaseException, settings: Any, model: str) -> str:
         geheim = list(settings.secrets())
     except Exception:
         geheim = []
-    for wert in geheim:
+    for wert in sorted(geheim, key=len, reverse=True):
         text = text.replace(wert, "***")
     text = re.sub(r"(?i)\b(bearer|api[_-]?key|key|token)([\s=:\"']+)[^\s,;\"']+", r"\1\2***",
                   text)
-    text = re.sub(r"https?://\S+", "<Adresse>", text).replace("`", "'")
+    text = re.sub(r"https?://\S+", "<Adresse>", text, flags=re.IGNORECASE).replace("`", "'")
     return f"{model}: {type(exc).__name__}: {text}"[:240]
 
 
@@ -749,10 +749,17 @@ def judge(
             # hiess es nur "hat nicht geantwortet", und niemand wusste, warum.
             fehler = error_text(exc, settings, model)
             LOG.warning("Rechtsprüfung: %s", fehler)
-            from aquaticy.system import is_gone_error, replacement
+            from aquaticy.system import is_gone_error, mark_retired, replacement
 
             # Eben erst abgeschaltet (410): gleich den Ersatz des Anbieters fragen.
-            nachfolger = replacement(settings, model) if is_gone_error(exc) else model
+            nachfolger = model
+            if is_gone_error(exc):
+                # Der Schluessel stammt noch von den urspruenglichen Modellen.
+                # Ein Ersatzurteil darf darunter auch nach Verdraengung der
+                # Abschaltungsbeobachtung nicht wieder als altes Urteil auftauchen.
+                key = None
+                mark_retired(model, settings)
+                nachfolger = replacement(settings, model)
             if nachfolger != model and nachfolger not in modelle:
                 modelle.insert(index + 1, nachfolger)
                 gemerkt_bis += 1

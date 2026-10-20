@@ -9,6 +9,7 @@ Nemotron vorn.
 from __future__ import annotations
 
 import tempfile  # noqa: F401
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +37,7 @@ def _nvidia(tmp: Path, live: list[str] | None = None, model: str = ALT) -> Setti
 
 @pytest.fixture(autouse=True)
 def _vergessen(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(system, "_retired_seen", set())
+    monkeypatch.setattr(system, "_retired_seen", OrderedDict())
     monkeypatch.delenv("NVIDIA_NIM_API_KEY", raising=False)
 
 
@@ -48,14 +49,15 @@ def test_the_retired_nvidia_models_are_known_and_no_default_anymore() -> None:
     assert not system.is_retired("mistral/mistral-medium-latest")
 
 
-def test_a_410_is_recognised_and_remembered() -> None:
+def test_a_410_is_recognised_and_remembered(tmp_path) -> None:
     fehler = Exception("litellm.APIError: Nvidia_nimException - Error code: 410 - {'title': "
                        "'Gone', 'detail': \"The model 'x' has reached its end of life\"}")
     assert system.is_gone_error(fehler)
     assert system.is_gone_error(type("E", (Exception,), {"status_code": 410})("x"))
     assert not system.is_gone_error(Exception("401 Unauthorized"))
-    system.mark_retired("nvidia_nim/neu/weg")
-    assert system.is_retired("nvidia_nim/neu/weg")
+    settings = _nvidia(tmp_path)
+    system.mark_retired("nvidia_nim/neu/weg", settings)
+    assert system.is_retired("nvidia_nim/neu/weg", settings)
 
 
 def test_the_picker_shows_only_what_the_provider_offers_nemotron_first(tmp_path) -> None:
@@ -120,7 +122,7 @@ def test_a_freshly_retired_model_hands_over_in_the_same_check(monkeypatch, tmp_p
     def frage(prompt: str, model: str, settings: Any) -> str:
         gefragt.append(model)
         if model == neu_weg:
-            system.mark_retired(model)
+            system.mark_retired(model, settings)
             raise Exception("Error code: 410 - Gone, reached its end of life")
         return ERLAUBT
 
@@ -147,10 +149,11 @@ def test_metering_remembers_a_410(monkeypatch, tmp_path) -> None:
         raise Exception("Error code: 410 - Gone")
 
     monkeypatch.setattr(llmcall, "completion", gone)
+    settings = _nvidia(tmp_path)
     with pytest.raises(Exception, match="410"):
-        metering.completion(_nvidia(tmp_path), model="nvidia_nim/foo/bar",
+        metering.completion(settings, model="nvidia_nim/foo/bar",
                             messages=[{"role": "user", "content": "x"}], enforce=False)
-    assert system.is_retired("nvidia_nim/foo/bar")
+    assert system.is_retired("nvidia_nim/foo/bar", settings)
 
 
 def test_the_chat_switches_to_the_successor(monkeypatch, tmp_path) -> None:

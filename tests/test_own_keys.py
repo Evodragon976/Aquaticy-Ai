@@ -31,7 +31,7 @@ from typing import Any
 
 import pytest
 
-from aquaticy import guardrails, keyvault, linked, metering, web
+from aquaticy import guardrails, keyvault, linked, metering, system, web
 from aquaticy.config import NO_KEY, Settings
 from aquaticy.keyvault import KeyVault, VaultError, load_secret, masked, scrub
 from aquaticy.quota import SESSION_TOKENS, Quota, QuotaExceeded
@@ -374,9 +374,11 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv(key, raising=False)
     config.reset_settings_cache()
     monkeypatch.setattr(guardrails, "_ask_model", ECHTER_PRUEFER)
-    # Das Add-on fragt beim Verknuepfen den Anbieter -- hier ohne Netz.
+    # Das Add-on fragt beim Verknuepfen den Anbieter -- hier ohne Netz. Eine
+    # bekannte leere Liste bietet seit 12.2.4 keine geratenen Standardmodelle an.
     monkeypatch.setattr(linked, "inspect", lambda provider, key, client=None: {
-        "models": [], "tier": "", "tokens": None})
+        "models": [{"id": system.PROVIDER_MODELS[provider]},
+                   {"id": system.FAST_MODELS[provider]}], "tier": "", "tokens": None})
     monkeypatch.setattr(web, "AUTH", AuthStore(tmp_path / "konten", "PROKEY234"))
     monkeypatch.setattr(web, "SESSIONS", web.SessionRegistry())
     monkeypatch.setattr(web, "SESSION", web.SessionProxy())
@@ -527,6 +529,22 @@ def test_keys_and_their_models_belong_to_one_account(server: dict[str, Any]) -> 
     fake_llm.ANFRAGEN.clear()
     _chat(port, bernd, "Bernd fragt mit dem NVIDIA-Modell")
     assert not any(a["auth"].startswith("Bearer nvapi") for a in _anfragen())
+
+
+def test_models_api_never_reinserts_retired_addon_models(
+        server: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    port = server["port"]
+    anna = _konto(port)
+    retired = "nvidia_nim/meta/llama-3.3-70b-instruct"
+    monkeypatch.setattr(linked, "inspect", lambda *a, **k: {
+        "models": [{"id": retired}, {"id": NVIDIA}], "tier": "", "tokens": None})
+    _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
+    for mode in ("chat", "pro", "code"):
+        result = _json(port, "GET", "/api/models?mode=" + mode, anna)
+        for field in ("models", "strong"):
+            ids = {m["id"] for m in result[field]}
+            assert retired not in ids
+            assert NVIDIA in ids
 
 
 def test_an_own_key_model_runs_at_the_provider_and_does_not_count(

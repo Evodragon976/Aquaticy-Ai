@@ -2408,21 +2408,27 @@ class Agent:
         nicht. Im Pro-Modus, weil genau das der Modus ist -- wer ihn waehlt,
         bittet um die beste Leistung, die da ist.
         """
+        if getattr(self, "_request_model", ""):
+            # Ein laufender Aufruf behaelt sein Modell, auch wenn eine parallele
+            # Pruefung es bereits als abgeschaltet erkannt hat.
+            return self._request_model
         if getattr(self, "_ausweich_model", ""):
             # Ausweichmodell (9.6.8 Sol): das eigentliche antwortete nicht --
             # fuer den Rest dieses Turns uebernimmt das schnelle Modell.
-            return self._ausweich_model
-        if clean_mode(self.mode) in ("code", "pro"):
-            return self._strongest_model() or self.settings.model
-        if getattr(self, "_auto_pick", ""):
+            model = self._ausweich_model
+        elif clean_mode(self.mode) in ("code", "pro"):
+            model = self._strongest_model() or self.settings.model
+        elif getattr(self, "_auto_pick", ""):
             # Automatische Modellwahl (Dev settings): gilt nur fuer diesen
             # Turn und nur fuer den Master -- die Agenten bleiben, wie sie sind.
-            return self._auto_pick
+            model = self._auto_pick
+        else:
+            model = self.settings.model
         # Abgeschaltet (12.2.2 Astra, 410 Gone): der Ersatz desselben Anbieters,
         # wenn der Anbieter einen anbietet.
         from aquaticy.system import replacement
 
-        return replacement(self.settings, self.settings.model)
+        return replacement(self.settings, model)
 
     def _council_turn(self, question: str, stream: bool) -> AgentResult | None:
         """AI Council (9.6.1, aquaticy/linked.py): die verknuepften Modelle arbeiten,
@@ -2847,8 +2853,15 @@ class Agent:
         self._tell_if_loading()
 
         for attempt in range(attempts):
+            # Vor dem Aufruf merken: eine parallele Pruefung kann das Modell
+            # bereits sperren, bevor wir hier seinen Fehler behandeln.
+            aufgerufen = self.active_model
             try:
-                antwort = self._completion(messages, stream=stream)
+                self._request_model = aufgerufen
+                try:
+                    antwort = self._completion(messages, stream=stream)
+                finally:
+                    self._request_model = ""
             except metering.QuotaExceeded:
                 raise  # am Kontingent hilft kein zweiter Versuch
             except Exception as exc:
@@ -2859,8 +2872,8 @@ class Agent:
                 from aquaticy.system import is_gone_error, mark_retired, replacement
 
                 if is_gone_error(exc):
-                    weg = self.active_model
-                    mark_retired(weg)
+                    weg = aufgerufen
+                    mark_retired(weg, self.settings)
                     if self.active_model != weg:
                         self._emit("note", text=(
                             f"{weg} gibt es beim Anbieter nicht mehr – Aquaticy nimmt "

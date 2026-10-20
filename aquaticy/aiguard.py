@@ -1795,14 +1795,19 @@ def _ask_model(prompt: str, settings: Settings) -> str:
     Hauptmodell -- etwa ueber den API-Schluessel --, fragt Ai-guard das (12.2.2
     Sol). Bis dahin blieb die Einschaetzung dann einfach aus.
     """
-    from aquaticy.system import replacement
+    from aquaticy.system import is_gone_error, mark_retired, replacement
 
     modelle = list(dict.fromkeys(replacement(settings, m) for m in (
         _fast_model(settings), str(getattr(settings, "model", "") or "")) if m))
     for nummer, model in enumerate(modelle):
         try:
             return _ask_one(prompt, settings, model)
-        except Exception:
+        except Exception as exc:
+            if is_gone_error(exc):
+                mark_retired(model, settings)
+                nachfolger = replacement(settings, model)
+                if nachfolger != model and nachfolger not in modelle:
+                    modelle.insert(nummer + 1, nachfolger)
             if nummer == len(modelle) - 1:
                 raise
     raise RuntimeError("Kein Modell für Ai-guard eingestellt.")
@@ -1886,8 +1891,11 @@ def forget_judgements() -> None:
 
 def _decision_key(settings: Settings, *parts: str) -> str | None:
     from aquaticy import judgecache
+    from aquaticy.system import replacement
 
-    bereich = judgecache.scope(settings, [_fast_model(settings)])
+    modelle = list(dict.fromkeys(replacement(settings, m) for m in (
+        _fast_model(settings), str(getattr(settings, "model", "") or "")) if m))
+    bereich = judgecache.scope(settings, modelle)
     return judgecache.cache_key(GUARD_VERSION, bereich, *parts) if bereich else None
 
 
@@ -1943,6 +1951,8 @@ def classify(
         urteil = parse_judgement(roh)
     except Exception:
         urteil = None
+    if schluessel is not None and schluessel != _decision_key(settings, "anfrage", context, text):
+        schluessel = None
     _remember_decision(schluessel, urteil, generation)
     return urteil
 
@@ -2092,6 +2102,8 @@ def answer_problem(
         urteil = parse_judgement(frage(answer_prompt(roh), settings))
     except Exception:
         urteil = None
+    if schluessel is not None and schluessel != _decision_key(settings, "antwort", roh):
+        schluessel = None
     _remember_decision(schluessel, urteil, generation)
     return urteil[1] if urteil and urteil[0] else ""
 
