@@ -78,12 +78,17 @@ def test_nvidia_checks_the_key_with_one_token_and_keeps_only_chat_models() -> No
         "/v1/models": httpx.Response(200, json={"data": [
             {"id": "deepseek-ai/deepseek-r1"}, {"id": "meta/llama-3.1-8b-instruct"},
             {"id": "meta/llama-3.3-70b-instruct"}, {"id": "nvidia/nv-embedqa-e5-v5"},
+            {"id": "nvidia/llama-3.3-nemotron-super-49b-v1.5"},
+            {"id": "nvidia/nvidia-nemotron-nano-9b-v2"}, {"id": "nvidia/nemotron-mini-4b"},
             {"id": "nvidia/llama-3.1-nemotron-70b-reward"},
             {"id": "black-forest-labs/flux.1-schnell"}, {"id": "meta/llama-guard-4-12b"}]})})
     info = linked.inspect("nvidia_nim", "nvapi-test-123456", client)
     ids = [m["id"] for m in info["models"]]
-    assert ids[:2] == ["nvidia_nim/meta/llama-3.3-70b-instruct",
-                       "nvidia_nim/meta/llama-3.1-8b-instruct"], "das Arbeitspferd zuerst"
+    # Seit 12.2.3 Astra: das Nemotron-Arbeitspferd und das kleine zuerst, dann die
+    # uebrigen Nemotron-Modelle, dann der Rest.
+    assert ids[:3] == ["nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                       "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2",
+                       "nvidia_nim/nvidia/nemotron-mini-4b"], "das Arbeitspferd zuerst"
     assert "nvidia_nim/deepseek-ai/deepseek-r1" in ids
     assert not any(wort in i for i in ids for wort in ("embed", "reward", "flux", "guard"))
     assert b'"max_tokens":1' in gesehen[0].content.replace(b" ", b"")

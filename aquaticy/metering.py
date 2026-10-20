@@ -432,8 +432,14 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
         from aquaticy import llmcall
 
         response = llmcall.completion(**kwargs)
-    except BaseException:
+    except BaseException as exc:
         buchung.cancel()
+        # Abgeschaltet (12.2.2 Astra, 410 Gone): merken -- die Modellwahl und die
+        # Pruefer nehmen es dann nicht mehr.
+        from aquaticy.system import is_gone_error, mark_retired
+
+        if isinstance(exc, Exception) and is_gone_error(exc):
+            mark_retired(modell)
         raise
     rein, raus = _counted(kwargs.get("messages"), response)
     buchung.settle(rein, raus)

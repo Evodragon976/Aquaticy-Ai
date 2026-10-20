@@ -3785,8 +3785,9 @@ def test_the_agents_run_on_the_small_model(monkeypatch: pytest.MonkeyPatch) -> N
     from aquaticy.config import Settings
     from aquaticy.system import fast_model
 
-    settings = Settings(model="nvidia_nim/meta/llama-3.3-70b-instruct")
-    assert fast_model(settings) == "nvidia_nim/meta/llama-3.1-8b-instruct"
+    # Seit 12.2.3 Astra Nemotron: Llama 3.3 70B und 3.1 8B hat NVIDIA abgeschaltet.
+    settings = Settings(model="nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5")
+    assert fast_model(settings) == "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2"
     assert settings.effective_subagent_model == fast_model(settings)
 
     settings = Settings(model="mistral/mistral-large-latest")
@@ -3818,8 +3819,9 @@ def test_the_coding_models_are_offered_for_code(monkeypatch: pytest.MonkeyPatch)
                                    "nvidia_nim/qwen/qwen2.5-coder-32b-instruct"]
 
     fuer_die_recherche = [e["id"] for e in strongest_models(settings, purpose="work")]
+    # Seit 12.2.3 Astra Nemotron -- Llama 3.3 70B hat NVIDIA abgeschaltet.
     assert fuer_die_recherche == ["mistral/mistral-large-latest",
-                                  "nvidia_nim/meta/llama-3.3-70b-instruct"]
+                                  "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"]
 
 
 

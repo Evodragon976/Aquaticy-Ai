@@ -210,7 +210,9 @@ def test_what_counts_as_usable(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("AQUATICY_API_KEY", "allgemein")
     assert not model_usable(s, "fremd/eigenes")
     monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test")
-    assert model_usable(s, "nvidia_nim/meta/llama-3.3-70b-instruct")
+    assert model_usable(s, "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5")
+    # Abgeschaltet (12.2.3 Astra): auch mit Schluessel nicht mehr waehlbar.
+    assert not model_usable(s, "nvidia_nim/meta/llama-3.3-70b-instruct")
     assert not model_usable(s, SPLIT_MODEL_ID)                # zeigt web.py nur, wenn er laeuft
     assert not model_usable(s, "")
     # Lokal zaehlt nur, was installiert ist -- `name` und `name:latest` sind dasselbe.

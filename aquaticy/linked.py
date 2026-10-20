@@ -209,9 +209,10 @@ _NVIDIA_SKIP = re.compile(
     r"embed|rerank|retriev|guard|safety|reward|clip|vila|neva|vision|-vl|vl-|parakeet|"
     r"whisper|flux|diffusion|ocr|deplot|kosmos|fuyu|detect|pii|riva|audio|tts|asr|"
     r"translate|cosmos|-base\b", re.IGNORECASE)
-#: Diese zuerst: das Arbeitspferd, das schnelle, das fuers Programmieren.
-_NVIDIA_FIRST = ("meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct",
-                 "qwen/qwen2.5-coder-32b-instruct")
+#: Diese zuerst: das Arbeitspferd, das schnelle, das fuers Programmieren. Seit 12.2.2
+#: Astra Nemotron -- Llama 3.3 70B und 3.1 8B hat NVIDIA am 26.08.2026 abgeschaltet.
+_NVIDIA_FIRST = ("nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia/nvidia-nemotron-nano-9b-v2",
+                 "qwen/qwen3-coder-480b-a35b-instruct")
 
 
 def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
@@ -233,7 +234,8 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
     ids = [i for i in dict.fromkeys(ids) if i and _NVIDIA_CHAT.search(i)
            and not _NVIDIA_SKIP.search(i)]
     vorne = [i for i in _NVIDIA_FIRST if i in ids or not ids]
-    rest = sorted(i for i in ids if i not in vorne)
+    # Nemotron vor dem Rest (12.2.2 Astra), dann alphabetisch.
+    rest = sorted((i for i in ids if i not in vorne), key=lambda i: ("nemotron" not in i, i))
     info["models"] = [{"id": "nvidia_nim/" + i, "label": i.split("/", 1)[-1]}
                       for i in (vorne + rest)[:MAX_MODELS]]
     if info["tokens"] is None:

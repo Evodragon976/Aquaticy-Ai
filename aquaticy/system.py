@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +52,8 @@ PROVIDER_LABELS: dict[str, str] = {
 #: Das Arbeitspferd je Anbieter: gut genug fuer alles, was Aquaticy den ganzen
 #: Tag tut -- recherchieren, lesen, zusammenfassen.
 PROVIDER_MODELS: dict[str, str] = {
-    "nvidia_nim": "nvidia_nim/meta/llama-3.3-70b-instruct",
+    # Llama 3.3 70B hat NVIDIA am 26.08.2026 abgeschaltet (410 Gone, 12.2.2 Astra).
+    "nvidia_nim": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
     "mistral": "mistral/mistral-large-latest",
 }
 
@@ -60,9 +63,118 @@ PROVIDER_MODELS: dict[str, str] = {
 #: gleichzeitig gibt. Ein 70B-Modell fuer "such mir die Oeffnungszeiten"
 #: kostet Sekunden, die sich mit jedem Agenten summieren.
 FAST_MODELS: dict[str, str] = {
-    "nvidia_nim": "nvidia_nim/meta/llama-3.1-8b-instruct",
+    "nvidia_nim": "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2",
     "mistral": "mistral/mistral-small-latest",
 }
+
+#: So viele Modelle eines Anbieters zeigt die Modellwahl hoechstens.
+MAX_PICKER_MODELS = 8
+
+#: Abgeschaltete Modelle (12.2.2 Astra): Der Anbieter antwortet mit "410 Gone -- reached
+#: its end of life". Fest, was bekannt ist; dazu, was Aquaticy beim Aufruf erfaehrt.
+RETIRED_MODELS = frozenset({
+    "nvidia_nim/meta/llama-3.3-70b-instruct",
+    "nvidia_nim/meta/llama-3.1-8b-instruct",
+})
+_retired_seen: set[str] = set()
+_retired_lock = threading.Lock()
+
+#: Ersatz je Anbieter und Rolle -- nur genommen, wenn der Anbieter das Modell dem Konto
+#: auch anbietet (seine Liste beim Einrichten). Bei NVIDIA die Nemotron-Modelle vorn.
+PREFERRED_MODELS: dict[tuple[str, str], tuple[str, ...]] = {
+    ("nvidia_nim", "main"): (
+        "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1",
+        "nvidia_nim/nvidia/nemotron-3-super-120b-a12b",
+        "nvidia_nim/nvidia/llama-3.1-nemotron-ultra-253b-v1",
+    ),
+    ("nvidia_nim", "fast"): (
+        "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2",
+        "nvidia_nim/nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia_nim/nvidia/llama-3.1-nemotron-nano-8b-v1",
+    ),
+    ("nvidia_nim", "code"): (
+        "nvidia_nim/qwen/qwen3-coder-480b-a35b-instruct",
+        "nvidia_nim/qwen/qwen2.5-coder-32b-instruct",
+    ),
+}
+#: Woran man in einer Liste ein kleines, schnelles Modell erkennt.
+_KLEIN = re.compile(r"nano|mini|small|\b(?:[1-9]|1[0-4])b\b|-[1-9]b-", re.IGNORECASE)
+
+
+def is_retired(model: str) -> bool:
+    """Hat der Anbieter dieses Modell abgeschaltet?"""
+    with _retired_lock:
+        return model in RETIRED_MODELS or model in _retired_seen
+
+
+def mark_retired(model: str) -> None:
+    """Merkt sich ein Modell, das der Anbieter mit 410 Gone abgelehnt hat."""
+    if model:
+        with _retired_lock:
+            _retired_seen.add(model)
+
+
+def is_gone_error(exc: BaseException) -> bool:
+    """Sagt der Fehler, dass das Modell abgeschaltet ist (410 Gone, end of life)?"""
+    if getattr(exc, "status_code", None) == 410:
+        return True
+    text = str(exc).lower()
+    return ("410" in text and "gone" in text) or "end of life" in text \
+        or "reached its end" in text
+
+
+def live_models(settings: Any, provider: str) -> list[str]:
+    """Was der Anbieter diesem Konto anbietet (seine Liste beim Einrichten), ohne Abgeschaltete."""
+    try:
+        from aquaticy import linked
+
+        stand = linked.load(settings.data_dir).get(provider) or {}
+    except Exception:
+        return []
+    ids = [str(m.get("id") or "") for m in stand.get("models", []) or []
+           if isinstance(m, dict)]
+    return [i for i in dict.fromkeys(ids) if i.startswith(provider + "/") and not is_retired(i)]
+
+
+def provider_choice(settings: Any, provider: str, kind: str = "main") -> str:
+    """Das Modell eines Anbieters fuer eine Rolle (main, fast, code) -- nie ein abgeschaltetes.
+
+    Kennt Aquaticy die Liste des Anbieters, gilt nur, was darin steht. Ohne Liste der
+    Tabellenwert, solange er nicht abgeschaltet ist.
+    """
+    tabelle = {"main": PROVIDER_MODELS, "fast": FAST_MODELS, "code": CODING_MODELS}[kind]
+    wunsch = tabelle.get(provider, "")
+    live = live_models(settings, provider)
+    if wunsch and not is_retired(wunsch) and (not live or wunsch in live):
+        return wunsch
+    for kandidat in PREFERRED_MODELS.get((provider, kind), ()):
+        if kandidat in live:
+            return kandidat
+    if kind == "fast":
+        return next((i for i in live if _KLEIN.search(i)), "")
+    if kind == "main" and live:
+        return next((i for i in live if "nemotron" in i), live[0])
+    return ""
+
+
+def replacement(settings: Any, model: str) -> str:
+    """Ein abgeschaltetes Modell -> sein Ersatz beim selben Anbieter, sonst unveraendert.
+
+    Getauscht wird nur, wenn der Anbieter einen Ersatz anbietet (seine Liste). Sonst
+    bleibt das Modell -- und die Fehlermeldung sagt, dass es abgeschaltet ist.
+    """
+    if not model or not is_retired(model):
+        return model
+    from aquaticy.config import provider_of
+
+    anbieter = provider_of(model)
+    if not live_models(settings, anbieter):
+        return model
+    rolle = "fast" if model in FAST_MODELS.values() or _KLEIN.search(model) else "main"
+    return provider_choice(settings, anbieter, rolle) or \
+        provider_choice(settings, anbieter, "main") or model
+
 
 #: Fuers Programmieren das jeweils staerkste Modell eines Anbieters -- dort,
 #: wo es ein anderes ist als das Arbeitspferd.
@@ -319,7 +431,8 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
         return is_installed(name, _ollama_liste(settings, model_id) if installed is None
                             else installed)
     provider = provider_of(model_id)
-    if not provider:
+    if not provider or is_retired(model_id):
+        # Abgeschaltet (12.2.2 Astra): beim Anklicken kaeme nur "410 Gone".
         return False
     try:
         weg = getattr(settings, "route", None)
@@ -408,13 +521,15 @@ def strongest_models(
         if not key_name:
             continue
         stark = (
-            CODING_MODELS.get(provider) if purpose == "code" else ""
-        ) or PROVIDER_MODELS.get(provider, "")
+            provider_choice(settings, provider, "code") if purpose == "code" else ""
+        ) or provider_choice(settings, provider, "main")
+        if not stark:
+            continue
         dazu(
             stark,
             PROVIDER_LABELS.get(provider, provider),
             "Fürs Programmieren"
-            if purpose == "code" and CODING_MODELS.get(provider) == stark
+            if purpose == "code" and provider_choice(settings, provider, "code") == stark
             else PROVIDER_NOTES.get(provider, "Über die Schnittstelle des Anbieters"),
             model_origin(settings, stark, key_origin(settings, provider)),
         )
@@ -461,7 +576,8 @@ def fast_model(settings: Any) -> str:
     eigen = str(getattr(settings, "subagent_model", "") or "").strip()
     if eigen:
         return eigen
-    return FAST_MODELS.get(provider_of(str(getattr(settings, "model", "") or "")), "")
+    anbieter = provider_of(str(getattr(settings, "model", "") or ""))
+    return provider_choice(settings, anbieter, "fast") if anbieter in FAST_MODELS else ""
 
 
 def available_models(settings: Any) -> list[dict[str, str]]:
@@ -507,36 +623,38 @@ def available_models(settings: Any) -> list[dict[str, str]]:
     )
     for provider in anbieter:
         herkunft = key_origin(settings, provider)
-        model_id = PROVIDER_MODELS.get(provider, "")
-        if not model_id:
-            continue
-        # Laeuft gerade ein anderes Modell dieses Anbieters, ist das gemeint --
-        # ausser es ist das schnelle: dann blieb das grosse nicht mehr waehlbar
-        # (bis 9.5.34 ging es nur ueber die Einstellungen zurueck).
-        if provider_of(current) == provider and current != FAST_MODELS.get(provider, ""):
-            model_id = current
-        found.append(_mit_herkunft(
-            {
-                "id": model_id,
-                "label": model_id.split("/", 1)[-1],
-                "kind": PROVIDER_LABELS.get(provider, provider),
-                "note": PROVIDER_NOTES.get(provider, "Über die Schnittstelle des Anbieters"),
-            },
-            model_origin(settings, model_id, herkunft),
-        ))
-        # Dazu das schnelle kleine Modell desselben Anbieters. Nicht jede
-        # Frage braucht das Arbeitspferd -- wer vor allem Tempo will, waehlt
-        # hier, und niemand muss dafuer eine Modell-ID von Hand eintippen.
-        schnell = FAST_MODELS.get(provider, "")
-        if schnell and schnell != model_id:
+        # Nur, was der Anbieter diesem Konto wirklich anbietet und nicht abgeschaltet
+        # hat (12.2.2 Astra) -- bei NVIDIA die Nemotron-Modelle vorn. Ohne Liste
+        # (Schluessel des Betreibers) das Arbeitspferd und das schnelle Modell.
+        live = live_models(settings, provider)
+        if live:
+            nemotron = [i for i in live if "nemotron" in i]
+            ids = (nemotron + [i for i in live if i not in nemotron])[:MAX_PICKER_MODELS]
+            if provider_of(current) == provider and current in live and current not in ids:
+                ids.insert(0, current)
+        else:
+            model_id = provider_choice(settings, provider, "main")
+            # Laeuft gerade ein anderes Modell dieses Anbieters, ist das gemeint --
+            # ausser es ist das schnelle: dann blieb das grosse nicht mehr waehlbar
+            # (bis 9.5.34 ging es nur ueber die Einstellungen zurueck).
+            schnell = provider_choice(settings, provider, "fast")
+            if (provider_of(current) == provider and current != schnell
+                    and not is_retired(current)):
+                model_id = current
+            ids = [m for m in dict.fromkeys((model_id, schnell)) if m]
+        for model_id in ids:
+            klein = model_id == provider_choice(settings, provider, "fast")
             found.append(_mit_herkunft(
                 {
-                    "id": schnell,
-                    "label": schnell.split("/", 1)[-1],
+                    "id": model_id,
+                    "label": model_id.split("/", 1)[-1],
                     "kind": PROVIDER_LABELS.get(provider, provider),
-                    "note": "Klein und schnell: kurze Antworten in Sekunden",
+                    # Nicht jede Frage braucht das Arbeitspferd -- wer vor allem
+                    # Tempo will, waehlt das kleine, ohne eine Kennung zu tippen.
+                    "note": "Klein und schnell: kurze Antworten in Sekunden" if klein
+                    else PROVIDER_NOTES.get(provider, "Über die Schnittstelle des Anbieters"),
                 },
-                model_origin(settings, schnell, herkunft),
+                model_origin(settings, model_id, herkunft),
             ))
 
     # Das laufende Modell gehoert in die Liste, auch wenn es sonst nirgends

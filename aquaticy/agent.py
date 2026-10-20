@@ -2418,7 +2418,11 @@ class Agent:
             # Automatische Modellwahl (Dev settings): gilt nur fuer diesen
             # Turn und nur fuer den Master -- die Agenten bleiben, wie sie sind.
             return self._auto_pick
-        return self.settings.model
+        # Abgeschaltet (12.2.2 Astra, 410 Gone): der Ersatz desselben Anbieters,
+        # wenn der Anbieter einen anbietet.
+        from aquaticy.system import replacement
+
+        return replacement(self.settings, self.settings.model)
 
     def _council_turn(self, question: str, stream: bool) -> AgentResult | None:
         """AI Council (9.6.1, aquaticy/linked.py): die verknuepften Modelle arbeiten,
@@ -2850,6 +2854,22 @@ class Agent:
             except Exception as exc:
                 last_error = exc
                 detail = f"{type(exc).__name__}: {exc}"
+                # 12.2.2 Astra: abgeschaltet (410 Gone) -- merken und, wenn der
+                # Anbieter einen Ersatz anbietet, gleich damit; sonst keine Wiederholung.
+                from aquaticy.system import is_gone_error, mark_retired, replacement
+
+                if is_gone_error(exc):
+                    weg = self.active_model
+                    mark_retired(weg)
+                    if self.active_model != weg:
+                        self._emit("note", text=(
+                            f"{weg} gibt es beim Anbieter nicht mehr – Aquaticy nimmt "
+                            f"{self.active_model}."), text_en=(
+                            f"{weg} was retired by the provider – Aquaticy uses "
+                            f"{self.active_model}."))
+                        return self._completion_with_retry(messages, stream=stream)
+                    if replacement(self.settings, weg) == weg:
+                        break
                 # 11.2.2 Terra: "does not support thinking/tools" -- das Modell
                 # kann etwas nicht, was mitgeschickt wurde. Merken und sofort ohne
                 # noch einmal; ein zweiter Versuch mit demselben waere zwecklos.
@@ -2934,7 +2954,7 @@ class Agent:
         if getattr(self, "_ausweich_model", ""):
             return False
         from aquaticy.config import provider_of
-        from aquaticy.system import FAST_MODELS, fast_model
+        from aquaticy.system import fast_model, provider_choice
 
         aktuell = self.active_model
         # Nach dem Modell, das gerade WIRKLICH antwortet (9.6.9 Luna) -- im
@@ -2945,7 +2965,7 @@ class Agent:
         except Exception:
             ersatz = ""
         if not ersatz or provider_of(ersatz) != anbieter:
-            ersatz = FAST_MODELS.get(anbieter, "")
+            ersatz = provider_choice(self.settings, anbieter, "fast")
         if not ersatz or ersatz == aktuell or provider_of(ersatz) != anbieter:
             return False
         self._ausweich_model = ersatz

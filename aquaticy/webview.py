@@ -33,7 +33,7 @@ MONATE_KURZ = ("Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "
 #: Die Anbieter im Einstellungsfenster: (Kennung, Name, Schluessel, Beispiel, Form).
 PROVIDERS: tuple[tuple[str, str, str, str, str], ...] = (
     ("nvidia_nim", "NVIDIA NIM", "NVIDIA_NIM_API_KEY",
-     "nvidia_nim/meta/llama-3.3-70b-instruct", "nvapi-…"),
+     "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvapi-…"),
     ("mistral", "Mistral", "MISTRAL_API_KEY", "mistral/mistral-large-latest", ""),
     ("ollama_chat", "Ollama (lokal)", "", "ollama_chat/gemma4:12b", ""),
 )

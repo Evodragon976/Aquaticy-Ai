@@ -136,3 +136,4 @@ def test_aiguard_retries_without_schema_too(monkeypatch) -> None:
     _anbieter(monkeypatch, AuthenticationError("401"))
     with pytest.raises(AuthenticationError):
         aiguard._ask_one("Prüfe das", _mistral(), "mistral/mistral-small-latest")
+

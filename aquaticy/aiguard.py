@@ -1795,9 +1795,10 @@ def _ask_model(prompt: str, settings: Settings) -> str:
     Hauptmodell -- etwa ueber den API-Schluessel --, fragt Ai-guard das (12.2.2
     Sol). Bis dahin blieb die Einschaetzung dann einfach aus.
     """
-    modelle = list(dict.fromkeys(m for m in (_fast_model(settings),
-                                             str(getattr(settings, "model", "") or ""))
-                                 if m))
+    from aquaticy.system import replacement
+
+    modelle = list(dict.fromkeys(replacement(settings, m) for m in (
+        _fast_model(settings), str(getattr(settings, "model", "") or "")) if m))
     for nummer, model in enumerate(modelle):
         try:
             return _ask_one(prompt, settings, model)

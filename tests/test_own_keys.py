@@ -344,7 +344,8 @@ def test_tools_book_their_server_work_and_refuse_at_the_limit(
 # -- Ende zu Ende: zwei Konten, ein Betreiber, ein "Anbieter" ------------------------------
 #: Der echte Rechtspruefer -- conftest ersetzt ihn sonst durch "zulaessig".
 ECHTER_PRUEFER = guardrails._ask_model
-NVIDIA = "nvidia_nim/meta/llama-3.3-70b-instruct"
+#: Seit 12.2.3 Astra Nemotron -- Llama 3.3 70B hat NVIDIA abgeschaltet.
+NVIDIA = "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
 
 @pytest.fixture

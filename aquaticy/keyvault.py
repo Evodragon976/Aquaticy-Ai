@@ -61,7 +61,7 @@ class Slot:
 #: :meth:`KeyVault._setup` beim naechsten Oeffnen.
 SLOTS: tuple[Slot, ...] = (
     Slot("NVIDIA_NIM_API_KEY", "NVIDIA NIM", "modell", "nvapi-…",
-         "Für die NVIDIA-Modelle (nvidia_nim/…), zum Beispiel Llama 3.3 70B."),
+         "Für die NVIDIA-Modelle (nvidia_nim/…), zum Beispiel Nemotron."),
     Slot("MISTRAL_API_KEY", "Mistral", "modell", "",
          "Für die Mistral-Modelle (mistral/…), zum Beispiel Mistral Large und Codestral."),
 )

@@ -403,7 +403,7 @@ def model_problem(model: str, api_base: str = "") -> str:
     else:
         message += (
             "\nBeispiele: mistral/mistral-large-latest, "
-            "nvidia_nim/meta/llama-3.3-70b-instruct, ollama_chat/qwen2.5:7b"
+            "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5, ollama_chat/qwen2.5:7b"
         )
     return message
 

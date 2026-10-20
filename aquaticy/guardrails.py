@@ -581,7 +581,14 @@ def schema_retry_useful(exc: BaseException) -> bool:
     ohne Schema -- der Prompt verlangt ohnehin reines JSON.
     """
     name = type(exc).__name__
-    return not any(teil in name for teil in _NOCHMAL_SINNLOS)
+    if any(teil in name for teil in _NOCHMAL_SINNLOS):
+        return False
+    # LiteLLM meldet manches unter einem allgemeinen Namen ("InternalServerError:
+    # 403 Forbidden") -- dann entscheidet der Status. Nur 400/422 deuten aufs Schema.
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int):
+        return status in (400, 422)
+    return not re.search(r"\b(?:401|403|404|408|410|429|5\d\d)\b", str(exc))
 
 
 def error_text(exc: BaseException, settings: Any, model: str) -> str:
@@ -590,6 +597,12 @@ def error_text(exc: BaseException, settings: Any, model: str) -> str:
     Schluessel (eigene und gestellte), "Bearer ..." und Adressen fallen heraus:
     die Absage sieht jedes Konto, die Adresse eines Servers geht es nichts an.
     """
+    from aquaticy.system import is_gone_error
+
+    if is_gone_error(exc):
+        # Verstaendlich statt roh (12.2.2 Astra): der Anbieter hat es abgeschaltet.
+        return (f"{model} hat der Anbieter abgeschaltet (410, Ende der Laufzeit). "
+                "Bitte im Chat ein anderes Modell wählen.")
     text = " ".join(str(exc).split())
     try:
         geheim = list(settings.secrets())
@@ -688,8 +701,11 @@ def judge(
         return ALLOWED
     with _cache_lock:
         generation = _cache_generation
-    modelle = list(dict.fromkeys(m for m in (settings.effective_subagent_model, settings.model)
-                                if m))
+    from aquaticy.system import replacement
+
+    # Abgeschaltete Modelle (410 Gone) durch den Ersatz des Anbieters (12.2.2 Astra).
+    modelle = list(dict.fromkeys(replacement(settings, m) for m in (
+        settings.effective_subagent_model, settings.model) if m))
     bereich = judgecache.scope(settings, modelle)
     key = judgecache.cache_key(RULES_VERSION, bereich, baseline, tool,
                                topic if tool else "", context, text) if bereich else None
@@ -733,6 +749,13 @@ def judge(
             # hiess es nur "hat nicht geantwortet", und niemand wusste, warum.
             fehler = error_text(exc, settings, model)
             LOG.warning("Rechtsprüfung: %s", fehler)
+            from aquaticy.system import is_gone_error, replacement
+
+            # Eben erst abgeschaltet (410): gleich den Ersatz des Anbieters fragen.
+            nachfolger = replacement(settings, model) if is_gone_error(exc) else model
+            if nachfolger != model and nachfolger not in modelle:
+                modelle.insert(index + 1, nachfolger)
+                gemerkt_bis += 1
             continue
         verdict = parse_verdict(raw, require_abuse=tool in BASELINE_VM_TOOLS,
                                 require_rule=baseline and tool == "create_image")

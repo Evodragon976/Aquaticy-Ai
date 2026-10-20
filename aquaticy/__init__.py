@@ -6,7 +6,7 @@ import os as _os
 # Aquaticy braucht sie nicht; ohne Netz kostet der Versuch Sekunden.
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "12.2.2"
+__version__ = "12.2.3"
 
 #: Der Name dieser Fassung. Er steht ueberall hinter der Versionsnummer, wo
 #: Menschen sie lesen -- nicht in Paketangaben und Kennungen fuer Server.

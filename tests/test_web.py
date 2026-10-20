@@ -1920,7 +1920,8 @@ def test_the_ui_shows_what_a_key_looks_like() -> None:
 
     nvidia = next(p for p in provider_view() if p["id"] == "nvidia_nim")
     assert nvidia["placeholder"].startswith("nvapi-")
-    assert nvidia["example"] == "nvidia_nim/meta/llama-3.3-70b-instruct"
+    # Seit 12.2.3 Astra Nemotron -- Llama 3.3 70B hat NVIDIA abgeschaltet.
+    assert nvidia["example"] == "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"
     # Seit 12.0.0 Luna steht im Satz, wo der Schluessel hingehoert: beim Add-on.
     assert "Add-ons → NVIDIA NIM" in nvidia["note"] and "nvapi-" in nvidia["note"]
     lokal = next(p for p in provider_view() if p["id"] == "ollama_chat")

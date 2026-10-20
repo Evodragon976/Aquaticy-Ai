@@ -181,7 +181,8 @@ def test_the_backup_model_follows_the_active_provider(settings, monkeypatch) -> 
                         lambda purpose="": "nvidia_nim/qwen/qwen2.5-coder-32b-instruct")
     assert agent.active_model.startswith("nvidia_nim/")
     assert agent._switch_to_backup_model()
-    assert agent.active_model == "nvidia_nim/meta/llama-3.1-8b-instruct"
+    # Seit 12.2.3 Astra das kleine Nemotron -- Llama 3.1 8B hat NVIDIA abgeschaltet.
+    assert agent.active_model == "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2"
     agent.close()
 
 

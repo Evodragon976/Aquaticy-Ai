@@ -47,7 +47,8 @@ console = Console()
 #: der Weg, ganz ohne einen auszukommen.
 MODEL_PRESETS: list[tuple[str, str]] = [
     ("mistral/mistral-large-latest", "Mistral Large – schnell, Server in der EU"),
-    ("nvidia_nim/meta/llama-3.3-70b-instruct", "NVIDIA NIM – großzügiges Freikontingent"),
+    ("nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+     "NVIDIA NIM – Nemotron, großzügiges Freikontingent"),
     ("ollama_chat/qwen2.5:7b", "Lokal via Ollama – kein API-Key nötig"),
 ]
 
@@ -116,7 +117,7 @@ def setup_command(
     if choice.strip() == "0":
         console.print(f"  [dim]{TOOL_CALL_WARNING}[/dim]")
         model = typer.prompt(
-            "Modell-ID im LiteLLM-Format, z.B. nvidia_nim/meta/llama-3.3-70b-instruct"
+            "Modell-ID im LiteLLM-Format, z.B. nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"
         )
     elif choice.strip() == str(LOCAL_CHOICE):
         # Lokales Modell: installieren, laden, pruefen -- danach ist der
