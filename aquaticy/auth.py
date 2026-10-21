@@ -721,6 +721,14 @@ class AuthStore:
                    + bytes(row["password_salt"]) + bytes(row["password_hash"]))
         return hmac.new(self._pepper, message, hashlib.sha256).digest()
 
+    def _require_current_credential(self, conn: sqlite3.Connection, account: Account) -> None:
+        """Vor destruktiven Aktionen innerhalb derselben Schreibtransaktion pruefen."""
+        current = conn.execute("SELECT id,password_hash,password_salt FROM users WHERE id=?",
+                               (account.id,)).fetchone()
+        if current is None or not hmac.compare_digest(
+                account._credential, self._credential_for(current)):
+            raise ValueError("Das Passwort wurde inzwischen geändert. Bitte melde dich neu an.")
+
     def register(
         self,
         email: str,
@@ -1286,15 +1294,17 @@ class AuthStore:
         from aquaticy.homeassistant import forget_states
         from aquaticy.learning import Learning
 
-        # Stored outside the personal profile. Do this before destructive DB
-        # changes; a failed JSON write must not silently leave account metadata.
-        upgrading.forget_account(self.data_dir, account.id)
-        forget_states(profile)
-        guardrails.forget_verdicts()
-        aiguard.forget_judgements()
         learning = Learning(profile)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            self._require_current_credential(conn, account)
+            # Auch ausserhalb des Profils erst nach aktueller Freigabe loeschen.
+            # Die Schreibsperre umfasst die Dateien: kein Passwortwechsel
+            # zwischen der Freigabe und dem letzten destruktiven Schritt.
+            upgrading.forget_account(self.data_dir, account.id)
+            forget_states(profile)
+            guardrails.forget_verdicts()
+            aiguard.forget_judgements()
             learning.forget(conn)
             for table, column in (("account_devices", "user_id"),
                                   ("account_events", "user_id"),
@@ -1302,9 +1312,9 @@ class AuthStore:
                 if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
                                 (table,)).fetchone():
                     conn.execute(f"DELETE FROM {table} WHERE {column}=?", (account.id,))
-        if profile.exists():
-            shutil.rmtree(profile)
-        secure_directory(profile)
+            if profile.exists():
+                shutil.rmtree(profile)
+            secure_directory(profile)
 
     def remove_account(self, account: Account) -> None:
         """Loescht Konto, Sitzungen, Verbrauch, Sperren und das private Profil."""
@@ -1317,13 +1327,14 @@ class AuthStore:
         from aquaticy.homeassistant import forget_states
         from aquaticy.learning import Learning
 
-        upgrading.forget_account(self.data_dir, account.id)
-        forget_states(profile)
-        guardrails.forget_verdicts()
-        aiguard.forget_judgements()
         learning = Learning(profile)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            self._require_current_credential(conn, account)
+            upgrading.forget_account(self.data_dir, account.id)
+            forget_states(profile)
+            guardrails.forget_verdicts()
+            aiguard.forget_judgements()
             if conn.execute("DELETE FROM users WHERE id=?", (account.id,)).rowcount != 1:
                 raise ValueError("Das Konto existiert nicht mehr.")
             learning.forget(conn)
@@ -1344,8 +1355,8 @@ class AuthStore:
                             "AND name='aiguard_bans'").fetchone():
                 conn.execute("DELETE FROM aiguard_bans WHERE subject=?",
                              (f"user:{account.id}",))
-        if profile.exists():
-            shutil.rmtree(profile)
+            if profile.exists():
+                shutil.rmtree(profile)
 
 
 def folder_bytes(folder: Path) -> int:

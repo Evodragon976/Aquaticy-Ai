@@ -1946,12 +1946,19 @@ def classify(
             _cache.move_to_end(schluessel)
             return bekannt[1]
     frage = ask or _ask_model
+    from aquaticy.system import retirement_generation
+
+    # Begrenzte Beobachtungen koennen waehrend des Aufrufs verdraengt werden.
+    # Dann sieht der Schluessel wieder gleich aus, obwohl ein Ersatzmodell urteilte.
+    retirement = retirement_generation()
     try:
         roh = frage(judge_prompt(text, context), settings)
         urteil = parse_judgement(roh)
     except Exception:
         urteil = None
-    if schluessel is not None and schluessel != _decision_key(settings, "anfrage", context, text):
+    if schluessel is not None and (
+            retirement != retirement_generation() or
+            schluessel != _decision_key(settings, "anfrage", context, text)):
         schluessel = None
     _remember_decision(schluessel, urteil, generation)
     return urteil
@@ -2098,11 +2105,16 @@ def answer_problem(
             _cache.move_to_end(schluessel)
             return bekannt[1][1] if bekannt[1] and bekannt[1][0] else ""
     frage = ask or _ask_model
+    from aquaticy.system import retirement_generation
+
+    retirement = retirement_generation()
     try:
         urteil = parse_judgement(frage(answer_prompt(roh), settings))
     except Exception:
         urteil = None
-    if schluessel is not None and schluessel != _decision_key(settings, "antwort", roh):
+    if schluessel is not None and (
+            retirement != retirement_generation() or
+            schluessel != _decision_key(settings, "antwort", roh)):
         schluessel = None
     _remember_decision(schluessel, urteil, generation)
     return urteil[1] if urteil and urteil[0] else ""

@@ -5801,10 +5801,14 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 return
             self._json({"ok": True})
             return
-        if not AUTH.verify_password(konto, passwort):
+        verified = AUTH.authenticate(konto.email, passwort) if 0 < len(passwort) <= 128 else None
+        if verified is None or verified.id != konto.id:
             LOGIN_FAILS.allow(schluessel)
             self._json({"ok": False, "error": "Das Passwort stimmt nicht."}, 403)
             return
+        # authenticate kann einen alten Passwort-Hash migrieren. Die Freigabe
+        # muss an diesen aktuellen Stand gebunden sein, nicht an das Cookie-Abbild.
+        konto = verified
         if route == "/api/account/delete" and (
                 str(payload.get("confirm") or "").strip().upper() != DELETE_WORD):
             self._json({"ok": False, "error": f"Tippe zur Bestätigung {DELETE_WORD} ein."},
@@ -5812,7 +5816,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             return
         forget_account_runtime(konto)
         if route == "/api/account/wipe":
-            AUTH.wipe_data(konto)
+            try:
+                AUTH.wipe_data(konto)
+            except ValueError as exc:
+                self._json({"ok": False, "error": str(exc)}, 409)
+                return
             # Das Konto bleibt -- also auch sein Taktgeber (9.5.34: vorher
             # liefen neue Auftraege bis zur naechsten Anmeldung nie).
             with contextlib.suppress(Exception):
@@ -5834,7 +5842,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     if adresse:
                         AIGUARD.ban_ip(adresse, reason=sperre.reason, by="konto-geloescht",
                                        until=sperre.until)
-        AUTH.remove_account(konto)
+        try:
+            AUTH.remove_account(konto)
+        except ValueError as exc:
+            self._json({"ok": False, "error": str(exc)}, 409)
+            return
         self._json_cookie({"ok": True, "deleted": True}, AUTH_COOKIE, "", 0)
 
     def _chat(self) -> None:
@@ -6586,11 +6598,48 @@ class AquaticyServer(ThreadingHTTPServer):
     #: Lief die Schlange ueber, verwarf der Kernel den Verbindungsaufbau, und der
     #: Browser wartete mit wachsenden Pausen: einzelne Anfragen hingen 30 s und mehr.
     request_queue_size = 128
+    #: Vor dem ersten HTTP-Header begrenzen, auch bei langsam lesenden Clients.
+    #: Genug Platz fuer parallele Chats, SSE und Oberflaechenabfragen.
+    max_connections = 256
 
     def __init__(self, server_address: tuple[str, int], handler: Any,
                  bind_and_activate: bool = True) -> None:
         self.address_family = socket.AF_INET6 if ":" in server_address[0] else socket.AF_INET
+        self._connection_slots = threading.BoundedSemaphore(self.max_connections)
         super().__init__(server_address, handler, bind_and_activate=bind_and_activate)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self._connection_slots.acquire(blocking=False):
+            try:
+                self._reject_overload(request)
+            finally:
+                self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._connection_slots.release()
+            raise
+
+    def _reject_overload(self, request: Any) -> None:
+        with contextlib.suppress(OSError):
+            request.settimeout(0.1)
+            request.sendall(b"HTTP/1.1 503 Service Unavailable\r\n"
+                            b"Content-Length: 0\r\nConnection: close\r\n"
+                            b"Cache-Control: no-store\r\nRetry-After: 1\r\n"
+                            b"X-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\n"
+                            b"Referrer-Policy: no-referrer\r\n"
+                            b"Content-Security-Policy: default-src 'none'; "
+                            b"frame-ancestors 'none'\r\n\r\n")
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            self._serve_connection(request, client_address)
+        finally:
+            self._connection_slots.release()
+
+    def _serve_connection(self, request: Any, client_address: Any) -> None:
+        super().process_request_thread(request, client_address)
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         fehler = sys.exc_info()[1]
@@ -6673,7 +6722,11 @@ class _TLSServer(AquaticyServer):
         self.context = context
         super().__init__(address, handler)
 
-    def process_request_thread(self, request: Any, client_address: Any) -> None:
+    def _reject_overload(self, request: Any) -> None:
+        # Vor dem TLS-Handschlag keine unverschluesselte HTTP-Antwort senden.
+        return
+
+    def _serve_connection(self, request: Any, client_address: Any) -> None:
         import ssl
 
         try:
@@ -6684,7 +6737,7 @@ class _TLSServer(AquaticyServer):
             with contextlib.suppress(OSError):
                 request.close()
             return
-        super().process_request_thread(request, client_address)
+        super()._serve_connection(request, client_address)
 
 
 def bind_public(context: Any, port: int) -> ThreadingHTTPServer:

@@ -83,6 +83,7 @@ MAX_RETIRED_MODELS = 256
 MAX_RETIRED_SCOPES = 64
 _retired_seen: OrderedDict[str, OrderedDict[str, None]] = OrderedDict()
 _retired_lock = threading.Lock()
+_retirement_generation = 0
 
 #: Ersatz je Anbieter und Rolle -- nur genommen, wenn der Anbieter das Modell dem Konto
 #: auch anbietet (seine Liste beim Einrichten). Bei NVIDIA die Nemotron-Modelle vorn.
@@ -107,6 +108,12 @@ PREFERRED_MODELS: dict[tuple[str, str], tuple[str, ...]] = {
 _KLEIN = re.compile(r"nano|mini|small|\b(?:[1-9]|1[0-4])b\b|-[1-9]b-", re.IGNORECASE)
 
 
+def retirement_generation() -> int:
+    """Aenderungen auch dann erkennen, wenn begrenzte Beobachtungen wieder verschwinden."""
+    with _retired_lock:
+        return _retirement_generation
+
+
 def is_retired(model: str, settings: Any = None) -> bool:
     """Bekannt abgeschaltet oder fuer genau diese Verbindung mit 410 abgelehnt."""
     if model in RETIRED_MODELS:
@@ -125,12 +132,14 @@ def mark_retired(model: str, settings: Any) -> None:
     """Merkt 410 nur fuer Konto, Schluessel, Endpunkt und aktuelle Modellfreigabe."""
     from aquaticy.judgecache import scope
 
+    global _retirement_generation
     if not model or model in RETIRED_MODELS:
         return
     bereich = scope(settings, [model])
     if bereich is None:
         return
     with _retired_lock:
+        _retirement_generation += 1
         verbindungen = _retired_seen.setdefault(model, OrderedDict())
         verbindungen[bereich] = None
         verbindungen.move_to_end(bereich)
