@@ -1198,9 +1198,6 @@ python tools/rundgang.py --bilder   # mit Bildschirmfotos
 
 Wie KI-Agenten hier arbeiten und prüfen, steht in [`AGENTS.md`](AGENTS.md).
 
-Was zuletzt geprüft wurde und wo die Grenzen liegen, steht im
-[Prüfbericht](TESTREPORT-12.4.4-Sol.md).
-
 ---
 
 ## Lizenz

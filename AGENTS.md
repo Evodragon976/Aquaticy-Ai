@@ -77,8 +77,8 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
   ae/oe/ue. Zeilen höchstens 100 Zeichen.
 - **Neue Fassung:** `NUMMER` und `NAME` in `tests/test_version.py`, dazu
   `aquaticy/__init__.py`, `pyproject.toml`, `constraints.txt`, README-Titel,
-  Rückfall in `webui.html` und ein Prüfbericht `TESTREPORT-<nummer>-<name>.md`.
-  `tests/test_version.py` prüft, dass alles zusammenpasst.
+  Rückfall in `webui.html`. Prüfberichte (`TESTREPORT-*.md`) gibt es seit 12.4.4 Sol
+  nicht mehr im Repo. `tests/test_version.py` prüft, dass alles zusammenpasst.
 - **Leicht bleiben:** Schwere Pakete (LiteLLM, Playwright) erst importieren, wenn
   sie gebraucht werden. Kein neuer Hintergrund-Thread ohne Grund; Abfragen der
   Oberfläche pausieren in versteckten Tabs.

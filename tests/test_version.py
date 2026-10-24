@@ -5,6 +5,7 @@ Die anderen Tests lesen sie von hier; fuer eine neue Fassung aendert man nur
 diese beiden Werte -- und dieser Test sagt, was sonst noch nachzuziehen ist.
 """
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -38,7 +39,9 @@ def test_package_is_this_release() -> None:
 
 def test_release_files_name_this_release() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    assert f"TESTREPORT-{NUMMER}-{NAME}.md" in readme
-    assert (ROOT / f"TESTREPORT-{NUMMER}-{NAME}.md").exists()
+    # Seit 12.4.4 Sol gibt es keine Pruefberichte mehr im Repo (auf Wunsch geloescht).
+    # Verweist das README doch auf eine Datei, muss es sie auch geben.
+    for name in re.findall(r"\((TESTREPORT-[^)]+\.md)\)", readme):
+        assert (ROOT / name).exists(), name
     constraints = (ROOT / "constraints.txt").read_text(encoding="utf-8")
     assert constraints.startswith(f"# Aquaticy {LABEL} --")
