@@ -69,6 +69,10 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
   der Schlüssel ist der deutsche Text mit zusammengefasstem Leerraum. Wer einen
   Text ändert, ändert beide. Erklärtexte kurz halten; Hinweise zu Einwilligung,
   Datenschutz und Löschen nur mit allen Fakten.
+- **Einfache Sprache** (seit 12.4.4 Sol, beide Sprachen): kurze Sätze (höchstens
+  15 bis 20 Wörter), aktiv und mit „du“, bekannte Wörter statt Fachwörter (sonst kurz
+  erklären), das Wichtigste zuerst, ein Begriff für eine Sache (z. B. immer „Heimnetz“),
+  freundlich, ohne „bitte“ in Knöpfen und Hinweisen.
 - **Sichtbare Texte** mit echten Umlauten, Kommentare und Bezeichner im Code mit
   ae/oe/ue. Zeilen höchstens 100 Zeichen.
 - **Neue Fassung:** `NUMMER` und `NAME` in `tests/test_version.py`, dazu

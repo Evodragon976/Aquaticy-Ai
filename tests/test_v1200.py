@@ -50,7 +50,7 @@ def test_voice_input_explains_first_and_then_sends_by_itself() -> None:
     dialog = " ".join(dialog[: dialog.index('<div class="overlay" id="overlay">')].split())
     # Alle Fakten: wer die Aufnahme bekommt, was Aquaticy bekommt.
     for fakt in ("Chrome: Google", "Edge: Microsoft", "Safari: Apple", "auf dem Gerät",
-                 "nur den erkannten Text", "nie die Aufnahme"):
+                 "Aquaticy bekommt nur den Text", "Die Aufnahme bekommt Aquaticy nie"):
         assert fakt in dialog, fakt
     skript = html[html.index("/* ---------- Spracheingabe (12.0.0 Luna) ----------"):]
     skript = skript[: skript.index("/* ---------- Seitenleiste ---------- */")]

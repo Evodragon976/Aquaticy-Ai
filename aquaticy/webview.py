@@ -297,5 +297,5 @@ def picker_view(mode: str, models: list[dict[str, Any]],
         "groups": [g for g in gruppen if g["models"]],
         "field": "AQUATICY_CODE_MODEL" if nur_starke else "AQUATICY_MODEL",
         "empty": ("Kein Modell gefunden. Trag unter Chat → Modelle und Verbindungen einen eigenen "
-                  "Schlüssel ein, oder installiere eins mit aquaticy install-model."),
+                  "Schlüssel ein oder installiere ein Modell mit aquaticy install-model."),
     }

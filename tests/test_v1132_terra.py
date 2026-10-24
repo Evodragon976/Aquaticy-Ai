@@ -129,7 +129,7 @@ def test_incompatible_listener_fails_before_pairing(tmp_path, monkeypatch, host,
 
     server = cluster.Cluster(tmp_path, host=host, transport=forbidden)
     server.state["enabled"] = True
-    with pytest.raises(cluster.ClusterError, match="Adressfamilie"):
+    with pytest.raises(cluster.ClusterError, match="Art der Adresse"):
         server.invite(address, 8765)
 
 

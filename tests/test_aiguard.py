@@ -168,4 +168,4 @@ def test_the_settings_show_a_small_hint() -> None:
         encoding="utf-8"
     )
     assert 'class="aiguard-hint"' in html
-    assert "liest Ai-guard mit" in html
+    assert "Ai-guard liest mit" in html

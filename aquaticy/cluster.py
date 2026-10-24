@@ -139,10 +139,10 @@ def parse_port(value: Any) -> int:
     """Eine TCP-Portnummer, ohne stilles Abschneiden oder Ersatz fuer null."""
     if (isinstance(value, bool) or not isinstance(value, (int, str))
             or not re.fullmatch(r"[0-9]{1,5}", str(value).strip())):
-        raise ClusterError("Ungültiger Port. Erlaubt sind ganze Zahlen von 1 bis 65535.")
+        raise ClusterError("Diesen Port gibt es nicht. Nimm eine Zahl von 1 bis 65535.")
     port = int(value)
     if not 1 <= port <= 65535:
-        raise ClusterError("Ungültiger Port. Erlaubt sind ganze Zahlen von 1 bis 65535.")
+        raise ClusterError("Diesen Port gibt es nicht. Nimm eine Zahl von 1 bis 65535.")
     return port
 
 
@@ -319,8 +319,8 @@ def _address_for_family(addresses: list[str], family: int) -> str:
         actual = socket.AF_INET6 if ip.version == 6 else socket.AF_INET
         if family in (socket.AF_UNSPEC, actual):
             return address
-    raise ClusterError("Die Adressfamilie passt nicht zur lokalen Server-Bindung. "
-                       "Verwende auf allen Servern IPv4 mit --lan oder passende IPv6-Adressen.")
+    raise ClusterError("Die Art der Adresse (IPv4 oder IPv6) passt nicht zu diesem Server. Nimm "
+                       "auf allen Servern IPv4 mit --lan oder passende IPv6-Adressen.")
 
 
 def resolve_address(address: str, *, family: int = socket.AF_UNSPEC) -> str:
@@ -350,11 +350,11 @@ def resolve_address(address: str, *, family: int = socket.AF_UNSPEC) -> str:
     try:
         answers = socket.getaddrinfo(host + ".", None, type=socket.SOCK_STREAM)
     except OSError as exc:
-        raise ClusterError("MagicDNS nicht erreichbar. Prüfe Tailscale und MagicDNS "
-                           "oder verwende die Tailscale-IP-Adresse.") from exc
+        raise ClusterError("MagicDNS ist nicht erreichbar. Prüf Tailscale und MagicDNS oder nimm "
+                           "die Tailscale-IP-Adresse.") from exc
     addresses = list(dict.fromkeys(str(answer[4][0]) for answer in answers))
     if not addresses or not all(tailscale_ip_ok(item) for item in addresses):
-        raise ClusterError("Der MagicDNS-Name muss ausschließlich auf Tailscale-Adressen zeigen.")
+        raise ClusterError("Der MagicDNS-Name darf nur auf Tailscale-Adressen zeigen.")
     # Die Rueckverbindung muss zur lokalen Bindung passen. Ohne Vorgabe IPv4 zuerst.
     return _address_for_family(sorted(addresses, key=lambda item: ":" in item), family)
 

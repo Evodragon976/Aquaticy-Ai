@@ -92,7 +92,7 @@ def test_nvidia_checks_the_key_with_one_token_and_keeps_only_chat_models() -> No
     assert "nvidia_nim/deepseek-ai/deepseek-r1" in ids
     assert not any(wort in i for i in ids for wort in ("embed", "reward", "flux", "guard"))
     assert b'"max_tokens":1' in gesehen[0].content.replace(b" ", b"")
-    assert info["tokens"] is None and "40 Anfragen" in info["note"]
+    assert info["tokens"] is None and "40 Fragen" in info["note"]
 
 
 def test_rejected_key_is_reported() -> None:
@@ -326,7 +326,7 @@ def test_web_link_without_provider_detects_it(tmp_path: Path,
     karte = next(k for k in antwort["accounts"] if k["provider"] == "nvidia_nim")
     assert [w["id"] for w in karte["sign_in"]] == ["google", "email"]
     antwort, status = web.linked_action({"action": "link", "key": "irgendwas-12345"})
-    assert status == 400 and "erkenne" in antwort["error"]
+    assert status == 400 and "kenne ich nicht" in antwort["error"]
 
 
 def test_newly_linked_models_are_seen_without_restart(tmp_path: Path) -> None:

@@ -394,7 +394,7 @@ class Google:
                 if current.refresh_token == previous.refresh_token and not current.stale:
                     return current.access_token  # Ein anderer Client hat bereits erneuert.
                 raise NotConnected(
-                    "Die Google-Verbindung hat sich geändert. Bitte erneut versuchen.")
+                    "Die Verbindung zu Google hat sich geändert. Versuch es bitte noch einmal.")
         return tokens.access_token
 
     def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -649,7 +649,7 @@ def _resource_id(value: str) -> str:
     """Nur eine opake Mail-/Termin-Kennung, nie Pfade, Query oder Escape-Sequenzen."""
     value = value.strip(" ")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,1024}", value):
-        raise GoogleError("Ungültige Kennung für Mail oder Termin.")
+        raise GoogleError("Diese Mail oder diesen Termin finde ich nicht.")
     return value
 
 

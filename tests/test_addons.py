@@ -777,7 +777,7 @@ def test_the_ui_has_the_addon_window_and_login_apps() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     for teil in ('id="btn-addons"', 'id="addonbox"', 'id="btn-loginapps"', 'id="screenbox"',
                  "Installieren", "Deinstallieren", "/api/addons", "/api/werkstatt/eingabe",
-                 "Das gibt es leider nur mit einem Ultra-Konto"):
+                 "Das gibt es nur mit einem Ultra-Konto"):
         assert teil in html, teil
     # Der Add-ons-Knopf sitzt direkt beim User-mode-Schalter, die Login-Apps darunter.
     zeile = html.index('id="usermode"')

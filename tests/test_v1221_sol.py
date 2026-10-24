@@ -22,7 +22,7 @@ def test_stale_image_mode_is_rejected_before_settings_or_model_work(
     status, body = client("POST", "/api/chat", {
         "message": "Eine normale Frage", "mode": "code", "image_mode": retired,
     })
-    assert status == 400 and "nicht mehr unterstützt" in json.loads(body)["error"]
+    assert status == 400 and "gibt es nicht mehr" in json.loads(body)["error"]
     assert web.ui_state().read() == before and calls == []
 
 

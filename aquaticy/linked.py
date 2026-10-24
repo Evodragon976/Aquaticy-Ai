@@ -196,8 +196,8 @@ def _inspect_mistral(http: httpx.Client, key: str) -> dict[str, Any]:
                 wort in probe.text.lower() for wort in ("quota", "credit", "payment")):
             info["warning"] = "Kein Guthaben mehr auf dem Mistral-Konto."
     if info["tokens"] is None:
-        info["note"] = ("Mistral nennt das Restkontingent hier nicht — zu sehen in der "
-                        "Konsole unter „Limits“.")
+        info["note"] = ("Wie viel du noch hast, sagt Mistral hier nicht. Du siehst es bei Mistral "
+                        "unter „Limits“.")
     return info
 
 
@@ -223,7 +223,7 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
         raise _fehler(probe, "NVIDIA NIM")
     info: dict[str, Any] = {"models": [], "tier": "", "tokens": _tokens(probe.headers)}
     if probe.status_code == 429:
-        info["warning"] = "Das Limit ist gerade erreicht — in einer Minute geht es weiter."
+        info["warning"] = "Grenze erreicht. In einer Minute geht es weiter."
     elif probe.status_code >= 500:
         raise _fehler(probe, "NVIDIA NIM")
     # Ein anderes 4xx sagt nur etwas ueber das Probemodell, nicht ueber den Schluessel.
@@ -239,8 +239,8 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
     info["models"] = [{"id": "nvidia_nim/" + i, "label": i.split("/", 1)[-1]}
                       for i in (vorne + rest)[:MAX_MODELS]]
     if info["tokens"] is None:
-        info["note"] = ("NVIDIA nennt das Restkontingent hier nicht. Im Freikontingent "
-                        "gelten 40 Anfragen je Minute.")
+        info["note"] = ("Wie viel du noch hast, sagt NVIDIA hier nicht. Kostenlos gehen 40 Fragen "
+                        "pro Minute.")
     return info
 
 

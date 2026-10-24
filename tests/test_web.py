@@ -1068,7 +1068,7 @@ def test_a_broken_route_answers_500_instead_of_dying(
     monkeypatch.setattr(web, "current_values", boom)
     status, _, body = raw_request(port, "GET", "/api/config")
     assert status == 500
-    assert json.loads(body)["error"].startswith("Da ist bei Aquaticy etwas schiefgelaufen.")
+    assert json.loads(body)["error"].startswith("Bei Aquaticy ist etwas schiefgelaufen.")
     output = capfd.readouterr()
     assert "RuntimeError" in output.out
     assert "kaputt" not in output.out
@@ -2506,8 +2506,8 @@ def test_the_storage_is_set_up_in_the_network_section() -> None:
 def test_the_settings_say_that_read_only_is_no_lock() -> None:
     """Der Server selbst kennt keine Anmeldung -- das darf nicht verschwiegen werden."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "bremst nur Aquaticy" in html
-    assert "nicht die anderen in deinem Netz" in html
+    assert "„Nur lesen“ gilt nur für Aquaticy" in html
+    assert "nicht für andere in deinem Netz" in html
 
 
 def test_the_storage_probe_reports_what_it_found(
@@ -2997,7 +2997,7 @@ def test_the_picker_offers_the_web_switch() -> None:
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="online"' in picker
     assert "Im Web suchen" in picker
-    assert "deinen Anhängen" in picker
+    assert "deinen Dateien" in picker
     assert "ohne Web" in _kopf({"online": False})["status"], "die Kopfzeile sagt es"
     assert "ohne Web" not in _kopf({"online": False, "mode": "code"})["status"], (
         "im Code-Modus wird immer nachgeschlagen")
@@ -3018,7 +3018,7 @@ def test_the_workshop_switch_belongs_to_the_code_mode() -> None:
     picker = html[html.index('id="picker-models"') :]
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="werkstatt"' in picker
-    assert "Code wirklich ausprobieren" in picker
+    assert "Code echt ausprobieren" in picker
     # Der virtual-machine-Schalter steht im Code-Modus, die beiden anderen daneben.
     werkstatt = picker[picker.index('id="werkstatt"') - 200 : picker.index('id="werkstatt"')]
     assert "only-code" in werkstatt

@@ -888,7 +888,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(pg.inner_text("#version").startswith("v"), "Version in der Kopfzeile")
         log.pruefe(pg.locator(".chip").count() >= 2, "Beispielfragen vorhanden")
         log.pruefe(
-            pg.is_visible(".ki-hinweis") and "KI-generiert" in pg.inner_text(".ki-hinweis"),
+            pg.is_visible(".ki-hinweis") and "schreibt eine KI" in pg.inner_text(".ki-hinweis"),
             "unten steht, dass die Texte von einer KI kommen",
         )
         log.pruefe(pg.locator(".recent").count() == 3, "drei Chats in der Seitenleiste")

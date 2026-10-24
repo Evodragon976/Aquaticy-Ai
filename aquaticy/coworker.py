@@ -510,7 +510,7 @@ class CoworkerStore:
 
         if interval_seconds is not None and (type(interval_seconds) is not int
                                              or interval_seconds not in INTERVAL_SECONDS):
-            raise CoworkerError("Bitte einen angebotenen Rhythmus auswählen.")
+            raise CoworkerError("Wähl einen der angebotenen Rhythmen.")
         felder: dict[str, Any] = {}
         if name is not None:
             felder["name"] = " ".join(_clean_text(name, 200).split())[:MAX_NAME] or "Coworker"
@@ -576,8 +576,8 @@ class CoworkerStore:
                 if neu["zuhause"] == "erlauben":
                     binding = connection_key(settings)
                     if not ultra or not binding:
-                        raise CoworkerError("Erlauben braucht Ultra und eine verbundene, zum "
-                                            "Schalten freigegebene Home-Assistant-Verbindung.")
+                        raise CoworkerError("Erlauben geht nur mit Ultra und wenn Home Assistant "
+                                            "verbunden ist und schalten darf.")
             conn.execute("UPDATE coworkers SET rules = ?, ha_binding = ? WHERE id = ?",
                          (json.dumps(neu), binding, int(coworker_id)))
         return neu
@@ -600,9 +600,11 @@ class CoworkerStore:
                     raise CoworkerError("Die Kontextfreigabe muss an oder aus sein.")
             limit = values.get("notes_limit", cw.notes_limit)
             if type(limit) is not int or limit not in NOTE_LIMITS:
-                raise CoworkerError("Der Notizspeicher darf 6000, 12000 oder 24000 Zeichen haben.")
+                raise CoworkerError(
+                    "Der Platz für Notizen darf 6000, 12000 oder 24000 Zeichen haben."
+                )
             if "ha_grants" in values:
-                raise CoworkerError("Bitte die Regel „Im Haus etwas schalten“ verwenden.")
+                raise CoworkerError("Nimm dafür die Regel „Im Haus etwas schalten“.")
             timing = cw.schedule
             if "schedule" in values:
                 if not cw.schedule:
@@ -824,7 +826,7 @@ class CoworkerStore:
         """Legt eine Anfrage an. Returns: (Nummer, neu?) -- dieselbe gibt es nur einmal."""
         argumente = json.dumps(arguments, ensure_ascii=False, sort_keys=True)
         if len(argumente) > 20_000:
-            raise CoworkerError("Die Anfrage ist zu lang. Bitte teile sie in kleinere Schritte.")
+            raise CoworkerError("Die Frage ist zu lang. Teil sie bitte in kleinere Fragen.")
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             if not conn.execute("SELECT 1 FROM coworkers WHERE id = ?",
@@ -1074,7 +1076,7 @@ class Session:
             return {"error": "Dieser Coworker ist angehalten.", "gesperrt": True}
         aktuell = self.store.get(self.cw.id)
         if aktuell is None or not aktuell.enabled:
-            return {"error": "Dieser Coworker ist angehalten oder gelöscht.", "gesperrt": True}
+            return {"error": "Dieser Coworker ist pausiert oder gelöscht.", "gesperrt": True}
         if name == "coworker_report":
             if not self.reports_allowed:
                 return {"error": "Beobachtungen melden erst nach dem geprüften Nachweis "
@@ -1242,7 +1244,7 @@ def build_prompt(cw: Coworker, *, messages: list[dict[str, Any]],
         f"Du bist {cw.name}. Arbeitsschritt {cw.runs + 1}. Jetzt ist {tage[jetzt.weekday()]}, "
         f"der {jetzt.strftime('%d.%m.%Y, %H:%M')} Uhr.",
         "## Deine Aufgabe\n" + cw.goal,
-        f"Dein Notizspeicher hat {cw.notes_limit} Zeichen. Halte relevante Fakten knapp fest.",
+        f"Dein Platz für Notizen hat {cw.notes_limit} Zeichen. Halte relevante Fakten knapp fest.",
         "## Deine Notizen\n" + (cw.notes or "(noch leer – dies ist dein erster Schritt)"),
     ]
     neu = []
@@ -1576,7 +1578,7 @@ def run_action(store: CoworkerStore, action: dict[str, Any], settings: Any,
     from aquaticy.tools import Toolbox
 
     if not isinstance(action.get("arguments"), dict):
-        return False, "Die gespeicherte Anfrage ist beschädigt. Bitte stelle sie neu."
+        return False, "Die gespeicherte Frage ist kaputt. Stell sie bitte neu."
     tool = action["tool"]
     kat = CATEGORY_OF.get(tool)
     cw = store.get(action["coworker"])

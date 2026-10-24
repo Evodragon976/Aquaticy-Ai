@@ -578,8 +578,8 @@ def test_vm_switch_text_no_longer_promises_internet() -> None:
     assert 'id="werkstatt-netz"' in html and 'id="werkstatt-status"' in html
     # Jeder sichtbare Satz hat seine englische Fassung.
     for satz in ("Internet für die virtual machine",
-                 "Auf diesem Rechner fehlt Podman oder Docker – die virtual machine kann "
-                 "nicht starten. Einrichten: im Terminal aquaticy install-vm."):
+                 "Auf diesem Rechner fehlt Podman oder Docker. Darum startet die virtual "
+                 "machine nicht. So richtest du es ein: im Terminal aquaticy install-vm."):
         assert f'"{satz}":' in html, satz
 
 
@@ -884,7 +884,7 @@ def test_patterns_never_touch_text_from_the_model_or_the_user() -> None:
         """console.log(JSON.stringify([
   aufEnglisch("Wie kann ich Cookies löschen?", 0, true),
   aufEnglisch("Sitzung Bundestag heute", 0, true),
-  aufEnglisch("sichte die Anfrage …", 0, true),
+  aufEnglisch("lese die Anfrage …", 0, true),
   aufEnglisch("3 Dateien", 0, false)]));""",
     ))
     try:

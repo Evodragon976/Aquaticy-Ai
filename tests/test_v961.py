@@ -70,7 +70,7 @@ def test_version_badge_is_bigger() -> None:
 def test_pro_mode_says_it_takes_longer_for_accuracy() -> None:
     html = _ui()
     assert 'class="hint pro-hinweis only-pro"' in html
-    assert "Pro sucht gründlicher und braucht dafür länger." in html
+    assert "Pro sucht gründlicher und braucht länger." in html
 
 
 def test_normal_mode_is_bounded_pro_is_not() -> None:

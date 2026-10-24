@@ -231,8 +231,8 @@ class RunBook:
             if sum(not r.done for r in self._runs.values()) >= self.HARD:
                 # Nur das Buch zu kuerzen laesst die Arbeiter weiterlaufen. Dann
                 # waechst die Zahl wartender Threads trotz HARD ohne Grenze.
-                raise RunCapacityError("Zu viele laufende Anfragen in diesem Chat. "
-                                       "Bitte warte auf eine Antwort.")
+                raise RunCapacityError("Zu viele Anfragen laufen in diesem Chat. Warte auf eine "
+                                       "Antwort.")
             lauf = Run(secrets.token_hex(8), question)
             self._runs[lauf.id] = lauf
             # Aelteste fertige zuerst. Ein laufender bleibt (11.4.1 Luna): bis dahin
@@ -507,7 +507,7 @@ Start im Terminal steht &mdash; die mit <code>?token=</code> am Ende.</p>
 </div></body></html>"""
 
 #: Was Nutzer bei einem technischen Fehler lesen (9.6.8 Sol) -- nie den Fehler selbst.
-GENERIC_ERROR = "Da ist bei Aquaticy etwas schiefgelaufen. Bitte versuch es gleich noch einmal."
+GENERIC_ERROR = "Bei Aquaticy ist etwas schiefgelaufen. Versuch es gleich noch einmal."
 #: Woran ein technischer Fehlertext zu erkennen ist: Fehlernamen aus Python
 #: oder Bibliotheken, Statuscodes, Stapel, Systemfehlernummern.
 _TECHNISCH = re.compile(
@@ -3010,9 +3010,9 @@ def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     if aktion == "link" and not provider:
         provider = erkannt
         if not provider:
-            return {"ok": False, "error": "Diesen Schlüssel erkenne ich nicht. Ein Schlüssel "
-                                          "von NVIDIA beginnt mit „nvapi-“, einer von Mistral "
-                                          "hat 32 Buchstaben und Ziffern."}, 400
+            return {"ok": False, "error": "Diesen Schlüssel kenne ich nicht. Ein Schlüssel von "
+                                          "NVIDIA beginnt mit „nvapi-“. Einer von Mistral hat 32 "
+                                          "Buchstaben und Zahlen."}, 400
     if provider not in linked.PROVIDERS:
         return {"ok": False, "error": "Diesen Anbieter gibt es hier nicht."}, 400
     d = linked.PROVIDERS[provider]
@@ -3027,8 +3027,8 @@ def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     try:
         if aktion in ("link", "refresh"):
             if not KEY_TEST_LIMIT.allow(wer):
-                return {"ok": False, "error": "Das waren viele Versuche in kurzer Zeit — bitte "
-                                              "in einer Minute noch einmal."}, 429
+                return {"ok": False, "error": "Das waren zu viele Versuche. Versuch es in einer "
+                                              "Minute noch einmal."}, 429
             if aktion == "link":
                 wert = check_key(name, str(payload.get("key") or ""))
             else:
@@ -3038,7 +3038,7 @@ def linked_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                 wert = wert or (os.environ.get(name, "").strip() if session.profile is None
                                 else "")
                 if not wert:
-                    return {"ok": False, "error": "Hier ist noch kein Schlüssel hinterlegt."}, 400
+                    return {"ok": False, "error": "Hier ist noch kein Schlüssel."}, 400
             info = linked.inspect(provider, wert)
             if aktion == "link":
                 if session.profile is not None:
@@ -3122,7 +3122,7 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                 forget_strong_models(session.settings().data_dir)
             addons.uninstall(session.settings(), addon.id)
             session.reload(workshop=True)
-            hinweis = ("Deinstalliert — der Schlüssel ist gelöscht."
+            hinweis = ("Entfernt. Der Schlüssel ist gelöscht."
                        if addon.id in addons.MODEL_ADDONS
                        else "Deinstalliert — Programm und Anmeldung sind gelöscht.")
         elif action in ("enable", "disable"):
@@ -3426,7 +3426,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                     type(payload["interval_seconds"]) is not int
                     or payload["interval_seconds"] not in coworker_mod.INTERVAL_SECONDS
                 ):
-                    raise ValueError("Bitte einen angebotenen Rhythmus auswählen.")
+                    raise ValueError("Wähl einen der angebotenen Rhythmen.")
                 store.update(kollege.id, name=None if neuer_name is None else str(neuer_name),
                              goal=None if neue_aufgabe is None else str(neue_aufgabe),
                              avatar=None if payload.get("avatar") is None
@@ -4864,7 +4864,7 @@ class Handler(BaseHTTPRequestHandler):
                           if konto is not None and not SESSION.ultra else 0)
             self._json(context_view(einstellungen, modell, obergrenze))
         elif route == "/api/vm":
-            # Fuer den Schalter unter "Code wirklich ausprobieren" (11.2.2 Sol): ob
+            # Fuer den Schalter unter "Code echt ausprobieren" (11.2.2 Sol): ob
             # die virtual machine Internet hat, ob das Konto es aendern darf und ob
             # es auf diesem Rechner ueberhaupt eine Abschottung gibt.
             from aquaticy import sandbox as werkstatt
@@ -5194,8 +5194,8 @@ class Handler(BaseHTTPRequestHandler):
             if (payload.get("enabled") is True and AIGUARD is not None
                     and account is not None and AIGUARD.is_banned(
                         user_id=account.id, ip=self._client_ip()) is not None):
-                self._json({"error": "Gemeinsames Lernen kannst du während einer "
-                            "Kontosperre nur ausschalten."}, 403)
+                self._json({"error": "Solange dein Konto gesperrt ist, kannst du Gemeinsames "
+                            "Lernen nur ausschalten."}, 403)
                 return
             try:
                 state = Learning(SESSION.settings().data_dir).set_consent(
@@ -5905,7 +5905,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             wunsch["structured"] = payload["thinking"]
         # Alte Clients duerfen den entfernten Modus nicht wieder aktivieren.
         if payload.get("image_mode") not in (None, False):
-            self._json({"error": "Der angeforderte Modus wird nicht mehr unterstützt."}, 400)
+            self._json({"error": "Diesen Modus gibt es nicht mehr."}, 400)
             return
         # Ein Schalter, den der gewaehlte Modus gar nicht zeigt, ist kein
         # Wunsch: er darf den gespeicherten Stand nicht ueberschreiben. Sonst

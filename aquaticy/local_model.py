@@ -658,7 +658,7 @@ def context_limit(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
     if trainiert:
         grenze = min(grenze, trainiert)
     if grenze < 1:
-        raise ContextLimitError("Dieses Modell braucht mehr Kontextspeicher als erlaubt.")
+        raise ContextLimitError("Dieses Modell braucht mehr Speicher, als erlaubt ist.")
     # Eine Bedienungs-Mindestgroesse darf harte Obergrenzen nicht vergroessern.
     return grenze // 1024 * 1024 if grenze >= 1024 else grenze
 

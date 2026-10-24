@@ -265,7 +265,7 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
             if antwort.headers.get("content-encoding", "identity").strip().lower() not in (
                     "", "identity"):
                 # iter_bytes wuerde vor unserer Groessenpruefung unbegrenzt entpacken.
-                raise LlamaError("Der Download enthält eine unerwartete HTTP-Komprimierung.")
+                raise LlamaError("Die Datei kam in einem unerwarteten Format an.")
             pruefer = hashlib.sha256()
             geladen = 0
             with ziel.open("wb") as datei:
@@ -603,7 +603,7 @@ class Installer:
         return self._gewaehlt
 
     def _choose(self) -> None:
-        self.message = "Sucht die neueste Fassung von llama.cpp …"
+        self.message = "Sucht die neueste Version von llama.cpp …"
         http = self._http()
         try:
             self._gewaehlt = str(release(http=http)["tag_name"])

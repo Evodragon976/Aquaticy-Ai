@@ -73,8 +73,8 @@ LOCAL_PROVIDERS: dict[str, tuple[tuple[str, ...], str]] = {
 }
 #: Ollama reicht Modelle mit "-cloud" an ollama.com weiter -- das ist nicht lokal.
 _OLLAMA_CLOUD = re.compile(r"[:-]cloud$", re.IGNORECASE)
-MODEL_RULE_TEXT = ("Aquaticy nimmt nur Mistral und NVIDIA NIM (beide unter Add-ons) oder "
-                   "Modelle, die auf dem Server laufen: Ollama, LM Studio, vLLM, llama.cpp.")
+MODEL_RULE_TEXT = ("Aquaticy nutzt nur Mistral und NVIDIA NIM (unter Add-ons) oder Modelle auf "
+                   "dem Server, zum Beispiel mit Ollama.")
 #: Namen, die immer zum Server gehoeren -- auch ohne Nachschlagen.
 _LOKALE_NAMEN = (".local", ".lan", ".internal", ".home.arpa", ".localhost")
 #: Nachgeschlagene Namen: (Zeitpunkt, lokal?) -- fuenf Minuten lang.

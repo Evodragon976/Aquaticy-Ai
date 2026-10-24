@@ -58,7 +58,8 @@ def test_new_texts_have_english() -> None:
     html = _ui()
     en = html[html.index("const EN = {"):]
     for text in ("KI-Konten", "Server-Verbund", "Mit Apple", "Server im lokalen Netz",
-                 "Dafür braucht es NVIDIA NIM und Mistral, beide mit Schlüssel (unter Add-ons)."):
+                 "Dafür brauchst du NVIDIA NIM und Mistral, beide mit Schlüssel. Das geht unter "
+                 "Add-ons."):
         assert f'"{text}":' in en, text
 
 

@@ -282,7 +282,7 @@ def test_a_denied_request_never_reaches_the_chat_model_while_another_account_ans
 def test_full_run_book_rejects_new_work_and_keeps_all_active_runs():
     book = web.RunBook()
     runs = [book.start(str(i)) for i in range(book.HARD)]
-    with pytest.raises(RuntimeError, match="laufende Anfragen"):
+    with pytest.raises(RuntimeError, match="Zu viele Anfragen laufen"):
         book.start("zu viel")
     assert all(book.get(run.id) is run for run in runs)
     assert book.latest() is runs[-1]

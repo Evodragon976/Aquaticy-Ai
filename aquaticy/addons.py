@@ -102,34 +102,33 @@ CATALOG: dict[str, AddOn] = {
         # -- KI-Modelle (12.0.0 Luna): die einzigen Anbieter mit API-Schluessel --
         AddOn(
             "nvidia_nim", "NVIDIA NIM", "🟩", "KI-Modelle",
-            "Offene Modelle bei NVIDIA, zum Beispiel Llama 3.3 70B und Qwen-Coder. "
-            "Großzügiges Freikontingent: 40 Anfragen je Minute.",
+            "Offene Modelle bei NVIDIA, zum Beispiel Nemotron und Qwen-Coder. Viel kostenlos: 40 "
+            "Fragen pro Minute.",
             login="apikey",
-            anmelden="Melde dich bei NVIDIA an, erstelle unter „API Keys“ einen Schlüssel "
-            "(beginnt mit nvapi-) und füge ihn hier ein.",
-            hinweis="Deine Fragen gehen an NVIDIA. Der Schlüssel liegt verschlüsselt bei "
-            "deinem Konto und geht nur an NVIDIA.",
+            anmelden="Melde dich bei NVIDIA an. Erstelle unter „API Keys“ einen Schlüssel. Er "
+            "beginnt mit nvapi-. Füge ihn hier ein.",
+            hinweis="Deine Fragen gehen an NVIDIA. Der Schlüssel wird verschlüsselt in deinem "
+            "Konto gespeichert. Er geht nur an NVIDIA.",
         ),
         AddOn(
             "mistral", "Mistral", "🟧", "KI-Modelle",
-            "Europäischer Anbieter mit Servern in der EU: Mistral Large, Mistral Small "
-            "und Codestral.",
+            "Anbieter aus Europa, Server in der EU. Zum Beispiel Mistral Large, Mistral Small und "
+            "Codestral.",
             login="apikey",
-            anmelden="Melde dich bei Mistral an, erstelle unter „API Keys“ einen Schlüssel "
-            "und füge ihn hier ein.",
-            hinweis="Deine Fragen gehen an Mistral. Der Schlüssel liegt verschlüsselt bei "
-            "deinem Konto und geht nur an Mistral.",
+            anmelden="Melde dich bei Mistral an. Erstelle unter „API Keys“ einen Schlüssel. Füge "
+            "ihn hier ein.",
+            hinweis="Deine Fragen gehen an Mistral. Der Schlüssel wird verschlüsselt in deinem "
+            "Konto gespeichert. Er geht nur an Mistral.",
         ),
         AddOn(
             "github", "GitHub", "🐙", "Konten",
             "Deine Repos, Issues, Pull Requests und Dateien — Aquaticy liest sie, "
             "schreibt aber nie etwas.",
             login="token",
-            anmelden="Erstelle auf github.com unter Settings → Developer settings → Personal "
-            "access tokens ein Token (am besten „Fine-grained“ mit nur Leserechten) und "
-            "füge es hier ein.",
-            hinweis="Aquaticy nutzt nur lesende Aufrufe — auch wenn das Token mehr dürfte. "
-            "Inhalte privater Repos landen nie in einer Websuche.",
+            anmelden="Erstelle auf github.com ein Token: Settings → Developer settings → Personal "
+            "access tokens. Am besten „Fine-grained“ mit nur Leserechten. Füg es dann hier ein.",
+            hinweis="Aquaticy liest nur, auch wenn das Token mehr dürfte. Inhalte privater Repos "
+            "landen nie in einer Websuche.",
         ),
         AddOn(
             "whatsapp", "WhatsApp Web", "💬", "Messenger",
@@ -140,9 +139,9 @@ CATALOG: dict[str, AddOn] = {
             anmelden="„Anmelden“ öffnet WhatsApp Web in der virtual machine. Auf dem Handy: "
             "WhatsApp → Einstellungen → Verknüpfte Geräte → Gerät hinzufügen, dann den "
             "QR-Code im Bildschirm unten scannen.",
-            hinweis="WhatsApp mag keine Automatisierung: nutze es für dich, nie für "
-            "Massennachrichten — sonst droht eine Sperre. Was Aquaticy liest, geht an "
-            "dein Modell. Braucht Firefox (wird beim Installieren mitgeladen).",
+            hinweis="WhatsApp mag keine Automatisierung. Nutze es nur für dich, nie für "
+            "Massennachrichten, sonst droht eine Sperre. Was Aquaticy liest, geht an dein Modell. "
+            "Braucht Firefox (kommt beim Installieren mit).",
         ),
         AddOn(
             "signal", "Signal", "🔵", "Messenger",
@@ -153,8 +152,8 @@ CATALOG: dict[str, AddOn] = {
             "Einstellungen → Gekoppelte Geräte → +, dann den QR-Code im Bildschirm unten "
             "scannen.",
             hinweis="Signal Desktop gibt es nur für x86_64. Nachrichten, die Aquaticy liest, "
-            "gehen an dein Modell — bei einem Messenger mit Ende-zu-Ende-Verschlüsselung "
-            "solltest du das bewusst entscheiden.",
+            "gehen an dein Modell. Signal ist Ende-zu-Ende-verschlüsselt — überleg dir das also "
+            "gut.",
         ),
         AddOn(
             "telegram", "Telegram Web", "✈️", "Messenger",
@@ -165,22 +164,22 @@ CATALOG: dict[str, AddOn] = {
             anmelden="„Anmelden“ öffnet Telegram Web. Auf dem Handy: Telegram → "
             "Einstellungen → Geräte → Desktop-Gerät verbinden, dann den QR-Code scannen. "
             "Alternativ Telefonnummer und Code selbst in den Bildschirm tippen.",
-            hinweis="Was Aquaticy liest, geht an dein Modell. Braucht Firefox (wird beim "
-            "Installieren mitgeladen).",
+            hinweis="Was Aquaticy liest, geht an dein Modell. Braucht Firefox (kommt beim "
+            "Installieren mit).",
         ),
         AddOn(
             "blender", "Blender", "🧊", "Programme",
             "Das 3D-Programm von blender.org: mit Oberfläche im Desktop der virtual machine und "
-            "für Skripte (blender_run) — Modelle bauen, Szenen einrichten, rendern.",
+            "für Skripte (blender_run). Damit baust du Modelle, richtest Szenen ein und renderst.",
             login="keine", werkstatt=True, programm="blender",
             anmelden="Keine Anmeldung nötig.",
-            hinweis="Gut 350 MB Download, ausgepackt über 1 GB. Mit der Größe der virtual machine "
-            "„Plus“ läuft es deutlich ruhiger.",
+            hinweis="Rund 350 MB Download, ausgepackt über 1 GB. Mit der virtual machine in Größe "
+            "„Plus“ läuft es viel ruhiger.",
         ),
         AddOn(
             "wetter", "Wetter", "🌦️", "Dienste",
-            "Aktuelles Wetter und Vorhersage bis 7 Tage für jeden Ort — von Open-Meteo "
-            "(freie Wetterdaten u. a. vom DWD), ohne Schlüssel.",
+            "Wetter jetzt und Vorhersage bis 7 Tage für jeden Ort. Von Open-Meteo (freie "
+            "Wetterdaten, u. a. vom Deutschen Wetterdienst), ohne Schlüssel.",
             login="keine", vorschlag=True,
             anmelden="Keine Anmeldung nötig.",
             hinweis="Nur der Ortsname geht an Open-Meteo, sonst nichts.",
@@ -191,8 +190,8 @@ CATALOG: dict[str, AddOn] = {
             "einträgst, und fasst zusammen, was neu ist.",
             login="feeds", vorschlag=True,
             anmelden="Trag die Adressen deiner Feeds ein (eine je Zeile, höchstens 20).",
-            hinweis="Abgerufen wird höflich: robots.txt zählt, eine Anfrage je Sekunde und "
-            "Server, ehrliche Kennung.",
+            hinweis="Aquaticy ruft höflich ab: beachtet robots.txt, höchstens eine Anfrage pro "
+            "Sekunde und Server, mit ehrlicher Kennung.",
         ),
         # -- Neu in 9.5.17: vier kostenlose Dienste ohne Schlüssel -------------
         AddOn(
@@ -214,17 +213,16 @@ CATALOG: dict[str, AddOn] = {
         ),
         AddOn(
             "waehrung", "Währungsrechner", "💱", "Dienste",
-            "Tageskurse der Europäischen Zentralbank für gut 30 Währungen — umrechnen, "
-            "ohne zu suchen.",
+            "Tageskurse der Europäischen Zentralbank für rund 30 Währungen. Umrechnen ohne Suche.",
             login="keine", vorschlag=True,
             anmelden="Keine Anmeldung nötig.",
-            hinweis="Die Kurse kommen einmal pro Werktag gegen 16 Uhr (Frankfurter, "
+            hinweis="Neue Kurse gibt es einmal pro Werktag gegen 16 Uhr (Frankfurter Zeit, "
             "Referenzkurse der EZB). Für Überweisungen gilt der Kurs deiner Bank.",
         ),
         AddOn(
             "feiertage", "Feiertage", "📅", "Dienste",
-            "Gesetzliche Feiertage für Deutschland und über 100 andere Länder — auch, "
-            "welche nur in einzelnen Bundesländern gelten.",
+            "Gesetzliche Feiertage für Deutschland und über 100 andere Länder. Auch, welche nur "
+            "in einzelnen Bundesländern gelten.",
             login="keine", vorschlag=True,
             anmelden="Keine Anmeldung nötig.",
             hinweis="Daten von Nager.Date. Nur Jahr und Land gehen raus.",
@@ -232,8 +230,8 @@ CATALOG: dict[str, AddOn] = {
         # -- Eigene Plugins (11.0.0 Luna): Wissen statt Werkzeug ---------------
         AddOn(
             "code-review", "Code-Review", "🔍", "Plugins",
-            "Prüft Code auf typische Fehler — besonders auf die, die KI-generierter Code oft "
-            "hat: erfundene Funktionen und Pakete, fehlende Randfälle, verschluckte Fehler.",
+            "Prüft Code auf typische Fehler. Besonders auf die, die KI-Code oft hat: erfundene "
+            "Funktionen und Pakete, fehlende Randfälle, verschluckte Fehler.",
             login="keine",
             anmelden="Keine Anmeldung nötig. Im Chat: /code-review und dahinter Code, eine "
             "angehängte Datei oder ein GitHub-Repo.",
@@ -243,12 +241,12 @@ CATALOG: dict[str, AddOn] = {
         AddOn(
             "security-review", "Security-Review", "🛡️", "Plugins",
             "Sucht Sicherheitslücken wie XSS, SQL-Injection, fehlende Zugriffskontrolle oder "
-            "Prompt-Injection — nach OWASP Top 10 — und sagt, wie man sie schließt.",
+            "Prompt-Injection (nach OWASP Top 10). Sagt dir auch, wie du sie schließt.",
             login="keine",
             anmelden="Keine Anmeldung nötig. Im Chat: /security-review und dahinter Code, "
             "eine angehängte Datei oder ein GitHub-Repo.",
-            hinweis="Prüft aus Sicht eines Verteidigers: finden, belegen, beheben — ohne "
-            "Angriffsanleitungen. Der Code geht an dein Modell.",
+            hinweis="Prüft wie ein Verteidiger: finden, belegen, beheben. Keine Anleitungen für "
+            "Angriffe. Der Code geht an dein Modell.",
         ),
     )
 }

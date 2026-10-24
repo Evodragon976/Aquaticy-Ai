@@ -199,7 +199,7 @@ class ChatRenderer:
     def _on_planning(self, payload: dict[str, Any]) -> None:
         self._flush_reading()
         self.console.print(
-            Text.assemble(("  [Plane] ", "bold magenta"), ("sichte die Anfrage ...", "dim"))
+            Text.assemble(("  [Plane] ", "bold magenta"), ("lese die Anfrage ...", "dim"))
         )
 
     def _on_triage(self, payload: dict[str, Any]) -> None:
