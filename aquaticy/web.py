@@ -1320,6 +1320,12 @@ class ChatSession:
         #: Antworten auf Rueckfragen. Nur eine Anfrage laeuft gleichzeitig,
         #: deshalb genuegt eine Schlange fuer die ganze Sitzung.
         self._answers: queue.Queue[str] = queue.Queue()
+        #: Wartet gerade eine Rueckfrage auf Antwort (12.4.5 Sol)? Nur dann zaehlt eine
+        #: Antwort -- und nur eine je Frage. Vorher landete jede Antwort waehrend eines
+        #: Laufs in der Schlange: ein doppelt geschicktes "ja" oder eine verspaetete
+        #: Antwort beantwortete still die naechste Frage derselben Reihe (1/3, 2/3 ...).
+        self._frage_offen = False
+        self._frage_lock = threading.Lock()
         #: Eine Einstellung wurde im Gespraech geaendert -- nach dem Durchlauf
         #: wird der Agent neu gebaut.
         self._reload_after = False
@@ -1682,10 +1688,20 @@ class ChatSession:
         try:
             with self._lock:
                 self._drain_answers()
+                with self._frage_lock:
+                    self._frage_offen = False
                 agent = self.agent()
                 previous_agent_limit = getattr(agent, "_agent_limit_override", None)
                 try:
-                    agent.on_event = lambda name, payload: emit(name, payload)
+                    def melden(name: str, payload: dict[str, Any]) -> None:
+                        # Die Frage gilt als offen, BEVOR der Browser sie sieht -- sonst
+                        # koennte eine sehr schnelle Antwort zu frueh kommen.
+                        if name == "ask":
+                            with self._frage_lock:
+                                self._frage_offen = True
+                        emit(name, payload)
+
+                    agent.on_event = melden
                     agent.toolbox.on_event = agent.on_event
                     # Aendert Aquaticy im Gespraech eine Einstellung, muss der Agent
                     # danach neu gebaut werden -- sonst arbeitet die naechste Frage
@@ -1811,10 +1827,16 @@ class ChatSession:
         Aufgeraeumt wird zu Beginn der Anfrage, nicht hier -- sonst koennte
         eine sehr schnelle Antwort dem eigenen Aufraeumen zum Opfer fallen.
         """
+        with self._frage_lock:
+            self._frage_offen = True
         try:
             return self._answers.get(timeout=self.ANSWER_TIMEOUT)
         except queue.Empty:
             return ""
+        finally:
+            # Beantwortet oder aufgegeben: eine spaetere Antwort gehoert zu keiner Frage.
+            with self._frage_lock:
+                self._frage_offen = False
 
     def _drain_answers(self) -> None:
         """Antworten aus einer frueheren Runde wegwerfen."""
@@ -1825,10 +1847,16 @@ class ChatSession:
                 return
 
     def answer(self, text: str) -> bool:
-        """Nimmt die Antwort aus dem Browser entgegen. `False` = niemand wartet."""
-        if not self.busy():
-            return False
-        self._answers.put(text)
+        """Nimmt die Antwort aus dem Browser entgegen. `False` = niemand wartet.
+
+        Genau eine Antwort je offener Frage: die zweite (doppelt geklickt) oder eine
+        nach dem Aufgeben kommt nicht in die Schlange und beantwortet nichts.
+        """
+        with self._frage_lock:
+            if not self.busy() or not self._frage_offen:
+                return False
+            self._frage_offen = False
+            self._answers.put(text)
         return True
 
     def attachments_text(
