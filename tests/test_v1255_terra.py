@@ -288,3 +288,62 @@ def test_connecting_without_a_secret_says_so_before_google(
     daten = json.loads(body)
     assert status == 200 and daten["ok"] is False and "url" not in daten
     assert "Client-Secret" in daten["error"]
+
+
+# -- Home Assistant: ein erfolgreicher Test gilt gleich ------------------------------
+HA_NAMEN = ("AQUATICY_HA_URL", "HA_TOKEN", "AQUATICY_HA_TOKEN", "AQUATICY_HA_CONTROL")
+
+
+@pytest.fixture
+def ha_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
+    """Eigene .env, ein gestelltes Home Assistant -- nichts bleibt nach dem Test."""
+    ziel = tmp_path / "ha.env"
+    monkeypatch.setattr(web, "find_env_file", lambda: ziel)
+    for name in HA_NAMEN:
+        monkeypatch.setenv(name, "")
+    monkeypatch.setattr("aquaticy.homeassistant.HomeAssistant.ping", lambda self: "Home 2026.5.1")
+    monkeypatch.setattr("aquaticy.homeassistant.HomeAssistant.domains",
+                        lambda self: {"light": 8, "sensor": 80})
+    web.SESSION.reload()
+    return ziel
+
+
+def test_a_successful_ha_test_is_saved_right_away(client, ha_env: Any) -> None:  # noqa: F811
+    """Fund: "Verbunden mit Home 2026.5.1 — 88 Geräte und Werte. Zum Übernehmen unten
+    speichern." -- wer das übersah, hatte im Chat kein Home Assistant."""
+    status, body = client("POST", "/api/ha", {"url": "192.168.1.5:8123",
+                                              "token": "ha-token-123456", "save": True})
+    daten = json.loads(body)
+    assert status == 200 and daten["ok"] is True and daten["saved"] is True
+    assert daten["entities"] == 88 and daten["control"] is False
+    inhalt = ha_env.read_text(encoding="utf-8")
+    assert "AQUATICY_HA_URL=http://192.168.1.5:8123" in inhalt
+    assert "HA_TOKEN=ha-token-123456" in inhalt
+    gilt = web.SESSION.settings()
+    assert gilt.ha_url == "http://192.168.1.5:8123" and gilt.ha_token == "ha-token-123456"
+    # Und der Chat bekommt die Werkzeuge.
+    namen = {t["function"]["name"] for t in Agent(gilt, cache=None).tools}
+    assert "ha_states" in namen and "ha_call" not in namen
+
+
+def test_without_save_the_ha_test_only_tests(client, ha_env: Any) -> None:  # noqa: F811
+    _, body = client("POST", "/api/ha", {"url": "192.168.1.5:8123", "token": "ha-token-123456"})
+    daten = json.loads(body)
+    assert daten["ok"] is True and daten["saved"] is False
+    assert not ha_env.exists()
+
+
+def test_the_model_hears_where_switching_is_turned_on(
+        settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    settings.ha_url, settings.ha_token, settings.ha_control = "http://ha.local:8123", "t", False
+    modell = Modell(_reply("Schalten ist aus."))
+    agent = _agent(settings, monkeypatch, modell, [])
+    monkeypatch.setattr(agent.toolbox, "ha_states", lambda search="", domain="": {"states": []})
+    agent.ask("Schalte meine Lichter an", stream=False)
+    verlauf = json.dumps(modell.verlaeufe[0], ensure_ascii=False)
+    assert "Aquaticy darf auch schalten" in verlauf and "ha_call" not in modell.werkzeuge[0]
+    settings.ha_control = True
+    agent = _agent(settings, monkeypatch, modell, [])
+    monkeypatch.setattr(agent.toolbox, "ha_states", lambda search="", domain="": {"states": []})
+    agent.ask("Schalte meine Lichter an", stream=False)
+    assert "Schalten ist aus" not in json.dumps(modell.verlaeufe[-1], ensure_ascii=False)

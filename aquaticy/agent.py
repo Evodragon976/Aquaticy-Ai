@@ -3399,6 +3399,13 @@ class Agent:
             if eigene_fehlen:
                 inhalt += ("\n[Nicht eingerichtet -- sag das dem Nutzer: "
                            f"{missing_text(eigene_fehlen)}]")
+            if "home" in da and not self.settings.ha_control:
+                # Ohne den Schalter gibt es ha_call nicht -- das Modell soll sagen,
+                # wo er sich einschalten laesst, statt nur "geht nicht" (12.5.5 Terra).
+                inhalt += ("\n[Schalten ist aus: In Home Assistant darfst du nur nachsehen. "
+                           "Will der Nutzer etwas schalten, sag ihm: Das geht in den "
+                           "Einstellungen unter „Zuhause & Netz“ mit „Aquaticy darf auch "
+                           "schalten“.]")
         self.messages.append({"role": "user", "content": inhalt})
 
         budget = max(1, self.settings.max_tool_calls)

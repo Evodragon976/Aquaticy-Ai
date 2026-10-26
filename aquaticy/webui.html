@@ -6627,8 +6627,11 @@ const EN_MUSTER = [
   [/^Gefunden: (.+)\. Zum Übernehmen unten speichern\.$/, "Found: $1. Save below to apply."],
   [/^Gefunden: (.+) — die erste ist eingetragen\.$/, "Found: $1 — the first one is filled in."],
   [/^Gefunden: (.+)$/, "Found: $1"],
-  [/^Verbunden mit (.+) — (\d+) Geräte und Werte\. Zum Übernehmen unten speichern\.$/,
-   "Connected to $1 — $2 devices and values. Save below to apply."],
+  [/^Verbunden mit (.+) — (\d+) Geräte und Werte\. Aquaticy kann jetzt nachsehen und .+$/,
+   "Connected to $1 — $2 devices and values. Aquaticy can now look things up and switch."],
+  [/^Verbunden mit (.+) — (\d+) Geräte und Werte\. Aquaticy kann jetzt nachsehen\. Zum .+$/,
+   "Connected to $1 — $2 devices and values. Aquaticy can now look things up. To switch "
+   + "things, turn on “Aquaticy may also switch things” and save below."],
   [/^Verbunden(?: als (.+?))? — (darf auch ändern|nur lesend)\.$/,
    (m, wer, recht) => "Connected" + (wer ? ` as ${wer}` : "")
      + (recht === "nur lesend" ? " — read only." : " — may also make changes.")],
@@ -10020,16 +10023,25 @@ $("#ha-find").addEventListener("click", async () => {
     : `Gefunden: ${data.found.join(", ")} — die erste ist eingetragen.`;
 });
 $("#ha-test").addEventListener("click", async () => {
+  // Klappt der Test, speichert der Server die Verbindung gleich (12.5.5 Terra).
   const data = await haCall({
     url: form.elements["AQUATICY_HA_URL"].value.trim(),
     token: form.elements["__HA_TOKEN__"].value.trim(),
+    save: true,
   });
   if (!data) return;
   const note = $("#ha-note");
   if (!data.ok){ note.className = "note bad"; note.textContent = data.error; return; }
   note.className = "note ok";
+  if (data.saved){
+    form.elements["AQUATICY_HA_URL"].value = data.url;
+    form.elements["__HA_TOKEN__"].value = "";
+    $("#ha-hint").textContent = "(gesetzt)";
+  }
   note.textContent = `Verbunden mit ${data.name} — ${data.entities} Geräte und Werte. `
-    + "Zum Übernehmen unten speichern.";
+    + (data.control ? "Aquaticy kann jetzt nachsehen und schalten."
+       : "Aquaticy kann jetzt nachsehen. Zum Schalten „Aquaticy darf auch schalten“ "
+         + "einschalten und unten speichern.");
 });
 
 /* ---------- Gmail und Kalender ---------- */

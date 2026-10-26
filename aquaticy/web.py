@@ -5770,12 +5770,29 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             counts = client.domains()
         except HomeAssistantError as exc:
             return {"ok": False, "error": str(exc)}
+        gespeichert = False
+        if payload.get("save") and (eingetippt or normalize_url(url)
+                                    != normalize_url(settings.ha_url)):
+            # Klappt der Test, gilt die Verbindung gleich (12.5.5 Terra). Bis dahin
+            # stand "Zum Uebernehmen unten speichern" da -- und wer das uebersah,
+            # hatte im Chat kein Home Assistant, obwohl der Test "verbunden" sagte.
+            neu = {"AQUATICY_HA_URL": client.url}
+            if eingetippt:
+                neu[HA_TOKEN_FIELD] = eingetippt
+            try:
+                save_values(neu)
+            except ValueError as exc:
+                return {"ok": False, "error": str(exc)}
+            gespeichert = True
         return {
             "ok": True,
             "name": hello,
             "url": client.url,
             "entities": sum(counts.values()),
             "domains": counts,
+            "saved": gespeichert,
+            # Schalten ist ein eigener Schalter -- die Oberflaeche sagt, wenn er aus ist.
+            "control": bool(SESSION.settings().ha_control),
         }
 
     def _send_ui(self) -> None:
