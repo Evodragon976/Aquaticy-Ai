@@ -860,7 +860,7 @@ class Cluster:
 
     def _load_node(self) -> dict[str, str]:
         knoten = self._load_json("node.json", {})
-        if not _NODE_RE.match(str(knoten.get("id", ""))):
+        if not _NODE_RE.fullmatch(str(knoten.get("id", ""))):
             knoten = {"id": secrets.token_hex(16)}
         knoten["name"] = (socket.gethostname() or "aquaticy")[:60]
         self._save_json("node.json", knoten)
@@ -1010,7 +1010,7 @@ class Cluster:
         if not isinstance(b, dict) or b.get("app") != "aquaticy":
             return
         knoten = str(b.get("node", ""))
-        if not _NODE_RE.match(knoten) or knoten == self.node_id:
+        if not _NODE_RE.fullmatch(knoten) or knoten == self.node_id:
             return
         try:
             port = int(b.get("port", 0))
@@ -1133,7 +1133,7 @@ class Cluster:
             if self.is_master:
                 jetzt = _now()
                 for user in args.get("seen", [])[:5000]:
-                    if _USER_RE.match(str(user)):
+                    if _USER_RE.fullmatch(str(user)):
                         self._activity[str(user)] = jetzt
             if isinstance(args.get("load"), dict):
                 self.loads[absender] = args["load"]
@@ -1147,7 +1147,7 @@ class Cluster:
             return {"ok": True}
         if op == "assign" and self.is_master:
             user = str(args.get("user", ""))
-            if not _USER_RE.match(user):
+            if not _USER_RE.fullmatch(user):
                 raise ClusterError("Ungültiges Konto.")
             return {"node": self.assign(user)}
         if op == "dblog":
@@ -1370,7 +1370,7 @@ class Cluster:
                 self.call(node, "adopt", {"user": user})
 
     def _release(self, user: str) -> bool:
-        if not _USER_RE.match(user):
+        if not _USER_RE.fullmatch(user):
             return False
         with self._lock:
             self._moving.add(user)
@@ -1568,7 +1568,7 @@ class Cluster:
             abgegeben: list[str] = []
             angenommen: list[str] = []
             if isinstance(homes, dict):
-                neue = {str(u): str(n) for u, n in homes.items() if _USER_RE.match(str(u))}
+                neue = {str(u): str(n) for u, n in homes.items() if _USER_RE.fullmatch(str(u))}
                 # Konten, die der Master inzwischen woanders hinlegt (etwa nach
                 # einer Uebernahme, waehrend dieser Server weg war), werden hier
                 # angehalten -- sonst liefen Auftraege und Sitzungen weiter (9.6.8 Sol).
@@ -1817,7 +1817,7 @@ class Cluster:
             return out
         for ordner in users.iterdir():
             user = ordner.name
-            if not ordner.is_dir() or not _USER_RE.match(user):
+            if not ordner.is_dir() or not _USER_RE.fullmatch(user):
                 continue
             heim = self.homes.get(user, "")
             if heim == self.node_id or (not heim and self.is_master):
@@ -1830,7 +1830,7 @@ class Cluster:
         except (ClusterError, OSError, ValueError):
             return
         for user, gen in stände.items():
-            if not _USER_RE.match(str(user)) or self.homes.get(user) == self.node_id:
+            if not _USER_RE.fullmatch(str(user)) or self.homes.get(user) == self.node_id:
                 continue
             if self._gens_done.get(user) == gen:
                 continue
@@ -1840,7 +1840,7 @@ class Cluster:
 
     def _user_dir(self, user: Any) -> Path:
         user = str(user or "")
-        if not _USER_RE.match(user):
+        if not _USER_RE.fullmatch(user):
             raise ClusterError("Ungültiges Konto.")
         return self.data_dir / "users" / user
 
@@ -1928,7 +1928,7 @@ class Cluster:
         jetzt = _now()
         for ordner in users.iterdir():
             user = ordner.name
-            if (not ordner.is_dir() or not _USER_RE.match(user) or user in bekannt
+            if (not ordner.is_dir() or not _USER_RE.fullmatch(user) or user in bekannt
                     or self.homes.get(user) == self.node_id or self.is_master):
                 self._orphans.pop(user, None)
                 continue
@@ -2033,7 +2033,7 @@ class Cluster:
             raise ClusterError(str(antwort["error"]))
         fremd = _unb64(antwort.get("pub"))
         knoten = str(antwort.get("node", ""))
-        if not _NODE_RE.match(knoten) or len(fremd) != 32:
+        if not _NODE_RE.fullmatch(knoten) or len(fremd) != 32:
             raise ClusterError("Der andere Server hat ungültig geantwortet.")
         if self.member(knoten) is not None:
             raise ClusterError("Dieser Server ist schon im Verbund.")
@@ -2162,7 +2162,7 @@ class Cluster:
         einladung_id = str(payload.get("id", ""))
         knoten = str(payload.get("node", ""))
         fremd = _unb64(payload.get("pub"))
-        if not re.fullmatch(r"[0-9a-f]{32}", einladung_id) or not _NODE_RE.match(knoten) \
+        if not re.fullmatch(r"[0-9a-f]{32}", einladung_id) or not _NODE_RE.fullmatch(knoten) \
                 or len(fremd) != 32:
             return {"error": "Ungültige Einladung."}
         with self._lock:
@@ -2224,7 +2224,7 @@ class Cluster:
             einladung.status = "failed"
             return {"error": "Der Schlüssel passt nicht."}
         info = paket.get("cluster") if isinstance(paket, dict) else None
-        if (not isinstance(info, dict) or not _NODE_RE.match(str(info.get("master", "")))
+        if (not isinstance(info, dict) or not _NODE_RE.fullmatch(str(info.get("master", "")))
                 or len(_unb64(info.get("secret"))) != 32
                 or not any(m.get("node") == self.node_id for m in info.get("members", []))):
             einladung.status = "failed"
@@ -2361,7 +2361,7 @@ class Cluster:
         if not self.joined or not lan_ip_ok(source_ip):
             raise ClusterError("Kein Verbund.")
         _, op, args, nonce, key = self._unwrap(raw, self._member_keys)
-        if op != "proxy" or not _USER_RE.match(str(args.get("u", ""))):
+        if op != "proxy" or not _USER_RE.fullmatch(str(args.get("u", ""))):
             raise ClusterError("Ungültige Weiterleitung.")
         return args, nonce, key
 

@@ -1506,7 +1506,7 @@ def currency(amount: Any = 1, base: str = "EUR", to: str = "",
     """Rechnet mit den Tageskursen der EZB (ueber Frankfurter) um."""
     von = str(base or "EUR").strip().upper()
     ziele = [z.strip().upper() for z in str(to or "").replace(";", ",").split(",") if z.strip()]
-    if not _WAEHRUNG.match(von) or any(not _WAEHRUNG.match(z) for z in ziele):
+    if not _WAEHRUNG.fullmatch(von) or any(not _WAEHRUNG.fullmatch(z) for z in ziele):
         return {"error": "Waehrungen bitte als dreistelligen Code, z.B. EUR, USD, CHF."}
     try:
         betrag = float(str(amount if amount not in (None, "") else 1).replace(",", "."))

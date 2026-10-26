@@ -97,7 +97,7 @@ def _chat_key(chat: Any) -> str:
 
 
 #: Version der Regeln. Ändert sie sich, gelten alte Urteile nicht mehr.
-GUARD_VERSION = "2026-09-30"
+GUARD_VERSION = "2026-10-26"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1780,7 +1780,8 @@ def judge_prompt(text: str, context: str = "") -> str:
         "- Anleitungen für Waffen, Sprengstoff oder andere Mittel, um Menschen zu schaden.\n\n"
         "KEIN Missbrauch ist: Verteidigung und Bildung -- Schadcode verstehen, eine "
         "eigene Lücke absichern, einen Angriff erkennen, ein Pentest mit Auftrag, eine "
-        "CTF-Aufgabe, allgemeine Sicherheitsfragen. Im Zweifel: kein Missbrauch.\n"
+        "CTF-Aufgabe, allgemeine Sicherheitsfragen, Fragen nach den eigenen Daten (eigene "
+        "Mails, Termine, Adresse, Standort). Im Zweifel: kein Missbrauch.\n"
         f"{davor}\n"
         f"Nachricht:\n{text.strip()[:2000]}\n\n"
         'Antworte NUR mit JSON: {"missbrauch": true|false, "art": "<zwei bis vier Wörter>", '
@@ -1935,6 +1936,12 @@ def classify(
     if smalltalk.art_von(text) is not None:
         # "Wer hat dich erschaffen?" -- eine Standardantwort, kein Anlass zur Pruefung.
         return False, ""
+    from aquaticy.guardrails import own_data_request
+
+    if own_data_request(text):
+        # "Was sind meine neusten Mails?", "Wo wohne ich?" (12.5.5 Luna): eigene Daten,
+        # kein Angriff -- das Modell sah darin sonst mitunter Ausforschen.
+        return False, ""
     with _cache_lock:
         generation = _cache_generation
     schluessel = _decision_key(settings, "anfrage", context, text)
@@ -2053,7 +2060,8 @@ def answer_prompt(text: str) -> str:
         "- Beleidigungen oder Drohungen des Assistenten gegen den Nutzer.\n\n"
         "KEIN Problem ist: Erklären, Einordnen, Geschichte, Nachrichten, Bildung, Prävention, "
         "Verteidigung und Hilfe (etwa eine Beratungsstelle), Zitate mit Einordnung, "
-        "Sachinformationen, Fiktion ohne Anleitung. Im Zweifel: kein Problem.\n\n"
+        "Sachinformationen, Fiktion ohne Anleitung, eine Übersicht über die eigenen Mails, "
+        "Termine oder Dateien des Nutzers (auch mit Spam darin). Im Zweifel: kein Problem.\n\n"
         f"Antwort:\n{_stichwort_fenster(text.strip())}\n\n"
         'Antworte NUR mit JSON: {"missbrauch": true|false, "art": "<zwei bis vier Wörter>", '
         '"grund": "<kurz>"}'

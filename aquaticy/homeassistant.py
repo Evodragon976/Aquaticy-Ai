@@ -319,7 +319,7 @@ def check_call(domain: str, service: str, entity_id: str = "", data: Any = None)
     Raises:
         HomeAssistantError: Bei allem, was nicht genau so aussieht.
     """
-    if not NAME_RE.match(domain or "") or not NAME_RE.match(service or ""):
+    if not NAME_RE.fullmatch(domain or "") or not NAME_RE.fullmatch(service or ""):
         raise HomeAssistantError(
             "Bereich und Dienst duerfen nur aus Kleinbuchstaben, Ziffern und _ bestehen.")
     payload: dict[str, Any] = dict(data) if isinstance(data, dict) else {}
@@ -331,7 +331,7 @@ def check_call(domain: str, service: str, entity_id: str = "", data: Any = None)
     if "entity_id" in payload:
         ziele += _entities(payload["entity_id"])
     for ziel in ziele:
-        if not ENTITY_RE.match(ziel):
+        if not ENTITY_RE.fullmatch(ziel):
             raise HomeAssistantError(f"'{ziel[:80]}' ist keine Entitaet (bereich.name).")
         if ziel.split(".", 1)[0] != domain:
             raise HomeAssistantError(

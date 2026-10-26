@@ -3648,11 +3648,11 @@ def _design_style(design: dict[str, Any]) -> str:
     accent = str(design.get("accent") or "").strip().lower()
     bg = str(design.get("bg") or "").strip().lower()
     sidebar = str(design.get("sidebar") or "").strip().lower()
-    if hexmuster.match(accent):
+    if hexmuster.fullmatch(accent):
         teile += [f"--accent:{accent}", f"--accent-text:{accent}"]
-    if hexmuster.match(bg):
+    if hexmuster.fullmatch(bg):
         teile += [f"--bg:{bg}", f"--surface:{bg}"]
-    if hexmuster.match(sidebar):
+    if hexmuster.fullmatch(sidebar):
         teile += [f"--sidebar:{sidebar}"]
     return ";".join(teile)
 
@@ -4886,7 +4886,7 @@ class Handler(BaseHTTPRequestHandler):
             # Der Regler unter der Modellauswahl (11.3.0 Luna).
             einstellungen = SESSION.settings()
             gewuenscht = (parse_qs(urlsplit(self.path).query).get("model") or [""])[0].strip()
-            modell = gewuenscht if _MODELL_RE.match(gewuenscht) else einstellungen.model
+            modell = gewuenscht if _MODELL_RE.fullmatch(gewuenscht) else einstellungen.model
             konto = self._account()
             obergrenze = (max(int(get_settings().context_tokens or 0), NORMAL_CONTEXT_CAP)
                           if konto is not None and not SESSION.ultra else 0)

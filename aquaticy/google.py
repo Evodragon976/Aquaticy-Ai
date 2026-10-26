@@ -676,7 +676,7 @@ def mail_addresses(text: str) -> str:
     if len(paare) > MAX_RECIPIENTS:
         raise GoogleError(f"Höchstens {MAX_RECIPIENTS} Empfänger je Entwurf.")
     for _, adresse in paare:
-        if not _ADRESSE.match(adresse):
+        if not _ADRESSE.fullmatch(adresse):
             raise GoogleError(f"'{adresse[:80]}' ist keine gültige Mailadresse.")
     return ", ".join(formataddr((" ".join(name.split())[:80], adresse)) for name, adresse in paare)
 def _times(start: str, end: str, whole_day: bool) -> tuple[dict[str, str], dict[str, str]]:

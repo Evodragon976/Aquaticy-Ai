@@ -61,7 +61,7 @@ def clean_design(value: Any) -> dict[str, str]:
         return design
     for key in DESIGN_KEYS:
         farbe = str(value.get(key) or "").strip().lower()
-        if _HEX.match(farbe):
+        if _HEX.fullmatch(farbe):
             design[key] = farbe
     return design
 

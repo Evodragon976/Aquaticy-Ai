@@ -472,7 +472,7 @@ def safe_path(path: str) -> str:
     raw = (path or "").strip()
     if not raw:
         raise ValueError("Ohne Pfad geht es nicht.")
-    if not PATH_CHARS.match(raw):
+    if not PATH_CHARS.fullmatch(raw):
         raise ValueError(
             "Im Pfad sind nur Buchstaben, Ziffern, Punkt, Strich, Unterstrich und "
             f"Schraegstrich erlaubt -- '{raw}' hat anderes darin."

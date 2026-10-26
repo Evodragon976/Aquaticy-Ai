@@ -717,7 +717,7 @@ class Desktop:
             liste = []
         if not liste or len(liste) > 10:
             return {"error": "Eine bis zehn Tasten, z. B. 'Return', 'ctrl+l' oder 'alt+F4'."}
-        falsch = [taste for taste in liste if not KEY_RE.match(taste)]
+        falsch = [taste for taste in liste if not KEY_RE.fullmatch(taste)]
         if falsch:
             return {"error": f"Das sind keine Tastennamen: {', '.join(falsch)}"}
         # Blaettern geht immer -- erst bei anderen Tasten zaehlt, was vorn ist.
