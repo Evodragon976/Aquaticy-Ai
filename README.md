@@ -1,4 +1,4 @@
-# Aquaticy AI 12.5.5 Luna
+# Aquaticy AI 12.5.5 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -97,6 +97,9 @@ $ aquaticy
 - **Zeitpläne und Beobachtungen:** direkt in Coworker, für alle Konten.
 - **Gmail und Kalender:** lesen, Termine anlegen, Entwürfe schreiben. Verschickt wird nichts.
 - **Zuhause** (Ultra): Heimnetz, Home Assistant, Lagerverwaltung.
+- **Eigene Dienste zuerst:** Fragst du nach deinen Mails, Terminen, Lichtern oder deinem
+  Lager, sieht Aquaticy dort nach und sucht nicht im Internet. Ist der Dienst nicht
+  verbunden, sagt es dir, wo du ihn verbindest.
 - **KI-Bilder** und **automatische Modellwahl**.
 - **Server-Verbund** (Ultra): bis zu 10 Server. Sie teilen sich die Nutzer oder rechnen
   gemeinsam an einem großen Modell.
@@ -117,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.5.5 Luna
+aquaticy --version            # 12.5.5 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

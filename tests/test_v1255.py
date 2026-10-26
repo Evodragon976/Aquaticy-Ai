@@ -122,8 +122,12 @@ def test_asking_for_own_mails_neither_refuses_nor_counts_as_abuse(
     gestellt = pruefer(SPERRT)
     monkeypatch.setattr("litellm.completion",
                         lambda **kwargs: _reply("Du hast zwei neue Mails."))
+    # Seit 12.5.5 Terra sagt Aquaticy ohne verbundenes Postfach nur, wo es sich
+    # verbinden laesst -- hier ist es verbunden, damit die Frage beim Modell ankommt.
+    settings.google_enabled, settings.google_client_id = True, "client"
     ereignisse: list[tuple[str, dict[str, Any]]] = []
     agent = Agent(settings, cache=None, on_event=lambda e, p: ereignisse.append((e, p)))
+    monkeypatch.setattr(agent.toolbox, "mail_search", lambda query="", count=8: {"mails": []})
     for frage in ("Was sind meine neusten E-Mails?", "Wo wohne ich?"):
         ergebnis = agent.ask(frage, stream=False)
         assert ergebnis.answer == "Du hast zwei neue Mails." and not ergebnis.guarded

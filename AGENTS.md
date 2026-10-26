@@ -39,7 +39,8 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
 
 - `aquaticy/` – das Paket. Jedes Modul sagt in seiner ersten Zeile, wofür es da ist.
   - `agent.py` Schleife mit Werkzeugaufrufen, `tools.py` die Werkzeuge,
-    `subagents.py`/`master.py` parallele Recherche.
+    `subagents.py`/`master.py` parallele Recherche, `ownservices.py` erkennt Fragen an
+    Mails, Kalender, Home Assistant und Lager (dann ohne Websuche).
   - `web.py` Server und API, `webui.html` die ganze Oberfläche (HTML, CSS, JS).
   - `cli.py` Kommandozeile, `config.py` Einstellungen.
   - Sicherheit: `netguard.py` (nur öffentliche Ziele), `injection.py`

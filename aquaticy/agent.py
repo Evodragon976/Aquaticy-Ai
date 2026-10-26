@@ -177,6 +177,9 @@ WEB_TOOLS = frozenset(
      "inspect_public_visual"}
 )
 
+#: Bei Fragen an die eigenen Dienste (12.5.5 Terra) gibt es diese Werkzeuge nicht.
+OWN_TURN_BLOCKED = WEB_TOOLS | {"research_subtasks"}
+
 VISUAL_SOURCES_PROMPT = """
 
 Öffentliche Bildquellen sind für diese Frage eingeschaltet:
@@ -1560,6 +1563,10 @@ class Agent:
             # das Modell antwortet aus dem, was im Gespraech steht.
             return []
         base = TOOL_SCHEMAS
+        if getattr(self, "_eigene", ()):
+            # Mails, Termine, Haus, Lager (12.5.5 Terra): die Antwort steht nie im Web.
+            extra = [s for s in extra if s["function"]["name"] not in OWN_TURN_BLOCKED]
+            base = [s for s in base if s["function"]["name"] not in OWN_TURN_BLOCKED]
         if not self.online:
             # Ohne Web bleiben die oertlichen Werkzeuge (Rechnen, Speicher,
             # Lager, Zuhause) -- weg ist alles, was hinausgeht. Ein Werkzeug
@@ -1851,6 +1858,63 @@ class Agent:
         # vorgelegt wird.
         return self._hand_over(results, spent, budget)
 
+    def _own_missing(self) -> tuple[str, ...]:
+        """Welche der gemeinten eigenen Dienste nicht eingerichtet sind."""
+        s = self.settings
+        eingerichtet = {
+            "mail": bool(s.google_enabled and s.google_client_id),
+            "calendar": bool(s.google_enabled and s.google_client_id),
+            "home": bool(s.ha_url and s.ha_token),
+            "storage": bool(s.storage_url and storage_access(s.storage_access) != "off"),
+        }
+        return tuple(q for q in getattr(self, "_eigene", ()) if not eingerichtet.get(q))
+
+    def _prefetch_own(self, question: str) -> int:
+        """Liest den gemeinten Dienst vorab -- wie die Nachrichten (12.5.5 Terra).
+
+        Kleine Modelle antworteten auf "Was sind meine Mails?" sonst aus dem Kopf
+        oder suchten im Web. Der Abruf steht danach als gewoehnlicher
+        Werkzeugaufruf im Verlauf. Geschaltet wird hier nie -- nur gelesen.
+
+        Returns:
+            Wie viele Werkzeugaufrufe das gekostet hat.
+        """
+        import secrets
+
+        from aquaticy.ownservices import READ_TOOL, calendar_days, home_domain
+
+        angeboten = {s.get("function", {}).get("name") for s in self.tools}
+        fehlen = set(self._own_missing())
+        calls = []
+        for quelle in self._eigene:
+            name = READ_TOOL[quelle]
+            if quelle in fehlen or name not in angeboten:
+                continue
+            if quelle == "mail":
+                ungelesen = re.search(r"ungelesen|unread", question, re.IGNORECASE)
+                argumente: dict[str, Any] = {"query": "is:unread" if ungelesen else "",
+                                             "count": 8}
+            elif quelle == "calendar":
+                argumente = {"days": calendar_days(question)}
+            elif quelle == "home":
+                bereich = home_domain(question)
+                argumente = {"domain": bereich} if bereich else {}
+            else:
+                argumente = {}
+            calls.append({
+                # Neun Zeichen aus Buchstaben und Ziffern -- wie bei den Nachrichten.
+                "id": "own" + secrets.token_hex(3),
+                "type": "function",
+                "function": {"name": name,
+                             "arguments": json.dumps(argumente, ensure_ascii=False)},
+            })
+        if not calls:
+            return 0
+        self.messages.append({"role": "assistant", "content": "", "tool_calls": calls})
+        for call in calls:
+            self.messages.append(self._tool_result(call))
+        return len(calls)
+
     def _prefetch_news(self, question: str) -> int:
         """Fragt jemand nach Nachrichten, holt Aquaticy die Meldungen vorab (11.1).
 
@@ -2043,7 +2107,8 @@ class Agent:
         """
         self._vorplan = None
         if not (self.pro_mode and self.structured and self.online and question
-                and self._auto_subagents_wanted() and not SMALL_TALK_RE.match(question)):
+                and self._auto_subagents_wanted() and not SMALL_TALK_RE.match(question)
+                and not getattr(self, "_eigene", ())):
             return
         from aquaticy.master import plan_mission
 
@@ -3176,6 +3241,10 @@ class Agent:
         """
         question = question.strip()
         self._plugin_turn = str(plugin_prompt or "").strip()
+        # Eigene Dienste (12.5.5 Terra): Mails, Kalender, Home Assistant, Lager.
+        from aquaticy.ownservices import own_sources
+
+        self._eigene: tuple[str, ...] = () if self._plugin_turn else own_sources(question)
         self._ausweich_model = ""
         learning = getattr(self, "learning", None)
         self.toolbox.learning_ticket = ""
@@ -3266,7 +3335,8 @@ class Agent:
         if abgelehnt is not None:
             return abgelehnt
 
-        if getattr(self.settings, "council", False):
+        # Der Rat hat keine Werkzeuge -- Mails, Termine, Haus und Lager liest er nie.
+        if getattr(self.settings, "council", False) and not self._eigene:
             beantwortet = self._council_turn(question, stream)
             if beantwortet is not None:
                 return beantwortet
@@ -3300,6 +3370,19 @@ class Agent:
             if picked and picked != self.settings.model:
                 self._emit("code_model", model=picked)
 
+        eigene_fehlen = self._own_missing()
+        if self._eigene and len(eigene_fehlen) == len(self._eigene):
+            # Kein gemeinter Dienst ist eingerichtet: sagen, wo er sich verbinden
+            # laesst -- statt im Web nach "meinen Mails" zu suchen (12.5.5 Terra).
+            from aquaticy.ownservices import missing_text
+
+            antwort = missing_text(eigene_fehlen, getattr(self, "answer_language", "de"))
+            self._emit("triage", decision="chat", source="eigene_dienste")
+            self.messages.append({"role": "user", "content": question})
+            self.messages.append({"role": "assistant", "content": antwort})
+            self._type_out(antwort, stream)
+            return self._finish(AgentResult(answer=antwort), question)
+
         # Alles ab hier gehoert zu diesem Turn. Scheitert das LLM endgueltig,
         # wird bis hierher zurueckgeschnitten -- ein halber Turn (Assistant-
         # Nachricht mit Tool-Calls ohne Antworten) macht den Verlauf fuer
@@ -3307,7 +3390,16 @@ class Agent:
         turn_start = len(self.messages)
         #: Was der Nutzer in diesem Turn im Rueckfrage-Fenster beantwortet.
         self._turn_clarified: list[tuple[str, str]] = []
-        self.messages.append({"role": "user", "content": self._with_context(question)})
+        inhalt = self._with_context(question)
+        if self._eigene:
+            from aquaticy.ownservices import missing_text, turn_note
+
+            da = tuple(q for q in self._eigene if q not in eigene_fehlen)
+            inhalt = f"{inhalt}\n\n{turn_note(da)}"
+            if eigene_fehlen:
+                inhalt += ("\n[Nicht eingerichtet -- sag das dem Nutzer: "
+                           f"{missing_text(eigene_fehlen)}]")
+        self.messages.append({"role": "user", "content": inhalt})
 
         budget = max(1, self.settings.max_tool_calls)
         if self.workshop_on and getattr(self.settings, "vm_user_mode", False):
@@ -3326,7 +3418,10 @@ class Agent:
         # Automatische Vorrecherche: die Anfrage wird zerlegt und die Teile
         # laufen parallel, bevor der Hauptagent uebernimmt. Was die
         # Subagenten schon gefunden haben, steht ihm dann zur Verfuegung.
-        if not self.structured:
+        if self._eigene:
+            # Eigene Dienste: keine Planung, keine Agenten im Web (12.5.5 Terra).
+            self._emit("triage", decision="chat", source="eigene_dienste")
+        elif not self.structured:
             # Denken aus ist der Standard und heisst: ein Gespraech. Kein
             # Planungsaufruf, keine Zerlegung, keine Agenten -- das Modell
             # antwortet selbst und greift zu seinen Werkzeugen, wenn die Frage
@@ -3347,7 +3442,9 @@ class Agent:
                 used += self._auto_research(question, budget)
         elif self.online and self._auto_subagents_wanted() and self._needs_research(question):
             used += self._auto_research(question, budget)
-        if self.online and not self.stopped:
+        if self._eigene and not self.stopped:
+            used += self._prefetch_own(question)
+        elif self.online and not self.stopped:
             used += self._prefetch_news(question)
 
         while True:
@@ -3436,14 +3533,15 @@ class Agent:
                 # danach greift die Notloesung nach der Schleife.
                 # Gezielte Angabe gefragt, aber keine Seite gelesen (11.4.0 Luna):
                 # einmal zurueck, mit genau dieser Angabe als Auftrag.
-                angabe = "" if detailliert else self._should_force_detail(question, antwort)
+                angabe = "" if detailliert or self._eigene else self._should_force_detail(
+                    question, antwort)
                 if angabe:
                     detailliert = True
                     self._emit("answer_reset", reason="gezielte Angabe")
                     self.messages.append(
                         {"role": "user", "content": FORCE_DETAIL_PROMPT % angabe})
                     continue
-                if not gebildert and self._should_force_visual():
+                if not gebildert and not self._eigene and self._should_force_visual():
                     gebildert = True
                     self._emit("answer_reset", reason="bildquelle")
                     self.messages.append(
@@ -3488,7 +3586,7 @@ class Agent:
                         }
                     )
 
-        if self.recheck_on and self.online and not result.stopped:
+        if self.recheck_on and self.online and not result.stopped and not self._eigene:
             self._second_round(result, question=question, stream=stream)
         if not result.stopped:
             self._fallback_visual(result)
@@ -3840,8 +3938,14 @@ class Agent:
         # steht es vollstaendig.
         self._emit("action", tool=name, arguments=arguments)
 
+        payload: Any
         try:
-            payload = self.toolbox.call(name, arguments)
+            if getattr(self, "_eigene", ()) and name in OWN_TURN_BLOCKED:
+                payload = {"error": ("Nicht für diese Frage: Die Antwort steht in den eigenen "
+                                     "Diensten des Nutzers, nicht im Internet."),
+                           "skipped_reason": "eigene_dienste"}
+            else:
+                payload = self.toolbox.call(name, arguments)
         except Exception as exc:
             # Ein kaputtes Werkzeug darf den Durchlauf nicht beenden -- der
             # Agent soll es mit einer anderen Quelle weiter versuchen.
