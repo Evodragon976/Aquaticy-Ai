@@ -15,10 +15,12 @@ from typing import Any
 
 import pytest
 
+from aquaticy import web
 from aquaticy.agent import Agent
 from aquaticy.config import Settings
 from aquaticy.ownservices import calendar_days, home_domain, missing_text, own_sources
 from tests.test_guardrails import _reply
+from tests.test_web import client, session, web_settings  # noqa: F401
 
 JA = [
     ("was sind meine emails", "mail"),
@@ -235,3 +237,54 @@ def test_the_council_does_not_answer_from_memory(google: Settings,
     monkeypatch.setattr(agent, "_council_turn", _kein_planer)
     monkeypatch.setattr(agent.toolbox, "mail_search", lambda query="", count=8: {"mails": []})
     assert agent.ask("Was sind meine Mails?", stream=False).answer == "Fertig."
+
+
+# -- Google verbinden, ohne vorher zu speichern ---------------------------------
+GOOGLE_NAMEN = ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AQUATICY_GOOGLE",
+                "AQUATICY_GOOGLE_WRITE")
+
+
+@pytest.fixture
+def leere_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> Any:
+    """Eine eigene .env -- und Umgebungsvariablen, die nach dem Test wieder weg sind."""
+    ziel = tmp_path / "formular.env"
+    monkeypatch.setattr(web, "find_env_file", lambda: ziel)
+    for name in GOOGLE_NAMEN:
+        monkeypatch.setenv(name, "")
+    web.SESSION.reload()
+    return ziel
+
+
+def test_connecting_saves_id_and_secret_from_the_form(
+        client, leere_env: Any, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+    """Fund: ID und Secret eingetippt, aber nicht unten gespeichert -- dann stimmte man
+    bei Google zu und bekam "Erst Client-ID und Secret speichern"."""
+    import time
+
+    from aquaticy.google import Tokens
+
+    monkeypatch.setattr("aquaticy.google.exchange_code", lambda cid, secret, code, redirect:
+                        Tokens(access_token="at", refresh_token="rt",
+                               expires_at=time.time() + 3600))
+    monkeypatch.setattr("aquaticy.google.Google.remember", lambda self, tokens: None)
+    monkeypatch.setattr("aquaticy.google.Google.account", lambda self: "jemand@example.com")
+    status, body = client("POST", "/api/google", {
+        "action": "start", "client_id": "id-9.apps.googleusercontent.com",
+        "client_secret": "geheim", "write": False})
+    daten = json.loads(body)
+    assert status == 200 and daten["ok"] is True, daten
+    inhalt = leere_env.read_text(encoding="utf-8")
+    assert "GOOGLE_CLIENT_ID=id-9.apps.googleusercontent.com" in inhalt
+    assert "GOOGLE_CLIENT_SECRET=geheim" in inhalt
+    assert "AQUATICY_GOOGLE=true" in inhalt and "AQUATICY_GOOGLE_WRITE=false" in inhalt
+    status, seite = client("GET", f"/google?code=4/0AX&state={daten['state']}")
+    assert status == 200 and b"jemand@example.com" in seite
+
+
+def test_connecting_without_a_secret_says_so_before_google(
+        client, leere_env: Any) -> None:  # noqa: F811
+    status, body = client("POST", "/api/google", {
+        "action": "start", "client_id": "id-9.apps.googleusercontent.com"})
+    daten = json.loads(body)
+    assert status == 200 and daten["ok"] is False and "url" not in daten
+    assert "Client-Secret" in daten["error"]

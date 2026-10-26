@@ -5380,7 +5380,8 @@ class Handler(BaseHTTPRequestHandler):
                           "SameSite=Lax")
         settings = SESSION.settings()
         if not settings.google_client_id or not settings.google_client_secret:
-            self._google_page(False, "Client-ID und Secret fehlen – erst speichern.")
+            self._google_page(False, "Client-ID und Client-Secret fehlen. Trag beides in "
+                                     "den Einstellungen ein und verbinde neu.")
             return
         client = google_client(settings)
         try:
@@ -5552,13 +5553,38 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         redirect = google_redirect(self.headers.get("Host", ""))
 
         if action == "start":
-            client_id = str(payload.get("client_id", "")).strip() or settings.google_client_id
             # Wie viel Recht gefragt wird, entscheidet der Schalter im
             # Formular -- nicht der gespeicherte Stand. Wer gerade "Aendern
             # erlaubt" angehakt hat, soll nicht erst speichern muessen.
             darf_aendern = payload.get("write")
             if darf_aendern is None:
                 darf_aendern = settings.google_write
+            # Client-ID und Secret aus dem Formular gleich speichern (12.5.5 Terra):
+            # Bis dahin nahm der Start die ID aus dem Formular, das Einloesen danach
+            # aber nur gespeicherte Werte -- wer nicht erst unten gespeichert hatte,
+            # stimmte bei Google zu und bekam dann "Erst ... speichern".
+            neu: dict[str, Any] = {}
+            client_id = str(payload.get("client_id", "")).strip()
+            if client_id and client_id != settings.google_client_id:
+                neu[GOOGLE_ID_FIELD] = client_id
+            secret = str(payload.get("client_secret", "")).strip()
+            if secret:
+                neu[GOOGLE_SECRET_FIELD] = secret
+            if neu:
+                # Wer verbindet, will lesen lassen -- sonst saehe das Modell die
+                # Werkzeuge trotz Verbindung nicht.
+                neu["AQUATICY_GOOGLE"] = "true"
+                neu["AQUATICY_GOOGLE_WRITE"] = "true" if darf_aendern else "false"
+                try:
+                    save_values(neu)
+                except ValueError as exc:
+                    return {"ok": False, "error": str(exc)}
+                settings = SESSION.settings()
+            if not settings.google_client_id or not settings.google_client_secret:
+                return {"ok": False, "error": (
+                    "Trag erst Client-ID und Client-Secret ein. Dann klick auf „Verbinden“. "
+                    "Ohne beides kann Google die Anmeldung nicht abschließen.")}
+            client_id = settings.google_client_id
             try:
                 browser = secrets.token_urlsafe(32)
                 state = google_state_new(getattr(SESSION.account, "id", "") or "", browser)
@@ -5593,8 +5619,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 return {
                     "ok": False,
                     "error": (
-                        "Erst Client-ID und Secret speichern, dann verbinden – "
-                        "ohne beides kann Google den Code nicht einlösen."
+                        "Trag erst Client-ID und Client-Secret ein. Dann klick auf "
+                        "„Verbinden“. Ohne beides kann Google den Code nicht einlösen."
                     ),
                 }
             client = google_client(settings)

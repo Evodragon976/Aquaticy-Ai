@@ -2284,6 +2284,9 @@ def test_an_empty_google_secret_means_unchanged(
 
 def test_the_consent_link_is_built_on_request(client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "id-123.apps.googleusercontent.com")
+    # Seit 12.5.5 Terra startet die Anmeldung nur mit beidem -- ohne Secret haette
+    # Google zugestimmt und das Einloesen waere danach gescheitert.
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "s3cret")
     web.SESSION.reload()
     status, body = client("POST", "/api/google", {"action": "start"})
     data = json.loads(body)

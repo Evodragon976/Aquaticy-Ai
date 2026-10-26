@@ -6346,7 +6346,7 @@ const EN = {
 "z. B. neu oder gebraucht, Versand nach Deutschland": "e.g. new or used, shipping to Germany",
 "Nichts gefunden. Die Adresse siehst du oben im Browser, wenn Home Assistant offen ist.": "Nothing found. You'll see the address at the top of the browser when Home Assistant is open.",
 "Noch kein Konto verbunden.": "No account connected yet.",
-"Erst Client-ID und Secret speichern.": "Save the client ID and secret first.",
+"Trag Client-ID und Client-Secret ein. Dann klick auf „Verbinden“.": "Enter the client ID and client secret. Then click “Connect”.",
 "Suche im Netz …": "Searching the network …",
 "Frage nach …": "Asking …",
 "Nicht gespeichert": "Not saved",
@@ -10057,14 +10057,17 @@ function showGoogle(state){
     note.className = "note";
     note.textContent = state.has_id
       ? "Noch kein Konto verbunden."
-      : "Erst Client-ID und Secret speichern.";
+      : "Trag Client-ID und Client-Secret ein. Dann klick auf „Verbinden“.";
   }
 }
 
 let googleState = "";
 $("#google-connect").addEventListener("click", async () => {
+  // ID und Secret gehen mit und werden gespeichert (12.5.5 Terra) -- vorher
+  // klappte das Verbinden nur, wenn man sie erst unten gespeichert hatte.
   const data = await googleCall({
     action:"start", client_id: form.elements["__GOOGLE_ID__"].value.trim(),
+    client_secret: form.elements["__GOOGLE_SECRET__"].value.trim(),
     // Was gerade angehakt ist, zaehlt -- nicht, was zuletzt gespeichert wurde.
     write: $("#google-write").checked,
   });
@@ -10077,6 +10080,11 @@ $("#google-connect").addEventListener("click", async () => {
   // Der einmalige state dieser Anmeldung (9.5.15) -- nur fuer den Fall, dass
   // jemand nur den Code statt der ganzen Adresse einfuegt.
   googleState = data.state || "";
+  // Gespeichert: das Secret verschwindet aus dem Feld, der Hinweis sagt "(gesetzt)".
+  form.elements["__GOOGLE_SECRET__"].value = "";
+  $("#google-id-hint").textContent = "(gesetzt)";
+  $("#google-secret-hint").textContent = "(gesetzt)";
+  $("#google-on").checked = true;
   $("#google-link").href = data.url;
   $("#google-redirect").textContent = data.redirect;
   $("#google-step").hidden = false;
