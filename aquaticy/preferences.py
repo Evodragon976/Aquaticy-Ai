@@ -158,6 +158,7 @@ PROTECTED: dict[str, str] = {
     "AQUATICY_HA_DIRECT": "ob ich im Haus ohne Rückfrage schalten darf",
     "AQUATICY_GOOGLE": "ob ich Mail und Kalender lesen darf",
     "AQUATICY_GOOGLE_WRITE": "ob ich bei Google etwas aendern darf",
+    "AQUATICY_GOOGLE_DIRECT": "ob ich bei Google ohne Rückfrage etwas ändern darf",
     "AQUATICY_STORAGE_ACCESS": "was ich im Lager darf",
     "AQUATICY_STORAGE_URL": "welches Lager angebunden ist",
     "AQUATICY_LAN_ENABLED": "ob ich ins Heimnetz sehen darf",

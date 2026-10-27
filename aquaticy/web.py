@@ -340,6 +340,7 @@ SETTING_KEYS: tuple[str, ...] = (
     "AQUATICY_HA_DIRECT",
     "AQUATICY_GOOGLE",
     "AQUATICY_GOOGLE_WRITE",
+    "AQUATICY_GOOGLE_DIRECT",
     "AQUATICY_STORAGE_URL",
     "AQUATICY_STORAGE_ACCESS",
     "AQUATICY_LAN_ENABLED",
@@ -690,6 +691,7 @@ _BOOL_SETTINGS = {
     "AQUATICY_HA_DIRECT": "ha_direct",
     "AQUATICY_GOOGLE": "google_enabled",
     "AQUATICY_GOOGLE_WRITE": "google_write",
+    "AQUATICY_GOOGLE_DIRECT": "google_direct",
     "AQUATICY_LAN_ENABLED": "lan_enabled",
     "AQUATICY_MEMORY": "memory_enabled",
     "AQUATICY_VM_USER_MODE": "vm_user_mode",
@@ -2613,6 +2615,7 @@ def current_values() -> dict[str, str]:
         "AQUATICY_HA_DIRECT": "true" if settings.ha_direct else "false",
         "AQUATICY_GOOGLE": "true" if settings.google_enabled else "false",
         "AQUATICY_GOOGLE_WRITE": "true" if settings.google_write else "false",
+        "AQUATICY_GOOGLE_DIRECT": "true" if settings.google_direct else "false",
         "AQUATICY_STORAGE_URL": settings.storage_url,
         "AQUATICY_STORAGE_ACCESS": settings.storage_access,
         "AQUATICY_LAN_ENABLED": "true" if settings.lan_enabled else "false",
@@ -2653,6 +2656,17 @@ def google_client(settings: Settings) -> Any:
     )
 
 
+def google_write_gap(settings: Settings, tokens: Any) -> str:
+    """Ein Satz, wenn "Aendern erlaubt" an ist, Google es aber nicht erteilt hat."""
+    from aquaticy.google import granted_write
+
+    erlaubt = granted_write(list(getattr(tokens, "scopes", []) or []))
+    if not settings.google_write or erlaubt is None or all(erlaubt):
+        return ""
+    return (" Aber Google hat das Ändern nicht erlaubt. Klick in Aquaticy noch einmal auf "
+            "„Verbinden“ und setz bei Google alle Haken.")
+
+
 def google_state(settings: Settings) -> dict[str, Any]:
     """Was die Oberflaeche ueber die Google-Anbindung wissen darf.
 
@@ -2663,11 +2677,14 @@ def google_state(settings: Settings) -> dict[str, Any]:
     try:
         connected = client.connected()
         account = client.account()
+        erlaubt = client.write_access() if connected else None
     finally:
         client.close()
     return {
         "enabled": settings.google_enabled,
         "write": settings.google_write,
+        # Hat Google das Aendern wirklich erlaubt (12.5.6 Sol)? None = unbekannt.
+        "write_granted": None if erlaubt is None else all(erlaubt),
         "has_id": bool(settings.google_client_id),
         "has_secret": bool(settings.google_client_secret),
         "connected": connected,
@@ -5403,7 +5420,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         finally:
             client.close()
-        self._google_page(True, f"Verbunden{f' als {account}' if account else ''}.")
+        self._google_page(True, f"Verbunden{f' als {account}' if account else ''}."
+                          + google_write_gap(settings, tokens))
 
     def _google_page(self, ok: bool, message: str) -> None:
         """Eine schlichte Seite als Rueckmeldung -- ohne Skript, ohne Ballast."""

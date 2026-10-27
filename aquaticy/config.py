@@ -503,6 +503,10 @@ class Settings:
     #: und Mediaplayer OHNE Rueckfrage schalten (12.5.5 Sol)? Setzt ha_control voraus.
     #: Schloesser, Alarm, Tore, Heizung, Skripte und Szenen fragen weiter jedes Mal.
     ha_direct: bool = False
+    #: Darf Aquaticy bei Google auf Befehl (Chat) oder Aufgabe (Coworker) Termine eintragen,
+    #: aendern und Mail-Entwuerfe anlegen OHNE Rueckfrage (12.5.6 Sol)? Setzt google_write
+    #: voraus. Nach dem Lesen von Mails oder Webseiten fragt es trotzdem.
+    google_direct: bool = False
     #: Darf Aquaticy AI sich ueber Gespraeche hinweg Dinge merken?
     memory_enabled: bool = True
     #: Passphrase fuer den Speicher. Leer = Schluesseldatei im Datenordner.
@@ -1036,6 +1040,7 @@ def get_settings() -> Settings:
         storage_access=_env_str("AQUATICY_STORAGE_ACCESS", "read"),
         google_enabled=_env_bool("AQUATICY_GOOGLE", False),
         google_write=_env_bool("AQUATICY_GOOGLE_WRITE", False),
+        google_direct=_env_bool("AQUATICY_GOOGLE_DIRECT", False),
         google_client_id=_env_str("GOOGLE_CLIENT_ID"),
         google_client_secret=_env_str("GOOGLE_CLIENT_SECRET"),
         enable_playwright=_env_bool("AQUATICY_ENABLE_PLAYWRIGHT", True),

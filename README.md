@@ -1,4 +1,4 @@
-# Aquaticy AI 12.5.5 Sol
+# Aquaticy AI 12.5.6 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.5.5 Sol
+aquaticy --version            # 12.5.6 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -756,6 +756,15 @@ Mail-**Entwürfe**. **Verschickt und gelöscht wird nichts.** Aquaticy bietet da
 Werkzeuge an und verwendet feste API-Pfade. Googles Recht `gmail.compose` wird für Entwürfe
 benötigt und erlaubt technisch auch Senden; die Begrenzung auf Entwürfe liegt daher im Code.
 
+**Ändern klappt nur, wenn Google es erlaubt hat.** Bei der Zustimmung zeigt Google jedes Recht
+einzeln, und du kannst Haken abwählen. Ein Haken fehlt? Dann steht unter „Gmail & Kalender“:
+„Google hat das Ändern noch nicht erlaubt.“ Klick noch einmal auf „Verbinden“ und setz alle
+Haken. Das gilt auch, wenn du „Ändern erlaubt“ erst nach dem Verbinden einschaltest.
+
+**Ohne Rückfrage:** Mit **„Auf Befehl ohne Rückfrage ändern“** (`AQUATICY_GOOGLE_DIRECT`) trägt
+Aquaticy Termine ein und legt Entwürfe an, sobald du darum bittest, auch als Coworker-Aufgabe.
+Hat es Mails oder Webseiten gelesen, fragt es trotzdem. Dein eigener Kalender zählt dafür nicht.
+
 **Einrichten (einmal, etwa fünf Minuten):**
 
 1. Auf [console.cloud.google.com](https://console.cloud.google.com/) ein Projekt anlegen.
@@ -1152,6 +1161,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_ANSWER_CHECK` | Ai-guard prüft auch Antworten | `true` |
 | `AQUATICY_GITHUB_TOKEN` | Token des GitHub-Add-ons | – |
 | `AQUATICY_GOOGLE` / `AQUATICY_GOOGLE_WRITE` | Gmail und Kalender lesen / ändern | `false` |
+| `AQUATICY_GOOGLE_DIRECT` | auf Befehl ohne Rückfrage ändern, braucht `AQUATICY_GOOGLE_WRITE` | `false` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | eigene Google-Anwendung | – |
 | `AQUATICY_HA_URL` / `AQUATICY_HA_CONTROL` | Home Assistant / schalten erlaubt (Ultra) | – / `false` |
 | `AQUATICY_HA_DIRECT` | auf Befehl ohne Rückfrage schalten, braucht `AQUATICY_HA_CONTROL` (Ultra) | `false` |

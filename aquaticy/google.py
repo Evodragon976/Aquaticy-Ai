@@ -63,11 +63,25 @@ SCOPES = (
 #:   (Freigaben, Loeschen des Kalenders) bleibt aussen vor.
 #: * `gmail.compose` wird fuer Entwuerfe gebraucht, erlaubt bei Google aber
 #:   auch Senden. Aquaticy verwendet ausschliesslich den Entwurfs-Endpunkt.
-WRITE_SCOPES = (
-    *SCOPES,
-    "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/gmail.compose",
-)
+CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events"
+MAIL_WRITE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"
+WRITE_SCOPES = (*SCOPES, CALENDAR_WRITE_SCOPE, MAIL_WRITE_SCOPE)
+
+
+def granted_write(scopes: list[str]) -> tuple[bool, bool] | None:
+    """Was Google fuer das Aendern wirklich erlaubt hat: (Kalender, Mail).
+
+    Google laesst den Nutzer jedes Recht einzeln abwaehlen -- die Zustimmung kann
+    also "nur lesen" sein, obwohl "Aendern erlaubt" an war (12.5.6 Sol). `None` heisst:
+    unbekannt (eine Verbindung aus der Zeit, bevor die Rechte gespeichert wurden).
+    """
+    if not scopes:
+        return None
+    menge = set(scopes)
+    kalender = bool(menge & {CALENDAR_WRITE_SCOPE, "https://www.googleapis.com/auth/calendar"})
+    mail = bool(menge & {MAIL_WRITE_SCOPE, "https://www.googleapis.com/auth/gmail.modify",
+                         "https://mail.google.com/"})
+    return kalender, mail
 
 #: Datei mit den verschluesselten Token.
 TOKEN_FILE = "google.json"
@@ -363,6 +377,10 @@ class Google:
     def account(self) -> str:
         """Die Adresse des verbundenen Kontos, oder "" wenn keines da ist."""
         return self.tokens().email
+
+    def write_access(self) -> tuple[bool, bool] | None:
+        """(Termine aendern erlaubt, Entwuerfe erlaubt) -- oder None, wenn unbekannt."""
+        return granted_write(self.tokens().scopes)
 
     def disconnect(self) -> None:
         self.store.clear()

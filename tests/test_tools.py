@@ -838,6 +838,10 @@ class FakeGoogle:
     def connected(self) -> bool:
         return self._connected
 
+    def write_access(self):
+        """Unbekannt wie bei einer alten Verbindung: Die Rechte prueft dann Google selbst."""
+        return None
+
     def events(self, days=7, query="", count=10):
         self.calls.append(("events", {"days": days, "query": query, "count": count}))
         return [{"summary": "Zahnarzt", "start": "2026-09-08T09:30:00+02:00"}]

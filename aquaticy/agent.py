@@ -864,6 +864,15 @@ auf Senden drueckt; sag ihm das dazu, damit er nicht glaubt, die Mail sei weg.
 - Loeschen kannst du auch nichts -- weder Mails noch Termine. Wer das will, macht es \
 selbst."""
 
+#: Zusaetzlich, wenn der Nutzer "Auf Befehl ohne Rueckfrage aendern" eingeschaltet hat
+#: (12.5.6 Sol).
+GOOGLE_DIRECT_PROMPT = """\
+Der Nutzer hat erlaubt, auf seinen Befehl ohne Rueckfrage zu aendern: Termine eintragen \
+und aendern, Mail-Entwuerfe anlegen. Frag dann nicht nach, ob du es darfst, sondern tu \
+es. Fehlt dir eine Angabe wie Tag oder Uhrzeit, frag trotzdem danach. Hast du Mails oder \
+Webseiten gelesen, fragt Aquaticy ihn trotzdem. Schreib nie von dir aus, nur auf seine \
+Bitte."""
+
 #: Wird an den Systemprompt gehaengt, sobald eine Oberflaeche Rueckfragen
 #: annehmen kann. Ohne jemanden am anderen Ende waere die Erwaehnung schaedlich:
 #: das Modell wuerde ein Werkzeug aufrufen, das es gar nicht gibt.
@@ -2363,6 +2372,8 @@ class Agent:
             parts.append(GOOGLE_PROMPT)
             if getattr(self.settings, "google_write", False):
                 parts.append(GOOGLE_WRITE_PROMPT)
+                if getattr(self.settings, "google_direct", False):
+                    parts.append("\n" + GOOGLE_DIRECT_PROMPT)
         if self.settings.ha_url and self.settings.ha_token:
             parts.append(HA_PROMPT)
             if self.settings.ha_control:
@@ -3409,6 +3420,13 @@ class Agent:
             if eigene_fehlen:
                 inhalt += ("\n[Nicht eingerichtet -- sag das dem Nutzer: "
                            f"{missing_text(eigene_fehlen)}]")
+            if ({"calendar", "mail"} & set(da)
+                    and not getattr(self.settings, "google_write", False)):
+                # Ohne "Aendern erlaubt" gibt es die Schreib-Werkzeuge nicht (12.5.6 Sol).
+                inhalt += ("\n[Ändern ist aus: Bei Google darfst du nur lesen. Will der "
+                           "Nutzer etwas eintragen, ändern oder entwerfen, sag ihm: Das "
+                           "geht in den Einstellungen unter „Gmail & Kalender“ mit „Ändern "
+                           "erlaubt“. Danach einmal neu verbinden.]")
             if "home" in da and not self.settings.ha_control:
                 # Ohne den Schalter gibt es ha_call nicht -- das Modell soll sagen,
                 # wo er sich einschalten laesst, statt nur "geht nicht" (12.5.5 Terra).

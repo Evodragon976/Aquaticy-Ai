@@ -2573,6 +2573,14 @@ html.vv,html.vv body{height:var(--app-h)}
               holt Aquaticy bei Google gar nicht erst. Nach dem Einschalten einmal neu
               verbinden.</span></label>
         </div>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="google-direct" name="AQUATICY_GOOGLE_DIRECT">
+          <label for="google-direct" style="margin:0">Auf Befehl ohne Rückfrage ändern
+            <span class="why">Du sagst „Trag morgen um 10 Uhr Zahnarzt ein“, und es steht gleich
+              im Kalender. Das gilt auch für Aufgaben von Coworkern. Nur Termine und
+              Mail-Entwürfe. Hat Aquaticy Mails oder Webseiten gelesen, fragt es auch hier.
+              Braucht „Ändern erlaubt“.</span></label>
+        </div>
         <div class="row">
           <label><span class="lbl">Client-ID <span id="google-id-hint"></span></span>
             <input type="text" name="__GOOGLE_ID__"
@@ -2911,7 +2919,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.5.5 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.5.6 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5983,6 +5991,8 @@ const EN = {
 "Richtig recherchieren": "Research properly",
 "Mit Teilfragen, Helfern und Quellen, wie bei „Strukturieren“. Aus: Aquaticy antwortet kurz mit dem, was es weiß.": "With sub-questions, helpers and sources, like “Structure”. Off: Aquaticy answers briefly with what it knows.",
 "Gmail & Kalender": "Gmail & Calendar",
+"Auf Befehl ohne Rückfrage ändern": "Change on command without asking",
+"Du sagst „Trag morgen um 10 Uhr Zahnarzt ein“, und es steht gleich im Kalender. Das gilt auch für Aufgaben von Coworkern. Nur Termine und Mail-Entwürfe. Hat Aquaticy Mails oder Webseiten gelesen, fragt es auch hier. Braucht „Ändern erlaubt“.": "You say “Add dentist tomorrow at 10”, and it’s in the calendar right away. This also applies to coworker tasks. Only events and mail drafts. If Aquaticy has read mails or web pages, it asks here too. Needs “Changes allowed”.",
 "Termine und Mails lesen dürfen": "May read appointments and mails",
 "Dann beantwortet Aquaticy Fragen zu Terminen und Mails. Nur lesen. Ändern geht erst mit dem Schalter darunter.": "Then Aquaticy answers questions about appointments and emails. Read only. Changing needs the switch below.",
 "Ändern erlaubt": "Changes allowed",
@@ -6646,6 +6656,9 @@ const EN_MUSTER = [
   [/^Verbunden(?: als (.+?))? — (darf auch ändern|nur lesend)\.$/,
    (m, wer, recht) => "Connected" + (wer ? ` as ${wer}` : "")
      + (recht === "nur lesend" ? " — read only." : " — may also make changes.")],
+  [/^Verbunden(?: als (.+?))? — Google hat das Ändern noch nicht erlaubt\. .+$/,
+   (m, wer) => "Connected" + (wer ? ` as ${wer}` : "") + " — Google hasn’t allowed changes yet. "
+     + "Click “Connect” and tick all boxes at Google."],
   [/^(.+) unter (.+) — (\d+) (?:Raum|Räume), (\d+) Artikel\. Zum Übernehmen unten speichern\.$/,
    "$1 at $2 — $3 room(s), $4 item(s). Save below to apply."],
   [/^(.+) stärker$/, "$1 stronger"],
@@ -10073,9 +10086,13 @@ function showGoogle(state){
   $("#google-id-hint").textContent = state.has_id ? "(gesetzt)" : "";
   $("#google-secret-hint").textContent = state.has_secret ? "(gesetzt)" : "";
   if (state.connected){
-    note.className = "note ok";
+    note.className = state.write && state.write_granted === false ? "note bad" : "note ok";
     note.textContent = "Verbunden" + (state.account ? ` als ${state.account}` : "")
-      + (state.write ? " — darf auch ändern." : " — nur lesend.");
+      + (!state.write ? " — nur lesend."
+         : state.write_granted === false
+           ? " — Google hat das Ändern noch nicht erlaubt. Klick auf „Verbinden“ und setz "
+             + "bei Google alle Haken."
+           : " — darf auch ändern.");
   } else {
     note.className = "note";
     note.textContent = state.has_id

@@ -1612,6 +1612,9 @@ class Toolbox:
         #: Steht fremder Text im Gespraech (Web, Mails, Bildschirm)? Dann
         #: laufen Werkzeuge mit Wirkung nur noch mit Bestaetigung (9.5.15).
         self.untrusted_seen = False
+        #: Setzt ein Coworker: darf dieses Werkzeug wegen seiner Regel ohne Rueckfrage
+        #: laufen (12.5.6 Sol)? Niemand ist da, den man fragen koennte.
+        self.coworker_write_ok: Callable[[str], bool] | None = None
         #: Fuer das gemeinsame Lernen dieses Turns ("" = keins).
         self.learning_ticket = ""
         #: Was der Nutzer in diesem Chat selbst geschrieben hat (setzt der
@@ -2035,7 +2038,7 @@ class Toolbox:
     #    geschrieben -- lieber gar nichts als etwas Ungefragtes im Kalender.
     # 3. Verschickt wird nie eine Mail. Es gibt nur Entwuerfe, und dafuer
     #    fehlt Aquaticy sogar das Recht bei Google selbst.
-    def _google_write_ready(self) -> str:
+    def _google_write_ready(self, tool: str = "") -> str:
         problem = self._google_ready()
         if problem:
             return problem
@@ -2045,10 +2048,39 @@ class Toolbox:
                 "Aendern in den Einstellungen unter 'Gmail & Kalender' frei und "
                 "verbindet danach neu. Sag ihm das, statt es zu umgehen."
             )
+        # Hat Google das Aendern bei der Zustimmung wirklich erlaubt (12.5.6 Sol)?
+        # Der Schalter allein genuegt nicht: Google laesst jedes Recht einzeln abwaehlen,
+        # und eine Verbindung von vor dem Einschalten kennt es gar nicht.
+        erlaubt = self._google().write_access() if tool else None
+        if erlaubt is not None:
+            kalender = tool.startswith("calendar")
+            if not (erlaubt[0] if kalender else erlaubt[1]):
+                return (
+                    "Google hat bei der Anmeldung das Recht dafuer nicht erteilt "
+                    f"({'Termine aendern' if kalender else 'Mail-Entwuerfe anlegen'}). "
+                    "Der Nutzer klickt in den Einstellungen unter 'Gmail & Kalender' noch "
+                    "einmal auf 'Verbinden' und setzt bei Google alle Haken. Sag ihm das, "
+                    "statt es zu umgehen."
+                )
         return ""
 
-    def _confirm(self, question: str) -> str:
+    def _write_without_asking(self, tool: str) -> bool:
+        """Darf dieses Schreiben ohne Rueckfrage laufen (12.5.6 Sol)?
+
+        Mit "Auf Befehl ohne Rueckfrage aendern" -- aber nie nach Mails oder Webseiten.
+        Ein Coworker mit der Regel "erlauben" meldet sich ueber coworker_write_ok.
+        """
+        s = self.settings
+        if (getattr(s, "google_direct", False) and getattr(s, "google_write", False)
+                and not getattr(self, "_untrusted_hard", False)):
+            return True
+        pruefung = self.coworker_write_ok
+        return bool(pruefung is not None and pruefung(tool))
+
+    def _confirm(self, question: str, tool: str = "") -> str:
         """Fragt nach. Returns: "" wenn zugestimmt, sonst der Grund dagegen."""
+        if tool and self._write_without_asking(tool):
+            return ""
         if self.ask_handler is None:
             return (
                 "Hier kann gerade niemand bestaetigen -- und ohne Bestaetigung "
@@ -2074,11 +2106,12 @@ class Toolbox:
         """Traegt einen Termin ein -- nach Rueckfrage."""
         from aquaticy.google import GoogleError
 
-        problem = self._google_write_ready()
+        problem = self._google_write_ready("calendar_add")
         if problem:
             return {"error": problem}
         wann = start + (f" bis {end}" if end else "")
-        nein = self._confirm(f"Soll ich \u201e{summary}\u201c am {wann} eintragen?")
+        nein = self._confirm(f"Soll ich \u201e{summary}\u201c am {wann} eintragen?",
+                             "calendar_add")
         if nein:
             return {"created": False, "note": nein}
         self._emit("calendar_write", what="anlegen", summary=summary, start=start)
@@ -2111,7 +2144,7 @@ class Toolbox:
         """Aendert einen Termin -- nach Rueckfrage."""
         from aquaticy.google import GoogleError
 
-        problem = self._google_write_ready()
+        problem = self._google_write_ready("calendar_edit")
         if problem:
             return {"error": problem}
         was = ", ".join(
@@ -2124,7 +2157,7 @@ class Toolbox:
             )
             if teil
         )
-        nein = self._confirm(f"Soll ich den Termin wirklich aendern ({was})?")
+        nein = self._confirm(f"Soll ich den Termin wirklich aendern ({was})?", "calendar_edit")
         if nein:
             return {"updated": False, "note": nein}
         self._emit("calendar_write", what="aendern", summary=summary or event_id)
@@ -2149,7 +2182,7 @@ class Toolbox:
         """Legt einen Mail-Entwurf an -- nach Rueckfrage. Verschickt wird nie."""
         from aquaticy.google import GoogleError
 
-        problem = self._google_write_ready()
+        problem = self._google_write_ready("mail_draft")
         if problem:
             return {"error": problem}
         try:
@@ -2164,7 +2197,7 @@ class Toolbox:
         an = (to + (f", Kopie an {cc}" if cc else "")) or "ohne Empfaenger"
         nein = self._confirm(
             f"Soll ich einen Entwurf an {an} mit dem Betreff "
-            f"\u201e{subject}\u201c anlegen? (Verschickt wird nichts.)"
+            f"\u201e{subject}\u201c anlegen? (Verschickt wird nichts.)", "mail_draft"
         )
         if nein:
             return {"drafted": False, "note": nein}
@@ -2689,6 +2722,19 @@ class Toolbox:
             vorab.settle_work(metering.work_cost(art))
         return self._after_untrusted(name, payload)
 
+    @property
+    def untrusted_seen(self) -> bool:
+        """Steht fremder Text im Gespraech? Auch der eigene Kalender zaehlt dazu."""
+        return bool(getattr(self, "_untrusted_hard", False)
+                    or getattr(self, "_untrusted_soft", False))
+
+    @untrusted_seen.setter
+    def untrusted_seen(self, wert: bool) -> None:
+        # Von aussen gesetzt heisst: richtig fremd (Web, Mails, Agenten). Zurueck auf
+        # False leert beides.
+        self._untrusted_hard = bool(wert)
+        self._untrusted_soft = False
+
     def _after_untrusted(self, name: str, payload: Any) -> Any:
         """Merkt sich, dass fremder Text im Gespraech ist -- und kennzeichnet ihn.
 
@@ -2708,9 +2754,18 @@ class Toolbox:
         # Die eigenen Zustaende aus Home Assistant sind kein Web-Inhalt: Mit dem Schalter
         # "Auf Befehl ohne Rueckfrage" (12.5.5 Sol) loest ihr Lesen keine Rueckfrage mehr
         # aus. Steht darin aber eine Anweisung an eine KI, bleibt die Sperre.
-        if arten or not (name == "ha_states" and getattr(self.settings, "ha_direct", False)
-                         and getattr(self.settings, "ha_control", False)):
+        eigenes_haus = (name == "ha_states" and getattr(self.settings, "ha_direct", False)
+                        and getattr(self.settings, "ha_control", False))
+        # Der eigene Kalender (12.5.6 Sol): zaehlt fuer alle anderen Sperren weiter als
+        # fremd, nicht aber fuer "Termin eintragen ohne Rueckfrage". Mails und
+        # Webseiten bleiben richtig fremd.
+        eigener_kalender = (name == "calendar_events"
+                            and getattr(self.settings, "google_direct", False)
+                            and getattr(self.settings, "google_write", False))
+        if arten or not (eigenes_haus or eigener_kalender):
             self.untrusted_seen = True
+        elif eigener_kalender:
+            self._untrusted_soft = True
         if arten:
             self._emit("injection", tool=name, kinds=arten)
         return markiert

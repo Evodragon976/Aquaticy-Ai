@@ -1112,8 +1112,9 @@ class Session:
         if name == "ha_call":
             if self.ha_approved(toolbox, arguments) or self.ha_direct(toolbox, arguments):
                 return None
-        elif regel == "erlauben" and (kat.key == "werkstatt"
-                                     or not getattr(toolbox, "untrusted_seen", False)):
+        elif self.google_direct(toolbox, name) or (
+                regel == "erlauben" and (kat.key == "werkstatt"
+                                         or not getattr(toolbox, "untrusted_seen", False))):
             return None
         # Fragen -- oder erlaubt, aber nach fremdem Text: dann entscheidet der Mensch.
         try:
@@ -1176,6 +1177,44 @@ class Session:
             and direct_allowed(arguments)
         )
 
+    def google_direct(self, toolbox: Any, name: str) -> bool:
+        """Darf dieses Google-Schreiben wegen "Auf Befehl ohne Rueckfrage aendern" laufen?
+
+        Nur Termin eintragen/aendern und Mail-Entwurf, nur ohne Mails oder Webseiten im
+        Lauf, nur bei derselben Google-Anwendung wie beim Start (12.5.6 Sol).
+        """
+        if name not in ("calendar_add", "calendar_edit", "mail_draft"):
+            return False
+        if self.cancelled is not None and self.cancelled():
+            return False
+        settings = (self.current_settings() if self.current_settings is not None
+                    else getattr(toolbox, "settings", None))
+        return bool(
+            getattr(settings, "google_direct", False)
+            and _setting_allows(name, settings)
+            and getattr(settings, "google_client_id", "")
+            == getattr(getattr(toolbox, "settings", None), "google_client_id", None)
+            and not getattr(toolbox, "_untrusted_hard", False)
+        )
+
+    def write_ok(self, toolbox: Any, name: str) -> bool:
+        """Hat der Nutzer diesem Coworker das Schreiben erlaubt (Regel "erlauben")?
+
+        Das Tor (gate) hat die Aktion schon durchgelassen; der Werkzeugkasten wuerde
+        sonst trotzdem fragen -- und im Coworker sitzt niemand, der antworten koennte.
+        """
+        kat = CATEGORY_OF.get(name)
+        if kat is None or kat.key not in ("kalender", "mail"):
+            return False
+        if self.cancelled is not None and self.cancelled():
+            return False
+        aktuell = self.store.get(self.cw.id)
+        settings = (self.current_settings() if self.current_settings is not None
+                    else getattr(toolbox, "settings", None))
+        return bool(aktuell and aktuell.enabled and aktuell.rule(kat.key) == "erlauben"
+                    and not getattr(toolbox, "untrusted_seen", False)
+                    and _setting_allows(name, settings))
+
     def _report(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if len(self.reports) >= MAX_REPORTS_PER_RUN:
             return {"error": f"Höchstens {MAX_REPORTS_PER_RUN} Meldungen je Arbeitsschritt."}
@@ -1200,6 +1239,7 @@ def coworker_agent_class() -> type:
             super().__init__(settings, cache=None)
             self.toolbox.gate = lambda name, args: session.gate(self.toolbox, name, args)
             self.toolbox.coworker_ha_approval = lambda args: session.ha_approved(self.toolbox, args)
+            self.toolbox.coworker_write_ok = lambda tool: session.write_ok(self.toolbox, tool)
             self.toolbox.private_context = [session.cw.notes]
 
         @property
