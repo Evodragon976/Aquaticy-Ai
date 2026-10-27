@@ -32,8 +32,8 @@ CREATE INDEX IF NOT EXISTS research_expiry ON research_facts(expires);
 CREATE INDEX IF NOT EXISTS research_created ON research_facts(created);
 CREATE INDEX IF NOT EXISTS research_terms_fact ON research_terms(owner,fact);
 """
-# Names and ordinary public biographical dates are permitted; contacts, private
-# claims, secrets and sensitive personal categories are deliberately excluded.
+
+
 _PRIVATE = re.compile(
     r"@|https?://|www\.|\b\d{5,}\b|\b(?:ich|mein\w*|unser\w*|dein\w*|du|"
     r"we|our|your|you|my|passwor\w*|secret\w*|token\w*|api.?key|email|"
@@ -69,8 +69,8 @@ def matches_subject(url: str, query: set[str], question: str = "") -> bool:
         return True
     if not last & query:
         return False
-    # A surname-only question remains useful. An explicit different full name
-    # must not receive another person's facts just because the surname matches.
+
+
     for name in re.findall(r"\b[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+){1,3}\b",
                            unicodedata.normalize("NFKC", question)):
         named = words(name)
@@ -99,7 +99,7 @@ def sentences(body: str) -> list[str]:
     chopping or ellipses that could discard a qualification or negation.
     """
     if "\ue000" in body[:48000]:
-        return []  # Never reinterpret a source-supplied control/private-use marker.
+        return []
     def protect(match):
         return match[0].replace(".", "\ue000")
     protected = re.sub(
@@ -155,12 +155,12 @@ class ResearchCache:
         for url, body in pages[:6]:
             if not source_url(url) or suspicious(body):
                 continue
-            # The title must match a nontrivial query token: avoids accumulating
-            # unrelated people merely mentioned in a researched article.
+
+
             if not matches_subject(url, query, question):
                 continue
             if len(words(body[:48000]) & used) < 3:
-                continue  # The successful answer must actually concern this source.
+                continue
             for sentence in sentences(body):
                 if clean_text(sentence) != sentence:
                     continue
@@ -194,7 +194,7 @@ class ResearchCache:
                     break
                 if conn.execute("SELECT 1 FROM research_facts WHERE owner=? AND id=?",
                                 (store.owner, key)).fetchone():
-                    continue  # Repeated questions do not extend the original deadline.
+                    continue
                 conn.execute("INSERT INTO research_facts VALUES (?,?,?,?,?,?)",
                              (store.owner, key, store.secrets.seal("- " + text,
                                                                   "research-text:" + key),
@@ -235,8 +235,8 @@ class ResearchCache:
         for key, sealed, source, created, expires in rows:
             text = store.secrets.open(sealed, "research-text:" + key)
             url = store.secrets.open(source, "research-source:" + key)
-            # Old Terra rows keep their identifiers and original expiry. New
-            # rows store the bullet marker; its removal must still authenticate.
+
+
             valid = secrets.compare_digest(key, store.secrets.blind(
                 "research-fact", store.owner + "\n" + url + "\n" + text))
             if not valid and text.startswith("- "):
@@ -265,7 +265,7 @@ def start_cleanup(cache: ResearchCache):
             try:
                 delay = cache.sweep()
             except Exception:
-                delay = 5.0  # Expiry is still enforced by every read on failure.
+                delay = 5.0
             stop.wait(delay)
 
     worker = threading.Thread(target=run, daemon=True, name="aquaticy-research-cleanup")

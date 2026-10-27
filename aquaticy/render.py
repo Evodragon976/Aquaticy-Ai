@@ -77,7 +77,7 @@ class ChatRenderer:
         self._skips: list[str] = []
         self._streaming_answer = False
 
-    # -- Ereignisse -------------------------------------------------------
+
     def handle(self, event: str, payload: dict[str, Any]) -> None:
         handler = getattr(self, f"_on_{event}", None)
         if handler is not None:
@@ -208,7 +208,7 @@ class ChatRenderer:
             return
         self._flush_reading()
         if payload.get("source") == "heuristik":
-            return  # Gruss: gar keine Meldung, das waere nur Laerm
+            return
         seconds = payload.get("seconds")
         suffix = f" ({seconds}s)" if seconds else ""
         self.console.print(
@@ -222,7 +222,7 @@ class ChatRenderer:
         self._flush_reading()
         tasks = payload.get("tasks", [])
         if payload.get("direct"):
-            # Ohne Denken wurde nichts zerlegt -- "1 Teilfrage" waere gelogen.
+
             self.console.print(
                 Text.assemble(("  [Direkt] ", "bold magenta"), ("ohne Zerlegen", "white"))
             )
@@ -416,7 +416,7 @@ class ChatRenderer:
                 "-- oben steht der Zwischenstand.[/yellow]"
             )
 
-    # -- Live-Zeile "[Lese] N Seiten..." ----------------------------------
+
     def _reading_text(self) -> Text:
         text = Text.assemble(
             ("  [Lese]  ", "bold cyan"), (f"{self._fetch_count} Seiten...", "white")
@@ -447,7 +447,7 @@ class ChatRenderer:
             self._live.stop()
             self._live = None
 
-    # -- Abschluss --------------------------------------------------------
+
     def reset(self) -> None:
         self._stop_live()
         self._answer.clear()
@@ -464,9 +464,9 @@ class ChatRenderer:
             self.console.print(Markdown(text))
 
 
-# ---------------------------------------------------------------------------
-# Bilder
-# ---------------------------------------------------------------------------
+
+
+
 def image_backend() -> str:
     """Welche Bildausgabe kann dieses Terminal? `term-image`, `chafa` oder `none`."""
     term = os.environ.get("TERM", "")
@@ -497,9 +497,9 @@ def render_image(console: Console, url: str, width: int = 34) -> bool:
     if backend == "none" or not url:
         return False
     try:
-        # Die Adresse stammt aus einer fremden Seite: geladen wird nur ueber
-        # die Netzregel (oeffentlich, Weiterleitungen geprueft, Groesse
-        # begrenzt) -- nie mehr ueber die eigenen Abrufe der Bildbibliothek.
+
+
+
         from aquaticy import netguard
 
         with netguard.image_client(timeout=10) as client:

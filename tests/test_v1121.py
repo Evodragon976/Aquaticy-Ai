@@ -26,7 +26,7 @@ def _python(code: str, **env: str) -> str:
     return fertig.stdout.strip()
 
 
-# --- Weniger Last -------------------------------------------------------------------
+
 
 
 @pytest.mark.parametrize("model, provider", [
@@ -41,7 +41,7 @@ def test_known_prefixes_resolve_without_litellm(model: str, provider: str) -> No
 
 
 def test_known_prefix_without_model_name_is_not_taken_for_granted(monkeypatch) -> None:
-    # "mistral/" ohne Namen entscheidet weiter LiteLLM, nicht der schnelle Weg.
+
     gefragt: list[str] = []
 
     class Fake:
@@ -85,7 +85,7 @@ def test_models_without_prefix_still_ask_litellm() -> None:
 def test_litellm_uses_its_bundled_price_list() -> None:
     assert _python("import aquaticy, os; print(os.environ['LITELLM_LOCAL_MODEL_COST_MAP'])") \
         == "True"
-    # Wer die Liste ausdrücklich aus dem Netz will, bekommt sie.
+
     assert _python("import aquaticy, os; print(os.environ['LITELLM_LOCAL_MODEL_COST_MAP'])",
                    LITELLM_LOCAL_MODEL_COST_MAP="False") == "False"
 
@@ -123,7 +123,7 @@ def test_browser_slots_limit_parallel_chromium(monkeypatch) -> None:
     monkeypatch.setattr(browser, "BROWSER_SLOTS", threading.BoundedSemaphore(1))
     with browser.browser_slot(), pytest.raises(TimeoutError), browser.browser_slot(wait=0.05):
         pass
-    # Danach ist der Platz wieder frei -- auch nach einem Fehler im Block.
+
     with pytest.raises(RuntimeError), browser.browser_slot(wait=0.05):
         raise RuntimeError("Seite kaputt")
     with browser.browser_slot(wait=0.05):
@@ -163,7 +163,7 @@ def test_parallel_tool_calls_use_at_most_eight_threads() -> None:
     assert gleichzeitig[1] <= 8
 
 
-# --- Prüf-Plugins: Vorprüfung ---------------------------------------------------------
+
 
 from aquaticy import addons, plugins, review_scan  # noqa: E402
 
@@ -202,9 +202,9 @@ def test_scan_finds_known_patterns_with_file_and_line() -> None:
     assert gefunden["CWE-95"] == ("Code-Block 1 (python)", (13,))
     assert gefunden["veränderlicher-default"][1] == (3,)
     assert gefunden["leeres-except"][1] == (11,)
-    # Nur der Aufruf ohne Zeitlimit -- der mit "timeout" in der Folgezeile nicht.
+
     assert gefunden["ohne-timeout"][1] == (6,)
-    # innerHTML mit fremdem Text ja, das Leeren nicht.
+
     assert gefunden["CWE-79"] == ("Code-Block 2 (js)", (1,))
 
 
@@ -262,7 +262,7 @@ def test_scan_is_bounded_and_fast() -> None:
     gross = "```\n" + "\n".join(f"wert_{n} = rechne({n})" for n in range(30_000)) + \
         "\neval(x)\n```"
     start = time.monotonic()
-    assert review_scan.scan(gross) == []  # eval steht hinter MAX_LINES
+    assert review_scan.scan(gross) == []
     assert time.monotonic() - start < 10
     viele = "```\n" + "\n".join(f"eval(x{n})" for n in range(100)) + "\n```"
     hinweis = review_scan.scan(viele)[0]
@@ -283,7 +283,7 @@ def test_review_prompt_carries_the_prescan(konto) -> None:
                             konto, True)
     assert "Automatische Vorprüfung" in sicher
     assert "Code-Block 1 (python), Zeile 4: SQL" in sicher
-    # Die Sicherheitsprüfung bekommt nur Sicherheitstreffer.
+
     assert "veränderlicher-default" not in sicher
     assert "Umfang: Code-Block 1 (python) (13 Zeilen), Code-Block 2 (js) (2 Zeilen)" in sicher
     assert plugins.SECRETS_RULE in sicher
@@ -301,7 +301,7 @@ def test_review_prompt_without_hits_has_no_prescan_section(konto) -> None:
     assert "Automatische Vorprüfung" not in text
 
 
-# --- Stabilität: Hintergrund-Schleifen sterben nicht an einem Fehler -------------------
+
 
 
 def test_tunnel_keeps_trying_after_an_unexpected_error(tmp_path) -> None:
@@ -317,7 +317,7 @@ def test_tunnel_keeps_trying_after_an_unexpected_error(tmp_path) -> None:
     tunnel = Tunnel(tmp_path, lambda: "eyJ" + "t" * 60, locate=lambda: tmp_path / "cf",
                     popen=kaputt, sleep=lambda s: pausen.append(s) or len(pausen) >= 2)
     tunnel._run()
-    assert len(versuche) == 2  # nicht nach dem ersten Fehler aufgegeben
+    assert len(versuche) == 2
     assert tunnel.phase == "fehler"
     assert "eyJ" not in tunnel.message and "ValueError" in tunnel.message
 
@@ -365,7 +365,7 @@ def test_auto_upgrading_survives_a_broken_state_file(tmp_path) -> None:
         return original(0.01)
 
     trainer.wake_event.wait = warten  # type: ignore[method-assign]
-    trainer._loop()  # ohne Ausnahme bis zum Ende
+    trainer._loop()
     assert len(runden) == 3
 
 
@@ -383,7 +383,7 @@ def test_weather_codes_never_crash(code, wort) -> None:
 
 
 def test_web_server_lock_uses_the_platform_check() -> None:
-    # 11.2.1: `sys` fehlte in web.py, sobald die Sperre ueber sys.platform lief.
+
     assert web.sys is sys
     quelle = inspect.getsource(web)
     assert 'if sys.platform == "win32":' in quelle
@@ -406,7 +406,7 @@ def test_ui_explanations_stay_short() -> None:
     "password_" * 200 + " == x", ("a" * 59 + "=") * 33, "token" * 400,
 ])
 def test_scan_stays_fast_on_hostile_lines(zeile: str) -> None:
-    # Vor dem Fix brauchte "password_" * 222 rund fuenf Sekunden je Zeile.
+
     start = time.monotonic()
     review_scan.scan("```\n" + "\n".join([zeile] * 50) + "\n```")
     assert time.monotonic() - start < 3
@@ -414,7 +414,7 @@ def test_scan_stays_fast_on_hostile_lines(zeile: str) -> None:
 
 def test_scan_reads_at_most_one_megabyte() -> None:
     zeile = "eval(x)  # " + "a" * 989
-    text = "```\n" + "\n".join([zeile] * 3000) + "\n```"  # rund 3 MB
+    text = "```\n" + "\n".join([zeile] * 3000) + "\n```"
     hinweis = next(h for h in review_scan.scan(text) if h.rule == "CWE-95")
     assert len(hinweis.lines) + hinweis.more < 1100
 

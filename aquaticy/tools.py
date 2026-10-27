@@ -37,32 +37,31 @@ from aquaticy.search import (
     search_web,
 )
 
-#: Callback fuer die Live-Anzeige: (event, payload)
 EventHook = Callable[[str, dict[str, Any]], None]
-#: LLM-Fallback fuer Specs: (seitentext, url) -> {"CPU": "...", ...}
+
 SpecExtractor = Callable[[str, str], dict[str, str]]
-#: Rueckfrage an den Nutzer: (frage, moeglichkeiten) -> antwort ("" = keine)
+
 AskHandler = Callable[[str, list[str]], str]
 VisualInspector = Callable[[str, str], str]
 
-#: So oft darf der Agent je Anfrage nachfragen. Wer dreimal fragt, hat die
-#: Anfrage nicht verstanden -- dann ist eine begruendete Annahme besser.
+
+
 MAX_QUESTIONS = 2
 
-#: So viele Fragen darf EIN Aufruf von ask_user hintereinander stellen (12.1.1 Luna):
-#: "Wo wohnst du?", "Was interessiert dich?" -- das Fenster zeigt 1/3, 2/3, 3/3.
+
+
 MAX_BATCH = 5
 
-#: Eine leere Antwort nach so vielen Sekunden ist keine Entscheidung, sondern ein
-#: Ablauf der Wartezeit (web.py: ANSWER_TIMEOUT = 180) -- dann keine Frage mehr.
+
+
 ASK_GAVE_UP_AFTER = 120.0
 
-#: Was als "ja" gilt, wenn Aquaticy vor einer Wirkung nachfragt -- an jeder
-#: Stelle dasselbe (seit 9.5.16; vorher kannte ha_call "klar" nicht).
+
+
 YES_WORDS = frozenset({"ja", "j", "yes", "ok", "mach", "los", "klar", "ja, mach"})
 
-#: Drittes Werkzeug, das nur der Hauptagent bekommt -- Subagenten duerfen
-#: keine weiteren Subagenten starten.
+
+
 SUBAGENT_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -212,17 +211,17 @@ NEWS_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Wo eine Marke, eine Firma oder eine Person ausser auf der eigenen Seite
-#: noch steht. Die Reihenfolge ist die Reihenfolge der Ausbeute: bei Marken
-#: und Laeden bringt Instagram am meisten, bei Firmen LinkedIn, und Wikipedia
-#: klaert, ob es ueberhaupt dieselbe Sache ist.
-#:
-#: Gesucht wird ueber die Suchmaschine mit `site:` -- nicht, indem Adressen
-#: durchprobiert werden. Das ist der Unterschied zwischen Recherche und
-#: Abgrasen: wir fragen, was oeffentlich indexiert ist, statt ein Verzeichnis
-#: von Profilnamen abzuklappern. Und was eine Seite nicht hergibt (Instagram
-#: und LinkedIn sperren Abrufe aus), bleibt eben beim Titel und dem
-#: Suchausschnitt -- umgangen wird nichts.
+
+
+
+
+
+
+
+
+
+
+
 PROFILE_SITES: tuple[tuple[str, str], ...] = (
     ("Instagram", "instagram.com"),
     ("LinkedIn", "linkedin.com"),
@@ -238,8 +237,8 @@ PROFILE_SITES: tuple[tuple[str, str], ...] = (
     ("Reddit", "reddit.com"),
 )
 
-#: So viele Plattformen fragt ein Aufruf hoechstens ab. Zwoelf Suchanfragen
-#: auf einmal sind fuer eine offene Suchmaschine ein Ausschlag.
+
+
 MAX_PROFILE_SITES = 8
 
 PROFILE_SCHEMA: dict[str, Any] = {
@@ -338,9 +337,9 @@ CALC_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Etwas fuer spaeter behalten. Der Merkzettel ist fuer ausdrueckliche
-#: Bitten des Nutzers; der Speicher fuer alles, was der Agent selbst als
-#: wichtig erkennt.
+
+
+
 MEMORY_WRITE_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -370,7 +369,7 @@ MEMORY_WRITE_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Im Speicher nachsehen.
+
 MEMORY_READ_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -396,8 +395,8 @@ MEMORY_READ_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Das eigene Netz ansehen. Kein Ersatz fuer die Websuche, sondern die Antwort
-#: auf Fragen, die im Web gar nicht stehen koennen.
+
+
 LAN_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -432,7 +431,7 @@ LAN_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Ein einzelnes Geraet gezielt pruefen -- schneller als das ganze Netz.
+
 LAN_HOST_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -455,7 +454,7 @@ LAN_HOST_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Home Assistant lesen.
+
 HA_STATES_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -486,7 +485,7 @@ HA_STATES_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Home Assistant schalten -- nur wenn ausdruecklich erlaubt.
+
 HA_CALL_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -520,8 +519,8 @@ HA_CALL_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Nur fuer den Hauptagenten: ein Subagent sitzt niemandem gegenueber, den er
-#: fragen koennte.
+
+
 ASK_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -582,7 +581,7 @@ ASK_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Nur fuer den Hauptagenten -- Subagenten sollen keine Notizen anlegen.
+
 MEMORY_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -603,11 +602,11 @@ MEMORY_SCHEMA: dict[str, Any] = {
 }
 
 
-# News-Suche und Rechner gehoeren zum Kern -- auch Subagenten sollen aktuelle
-# Meldungen finden und richtig rechnen koennen.
-# ---------------------------------------------------------------------------
-# Gmail und Kalender -- nur lesen, und nur wenn eingeschaltet
-# ---------------------------------------------------------------------------
+
+
+
+
+
 CALENDAR_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -762,9 +761,9 @@ GOOGLE_WRITE_SCHEMAS: tuple[dict[str, Any], ...] = (
     MAIL_DRAFT_SCHEMA,
 )
 
-# ---------------------------------------------------------------------------
-# Lagerverwaltung -- Raum > Moebel > Artikel
-# ---------------------------------------------------------------------------
+
+
+
 STORAGE_FIND_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -860,14 +859,14 @@ STORAGE_EDIT_SCHEMA: dict[str, Any] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Die virtual machine -- nur im Code-Modus, nur wenn sie eingeschaltet ist
-# ---------------------------------------------------------------------------
-#: Vorlage fuer die vm_run-Beschreibung -- die Zahlen haengen von der
-#: gewaehlten Groesse der virtual machine ab (normal/plus, siehe AQUATICY_VM_SIZE) und
-#: werden erst in `vm_schemas_for` eingesetzt. Falsche Zahlen waeren
-#: schlimmer als gar keine: das Modell plant damit, wie viel es sich leisten
-#: kann.
+
+
+
+
+
+
+
+
 VM_RUN_DESCRIPTION = (
     "Fuehrt einen Shell-Befehl in der abgeschotteten virtual machine aus und gibt "
     "Ausgabe und Rueckgabewert zurueck. Dort darfst du alles: Dateien anlegen, "
@@ -876,16 +875,16 @@ VM_RUN_DESCRIPTION = (
     "Nutze es, um deinen Code wirklich auszuprobieren, statt zu behaupten, er laufe."
 )
 
-#: Der Satz ueber das Netz -- ohne und mit User mode.
+
 VM_NET_OFF = "Es gibt KEIN Netz (kein pip install, kein curl)"
 VM_NET_USER = (
     "Es gibt Internet, aber kein Heimnetz (User mode) -- pip install und curl gehen"
 )
-#: Internet ohne Desktop -- nur Ultra, per Schalter (9.5.31).
+
 VM_NET_INTERNET = (
     "Es gibt Internet, aber kein Heimnetz -- pip install und curl gehen"
 )
-#: Internet UND lokales Netz -- nur Ultra, per Schalter (9.5.34).
+
 VM_NET_LAN = (
     "Es gibt Internet und das lokale Netz (vom Nutzer freigegeben) -- pip install, curl "
     "und Geraete im Haus gehen"
@@ -968,13 +967,13 @@ VM_FILES_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Blender arbeitet nur im Code-Modus, in der virtual machine -- nie auf dem
-#: Rechner des Nutzers, und nie ohne die Abschottung. Ob es das Werkzeug
-#: wirklich gibt, haengt am Abbild der virtual machine (AQUATICY_VM_IMAGE): das
-#: mitgelieferte Standardabbild bringt es nicht mit, sondern nur eins, das
-#: Blender selbst enthaelt (siehe docker/workshop-blender.Dockerfile). Fehlt
-#: es, kommt "command not found" zurueck -- das ist keine Stoerung, sondern
-#: die ehrliche Antwort.
+
+
+
+
+
+
+
 BLENDER_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -1022,9 +1021,9 @@ BLENDER_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Welche Werkzeuge Arbeit auf dem Server machen -- und in welcher Einheit
-#: sie zaehlen (aquaticy/metering.py, WORK_COSTS). Was hier fehlt (rechnen,
-#: merken, nachfragen ...), kostet den Server nichts Nennenswertes.
+
+
+
 WORK_TOOLS: dict[str, str] = {
     "web_search": "suche", "search_news": "suche", "local_places": "suche",
     "find_profiles": "suche", "weather": "suche", "github": "suche",
@@ -1038,24 +1037,24 @@ WORK_TOOLS: dict[str, str] = {
     "desktop_windows": "desktop",
 }
 
-#: Werkzeuge, deren Ergebnis fremder Text ist -- von Webseiten, aus Suchen,
-#: Feeds, Mails, Kalendereinladungen oder vom Bildschirm im User mode. Darin
-#: kann eine Anweisung stecken, die wie vom Nutzer klingt (Prompt-Injection).
+
+
+
 UNTRUSTED_SOURCES = frozenset({
     "web_search", "search_news", "fetch_page", "inspect_public_visual", "find_profiles",
     "local_places", "github", "weather", "read_feeds", "mail_search", "mail_read",
     "news_tagesschau", "wikipedia", "currency", "holidays",
     "calendar_events", "desktop_look", "desktop_windows", "research_subtasks",
-    # Seit 9.5.16: was in der virtual machine ausgegeben wird (im User mode mit
-    # Internet: curl, heruntergeladene Dateien), und Namen/Zustaende aus Home
-    # Assistant (ein Mediaplayer meldet den Titel, den ein Fremder vergibt).
+
+
+
     "vm_run", "vm_read", "vm_files", "blender_run", "ha_states",
 })
 
-#: Was danach nur noch mit ausdruecklicher Bestaetigung laeuft (seit 9.5.15):
-#: alles, was nach aussen wirkt oder bleibt. Eine Regel im Systemtext allein
-#: haelt eine gut gemachte Injection nicht auf -- diese Grenze schon, denn sie
-#: liegt im Code und fragt den Menschen.
+
+
+
+
 CONFIRM_AFTER_UNTRUSTED: dict[str, str] = {
     "ha_call": "im Haus etwas schalten",
     "change_setting": "eine Einstellung ändern",
@@ -1063,8 +1062,8 @@ CONFIRM_AFTER_UNTRUSTED: dict[str, str] = {
     "storage_edit": "etwas in der Lagerverwaltung ändern",
     "remember": "sich etwas dauerhaft merken",
     "save_memory": "etwas im Speicher ablegen",
-    # Seit 9.5.22: eine Seite soll nicht unbemerkt das Heimnetz auskundschaften
-    # lassen -- das Ergebnis koennte sie sich danach abholen wollen.
+
+
     "lan_scan": "das Heimnetz durchsuchen",
     "lan_check": "ein Gerät im Heimnetz abfragen",
 }
@@ -1077,9 +1076,9 @@ VM_SCHEMAS: tuple[dict[str, Any], ...] = (
     BLENDER_SCHEMA,
 )
 
-# ---------------------------------------------------------------------------
-# User mode: die virtual machine bedienen wie ein Mensch (siehe aquaticy/desktop.py)
-# ---------------------------------------------------------------------------
+
+
+
 DESKTOP_SCHEMAS: tuple[dict[str, Any], ...] = (
     {
         "type": "function",
@@ -1237,15 +1236,15 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
     memory_mb = max(1, int(getattr(settings, "vm_memory_mb", 1024) or 1024))
     disk_gb = max(1, int(getattr(settings, "vm_disk_gb", 4) or 4))
     user_mode = bool(getattr(settings, "vm_user_mode", False))
-    # Im User mode kommen die Desktop-Werkzeuge dazu -- ohne ihn gibt es sie
-    # fuer das Modell gar nicht.
+
+
     schemas = list(copy.deepcopy(VM_SCHEMAS + (DESKTOP_SCHEMAS if user_mode else ())))
     from aquaticy import addons
 
     aktiv = addons.active_ids(settings) if getattr(settings, "data_dir", None) else []
     if user_mode and "blender" not in aktiv:
-        # Im User mode kommt Blender als Add-on. Ist es nicht eingeschaltet,
-        # gibt es das Werkzeug nicht -- statt eines "command not found".
+
+
         schemas = [s for s in schemas if s["function"]["name"] != "blender_run"]
     apps = addons.desktop_apps(settings) if user_mode and aktiv else []
     zusatz = (
@@ -1271,9 +1270,9 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
     return tuple(schemas)
 
 
-# ---------------------------------------------------------------------------
-# Add-ons (aquaticy/addons.py) -- nur, wenn installiert und eingeschaltet
-# ---------------------------------------------------------------------------
+
+
+
 GITHUB_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -1418,7 +1417,7 @@ HOLIDAYS_SCHEMA: dict[str, Any] = {
     },
 }
 
-#: Werkzeugname -> Add-on, zu dem es gehoert.
+
 ADDON_TOOLS: dict[str, str] = {
     "github": "github", "weather": "wetter", "read_feeds": "feeds",
     "news_tagesschau": "nachrichten", "wikipedia": "wikipedia",
@@ -1447,9 +1446,9 @@ def addon_schemas_for(settings: Any, pro: bool = True) -> list[dict[str, Any]]:
     return schemas
 
 
-# ---------------------------------------------------------------------------
-# Einstellungen aus dem Gespraech heraus
-# ---------------------------------------------------------------------------
+
+
+
 SETTING_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -1498,8 +1497,8 @@ class ToolStats:
     research_pages: list[tuple[str, str]] = field(default_factory=list)
     calculations: int = 0
     notes_saved: int = 0
-    #: Rueckfragen zaehlen NICHT als Werkzeugaufruf -- eine Nachfrage soll den
-    #: Rechercheetat nicht schmaelern.
+
+
     questions: int = 0
     memories: int = 0
     lan_scans: int = 0
@@ -1510,7 +1509,7 @@ class ToolStats:
     storage_reads: int = 0
     storage_writes: int = 0
     settings_changed: int = 0
-    #: Aufrufe in der virtual machine -- ausfuehren, schreiben, lesen.
+
     vm_calls: int = 0
     addon_calls: int = 0
 
@@ -1562,14 +1561,14 @@ class ToolStats:
         self.addon_calls = 0
 
 
-#: Gruende, die meist gleich wieder vorbei sind. Sie werden nie gemerkt: ein
-#: Aussetzer von jetzt sagt nichts ueber die Seite in fuenf Minuten.
+
+
 TRANSIENT_SKIPS = frozenset({
     "timeout", "network_error", "dns_error", "robots_unavailable", "blocked_http_429",
 })
 
-#: Wie lange ein Fehlschlag gemerkt wird. Bis 11.0 waren es 24 Stunden -- eine
-#: Seite, die einmal hakte, blieb einen Tag lang "kaputt".
+
+
 FAILED_PAGE_SECONDS = 3600
 
 
@@ -1605,24 +1604,24 @@ class Toolbox:
         self.visual_inspector = visual_inspector
         self.rules = load_rules()
         self.stats = ToolStats()
-        #: Setzt der Agent, wenn Subagenten erlaubt sind.
+
         self.subagent_runner: Callable[[list[str]], list[dict[str, Any]]] | None = None
-        #: Setzt die Oberflaeche, wenn jemand da ist, der antworten kann.
+
         self.ask_handler: AskHandler | None = None
-        #: Steht fremder Text im Gespraech (Web, Mails, Bildschirm)? Dann
-        #: laufen Werkzeuge mit Wirkung nur noch mit Bestaetigung (9.5.15).
+
+
         self.untrusted_seen = False
-        #: Setzt ein Coworker: darf dieses Werkzeug wegen seiner Regel ohne Rueckfrage
-        #: laufen (12.5.6 Sol)? Niemand ist da, den man fragen koennte.
+
+
         self.coworker_write_ok: Callable[[str], bool] | None = None
-        #: Fuer das gemeinsame Lernen dieses Turns ("" = keins).
+
         self.learning_ticket = ""
-        #: Was der Nutzer in diesem Chat selbst geschrieben hat (setzt der
-        #: Agent). Ein Wort, das er selbst nennt, ist fuer den Abfluss-Schutz
-        #: kein Geheimnis (aquaticy/injection.py, seit 9.5.22).
+
+
+
         self.user_said = ""
-        #: Wird beim ersten Zugriff geoeffnet, nicht beim Start -- wer den
-        #: Speicher nie benutzt, soll auch keine Datei dafuer anlegen.
+
+
         self._memory_store: Any = None
         self._fetcher = fetcher or Fetcher(
             user_agent=settings.user_agent,
@@ -1631,40 +1630,40 @@ class Toolbox:
             rules=self.rules,
             enable_browser=settings.enable_playwright,
         )
-        #: Suchtreffer nach URL, damit blockierte Seiten wenigstens als Link taugen.
+
         self.seen_results: dict[str, SearchResult] = {}
-        #: In der Gegenpruefung: Quellen, die schon gelesen wurden. Sie fallen
-        #: dann aus den Suchtreffern heraus -- eine zweite Runde, die dieselben
-        #: Seiten noch einmal liest, ist keine zweite Runde.
+
+
+
         self.avoid_domains: set[str] = set()
-        #: Traegt jede gelesene Seite selbst in `avoid_domains` ein. Teilen
-        #: sich mehrere Agenten dieselbe Menge, meidet jeder von ihnen, was ein
-        #: anderer schon gelesen hat -- so kommen aus einer Zerlegung wirklich
-        #: verschiedene Quellen zurueck und nicht dreimal dieselbe Seite.
+
+
+
+
         self.claim_sources = False
-        #: Der Google-Zugriff wird erst beim ersten Aufruf gebaut -- ohne
-        #: verbundenes Konto soll gar nichts davon geladen werden.
+
+
         self._google_client: Any = None
-        #: Ebenso das Lager -- ohne eingetragene Adresse wird nichts gebaut.
+
         self._storage_client: Any = None
-        #: Und die virtual machine: sie entsteht erst, wenn wirklich Code laufen soll.
+
         self._sandbox_box: Any = None
-        #: Wird gerufen, wenn sich eine Einstellung geaendert hat. Die
-        #: Oberflaeche baut daraufhin den Agenten fuer die naechste Frage neu.
+
+
         self.on_settings_changed: Any = None
-        #: Der Rechtspruefer (aquaticy/guardrails.py). Er sitzt hier und nicht
-        #: im Agenten: durch diesen Werkzeugkasten laufen auch die Subagenten,
-        #: die Pruefer und die Notloesung fuer Bilder -- keiner davon kommt so
-        #: an ihm vorbei.
-        # Ohne Leitplanken bleibt der Grundschutz (10.1.4): Schadsoftware in der
-        # virtual machine und Bilder, die echte Menschen verletzen.
+
+
+
+
+
+
         self.guard: Guard | None = Guard(
             settings, baseline=not getattr(settings, "legal_guard", True))
-        #: Ersetzt im User mode das Vision-Modell (Tests). None = das echte.
+
         self.screen_reader: Callable[[bytes, str], str] | None = None
-        #: Eine Pruefung vor jedem Aufruf (11.0.0 Luna, aquaticy/coworker.py): gibt
-        #: sie ein Ergebnis zurueck, laeuft das Werkzeug nicht. Coworker setzen
-        #: hier ihre Regeln durch -- erlauben, fragen, sperren.
+
+
+
         self.coworker_ha_approval: Callable[[dict[str, Any]], bool] | None = None
         self.private_context: list[str] = []
         self.gate: Callable[[str, dict[str, Any]], dict[str, Any] | None] | None = None
@@ -1686,7 +1685,7 @@ class Toolbox:
         if self.on_event:
             self.on_event(event, payload)
 
-    # -- Werkzeug 1 -------------------------------------------------------
+
     def _plan_queries(self, query: str, extra: list[str] | None) -> list[str]:
         """Welche Anfragen wirklich rausgehen.
 
@@ -1709,15 +1708,15 @@ class Toolbox:
                     wanted.append(candidate)
         wanted = wanted[:limit]
 
-        # Und dann der Ortsfilter. Bisher war er eine Bitte im Systemtext --
-        # das Hauptmodell hielt sich meistens daran, die Subagenten sahen ihn
-        # nie, und bei "Cafes mit WLAN" kamen Treffer aus dem ganzen
-        # Sprachraum zurueck. Jetzt kommt eine Fassung MIT Ort dazu, sofern
-        # nicht ohnehin schon einer dasteht. Sie ersetzt keine der anderen
-        # Anfragen, sondern tritt daneben: beim Mischen (RRF) gewinnt, was
-        # mehrere Listen uebereinstimmend oben haben -- bei einer oertlichen
-        # Frage also das Oertliche, bei einer allgemeinen bleibt es beim
-        # Bisherigen.
+
+
+
+
+
+
+
+
+
         ort = (self.settings.location or "").strip()
         if ort and not any(mentions_place(anfrage, ort) for anfrage in wanted):
             mit_ort = with_place(keywords(wanted[0]) or wanted[0], ort)
@@ -1787,9 +1786,9 @@ class Toolbox:
             try:
                 results, used = search_broadly(wanted, count, configured)
             except SearchError as exc:
-                # Fallback: faellt das konfigurierte Backend aus (SearXNG down,
-                # API-Limit), uebernimmt die offene Metasuche -- die braucht
-                # nichts und ist praktisch immer da.
+
+
+
                 if self.settings.search_backend in OPEN_BACKEND_NAMES:
                     self._emit("error", message=str(exc))
                     return {"query": label, "results": [], "error": str(exc)}
@@ -1818,8 +1817,8 @@ class Toolbox:
                 if (result.source_domain or domain_of(result.url)) not in self.avoid_domains
             ]
             skipped = len(results) - len(fresh)
-            # Bleibt nach dem Aussortieren nichts uebrig, ist die alte Liste
-            # immer noch besser als gar keine -- dann sagt die Notiz es eben.
+
+
             if fresh:
                 results = fresh
 
@@ -1832,7 +1831,7 @@ class Toolbox:
             "results": [result.as_tool_dict() for result in results],
         }
         if cached is not None:
-            # Aus dem Zwischenspeicher: keine neue Arbeit auf dem Server.
+
             payload["cached"] = True
         if skipped:
             payload["note"] = (
@@ -1841,15 +1840,15 @@ class Toolbox:
             )
         return payload
 
-    # -- Werkzeug 2 -------------------------------------------------------
+
     def fetch_page(self, url: str) -> dict[str, Any]:
         """Laedt eine Seite und gibt lesbaren Text plus Produktdaten zurueck."""
         url = (url or "").strip()
         self._emit("fetch", url=url)
 
         key = cache_key("page", url)
-        # Parallele Helfer lesen dieselbe Seite haeufig gleichzeitig.
-        # Nach dem Warten erneut lesen; nur der erste Cache-Miss holt sie.
+
+
         with self.cache.filling(key) if self.cache else contextlib.nullcontext():
             cached = self.cache.get(key) if self.cache else None
             if cached is not None:
@@ -1885,8 +1884,8 @@ class Toolbox:
                 }
             )
             if self.claim_sources and domain:
-                # Ab jetzt gehoert diese Seite mir -- andere Agenten suchen
-                # weiter, ohne sie noch einmal vorgeschlagen zu bekommen.
+
+
                 self.avoid_domains.add(domain)
             for product in page.products:
                 self.stats.products.append(product)
@@ -1899,7 +1898,7 @@ class Toolbox:
         if not page.ok:
             hint = self.seen_results.get(url)
             if hint:
-                # Blockierte Seiten bleiben als Kauf-/Referenzlink brauchbar.
+
                 payload["search_title"] = hint.title
                 payload["search_snippet"] = hint.snippet
         return payload
@@ -1909,7 +1908,7 @@ class Toolbox:
         if not (page.ok and self.spec_extractor and page.text):
             return
         if not page.product_hint:
-            # Kein Produkt in Sicht -- kein Grund, das LLM zu bemuehen.
+
             return
         if page.products and page.products[0].specs:
             return
@@ -1929,7 +1928,7 @@ class Toolbox:
                 )
             ]
 
-    # -- Werkzeug: Gmail und Kalender -------------------------------------
+
     def _google(self) -> Any:
         """Der Zugriff auf das verbundene Konto, einmal je Toolbox aufgebaut."""
         from aquaticy.google import Google, TokenStore
@@ -2029,15 +2028,15 @@ class Toolbox:
         self._emit("mail_done", found=1)
         return mail
 
-    # -- Werkzeug: bei Google etwas aendern -------------------------------
-    # Drei Dinge sind hier festgeschrieben und stehen nicht im Prompt, wo ein
-    # geschickter Satz sie wegreden koennte:
-    #
-    # 1. Ohne "Aendern erlaubt" gibt es diese Werkzeuge gar nicht (agent.py).
-    # 2. Vor jedem Schreiben wird gefragt. Kann niemand antworten, wird nicht
-    #    geschrieben -- lieber gar nichts als etwas Ungefragtes im Kalender.
-    # 3. Verschickt wird nie eine Mail. Es gibt nur Entwuerfe, und dafuer
-    #    fehlt Aquaticy sogar das Recht bei Google selbst.
+
+
+
+
+
+
+
+
+
     def _google_write_ready(self, tool: str = "") -> str:
         problem = self._google_ready()
         if problem:
@@ -2048,9 +2047,9 @@ class Toolbox:
                 "Aendern in den Einstellungen unter 'Gmail & Kalender' frei und "
                 "verbindet danach neu. Sag ihm das, statt es zu umgehen."
             )
-        # Hat Google das Aendern bei der Zustimmung wirklich erlaubt (12.5.6 Sol)?
-        # Der Schalter allein genuegt nicht: Google laesst jedes Recht einzeln abwaehlen,
-        # und eine Verbindung von vor dem Einschalten kennt es gar nicht.
+
+
+
         erlaubt = self._google().write_access() if tool else None
         if erlaubt is not None:
             kalender = tool.startswith("calendar")
@@ -2186,8 +2185,8 @@ class Toolbox:
         if problem:
             return {"error": problem}
         try:
-            # Vor der Rueckfrage: der Mensch soll genau die Empfaenger sehen,
-            # die im Entwurf landen (seit 9.5.16, siehe google.mail_addresses).
+
+
             from aquaticy.google import mail_addresses
 
             to = mail_addresses(to) if to else ""
@@ -2211,7 +2210,7 @@ class Toolbox:
         self._emit("mail_written", subject=subject)
         return answer
 
-    # -- Werkzeug: Lagerverwaltung ----------------------------------------
+
     def _storage(self) -> Any:
         """Der Zugriff aufs Lager, einmal je Toolbox aufgebaut."""
         from aquaticy.storage import Storage
@@ -2345,7 +2344,7 @@ class Toolbox:
         self._emit("storage_done", found=1, action="geaendert")
         return {"changed": entry}
 
-    # -- Werkzeug: Einstellungen ------------------------------------------
+
     def _profile_env(self) -> Path | None:
         """Die `.env` des Kontos -- oder None, wenn Aquaticy allein laeuft.
 
@@ -2389,8 +2388,8 @@ class Toolbox:
         self._emit("setting", label=preference.label, value=stored)
 
         if preference.name in (preferences.APPEARANCE, preferences.PALETTE):
-            # Aussehen ist Sache des Browsers -- es steht in keiner Datei. Die
-            # Oberflaeche hoert auf dieses Ereignis und stellt es um.
+
+
             if preference.name == preferences.APPEARANCE:
                 self._emit("appearance", theme="light" if stored == "hell" else "dark")
             else:
@@ -2421,8 +2420,8 @@ class Toolbox:
             ),
         }
 
-    # -- Dispatch ---------------------------------------------------------
-    # -- Werkzeug: die virtual machine ------------------------------------------
+
+
     def _sandbox(self) -> Any:
         """Die gemeinsame virtual machine -- gebaut beim ersten Zugriff."""
         from aquaticy import sandbox as werkstatt
@@ -2449,7 +2448,7 @@ class Toolbox:
             return {"error": str(exc)}
         except ValueError as exc:
             return {"error": str(exc)}
-        except Exception as exc:  # pragma: no cover - Laufzeit meldet Unerwartetes
+        except Exception as exc:  # pragma: no cover
             return {"error": f"Die virtual machine antwortet nicht: {exc}"}
         self.stats.vm_calls += 1
         return result.as_dict()
@@ -2523,7 +2522,7 @@ class Toolbox:
             return {"error": str(exc)}
         except subprocess.TimeoutExpired:
             return {"error": "Die virtual machine hat nicht rechtzeitig geantwortet."}
-        except Exception as exc:  # pragma: no cover - Laufzeit meldet Unerwartetes
+        except Exception as exc:  # pragma: no cover
             return {"error": f"Die virtual machine antwortet nicht: {exc}"}
         self.stats.vm_calls += 1
         bild = answer.pop("_bild", b"") if isinstance(answer, dict) else b""
@@ -2582,7 +2581,7 @@ class Toolbox:
         if name == "weather":
             ort = str(arguments.get("place") or self.settings.location or "")
             if rechte["orte"] == "meiner":
-                # Recht "Nur mein Ort": der Ortsfilter gilt, egal was gefragt wurde.
+
                 ort = str(self.settings.location or "")
                 if not ort:
                     return {"error": (
@@ -2646,8 +2645,8 @@ class Toolbox:
             pfad = geschrieben["written"]
             from aquaticy.addons import werkstatt_command_for_blender
 
-            # Im User mode kommt Blender vom Add-on (/addons/blender), sonst aus
-            # dem Abbild -- der Befehl nimmt, was da ist.
+
+
             programm = (
                 werkstatt_command_for_blender()
                 if getattr(self.settings, "vm_user_mode", False)
@@ -2701,8 +2700,8 @@ class Toolbox:
         if art is None or metering.quota_of(self.settings) is None:
             return self._after_untrusted(name, self._call(name, arguments))
         try:
-            # Atomar (9.5.15): die Mindestkosten werden reserviert, solange die
-            # Arbeit laeuft -- parallele Werkzeuge sehen den Rest schon belegt.
+
+
             vorab = metering.reserve_work(self.settings, art)
         except metering.QuotaExceeded as exc:
             return {"error": str(exc), "kontingent": True}
@@ -2710,8 +2709,8 @@ class Toolbox:
         try:
             payload = self._call(name, arguments)
         except Exception as exc:
-            # Auch ein Werkzeug, das abbricht, hat auf dem Server gearbeitet --
-            # bis 9.5.15 wurde es dann gar nicht gebucht.
+
+
             payload = {"error": f"{type(exc).__name__}: {exc}"}
         try:
             vorab.settle_work(self._work_cost(name, art, payload, vorher))
@@ -2730,8 +2729,8 @@ class Toolbox:
 
     @untrusted_seen.setter
     def untrusted_seen(self, wert: bool) -> None:
-        # Von aussen gesetzt heisst: richtig fremd (Web, Mails, Agenten). Zurueck auf
-        # False leert beides.
+
+
         self._untrusted_hard = bool(wert)
         self._untrusted_soft = False
 
@@ -2748,17 +2747,17 @@ class Toolbox:
         from aquaticy import injection
 
         if payload.get("error"):
-            # Auch eine Fehlermeldung kann fremden Text tragen (Grund einer Seite).
+
             return injection.clean(payload)
         markiert, arten = injection.mark(name, payload)
-        # Die eigenen Zustaende aus Home Assistant sind kein Web-Inhalt: Mit dem Schalter
-        # "Auf Befehl ohne Rueckfrage" (12.5.5 Sol) loest ihr Lesen keine Rueckfrage mehr
-        # aus. Steht darin aber eine Anweisung an eine KI, bleibt die Sperre.
+
+
+
         eigenes_haus = (name == "ha_states" and getattr(self.settings, "ha_direct", False)
                         and getattr(self.settings, "ha_control", False))
-        # Der eigene Kalender (12.5.6 Sol): zaehlt fuer alle anderen Sperren weiter als
-        # fremd, nicht aber fuer "Termin eintragen ohne Rueckfrage". Mails und
-        # Webseiten bleiben richtig fremd.
+
+
+
         eigener_kalender = (name == "calendar_events"
                             and getattr(self.settings, "google_direct", False)
                             and getattr(self.settings, "google_write", False))
@@ -2833,11 +2832,11 @@ class Toolbox:
         if name == "ha_call":
             approval = getattr(self, "coworker_ha_approval", None)
             if approval is not None and approval(arguments):
-                return None  # explizite, eng begrenzte Dauerfreigabe des Besitzers
+                return None
             from aquaticy.homeassistant import PROTECTED_DOMAINS
 
             if str(arguments.get("domain", "")).strip().lower() in PROTECTED_DOMAINS:
-                return None  # fragt ohnehin selbst nach
+                return None
         detail = ", ".join(f"{k}={str(v)[:60]}" for k, v in list(arguments.items())[:4])
         frage = (f"In diesem Gespräch stehen Inhalte aus dem Web oder aus Mails. "
                  f"Soll Aquaticy jetzt wirklich {was}? ({detail})")
@@ -2896,9 +2895,9 @@ class Toolbox:
         if self.guard is not None and name in SENSITIVE_TOOLS:
             verdict = self.guard.check_call(name, arguments)
             if verdict.abuse:
-                # Wächter der virtual machine (9.5.24): Schadsoftware oder Angriffshilfe
-                # wird gestoppt, bevor sie läuft -- und Ai-guard erfährt davon
-                # (härtere Sperre, aquaticy/aiguard.py).
+
+
+
                 from aquaticy.aiguard import normalize_category
                 from aquaticy.guardrails import STOP_TOOL_ABUSE
 
@@ -2923,7 +2922,7 @@ class Toolbox:
                 count=self._anzahl(arguments.get("count")),
                 country=str(arguments.get("country") or ""),
                 lang=str(arguments.get("lang") or ""),
-                # Manche Modelle schicken einen String statt einer Liste.
+
                 queries=[str(item) for item in more] if isinstance(more, list) else [str(more)],
             )
         if name == "fetch_page":
@@ -3014,8 +3013,8 @@ class Toolbox:
                 timeout=int(arguments.get("timeout") or 0),
             )
         if name == "vm_write":
-            # Kleine Modelle schreiben gern "content" statt "text" (11.2.2 Sol). Bisher
-            # entstand dann still eine leere Datei, und der Lauf danach gab nichts aus.
+
+
             inhalt = arguments.get("text", arguments.get("content"))
             if inhalt is None:
                 return {"error": "vm_write braucht den Dateiinhalt im Feld 'text'."}
@@ -3164,7 +3163,7 @@ class Toolbox:
                 x=arguments.get("x"),
                 y=arguments.get("y"),
                 button=str(arguments.get("button") or "left"),
-                # "false" ist ein Wort, kein Ja -- bool("false") waere True.
+
                 double=str(arguments.get("double", "")).strip().lower()
                 in ("true", "1", "ja", "yes"),
             )
@@ -3196,7 +3195,7 @@ class Toolbox:
             return self.desktop_action("windows")
         return {"error": f"Unbekanntes Werkzeug '{name}'."}
 
-    # -- Werkzeug 3: News -------------------------------------------------
+
     def search_news(self, query: str, count: int = 0) -> dict[str, Any]:
         """News-Suche; faellt bei Ausfall auf die normale Websuche zurueck.
 
@@ -3210,8 +3209,8 @@ class Toolbox:
             schlagzeilen = self._headlines(count)
             if schlagzeilen is not None:
                 return schlagzeilen
-        # Auch hier gilt der Ortsfilter: "Baustellen" ohne Ort ist eine
-        # andere Frage als "Baustellen Bremen".
+
+
         query = with_place((query or "").strip(), self.settings.location)
         count = int(count or self.settings.max_results_default)
         self.stats.news_searches.append(query)
@@ -3229,7 +3228,7 @@ class Toolbox:
                     query, count=count, country=self.settings.country, lang=self.settings.lang
                 )
             except SearchError:
-                # Fallback: lieber normale Treffer als gar keine.
+
                 self._emit("fallback", source="news", target="websuche")
                 try:
                     results = search_web(
@@ -3242,7 +3241,7 @@ class Toolbox:
                     self._emit("error", message=str(exc))
                     return {"query": query, "results": [], "error": str(exc)}
             if self.cache:
-                # News veralten schnell -- eine Stunde statt 24.
+
                 self.cache.set(
                     key,
                     [result.model_dump() for result in results],
@@ -3271,7 +3270,7 @@ class Toolbox:
         else:
             results = headlines(land, sprache, menge)
             if results and self.cache:
-                # Schlagzeilen veralten in Minuten, nicht in Stunden.
+
                 self.cache.set(key, [r.model_dump() for r in results], kind="news",
                                label="Schlagzeilen", ttl=600)
         if not results:
@@ -3287,7 +3286,7 @@ class Toolbox:
                      "von Nachrichtenseiten."),
         }
 
-    # -- Werkzeug 4: Profile ----------------------------------------------
+
     def find_profiles(self, name: str, platforms: list[str] | None = None) -> dict[str, Any]:
         """Sucht, was es zu einem Namen ausserhalb der eigenen Website gibt.
 
@@ -3324,8 +3323,8 @@ class Toolbox:
             return dict(cached)
 
         def eine(position: int, label: str, domain: str) -> tuple[str, list[SearchResult]]:
-            # Leicht versetzt starten: acht Anfragen in derselben Millisekunde
-            # sind fuer eine offene Suchmaschine ein Ausschlag.
+
+
             if position:
                 time.sleep(min(position * 0.25, 2.0))
             try:
@@ -3360,8 +3359,8 @@ class Toolbox:
 
         for label, domain in sites:
             treffer = ergebnisse.get(label, [])
-            # Suchmaschinen liefern zu `site:` gern auch Nachbarn -- was nicht
-            # von der Plattform kommt, gehoert hier nicht hin.
+
+
             passend = [
                 item
                 for item in treffer
@@ -3398,7 +3397,7 @@ class Toolbox:
         self._emit("profiles_done", name=name, hits=len(gefunden))
         return payload
 
-    # -- Werkzeug 5: die Karte --------------------------------------------
+
     def local_places(self, what: str, where: str = "", radius_km: float = 0.0) -> dict[str, Any]:
         """Sucht Orte in OpenStreetMap statt in einer Suchmaschine.
 
@@ -3474,14 +3473,14 @@ class Toolbox:
                 "gehoeren gegengeprueft, sie veralten in der Karte am schnellsten."
             )
         if self.cache:
-            # Die Karte aendert sich langsam -- ein Tag ist reichlich. Ein leeres
-            # Ergebnis bleibt nur eine Stunde: vielleicht passt der Umkreis nicht.
+
+
             self.cache.set(key, payload, kind="places", label=f"{what} in {where}",
                            ttl=None if orte else FAILED_PAGE_SECONDS)
         self._emit("places_done", what=what, hits=len(orte))
         return payload
 
-    # -- Werkzeug 6: Rechner ----------------------------------------------
+
     def calculate(self, expression: str) -> dict[str, Any]:
         """Exakte Arithmetik -- damit das Modell nie selbst rechnen muss."""
         from aquaticy.calc import CalcError, calculate_pretty
@@ -3493,7 +3492,7 @@ class Toolbox:
         except CalcError as exc:
             return {"expression": expression, "error": str(exc)}
 
-    # -- Werkzeug 7: Merkzettel (nur Hauptagent) --------------------------
+
     def remember(self, text: str) -> dict[str, Any]:
         """Notiz auf den dauerhaften Merkzettel des Nutzers schreiben."""
         text = (text or "").strip()
@@ -3506,7 +3505,7 @@ class Toolbox:
         self._emit("remember", text=text)
         return {"saved": True, "note_id": note_id, "text": text}
 
-    # -- Werkzeug: Langzeitspeicher ---------------------------------------
+
     def _memory(self) -> Any:
         """Den Speicher oeffnen -- oder None, wenn er abgeschaltet ist."""
         if not self.settings.memory_enabled:
@@ -3567,7 +3566,7 @@ class Toolbox:
             ),
         }
 
-    # -- Werkzeug: das eigene Netz ----------------------------------------
+
     def lan_scan(self, subnet: str = "", thorough: bool = False) -> dict[str, Any]:
         """Sieht nach, welche Geraete im Heimnetz erreichbar sind."""
         from aquaticy.lan import NotPrivate, scan
@@ -3649,7 +3648,7 @@ class Toolbox:
             }
         return {"host": host, "reachable": True, **device.as_dict()}
 
-    # -- Werkzeug: Home Assistant -----------------------------------------
+
     def ha_states(self, search: str = "", domain: str = "") -> dict[str, Any]:
         """Liest Zustaende aus Home Assistant."""
         from aquaticy.homeassistant import MAX_ENTITIES, HomeAssistantError, from_settings
@@ -3729,15 +3728,15 @@ class Toolbox:
                 )
             }
         try:
-            # Vor der Rueckfrage: Dienst und Ziel muessen zum Bereich passen
-            # (seit 9.5.16 -- "light" mit "../lock/unlock" war ein Schloss).
+
+
             check_call(domain, service, entity_id, data)
         except HomeAssistantError as exc:
             return {"error": str(exc)}
 
-        # Schloesser, Alarmanlagen, Tore, Heizungen: hier wird nachgefragt,
-        # auch wenn Schalten erlaubt ist. Ein missverstandener Satz soll nicht
-        # die Haustuer aufschliessen.
+
+
+
         if domain in PROTECTED_DOMAINS:
             target = entity_id or domain
             if self.ask_handler is None:
@@ -3770,7 +3769,7 @@ class Toolbox:
             "changed": len(changed),
         }
 
-    # -- Werkzeug 6: Rueckfrage (nur fuer den Hauptagenten) ---------------
+
     def ask_user(self, question: str = "", options: Any = None,
                  questions: Any = None) -> dict[str, Any]:
         """Fragt beim Nutzer nach und wartet auf die Antwort -- auch auf mehrere.
@@ -3806,7 +3805,7 @@ class Toolbox:
         gesamt = len(fragen)
         antworten: list[dict[str, str]] = []
         for nummer, (frage, choices) in enumerate(fragen, start=1):
-            # Zaehler nur bei einer Reihe: eine einzelne Frage bleibt, wie sie war.
+
             zaehler = {"index": nummer, "total": gesamt} if gesamt > 1 else {}
             self._emit("ask", question=frage, options=choices, **zaehler)
             begonnen = time.monotonic()
@@ -3819,7 +3818,7 @@ class Toolbox:
             self._emit("ask_done", question=frage, answer=antwort, **zaehler)
             antworten.append({"question": frage, "answer": antwort})
             if not antwort and time.monotonic() - begonnen >= ASK_GAVE_UP_AFTER:
-                break  # Wartezeit abgelaufen: nicht auch noch die naechste Frage stellen
+                break
         gegeben = [a for a in antworten if a["answer"]]
         if not gegeben:
             return {
@@ -3861,7 +3860,7 @@ class Toolbox:
                 liste.append((text, optionen(wahl)))
         return liste[:MAX_BATCH]
 
-    # -- Werkzeug 7 (nur fuer den Hauptagenten) ---------------------------
+
     def research_subtasks(self, tasks: Any) -> dict[str, Any]:
         """Gibt Teilfragen an parallele Subagenten ab."""
         if self.subagent_runner is None:

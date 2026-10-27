@@ -66,15 +66,15 @@ class PageResult(BaseModel):
     status_code: int | None = None
     title: str = ""
     text: str = ""
-    #: Warum wurde die Seite uebersprungen? z.B. `blocked`, `consent_required`,
-    #: `paywall`, `robots_disallowed`, `timeout`, `empty`
+
+
     skipped_reason: str = ""
-    #: Wie kam der Inhalt zustande: `http`, `browser`, `cache`
+
     via: str = "http"
     source_domain: str = ""
     products: list[Product] = Field(default_factory=list)
     truncated: bool = False
-    #: Sieht die Seite ueberhaupt nach einem Produkt aus? Steuert den LLM-Fallback.
+
     product_hint: bool = False
 
     @property
@@ -109,9 +109,9 @@ class PageResult(BaseModel):
         return payload
 
 
-#: Was der Server mit einem Abweisungsstatus eigentlich sagt. Die Nummer ist
-#: der Unterschied zwischen "melde dich an" und "du fragst zu oft" -- und
-#: davon haengt ab, ob es sich lohnt, es spaeter noch einmal zu versuchen.
+
+
+
 HTTP_REFUSALS: dict[int, str] = {
     401: "verlangt eine Anmeldung (401)",
     402: "verlangt eine Bezahlung (402)",

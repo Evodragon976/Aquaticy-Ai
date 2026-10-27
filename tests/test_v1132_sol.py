@@ -32,11 +32,11 @@ def test_a_missing_mcp_package_no_longer_breaks_every_question(monkeypatch) -> N
     monkeypatch.setattr(litellm, "completion", _wie_litellm_1106(aufrufe))
     assert llmcall.completion(model="mistral/m", messages=[], tools=WERKZEUG) == "antwort"
     assert [a.get("_skip_mcp_handler") for a in aufrufe] == [None, True]
-    # Gemerkt: der naechste Aufruf geht gleich am Gateway vorbei.
+
     aufrufe.clear()
     assert llmcall.completion(model="mistral/m", messages=[], tools=WERKZEUG) == "antwort"
     assert [a.get("_skip_mcp_handler") for a in aufrufe] == [True]
-    # Ohne Werkzeuge bleibt der Aufruf, wie er war.
+
     aufrufe.clear()
     llmcall.completion(model="mistral/m", messages=[])
     assert "_skip_mcp_handler" not in aufrufe[0]
@@ -76,7 +76,7 @@ def test_the_slider_minimum_is_accepted_by_the_server(monkeypatch, tmp_path) -> 
     from aquaticy import local_model, web
     from aquaticy.config import Settings
 
-    # Ein riesiges Modell: 5 GB reichen nur fuer 1536 Tokens.
+
     monkeypatch.setattr(local_model, "kv_bytes_per_token", lambda *a, **k: 5 * 1024 ** 3 // 1536)
     monkeypatch.setattr(local_model, "trained_context", lambda *a, **k: 0)
     s = Settings(model="ollama_chat/riesig:405b", context_tokens=16384, data_dir=tmp_path)
@@ -86,7 +86,7 @@ def test_the_slider_minimum_is_accepted_by_the_server(monkeypatch, tmp_path) -> 
     assert unten <= sicht["min"] and oben >= sicht["max"]
 
 
-# --- Server-Verbund: Arbeit nach Staerke verteilen ---------------------------------
+
 
 SCHWACH = {"cores": 4, "cpu_pct": 30, "ram_gb": 8, "ram_used_gb": 3, "ram_pct": 37,
            "ollama_models": 0}
@@ -139,7 +139,7 @@ def test_the_strong_server_takes_a_bit_of_website_when_the_weak_is_busy(staerken
         a.homes[f"web-alt-{nummer}"] = a.node_id
         a._activity[f"web-alt-{nummer}"] = zeit.time()
     assert a.least_loaded("web-neu") == b.node_id
-    # ... aber nie ein Konto mit lokalen Modellen auf den schwachen.
+
     for nummer in range(6):
         a.homes[f"lokal-alt-{nummer}"] = b.node_id
         a._activity[f"lokal-alt-{nummer}"] = zeit.time()
@@ -151,7 +151,7 @@ def test_a_local_model_account_on_the_weak_server_moves(staerken) -> None:
 
     a, b = staerken
     a._set_home("lokal-7", a.node_id)
-    a._activity["lokal-7"] = zeit.time()          # gerade aktiv -- zieht trotzdem um
+    a._activity["lokal-7"] = zeit.time()
     assert a.misplaced("lokal-7", a.node_id)
     assert a.assign("lokal-7") == b.node_id
     assert not a.misplaced("lokal-7", b.node_id)
@@ -163,7 +163,7 @@ def test_without_any_model_server_everything_stays_as_before(tmp_path) -> None:
     hw = cluster.hardware(SCHWACH)
     assert cluster.model_power(hw) == 0.0
     assert cluster.model_power(cluster.hardware(STARK)) > 0
-    # Ohne Ollama-Modell kann auch die beste Karte keine lokalen Modelle.
+
     assert cluster.model_power(cluster.hardware({**STARK, "ollama_models": 0})) == 0.0
 
 
@@ -190,7 +190,7 @@ def test_the_load_display_shows_every_server(staerken, monkeypatch) -> None:
                                                      "Grafikkarte"]
     assert "RTX 4090" in stark["gauges"][2]["sub"]
     assert server[0]["self"] and server[0]["master"]
-    # Ein ausgefallener Server zeigt keine alten Werte.
+
     a.last_ok[b.node_id] = 0
     assert web.cluster_gauges(a)[1]["gauges"] == [] and not web.cluster_gauges(a)[1]["alive"]
 
@@ -237,7 +237,7 @@ def test_a_burst_of_connections_does_not_stall() -> None:
     from aquaticy import web
 
     assert web.AquaticyServer.request_queue_size >= 64
-    server = web.AquaticyServer(("127.0.0.1", 0), web.Handler)   # nimmt gerade nichts an
+    server = web.AquaticyServer(("127.0.0.1", 0), web.Handler)
     verbindungen = []
     try:
         anfang = time.monotonic()

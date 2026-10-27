@@ -20,7 +20,7 @@ from tests.test_agent import ScriptedLLM, _message, _tool_call, toolbox  # noqa:
 NACHRICHTEN = "Was sind die neuesten Nachrichten in meinem Ort?"
 
 
-# -- Erkennen ------------------------------------------------------------------------------
+
 @pytest.mark.parametrize("text, frage", [
     ("Gerne suche ich dir die neuesten Nachrichten heraus! Damit ich die richtigen finde: "
      "In welchem Ort wohnst du?", "In welchem Ort wohnst du?"),
@@ -45,14 +45,14 @@ def test_suggestions_under_the_question_become_buttons() -> None:
 
 
 @pytest.mark.parametrize("text", [
-    # Ein Angebot am Ende einer Antwort.
+
     "In Bremen wird es morgen 12 Grad. Soll ich auch das Wochenende nachsehen?",
     "Möchtest du noch mehr dazu wissen?",
     "Would you like me to check the weekend too?",
-    # Eine Antwort mit Quelle oder Code.
+
     "Laut https://example.org gibt es drei Termine. Welcher passt dir?",
     "```python\nprint(1)\n```\nPasst das so?",
-    # Viel Inhalt und am Ende eine Frage: geantwortet.
+
     "Die Stadt hat drei Zeitungen, zwei Radiosender und ein Lokalfernsehen, das jeden "
     "Abend um sechs Uhr berichtet. Die größte Zeitung erscheint täglich außer sonntags, "
     "die anderen beiden wöchentlich. Online gibt es außerdem zwei Nachrichtenportale "
@@ -63,7 +63,7 @@ def test_answers_and_offers_stay_text(text: str) -> None:
     assert text_question(text) is None
 
 
-# -- Im Lauf -------------------------------------------------------------------------------
+
 def _gefragt(toolbox: Toolbox, antwort: str = "Lilienthal") -> list[tuple[str, list[str]]]:  # noqa: F811
     liste: list[tuple[str, list[str]]] = []
 
@@ -95,15 +95,15 @@ def test_the_local_news_question_opens_the_window(
 
     assert gefragt == [("In welchem Ort wohnst du?", [])]
     assert result.answer.startswith("Die neuesten Nachrichten aus Lilienthal")
-    # Im Verlauf steht ein echter Aufruf von ask_user mit der Antwort -- keine Frage im Text.
+
     aufrufe = [c for m in agent.messages for c in (m.get("tool_calls") or [])
                if c["function"]["name"] == "ask_user"]
     assert len(aufrufe) == 1
     antworten = [m for m in agent.messages if m.get("role") == "tool"
                  and m.get("name") == "ask_user"]
     assert "Lilienthal" in antworten[0]["content"]
-    # Die erste Fassung bleibt stehen (auf sie bezieht sich der Anstoss), die zweite
-    # ist zum Aufruf geworden.
+
+
     assert sum(m.get("role") == "assistant" and m.get("content") == frage
                for m in agent.messages) == 1
 
@@ -153,7 +153,7 @@ def test_never_more_than_two_questions(
     assert result.answer == "Und welche Uhrzeit?"
 
 
-# -- Mit "Strukturiert": erst nach dem Ort fragen, dann planen ---------------------------
+
 from aquaticy.agent import PLACE_QUESTION, needs_place  # noqa: E402
 from aquaticy.subagents import Plan  # noqa: E402
 from tests.test_v1140_terra import _denken, einstellungen  # noqa: E402,F401

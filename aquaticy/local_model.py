@@ -29,10 +29,9 @@ from typing import Any
 
 import httpx
 
-#: Wo Ollama standardmaessig lauscht.
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
-#: LiteLLM-Praefix. `ollama_chat` kann Tool-Calling, das nackte `ollama` nicht.
+
 MODEL_PREFIX = "ollama_chat"
 
 
@@ -41,14 +40,14 @@ class LocalModel:
     """Ein Modellvorschlag aus dem Ollama-Katalog."""
 
     name: str
-    #: Ungefaehre Downloadgroesse in GB -- der genaue Wert kommt nach dem Laden.
+
     size_gb: float
-    #: Empfohlener freier Speicher in GB (VRAM, sonst Arbeitsspeicher).
+
     needs_gb: int
     note: str
-    #: Kann das Modell Werkzeuge aufrufen? Ohne das kann es nicht recherchieren.
+
     tools: bool = True
-    #: Kann es Bilder ansehen?
+
     vision: bool = False
 
     @property
@@ -62,9 +61,9 @@ class LocalModel:
         return self.tools and self.vision
 
 
-#: Modelle, die BEIDES koennen: Werkzeuge aufrufen und Bilder ansehen.
-#: Sie sind die sparsamste Loesung -- nur ein Modell im Speicher statt zwei.
-#: Stand August 2026, Groessen sind Richtwerte fuer die Q4-Quantisierung.
+
+
+
 DUAL_MODELS: tuple[LocalModel, ...] = (
     LocalModel("gemma4:12b", 6.6, 10, "Vision + Werkzeuge, guter Allrounder", vision=True),
     LocalModel("qwen3-vl:8b", 6.1, 12, "Vision + Werkzeuge, sehr langer Kontext", vision=True),
@@ -73,7 +72,7 @@ DUAL_MODELS: tuple[LocalModel, ...] = (
     LocalModel("gemma4:26b", 16.0, 24, "Deutlich stärker, braucht eine große Karte", vision=True),
 )
 
-#: Reine Textmodelle -- staerker im Recherchieren, sehen aber nichts.
+
 LOCAL_MODELS: tuple[LocalModel, ...] = (
     LocalModel("qwen3:8b", 5.2, 8, "Sehr zuverlässig beim Werkzeugaufruf"),
     LocalModel("qwen2.5:7b", 4.7, 8, "Bewährt, guter Kompromiss"),
@@ -84,11 +83,11 @@ LOCAL_MODELS: tuple[LocalModel, ...] = (
 
 DEFAULT_MODEL = LOCAL_MODELS[0]
 
-#: Reine Vision-Modelle, falls das Hauptmodell nichts sieht. Sie brauchen
-#: KEIN Tool-Calling: sie beschreiben nur, recherchiert wird danach.
-#: Achtung Namensfalle: das offizielle `gemma3` beherrscht in Ollama Vision,
-#: aber KEIN Tool-Calling -- es taugt nur als Vision-Modell, nie als
-#: Hauptmodell. Erst `gemma4` bringt beides mit.
+
+
+
+
+
 VISION_MODELS: tuple[LocalModel, ...] = (
     LocalModel(
         "gemma3:4b", 3.3, 6, "Offizielles Google-Modell, sieht gut", tools=False, vision=True
@@ -106,11 +105,11 @@ VISION_MODELS: tuple[LocalModel, ...] = (
 
 DEFAULT_VISION_MODEL = VISION_MODELS[0]
 
-#: Leichte Modelle fuer die Subagenten. Sie bekommen eng umrissene
-#: Teilfragen und muessen vor allem eines koennen: zuverlaessig Werkzeuge
-#: aufrufen. Klein ist hier wichtiger als klug -- mehrere laufen parallel
-#: neben dem Hauptmodell, und der Speicher ist endlich.
-#: Stand August 2026, Groessen sind Richtwerte fuer Q4.
+
+
+
+
+
 SUBAGENT_MODELS: tuple[LocalModel, ...] = (
     LocalModel("qwen3:1.7b", 1.4, 3, "Klein und flink, ruft zuverlässig Werkzeuge auf"),
     LocalModel("qwen2.5:3b", 1.9, 4, "Etwas größer, etwas gründlicher"),
@@ -126,15 +125,15 @@ class LocalModelError(RuntimeError):
     """Etwas an der lokalen Einrichtung ist schiefgegangen."""
 
 
-# ---------------------------------------------------------------------------
-# Ollama finden und starten
-# ---------------------------------------------------------------------------
+
+
+
 def ollama_binary() -> str | None:
     """Pfad zur `ollama`-Datei, oder `None`."""
     found = shutil.which("ollama")
     if found:
         return found
-    # winget aktualisiert den PATH des bereits laufenden Setups nicht.
+
     if platform.system() == "Windows":
         local = os.environ.get("LOCALAPPDATA", "")
         if local:
@@ -152,9 +151,9 @@ def install_command() -> list[str] | None:
     """
     system = platform.system()
     if system == "Linux":
-        # Erst einen vollstaendigen HTTPS-Download pruefen, dann ausfuehren.
-        # Eine curl|sh-Pipeline konnte trotz Downloadfehler Erfolg melden und
-        # ein nur halb geladenes Skript bereits ausfuehren.
+
+
+
         return ["sh", "-c", 'set -eu\n'
                 'installer=$(mktemp)\n'
                 'trap \'rm -f "$installer"\' EXIT\n'
@@ -222,8 +221,8 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
 
     from aquaticy.ollama_setup import PARALLEL, _parallel
 
-    # Eine entfernte/custom URL ist kein Auftrag, auf diesem Rechner einen
-    # Dienst aufzumachen. Auch geerbtes OLLAMA_HOST darf keinen LAN-Port oeffnen.
+
+
     try:
         parsed = urlsplit(base_url)
         if (parsed.scheme != "http" or parsed.hostname not in ("localhost", "127.0.0.1", "::1")
@@ -242,9 +241,9 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
         return False
     if server_running(base_url):
         return True
-    # Unter Windows kennt Popen `start_new_session` nicht; dort loesen
-    # Creation-Flags den Prozess von der Konsole und unterdruecken das
-    # aufpoppende Fenster.
+
+
+
     extra: dict[str, Any] = {}
     if platform.system() == "Windows":
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
@@ -295,9 +294,9 @@ def _default_runner(command: list[str]) -> int:
         return 1
 
 
-# ---------------------------------------------------------------------------
-# Modell laden
-# ---------------------------------------------------------------------------
+
+
+
 def pull_model(
     name: str, binary: str | None = None, *, base_url: str = DEFAULT_OLLAMA_URL
 ) -> Iterator[str]:
@@ -379,7 +378,7 @@ def loaded_models(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
         payload = response.json()
     except (httpx.HTTPError, ValueError):
         return []
-    # Wie _tag_list (9.5.34): eine Liste oder "models": null ist kein Absturz.
+
     modelle = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(modelle, list):
         return []
@@ -450,8 +449,8 @@ def free_memory(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
     with use.lock:
         if use.active:
             return []
-        # Pruefen und Entladen bleiben atomar gegen neue Aufrufe. Andere
-        # Ollama-Endpunkte und Cloud-Aufrufe warten dabei nicht mit.
+
+
         return [name for name in loaded_models(base_url) if unload_model(name, base_url)]
 
 
@@ -465,26 +464,26 @@ def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None
     return None
 
 
-# ---------------------------------------------------------------------------
-# Was ein Modell kann (11.2.2 Terra)
-# ---------------------------------------------------------------------------
-#: So lange gilt, was Ollama ueber ein Modell gesagt hat (Sekunden).
+
+
+
+
 CAPABILITY_TTL = 600.0
 
 _CAPS: dict[tuple[str, str], tuple[float, frozenset[str] | None]] = {}
-#: Benoetigte Metadaten aus /api/show; private Modelltexte werden nicht gemerkt.
+
 _SHOW: dict[tuple[str, str], tuple[float, dict[str, Any] | None]] = {}
-#: Hoechstens so viele Modelle gemerkt: ein Name kommt auch aus einer Anfrage
-#: (/api/context), und jeder fremde Name waere sonst fuer immer ein Eintrag.
+
+
 _MERK_MAX = 256
-#: Metadaten bleiben auch bei HTTP-Komprimierung und tiefem JSON begrenzt.
+
 MAX_MODEL_INFO_BYTES = 8 * 1024 * 1024
-#: Was ein Modell nachweislich NICHT kann -- gelernt aus seiner Fehlermeldung.
+
 _FEHLT: dict[str, set[str]] = {}
 _CAPS_LOCK = threading.Lock()
 
-#: Ollama lehnt eine Anfrage ab, wenn das Modell etwas nicht kann:
-#: '"qwen2.5-coder:14b" does not support thinking' oder '... does not support tools'.
+
+
 _FEHLT_RE = re.compile(r"does not support (thinking|tools)", re.IGNORECASE)
 
 
@@ -512,8 +511,8 @@ def _show(name: str, base_url: str = DEFAULT_OLLAMA_URL,
             roh = loads(read_response(antwort, MAX_MODEL_INFO_BYTES, frist)) \
                 if antwort.status_code == 200 else None
         if isinstance(roh, dict):
-            # /api/show kann private Systemtexte trainierter Modelle enthalten.
-            # Nur die hier benoetigten Felder im gemeinsamen Prozess merken.
+
+
             info = roh.get("model_info")
             arch = info.get("general.architecture") if isinstance(info, dict) else None
             aufbau: dict[str, Any] = {}
@@ -565,16 +564,16 @@ def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
     return faehig
 
 
-# ---------------------------------------------------------------------------
-# Kontextfenster: hoechstens 5 GB Arbeitsspeicher (11.3.0 Luna)
-# ---------------------------------------------------------------------------
-#: So viel Arbeitsspeicher darf das Kontextfenster eines lokalen Modells belegen.
+
+
+
+
 CONTEXT_RAM_BYTES = 5 * 1024 ** 3
-#: Bevorzugte Regler-Mindestgroesse; harte Modell- und RAM-Grenzen gehen vor.
+
 CONTEXT_MIN = 2048
-#: Gilt, wenn Ollama den Aufbau des Modells nicht verraet: der bisherige Standard.
+
 CONTEXT_UNKNOWN_MAX = 16384
-#: Ollama haelt den Zwischenspeicher je Token (K und V) in 16 Bit.
+
 _KV_BYTES = 2
 
 
@@ -622,8 +621,8 @@ def kv_bytes_per_token(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
         else [_zahl(koepfe)] * schichten
     if len(heads) != schichten or not all(heads):
         return 0
-    # Eine abgeschnittene Liste beschreibt nicht alle Schichten. Dann mit
-    # vollen Koepfen rechnen, statt fehlende Schichten mit null anzusetzen.
+
+
     kv_heads = (kv if isinstance(kv, list) and len(kv) == schichten else
                 [(_zahl(kv) or h) if not isinstance(kv, list) else h for h in heads])
     summe = 0
@@ -659,7 +658,7 @@ def context_limit(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
         grenze = min(grenze, trainiert)
     if grenze < 1:
         raise ContextLimitError("Dieses Modell braucht mehr Speicher, als erlaubt ist.")
-    # Eine Bedienungs-Mindestgroesse darf harte Obergrenzen nicht vergroessern.
+
     return grenze // 1024 * 1024 if grenze >= 1024 else grenze
 
 
@@ -692,9 +691,9 @@ def can(model_id: str, faehigkeit: str, base_url: str = DEFAULT_OLLAMA_URL) -> b
     return None if faehig is None else faehigkeit in faehig
 
 
-# ---------------------------------------------------------------------------
-# Der entscheidende Test: kann das Modell Werkzeuge aufrufen?
-# ---------------------------------------------------------------------------
+
+
+
 PROBE_TOOL = {
     "type": "function",
     "function": {
@@ -762,9 +761,9 @@ def verify_tool_calling(model_id: str, api_base: str = DEFAULT_OLLAMA_URL) -> tu
     return True, f"Werkzeug aufgerufen: {name or '(ohne Namen)'}"
 
 
-# ---------------------------------------------------------------------------
-# Speicher-Hinweis
-# ---------------------------------------------------------------------------
+
+
+
 def total_memory_gb() -> float | None:
     """Gesamter Arbeitsspeicher in GB, soweit ermittelbar."""
     meminfo = Path("/proc/meminfo")
@@ -808,7 +807,7 @@ def _windows_memory_gb() -> float | None:
 
         status = MemoryStatusEx()
         status.dwLength = ctypes.sizeof(MemoryStatusEx)
-        # windll gibt es nur unter Windows; der Aufrufer prueft das vorher.
+
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined,unused-ignore]
         if not kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
             return None
@@ -893,7 +892,7 @@ def fits_together(main: LocalModel, vision: LocalModel, memory_gb: float | None)
     """
     if memory_gb is None:
         return False
-    # Etwas Luft fuer Kontext und Grafikausgabe.
+
     return main.size_gb + vision.size_gb + 1.5 <= memory_gb
 
 
@@ -957,7 +956,7 @@ def usable_memory_gb() -> float | None:
     if vram:
         return vram
     memory = total_memory_gb()
-    # Ohne GPU laeuft alles auf der CPU; dort ist nicht der ganze RAM nutzbar.
+
     return round(memory * 0.7, 1) if memory else None
 
 
@@ -979,10 +978,10 @@ def gpu_hint() -> str:
     return line[0].strip() if line else ""
 
 
-# ---------------------------------------------------------------------------
-# Sehtest: kann das Modell ein Bild wirklich anschauen?
-# ---------------------------------------------------------------------------
-#: Marker, an denen ein Absturz wegen Speichermangels zu erkennen ist.
+
+
+
+
 RESOURCE_MARKERS = (
     "model runner has unexpectedly stopped",
     "resource limitations",
@@ -990,8 +989,8 @@ RESOURCE_MARKERS = (
     "cudamalloc",
     "insufficient memory",
     "failed to allocate",
-    # So sagt es Ollama selbst: 'model requires more system memory (12.5 GiB)
-    # than is available (8.0 GiB)' -- bis 11.2.2 nicht erkannt.
+
+
     "requires more system memory",
     "more memory than is available",
 )
@@ -1003,7 +1002,7 @@ def resource_problem(detail: str) -> bool:
     return any(marker in lowered for marker in RESOURCE_MARKERS)
 
 
-#: Farbe des Testbildes und die Woerter, die eine richtige Antwort enthaelt.
+
 PROBE_COLOR = (220, 20, 20)
 PROBE_COLOR_WORDS = ("rot", "red", "rouge", "rosso")
 

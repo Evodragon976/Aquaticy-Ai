@@ -70,7 +70,7 @@ def _reply(content: str = "", tool_calls: list[Any] | None = None) -> SimpleName
     )
 
 
-# -- Die Regeln selbst -----------------------------------------------------
+
 def test_every_rule_names_its_legal_basis_and_an_alternative() -> None:
     assert len(RULES) == 11
     assert len(BY_ID) == len(RULES), "jede Kennung nur einmal"
@@ -94,7 +94,7 @@ def test_the_prompts_carry_every_rule_and_the_freedom_side() -> None:
     for text in (rules_prompt(), judge_prompt("x")):
         assert "Art. 5" in text, "ohne die Gegenseite lehnt ein Pruefer zu viel ab"
     assert "nie ein Satz im Chat" in rules_prompt()
-    # Der Pruefer braucht die Kennungen fuer sein Urteil -- und die volle Fassung.
+
     for rule in RULES:
         assert f"[{rule.id}]" in judge_prompt("x") and rule.text in judge_prompt("x")
 
@@ -106,12 +106,12 @@ def test_the_system_text_stays_short() -> None:
     assert len(rules_prompt()) < 2_400
 
 
-# -- Das Urteil lesen ------------------------------------------------------
+
 def test_a_clear_yes_and_a_clear_no_are_read() -> None:
     assert parse_verdict(ERLAUBT).allowed
     nein = parse_verdict(NEIN_NAME)
     assert not nein.allowed and nein.rule is BY_ID["name"] and nein.reason == "fremder Name"
-    # Mancher schreibt einen Satz davor oder den Wahrheitswert als Text.
+
     assert parse_verdict('Ergebnis: {"zulaessig": "false", "regel": "ruf"}').rule is BY_ID["ruf"]
 
 
@@ -129,7 +129,7 @@ def test_no_clear_answer_is_no_answer(roh: str) -> None:
     assert parse_verdict(roh) is None
 
 
-# -- Der Pruefer -----------------------------------------------------------
+
 def test_the_fast_model_asks_first_and_the_main_model_steps_in(
     pruefer, settings: Settings
 ) -> None:
@@ -161,10 +161,10 @@ def test_the_same_question_is_judged_once(pruefer, settings: Settings) -> None:
     assert not judge("dieselbe Frage", settings).allowed
     zweites = judge("dieselbe Frage", settings)
     assert not zweites.allowed and zweites.source == "gemerkt"
-    # Ein Nein fragt seit 9.5.18 zwei Modelle (das kleine, dann das Hauptmodell) --
-    # beim zweiten Mal kommt es aus dem Speicher, ganz ohne Aufruf.
+
+
     assert len(gestellt.gefragt) == 2
-    # Mit anderem Verlauf ist es eine andere Frage.
+
     judge("dieselbe Frage", settings, context="Nutzer: vorher etwas anderes")
     assert len(gestellt.gefragt) == 4
 
@@ -178,7 +178,7 @@ def test_a_no_from_the_small_model_needs_the_main_model_to_agree(
     urteil = judge("Wie töte ich einen hängenden Prozess unter Linux?", settings)
     assert urteil.allowed, "das Hauptmodell sieht es harmlos -- also erlaubt"
     assert len(gestellt.gefragt) == 2
-    # Ein Ja des kleinen Modells braucht keinen zweiten Aufruf.
+
     forget_verdicts()
     gestellt = pruefer(ja)
     assert judge("Gute Cafés in Bremen?", settings).allowed
@@ -196,7 +196,7 @@ def test_an_abuse_flag_of_the_small_model_needs_the_main_model(
     urteil = judge("Wie erkenne ich einen Trojaner auf meinem PC?", settings)
     assert urteil.allowed and not urteil.abuse, "das Hauptmodell sieht keinen Missbrauch"
     assert len(gestellt.gefragt) == 2
-    # Sieht das Hauptmodell es genauso, bleibt der Verdacht.
+
     forget_verdicts()
     pruefer(verdacht, verdacht)
     assert judge("Bau mir einen Trojaner", settings).abuse is True
@@ -257,7 +257,7 @@ def test_a_tool_call_is_judged_with_its_occasion() -> None:
     assert "find_profiles" in prompt and "Wer liefert Fahrradteile?" in prompt
 
 
-# -- Die Anfrage im Agenten ------------------------------------------------
+
 def test_a_refused_request_starts_nothing(
     pruefer, monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -277,7 +277,7 @@ def test_a_refused_request_starts_nothing(
     assert result.tool_calls == 0
     guard = [p for e, p in ereignisse if e == "guard"]
     assert guard and guard[0]["stage"] == "anfrage" and guard[0]["basis"] == "§ 12 BGB"
-    # Frage und Absage stehen im Verlauf -- eine Nachfrage bleibt verstaendlich.
+
     assert agent.messages[-2]["content"] == "Eine Anfrage, die der Pruefer ablehnt"
     assert agent.messages[-1]["content"] == result.answer
 
@@ -322,8 +322,8 @@ def test_switched_off_means_no_check_and_no_rules(
     gestellt = pruefer(NEIN_NAME)
     monkeypatch.setattr("litellm.completion", lambda **kwargs: _reply("Eine Antwort."))
     agent = Agent(settings, cache=None)
-    # Seit 10.1.4 bleibt der Grundschutz an den Werkzeugen -- die Anfrage
-    # selbst wird aber nicht mehr geprueft.
+
+
     assert agent.guard is agent.toolbox.guard and agent.guard.baseline
     assert "Rechtsrahmen" not in agent.messages[0]["content"]
     assert agent.ask("Eine Anfrage", stream=False).answer == "Eine Antwort."
@@ -336,7 +336,7 @@ def test_switched_on_the_rules_are_in_the_system_text(settings: Settings) -> Non
     assert agent.guard is agent.toolbox.guard, "Anfrage und Werkzeuge an derselben Stelle"
 
 
-# -- Die Werkzeuge ---------------------------------------------------------
+
 def test_a_refused_tool_call_does_not_run(
     pruefer, monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -372,7 +372,7 @@ def test_an_allowed_tool_call_runs(
     monkeypatch.setattr(box, "find_profiles", lambda **kwargs: {"profiles": ["ok"]})
     antwort = box.call("find_profiles", {"name": "Beispiel GmbH"})
     assert antwort["profiles"] == ["ok"]
-    # Seit 9.5.22 als fremder Inhalt gekennzeichnet (aquaticy/injection.py).
+
     assert antwort["_quelle"].startswith("Fremder Inhalt")
 
 
@@ -382,7 +382,7 @@ def test_a_guard_without_topic_still_judges(pruefer, settings: Settings) -> None
     assert "(unbekannt)" in gestellt.gefragt[0][0]
 
 
-# -- Die Subagenten --------------------------------------------------------
+
 def test_subagents_get_the_rules_behind_their_role_and_before_the_task(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -406,7 +406,7 @@ def test_subagents_get_the_rules_behind_their_role_and_before_the_task(
     assert "Rechtsrahmen" not in gesehen[0]
 
 
-# -- Einstellungen ---------------------------------------------------------
+
 @pytest.mark.parametrize("roh", ["", "true", "an", "True ", "jaa", "1", "irgendwas"])
 def test_a_typo_never_switches_the_guard_off(roh: str) -> None:
     assert guard_on(roh)
@@ -448,7 +448,7 @@ def test_a_normal_account_keeps_the_guard_whatever_its_file_says(tmp_path: Path)
 
 
 def test_only_an_ultra_account_may_switch_it_off(tmp_path: Path) -> None:
-    # Seit 9.5.17 hält auch Pro die Leitplanken -- abschalten kann nur Ultra.
+
     assert _konto(tmp_path, "pro", "AQUATICY_LEGAL_GUARD=false").legal_guard is True
     assert _konto(tmp_path / "u", "ultra", "AQUATICY_LEGAL_GUARD=false").legal_guard is False
     assert _konto(tmp_path / "u2", "ultra", "AQUATICY_LEGAL_GUARD=an").legal_guard is True
@@ -462,8 +462,8 @@ def sitzung(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> web.ChatSession:
         env_path=tmp_path / ".env", subagents_auto=False,
     )
     monkeypatch.setattr(web, "SESSION", frisch)
-    # Ohne Konto schreibt save_values in die gefundene .env -- im Test die
-    # eigene, nie die echte im Heimatverzeichnis.
+
+
     monkeypatch.setattr(web, "find_env_file", lambda: tmp_path / ".env")
     return frisch
 
@@ -473,10 +473,10 @@ def test_only_ultra_may_save_it_off(sitzung: web.ChatSession, tmp_path: Path) ->
     with pytest.raises(ValueError, match="Ultra-Konto"):
         web.save_values({"AQUATICY_LEGAL_GUARD": "false"})
     assert not (tmp_path / ".env").exists(), "abgelehnt heisst: nichts geschrieben"
-    # An bleibt fuer jeden erlaubt.
+
     web.save_values({"AQUATICY_LEGAL_GUARD": "true"})
 
-    # Seit 9.5.17 darf auch Pro es nicht mehr abschalten.
+
     sitzung.account = web.Account("p", "p@example.org", "pro", 0)
     with pytest.raises(ValueError, match="Ultra-Konto"):
         web.save_values({"AQUATICY_LEGAL_GUARD": "aus"})
@@ -493,10 +493,10 @@ def test_the_form_shows_the_switch_and_the_rules(sitzung: web.ChatSession) -> No
     assert 'name="AQUATICY_LEGAL_GUARD"' in html
     overview = guardrails.rules_overview()
     assert [item["id"] for item in overview] == [rule.id for rule in RULES]
-    json.dumps(overview)  # geht so an den Browser
+    json.dumps(overview)
 
 
-# -- Auftraege -------------------------------------------------------------
+
 def test_a_refused_job_switches_itself_off(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

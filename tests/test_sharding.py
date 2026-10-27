@@ -131,7 +131,7 @@ def paar(verbund, monkeypatch):  # noqa: F811
     server = ThreadingHTTPServer(("127.0.0.1", 0), web.Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     http_port = server.server_address[1]
-    # A erreicht B unter dem echten Port; die Verbund-Aufrufe laufen weiter im Speicher.
+
     a._transport.knoten[http_port] = b
     with a._lock:
         for m in a.state["cluster"]["members"]:
@@ -155,12 +155,12 @@ class Rpc:
         return self.port
 
 
-# -- Der Tunnel ---------------------------------------------------------------------------
+
 def test_frames_are_numbered_and_tamper_proof() -> None:
     hin = sharding.Richtung(b"k" * 32)
     zurueck = sharding.Richtung(b"k" * 32)
     eins, zwei = hin.seal(b"eins"), hin.seal(b"zwei")
-    # Vertauscht: das zweite Stueck passt nicht an die erste Stelle.
+
     with pytest.raises(sharding.TunnelError):
         zurueck.open(zwei[4:])
     leser = sharding.Richtung(b"k" * 32)
@@ -201,7 +201,7 @@ def test_the_tunnel_carries_data_both_ways_encrypted(paar, monkeypatch) -> None:
             klein = b"hallo verbund"
             s.sendall(klein)
             assert _empfangen(s, len(klein)) == klein[::-1]
-        # Mehr als ein Stueck: ein ganzes Megabyte am Stueck.
+
         with socket.create_connection(("127.0.0.1", tunnel.port), timeout=20) as s:
             s.settimeout(20)
             gross = bytes(range(256)) * 4096
@@ -215,7 +215,7 @@ def test_the_tunnel_carries_data_both_ways_encrypted(paar, monkeypatch) -> None:
 def test_the_tunnel_answers_only_the_master_with_the_pairing_key(paar, monkeypatch) -> None:
     a, b = paar
     a.set_split(True, "testmodell")
-    # Mit dem Gruppenschluessel -- den kennt jedes Mitglied -- geht es nicht.
+
     gruppe, _ = a._wrap(a.key, "tunnel", {"c": base64.b64encode(b"z" * 16).decode()})
     with pytest.raises(cluster.ClusterError):
         b.open_tunnel(gruppe, "127.0.0.1")
@@ -226,7 +226,7 @@ def test_the_tunnel_answers_only_the_master_with_the_pairing_key(paar, monkeypat
     assert len(zufall) == 16 and link == base64.b64decode(b.state["link"])
     with pytest.raises(cluster.ClusterError, match="wiederholt"):
         b.open_tunnel(body, "127.0.0.1")
-    # Ein Mitglied oeffnet keine Tunnel, und ohne Aufteilen gibt es keine.
+
     with pytest.raises(cluster.ClusterError):
         b.tunnel_request(a.node_id)
     a.set_split(False)
@@ -249,11 +249,11 @@ def test_a_refused_tunnel_never_switches_protocols(paar, monkeypatch) -> None:
     assert b" 403 " in antwort.split(b"\r\n", 1)[0] and b" 101 " not in antwort
 
 
-# -- Wer wohin gehoert --------------------------------------------------------------------
+
 def test_only_the_master_switches_and_only_with_two_servers(verbund) -> None:  # noqa: F811
     a, b, _, _, gefragt, neustarts = verbund
     with pytest.raises(cluster.ClusterError):
-        a.set_split(True, "x")  # noch kein Verbund
+        a.set_split(True, "x")
     _verbinden(a, b, gefragt, neustarts)
     with pytest.raises(cluster.ClusterError, match="Master"):
         b.set_split(True, "x")
@@ -273,14 +273,14 @@ def test_in_split_mode_every_account_is_served_by_the_master(verbund) -> None:  
     a.set_split(True, "modell")
     _warte(lambda: a.homes.get(alt_a.id) == a.node_id)
     assert a.assign("neueskonto") == a.node_id
-    # Das Mitglied fragt beim Master, statt die alte Zuteilung zu nehmen.
+
     b.homes["neueskonto"] = b.node_id
     b._local_seen["neueskonto"] = time.time()
     b.last_ok[a.node_id] = time.time()
     assert b.home_for("neueskonto") == a.node_id
 
 
-# -- Prozesse ------------------------------------------------------------------------------
+
 @pytest.fixture
 def programme(tmp_path: Path, monkeypatch) -> Path:
     ordner = tmp_path / "bin"
@@ -322,18 +322,18 @@ def test_the_model_runs_split_across_both_servers(paar, programme, monkeypatch) 
         assert "--jinja" in args and args[args.index("-ngl") + 1] == "999"
         ziele = args[args.index("--rpc") + 1].split(",")
         assert len(ziele) == 2 and all(z.startswith("127.0.0.1:") for z in ziele)
-        # Der Schluessel steht in der Umgebung, nie auf der Kommandozeile.
+
         assert aufzeichnung["key"] and aufzeichnung["key"] not in " ".join(args)
-        # Beide rpc-server haben geantwortet -- einer davon durch den Tunnel zu B.
+
         for ziel, antwort in aufzeichnung["rpc"]:
             assert antwort == ("hallo-" + ziel.rsplit(":", 1)[1])[::-1]
-        monkeypatch.setattr(sharding, "_AKTIV", mgr_a)  # sonst setzt das Manager.start()
+        monkeypatch.setattr(sharding, "_AKTIV", mgr_a)
         adresse, schluessel = sharding.endpoint()
         assert adresse.startswith("http://127.0.0.1:") and schluessel == aufzeichnung["key"]
         assert mgr_a.servers() == 2
         ansicht = mgr_a.view()
         assert ansicht["phase"] == "bereit" and ansicht["on"]
-        # Ausschalten raeumt auf.
+
         a.set_split(False)
         mgr_a.tick()
         mgr_b.tick()
@@ -402,7 +402,7 @@ def test_ollama_model_file_is_found_from_the_modelfile(tmp_path: Path, monkeypat
         sharding.ollama_gguf("x", "http://127.0.0.1:11434")
 
 
-# -- Aufrufe und Oberflaeche ----------------------------------------------------------------
+
 def test_calls_go_to_the_local_llama_server_with_its_own_key(monkeypatch) -> None:
     settings = Settings(model=SPLIT_MODEL_ID)
     monkeypatch.setattr(sharding, "endpoint", lambda: ("", ""))
@@ -411,7 +411,7 @@ def test_calls_go_to_the_local_llama_server_with_its_own_key(monkeypatch) -> Non
     monkeypatch.setattr(sharding, "endpoint", lambda: ("http://127.0.0.1:5555/v1", "geheim"))
     assert settings.llm_kwargs_for(SPLIT_MODEL_ID) == {
         "api_base": "http://127.0.0.1:5555/v1", "api_key": "geheim"}
-    # Auch mit eigenem allgemeinem Schluessel zaehlt es ins Kontingent.
+
     settings.api_keys["AQUATICY_API_KEY"] = "eigener-schluessel"
     settings.own_key_names = frozenset({"AQUATICY_API_KEY"})
     settings.account_email = "konto@example.org"

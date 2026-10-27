@@ -92,7 +92,7 @@ def test_the_missing_text_says_where_to_connect() -> None:
     assert "Gmail & Calendar" in missing_text(("calendar",), "en")
 
 
-# -- Im Agenten --------------------------------------------------------------
+
 class Modell:
     """Ein gestelltes Hauptmodell, das mitschreibt, welche Werkzeuge es bekam."""
 
@@ -143,7 +143,7 @@ def test_own_mails_are_read_from_the_mailbox_not_the_web(
                          structured=True, online=True)
     assert ergebnis.answer == "Du hast eine neue Mail von Anna."
     assert gelesen == [{"query": "is:unread", "count": 8}]
-    # Das Modell sah weder Websuche noch Agenten -- und den Abruf schon im Verlauf.
+
     assert modell.werkzeuge and not modell.werkzeuge[0] & {"web_search", "fetch_page",
                                                          "search_news", "research_subtasks"}
     assert "mail_search" in modell.werkzeuge[0]
@@ -239,7 +239,7 @@ def test_the_council_does_not_answer_from_memory(google: Settings,
     assert agent.ask("Was sind meine Mails?", stream=False).answer == "Fertig."
 
 
-# -- Google verbinden, ohne vorher zu speichern ---------------------------------
+
 GOOGLE_NAMEN = ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AQUATICY_GOOGLE",
                 "AQUATICY_GOOGLE_WRITE")
 
@@ -290,7 +290,7 @@ def test_connecting_without_a_secret_says_so_before_google(
     assert "Client-Secret" in daten["error"]
 
 
-# -- Home Assistant: ein erfolgreicher Test gilt gleich ------------------------------
+
 HA_NAMEN = ("AQUATICY_HA_URL", "HA_TOKEN", "AQUATICY_HA_TOKEN", "AQUATICY_HA_CONTROL")
 
 
@@ -321,7 +321,7 @@ def test_a_successful_ha_test_is_saved_right_away(client, ha_env: Any) -> None: 
     assert "HA_TOKEN=ha-token-123456" in inhalt
     gilt = web.SESSION.settings()
     assert gilt.ha_url == "http://192.168.1.5:8123" and gilt.ha_token == "ha-token-123456"
-    # Und der Chat bekommt die Werkzeuge.
+
     namen = {t["function"]["name"] for t in Agent(gilt, cache=None).tools}
     assert "ha_states" in namen and "ha_call" not in namen
 

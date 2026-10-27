@@ -54,9 +54,9 @@ def test_history(tmp_path: Path) -> None:
     assert len(cache.recent_history(limit=10)) == 3
 
 
-# ---------------------------------------------------------------------------
-# Chats umbenennen und loeschen
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_chat_is_named_after_its_first_question(tmp_path: Path) -> None:
     cache = Cache(tmp_path / "c.sqlite3")
     cache.add_history("s1", "Wo liegt das Ladekabel?", "Im Keller.")
@@ -103,8 +103,8 @@ def test_deleting_a_chat_removes_it_completely(tmp_path: Path) -> None:
     assert [chat["session_id"] for chat in remaining] == ["s2"]
     assert cache.chat_history("s1") == []
 
-    # Der eigene Name darf nicht als Leiche zurueckbleiben und einen spaeteren
-    # Chat mit derselben Kennung falsch benennen.
+
+
     cache.add_history("s1", "Ganz neue Frage", "D")
     assert cache.recent_chats()[0]["title"] == "Ganz neue Frage"
 
@@ -115,9 +115,9 @@ def test_deleting_something_that_is_not_there_is_no_error(tmp_path: Path) -> Non
     assert cache.delete_chat("") == 0
 
 
-# ---------------------------------------------------------------------------
-# Chats durchsuchen
-# ---------------------------------------------------------------------------
+
+
+
 def _gespraeche(cache: Cache) -> None:
     cache.add_history("s1", "Wie kündige ich meinen Mietvertrag?", "Schriftlich, drei Monate.")
     cache.add_history("s1", "Und die Kaution?", "Die kommt nach der Abnahme zurück.")
@@ -182,9 +182,9 @@ def test_ein_chat_erscheint_nur_einmal(tmp_path):
     assert treffer[0]["turns"] == 2
 
 
-# ---------------------------------------------------------------------------
-# Ungelesenes: was ein Auftrag nachts geantwortet hat
-# ---------------------------------------------------------------------------
+
+
+
 def test_an_unread_chat_says_so(tmp_path: Path) -> None:
     cache = Cache(tmp_path / "c.sqlite3")
     cache.add_history(session_id="nachts", question="Was ist neu?", answer="Einiges.")
@@ -214,7 +214,7 @@ def test_marking_twice_is_still_one_chat(tmp_path: Path) -> None:
     cache.mark_unread("nachts")
     cache.mark_unread("nachts")
     assert cache.unread_chats() == {"nachts"}
-    # Ohne Kennung passiert gar nichts -- das ist kein Fehler, nur nichts.
+
     cache.mark_unread("")
     cache.clear_unread("")
     assert cache.unread_chats() == {"nachts"}

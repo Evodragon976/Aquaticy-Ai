@@ -34,25 +34,25 @@ from aquaticy.models import PageResult, domain_of
 
 SELECTORS_PATH = Path(__file__).with_name("selectors.yaml")
 
-#: Ab wie vielen Zeichen gilt ein Text als echter Inhalt?
+
 MIN_CONTENT_CHARS = 200
-#: Eine Sperrseite (Captcha, Browser-Check) hat hoechstens so viel Text.
+
 BOT_WALL_MAX_TEXT = 1500
-#: Wie viel Text bekommt der Agent maximal pro Seite?
+
 MAX_TEXT_CHARS = 20_000
-#: Wie viel HTML laden wir maximal herunter?
-#: So vielen Weiterleitungen folgt ein Seitenabruf hoechstens.
+
+
 MAX_REDIRECTS = 5
 
 MAX_HTML_BYTES = 4_000_000
-#: Obergrenze fuer PDFs -- Datenblaetter sind klein, Scans riesig.
+
 MAX_PDF_BYTES = 25_000_000
-#: Webcams liefern manchmal Videostreams statt Einzelbilder. Die Bildprüfung
-#: lädt nur überschaubare Standbilder.
+
+
 MAX_VISUAL_BYTES = 10_000_000
-#: Eine robots.txt ist ein paar Kilobyte -- mehr wird nicht gelesen.
+
 ROBOTS_MAX_BYTES = 512_000
-#: Mehr Seiten liest niemand am Stueck; haelt auch pypdf im Zaum.
+
 MAX_PDF_PAGES = 40
 
 
@@ -67,7 +67,7 @@ class SiteRules:
     blocked_html_markers: list[str] = field(default_factory=list)
     paywall_markers: list[str] = field(default_factory=list)
     known_blocking_domains: list[str] = field(default_factory=list)
-    # Stufe 3 (Playwright)
+
     cmp_reject_selectors: list[str] = field(default_factory=list)
     reject_text_pattern: str = ""
     overlay_remove_selectors: list[str] = field(default_factory=list)
@@ -96,17 +96,17 @@ def load_rules(path: str | None = None) -> SiteRules:
     )
 
 
-# ---------------------------------------------------------------------------
-# Stufe 1: saeubern und extrahieren
-# ---------------------------------------------------------------------------
-#: Tags, die nie Inhalt sind -- sie fliegen immer raus.
+
+
+
+
 _NIE_INHALT = frozenset({"script", "style", "noscript", "template", "svg", "iframe"})
 
-#: Knoten, die die ganze Seite tragen. Ein Cookie-Plugin, das ``<body>`` die
-#: Klasse "cookies-not-set" gibt, darf nicht den ganzen Text kosten.
+
+
 _TRAEGER = frozenset({"html", "body", "main", "article"})
 
-#: Mehr als dieser Anteil des Seitentexts ist kein Banner mehr, sondern Inhalt.
+
 _GROSSER_ANTEIL = 0.5
 
 
@@ -126,13 +126,13 @@ def strip_noise(html: str, rules: SiteRules | None = None) -> str:
     for selector in rules.strip_selectors:
         try:
             nodes = tree.css(selector)
-        except Exception:  # ungueltiger Selektor in der YAML -- ueberspringen
+        except Exception:
             continue
         inhalt = [n for n in nodes if n.tag not in _NIE_INHALT]
         if inhalt and gesamt > 0:
             weg = sum(len(n.text(separator=" ", strip=True)) for n in inhalt)
             if weg > 2000 and weg > gesamt * _GROSSER_ANTEIL:
-                # Dieser Selektor trifft den Inhalt, nicht einen Banner.
+
                 continue
         for node in nodes:
             if node.tag not in _NIE_INHALT and _traegt_inhalt(node, gesamt):
@@ -157,7 +157,7 @@ def _is_consent_paragraph(paragraph: str, phrases: list[str]) -> bool:
     hits = sum(1 for phrase in phrases if phrase in lowered)
     if hits == 0:
         return False
-    # Lange Fliesstext-Absaetze mit einer beilaeufigen Erwaehnung behalten wir.
+
     return hits >= 2 or len(paragraph) < 400
 
 
@@ -192,7 +192,7 @@ def extract_text(html: str, url: str = "", rules: SiteRules | None = None) -> st
         or ""
     )
     if not text.strip():
-        # trafilatura gibt bei sehr kurzen Seiten gern nichts zurueck.
+
         text = HTMLParser(cleaned).text(separator="\n", strip=True) or ""
     return drop_consent_paragraphs(text, rules)
 
@@ -225,8 +225,8 @@ def extract_pdf_text(data: bytes) -> tuple[str, str]:
             title = str(metadata.title)
         return text.strip(), title.strip()
     except Exception:
-        # pypdf wirft je nach Datei alles Moegliche -- ein kaputtes PDF ist
-        # ein uebersprungener Treffer, kein Absturz.
+
+
         return "", ""
 
 
@@ -241,9 +241,9 @@ def page_title(html: str) -> str:
     return re.sub(r"\s+", " ", title)[:200]
 
 
-# ---------------------------------------------------------------------------
-# Stufe 2: hat es geklappt?
-# ---------------------------------------------------------------------------
+
+
+
 def _contains_any(haystack: str, needles: list[str]) -> str:
     for needle in needles:
         if needle in haystack:
@@ -272,33 +272,33 @@ def classify_failure(
         or _contains_any(page_title(html).lower(), rules.blocked_markers)
         or _contains_any(html_lower[:200_000], rules.blocked_html_markers)
     ):
-        # Eine Sperrseite hat kaum eigenen Text. Bis 11.0 reichte das Wort
-        # "captcha" irgendwo im HTML -- und jede Seite mit reCAPTCHA im
-        # Kontaktformular galt als gesperrt.
+
+
+
         return "blocked_bot_wall"
 
     enough_text = len(text.strip()) >= MIN_CONTENT_CHARS
     if not enough_text:
-        # Reihenfolge mit Bedacht: "Zustimmen oder Abo" ist eine Consent-Wall,
-        # keine Bezahlschranke.
+
+
         if _contains_any(html_lower[:200_000], rules.consent_wall_markers) or _contains_any(
             text_lower, rules.consent_phrases
         ):
             return "consent_required"
-        # Der Paywall-Hinweis steckt oft in einem Knoten, den Stufe 1 bereits
-        # entfernt hat -- deshalb hier im Roh-HTML nachsehen.
+
+
         if _contains_any(text_lower, rules.paywall_markers) or _contains_any(
             html_lower[:200_000], rules.paywall_markers
         ):
             return "paywall"
         return "empty"
 
-    # Genug Text -- aber besteht er nur aus Consent-Geschwaetz?
+
     consent_hits = sum(1 for phrase in rules.consent_phrases if phrase in text_lower)
     if consent_hits >= 3 and len(text.strip()) < 1200:
         return "consent_required"
 
-    # Paywall-Teaser: kurzer Text plus eindeutiger Abo-Hinweis.
+
     if len(text.strip()) < 900 and _contains_any(text_lower, rules.paywall_markers):
         return "paywall"
 
@@ -311,9 +311,9 @@ def needs_browser(html: str, text: str, rules: SiteRules | None = None) -> bool:
     return reason in {"consent_required", "empty"}
 
 
-# ---------------------------------------------------------------------------
-# robots.txt und Rate-Limit
-# ---------------------------------------------------------------------------
+
+
+
 class RobotsRules:
     """Die Regeln einer robots.txt -- nach RFC 9309 (seit 9.5.34).
 
@@ -364,7 +364,7 @@ class RobotsRules:
                 continue
             in_regeln = True
             if not wert:
-                continue  # "Disallow:" ohne Pfad sperrt nichts
+                continue
             for liste in ziel:
                 liste.append((feld == "allow", wert))
         return cls(eigene if eigene_gefunden else allgemeine)
@@ -378,14 +378,14 @@ class RobotsRules:
         for erlaubt, muster, regex in self._regeln:
             if regex.match(pfad):
                 kandidat = (len(muster), erlaubt)
-                # Die laengste passende Regel gilt; bei Gleichstand "Allow".
+
                 if bester is None or kandidat > bester:
                     bester = kandidat
         return True if bester is None else bester[1]
 
 
-#: Wie lange eine robots.txt gilt -- danach wird sie neu geladen (RFC 9309:
-#: hoechstens 24 Stunden). Ist der Server gestoert, wird es frueher erneut versucht.
+
+
 ROBOTS_TTL = 24 * 3600
 ROBOTS_ERROR_TTL = 300
 
@@ -393,7 +393,7 @@ ROBOTS_ERROR_TTL = 300
 class RobotsPolicy:
     """Fragt und cached `robots.txt` je Origin."""
 
-    #: Steht fuer "robots.txt nicht erreichbar oder Serverfehler": nichts erlaubt.
+
     _GESPERRT = RobotsRules([(False, "/")])
 
     def __init__(self, client: httpx.Client, user_agent: str) -> None:
@@ -420,9 +420,9 @@ class RobotsPolicy:
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             return "robots_disallowed"
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        # Geladen wird AUSSERHALB der gemeinsamen Sperre (seit 9.5.16): ein
-        # langsames robots.txt (bis zehn Sekunden) hielt sonst alle Agenten
-        # auf allen anderen Seiten mit an. Je Origin laedt nur einer.
+
+
+
         with self._lock:
             bekannt = self._frisch(origin)
             sperre = None if bekannt else self._origin_locks.setdefault(origin, threading.Lock())
@@ -446,22 +446,22 @@ class RobotsPolicy:
         return eintrag is not None and eintrag[1] > time.monotonic()
 
     def _load(self, origin: str) -> tuple[RobotsRules | None, float]:
-        # Auch robots.txt laeuft ueber die Netzregel (aquaticy/netguard.py):
-        # bis 9.5.14 folgte schon dieser Abruf jeder Weiterleitung -- auch
-        # einer ins interne Netz, noch bevor die Seite selbst geprueft wurde.
+
+
+
         try:
             response = netguard.get(self._client, urljoin(origin, "/robots.txt"),
                                     max_bytes=(lambda _kopf: (ROBOTS_MAX_BYTES, True)),
                                     timeout=10)
         except netguard.BlockedTarget:
-            # Das Ziel ist ohnehin gesperrt; die Seite selbst scheitert an derselben Regel.
+
             return None, ROBOTS_ERROR_TTL
         except httpx.HTTPError:
             return self._GESPERRT, ROBOTS_ERROR_TTL
         if response.status_code >= 500:
             return self._GESPERRT, ROBOTS_ERROR_TTL
         if response.status_code >= 400:
-            # Keine robots.txt -> alles erlaubt.
+
             return None, ROBOTS_TTL
         return RobotsRules.parse(response.text, self._user_agent), ROBOTS_TTL
 
@@ -488,15 +488,15 @@ class DomainThrottle:
         return sleep_for
 
 
-# ---------------------------------------------------------------------------
-# Fetcher
-# ---------------------------------------------------------------------------
+
+
+
 HTML_CONTENT_TYPES = ("text/html", "application/xhtml", "text/plain", "application/xml")
 IMAGE_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 
-# Frei zugängliches, jeweils neuestes Meteosat-Bild. EUMETSAT dokumentiert
-# genau diesen festen WMS-Aufruf für Anwendungen, die nicht die dynamische
-# Kartenoberfläche bedienen können.
+
+
+
 EUMETSAT_LATEST_IMAGE = (
     "https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=GetMap"
     "&layers=msg_fes:ir108,backgrounds:ne_10m_coastline,backgrounds:ne_boundary_lines_land"
@@ -526,10 +526,10 @@ def dynamic_visual_page(url: str) -> bool:
     }
 
 
-#: Woran man einen laufenden Player erkennt. Eine Seite mit Player hat fast
-#: immer auch ein `og:image` -- und das ist das Vorschaubild vor dem Klick auf
-#: Play, bei einer Webcam also ein altes Standbild. Fuer solche Seiten ist die
-#: Aufnahme aus dem Browser die einzige Quelle, die das aktuelle Bild zeigt.
+
+
+
+
 LIVE_PLAYER_MARKERS = (
     "<video",
     ".m3u8",
@@ -544,9 +544,9 @@ LIVE_PLAYER_MARKERS = (
     "player.twitch.tv",
 )
 
-#: Bilder, die keine sind: Ladeanzeigen, Platzhalter, Logos. Frueher konnte
-#: genau so ein Bild als "das Webcam-Bild" zurueckkommen -- ein Spinner, ein
-#: graues Rechteck oder das Logo des Betreibers.
+
+
+
 PLACEHOLDER_MARKERS = (
     "loading", "placeholder", "spinner", "preloader", "blank", "dummy",
     "logo", "noimage", "no-image", "offline", "default", "spacer", "pixel",
@@ -619,9 +619,9 @@ class Fetcher:
         self.timeout = timeout
         self.respect_robots = respect_robots
         self.enable_browser = enable_browser
-        # Cookies bleiben nur im Speicher -- nichts landet auf der Platte.
-        # Abgesichert (aquaticy/netguard.py): verbunden wird nur mit
-        # oeffentlichen Adressen, jede Anfrage wird vorher geprueft.
+
+
+
         self._client = netguard.guarded_client(
             headers={
                 "User-Agent": user_agent,
@@ -636,7 +636,7 @@ class Fetcher:
         self.robots = RobotsPolicy(self._client, user_agent)
         self.throttle = DomainThrottle(delay_seconds)
 
-    # -- Lebenszyklus -----------------------------------------------------
+
     def close(self) -> None:
         self._client.close()
 
@@ -646,14 +646,14 @@ class Fetcher:
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
-    # -- Abruf ------------------------------------------------------------
+
     def fetch(self, url: str, *, want_products: bool = False) -> PageResult:
         """Laedt *url* und gibt lesbaren Text (und optional Produktdaten) zurueck."""
         url = (url or "").strip()
         try:
             domain = domain_of(url)
             parsed = urlparse(url)
-            parsed.port  # noqa: B018 -- wirft bei "http://[::1" oder ":abc" (9.5.34)
+            parsed.port  # noqa: B018
         except ValueError:
             result = PageResult(url=url, source_domain="")
             result.skipped_reason = "invalid_url"
@@ -668,16 +668,16 @@ class Fetcher:
             domain == blocked or domain.endswith(f".{blocked}")
             for blocked in self.rules.known_blocking_domains
         ):
-            # Bekannte Blocker gar nicht erst behelligen -- auch ihre
-            # Subdomains (m.amazon.de, smile.amazon.de) laufen ins Leere.
+
+
             result.skipped_reason = "blocked_by_list"
             return result
 
         problem, aussetzer = netguard.url_check(url)
         if problem:
-            # Nie ins eigene oder ein privates Netz (SSRF) -- siehe netguard.
-            # Ein Name, der sich gerade nicht aufloesen laesst, ist dagegen
-            # meist nur ein DNS-Aussetzer (11.1: vorher hiess das "not_public").
+
+
+
             result.skipped_reason = "dns_error" if aussetzer else "not_public"
             return result
 
@@ -690,10 +690,10 @@ class Fetcher:
         self.throttle.wait(domain)
 
         try:
-            # Jede Weiterleitung wird einzeln geprueft, die Antwort beim Lesen
-            # begrenzt (bis 9.5.14: erst ganz geladen, dann gewogen). Seit
-            # 9.5.16 gelten robots.txt, Blockerliste und Drossel auch fuer
-            # jedes Weiterleitungsziel -- nicht nur fuer die erste Adresse.
+
+
+
+
             response, sperre = self._get_following(url)
             if sperre:
                 result.skipped_reason = sperre
@@ -719,11 +719,11 @@ class Fetcher:
         result.source_domain = domain_of(result.final_url) or domain
 
         if response.status_code in (401, 402, 403, 407, 429):
-            # Frueher hiess das alles "blocked" -- dasselbe Wort fuer "wir
-            # fragen dort grundsaetzlich nicht", "die Seite hat uns die Tuer
-            # gewiesen" und "da steht eine Bot-Pruefung". Wer den Unterschied
-            # nicht sieht, kann auch nicht entscheiden, ob sich ein anderer
-            # Weg lohnt oder ob es an der Seite selbst liegt.
+
+
+
+
+
             result.skipped_reason = f"blocked_http_{response.status_code}"
             return result
         if response.status_code >= 400:
@@ -804,15 +804,15 @@ class Fetcher:
                 return None, "Die Adresse ist nicht öffentlich erreichbar."
             domain = domain_of(current)
             if self.respect_robots and not self.robots.allows(current):
-                # Auch kein Browser-Schnappschuss als Ausweg (seit 9.5.16): bis
-                # dahin wurde eine per robots.txt gesperrte Kartenansicht
-                # trotzdem im Browser geoeffnet. robots.txt gilt -- immer.
+
+
+
                 return None, "robots.txt erlaubt diesen Abruf nicht."
             self.throttle.wait(domain)
             try:
-                # Ohne diese Bitte liefert manch ein Zwischenspeicher das Bild
-                # von vorhin -- bei einer Webcam ist genau das der Unterschied
-                # zwischen "jetzt" und "irgendwann heute".
+
+
+
                 response = netguard.get(
                     self._client,
                     current,
@@ -844,19 +844,19 @@ class Fetcher:
                 return PublicVisual(final, response.content, content_type), ""
             if not any(kind in content_type for kind in HTML_CONTENT_TYPES):
                 return None, "Die Quelle liefert kein unterstütztes Bild."
-            # EUMETSAT bietet für genau diesen Zweck einen festen öffentlichen
-            # WMS-Endpunkt. Er liefert die Bildpixel direkt und ist verlässlicher
-            # als ein Screenshot der interaktiven Karte.
+
+
+
             if domain_of(final) == "view.eumetsat.int":
                 current = EUMETSAT_LATEST_IMAGE
                 continue
-            # Karten, Street View und NASA Worldview zeichnen ihre eigentliche
-            # Ansicht erst im Browser. Ein og:image wäre dort nur ein Vorschaubild.
-            #
-            # Dasselbe gilt für jede Seite mit einem Player: deren `og:image`
-            # ist das Bild VOR dem Klick auf Play. Bei einer Webcam ist das
-            # ein altes Standbild oder eine graue Fläche mit Abspielknopf --
-            # genau das, was hier nicht zurückkommen soll.
+
+
+
+
+
+
+
             if dynamic_visual_page(final) or live_player_page(response.text):
                 captured = self._capture(final)
                 if captured is not None:
@@ -879,13 +879,13 @@ class Fetcher:
             selected = ""
             for _, candidate in sorted(candidates, key=lambda item: item[0]):
                 absolute = urljoin(final, candidate)
-                # Eine Ladeanzeige ist kein Bild der Lage. Lieber weitersuchen
-                # und notfalls im Browser aufnehmen.
+
+
                 if placeholder_image(absolute) or not public_web_url(absolute):
                     continue
-                # Viele ältere Webcam-Seiten betten noch eine http-Adresse ein,
-                # obwohl dasselbe Bild verschlüsselt erreichbar ist. Browser
-                # blockieren diese gemischten Inhalte.
+
+
+
                 if final.startswith("https://") and absolute.startswith("http://"):
                     absolute = "https://" + absolute[len("http://") :]
                 selected = absolute
@@ -945,15 +945,15 @@ class Fetcher:
             try:
                 product = extract_product(html, result.final_url or result.url)
             except Exception:
-                # Seltsame Strukturdaten duerfen nie den Text der Seite kosten
-                # (bis 9.5.15 brach der ganze Abruf ab).
+
+
                 product = None
             if product is not None:
                 result.products = [product]
                 result.product_hint = True
             elif has_spec_heading(HTMLParser(html)):
-                # Kein strukturierter Treffer, aber eine "Technische Daten"-Ueberschrift:
-                # hier lohnt sich der LLM-Fallback.
+
+
                 result.product_hint = True
         return result
 
@@ -966,5 +966,5 @@ class Fetcher:
         try:
             return render_page(url, user_agent=self.user_agent, timeout=self.timeout)
         except Exception:
-            # Der Browser-Fallback darf den normalen Ablauf nie sprengen.
+
             return None

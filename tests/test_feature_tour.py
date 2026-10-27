@@ -23,7 +23,7 @@ import pytest
 
 from aquaticy import web
 from tests import fake_llm
-from tests.test_end_to_end import _konto, _req, server  # noqa: F401 - Fixture
+from tests.test_end_to_end import _konto, _req, server  # noqa: F401
 
 PNG = base64.b64encode(
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
@@ -54,8 +54,8 @@ class Tour:
         self.gesehen.append(("POST", "/api/chat", status))
         assert status == 200, daten
         events = [json.loads(z[6:]) for z in daten.decode().splitlines() if z.startswith("data: ")]
-        # Die Chat-Kennung ordnet den Transport zu; hier werden die fachlichen
-        # Antwort- und Sicherheitsereignisse geprueft.
+
+
         return [event for event in events if event.get("type") != "chat"]
 
     def kein_serverfehler(self) -> None:
@@ -69,8 +69,8 @@ def tour(server: tuple[int, Path], request: pytest.FixtureRequest,  # noqa: F811
     port, _ = server
     monkeypatch.setattr(web, "REQUEST_LIMIT", web.RateLimiter(attempts=10_000, window_seconds=60))
     monkeypatch.setattr(web, "ADDRESS_LIMIT", web.RateLimiter(attempts=10_000, window_seconds=60))
-    # Nur hier: das Kontingent ist in test_end_to_end eigens geprueft, und
-    # der grosse Systemtext kostet je Frage einige tausend Token.
+
+
     monkeypatch.setattr("aquaticy.quota.SESSION_TOKENS", 10**9)
     monkeypatch.setattr("aquaticy.quota.WEEK_TOKENS", 10**10)
     monkeypatch.chdir(tmp_path)
@@ -82,12 +82,12 @@ def tour(server: tuple[int, Path], request: pytest.FixtureRequest,  # noqa: F811
 @pytest.mark.parametrize("tour", ["normal", "pro", "ultra"], indirect=True)
 def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     status, konto = tour("GET", "/api/account")
-    # pro = Pro oder Ultra; ultra = alles, ohne Limit (seit 9.5.17).
+
     pro, ultra = konto["pro"], konto["ultra"]
     assert konto["usage"]["limited"] is not ultra
     assert status == 200 and konto["plan"] == ("ultra" if ultra else "pro" if pro else "normal")
 
-    # -- Seiten und Lesewege ------------------------------------------------
+
     assert tour("GET", "/")[0] == 200
     for route in sorted(web.LEGAL_ROUTES):
         assert tour("GET", route)[0] == 200, route
@@ -99,7 +99,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
         assert status == 200 and isinstance(daten, dict) and daten, route
     status, config = tour("GET", "/api/config")
     assert config["account"]["pro"] is pro and "sk-fake" not in json.dumps(config)
-    # Die Auslastung des Rechners gibt es seit 9.5.21 nur mit Ultra.
+
     assert tour("GET", "/api/system")[0] == (200 if ultra else 403)
     assert tour("GET", "/api/run")[0] == 404, "noch kein Lauf"
     assert tour("GET", "/api/werkstatt/bildschirm?leise=1")[0] == 204
@@ -110,7 +110,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     status, seite = tour("GET", "/google?error=access_denied")
     assert status == 200 and b"abgelehnt" in seite
 
-    # -- Einstellungen: Pro-Sperren und Unsinn --------------------------------
+
     status, stand = tour("POST", "/api/prefs", {"theme": "dark", "agents": 6, "quatsch": 1})
     assert status == 200 and stand["theme"] == "dark" and "quatsch" not in stand
     assert tour("POST", "/api/config", {"AQUATICY_LOCATION": "Bremen"})[0] == 200
@@ -124,7 +124,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     status, probe = tour("POST", "/api/probe", {"AQUATICY_MODEL": "openai/fake-modell"})
     assert status == 200 and probe["llm"]["ok"], probe
 
-    # -- Chat mit Anhaengen ---------------------------------------------------
+
     ereignisse = tour.chat("Rechne mir 6 mal 7 aus", mode="normal")
     assert "42" in "".join(e.get("text", "") for e in ereignisse if e["type"] == "chunk")
     ereignisse = tour.chat("", attachments=[
@@ -141,7 +141,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     assert tour("POST", "/api/stop", {})[0] == 200
     assert tour("POST", "/api/answer", {"text": "ja"})[1]["ok"] is False
 
-    # -- Chats ----------------------------------------------------------------
+
     chats = tour("GET", "/api/chats")[1]["chats"]
     kennung = chats[0]["session_id"]
     assert tour("GET", f"/api/chatexport?session_id={kennung}")[1]["markdown"].startswith("#")
@@ -151,7 +151,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     assert tour("POST", "/api/clear", {})[1]["ok"]
     assert tour("POST", "/api/chat-edit", {"session_id": kennung, "action": "x"})[1]["ok"] is False
 
-    # -- Slash-Befehle --------------------------------------------------------
+
     for zeile, erwartet in (("/help", "/export"), ("/max", "Pro-Modus"),
                             ("/location Bremen", "Bremen"), ("/location", "aufgehoben"),
                             ("/model", "fake-modell"), ("/memory", "Speicher"),
@@ -165,7 +165,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     assert antwort["download"]["name"].endswith(".csv") and antwort["download"]["content"]
     assert not list(tmp_path.glob("aquaticy-*")), "kein Export im Ordner des Servers"
 
-    # -- Speicher und Auftraege -----------------------------------------------
+
     assert tour("DELETE", "/api/memory?id=abc")[0] == 400
     assert tour("DELETE", "/api/memory")[0] == 200
     status, job = tour(
@@ -205,7 +205,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     assert tour("DELETE", f"/api/coworkers?id={nummer}")[1]["ok"] is True
     assert tour("DELETE", "/api/coworkers?id=x")[0] == 400
 
-    # -- Add-ons ohne virtual machine -----------------------------------------------
+
     katalog = {a["id"] for a in tour("GET", "/api/addons")[1]["addons"]}
     assert {"github", "signal", "whatsapp", "wetter", "feeds", "blender"} <= katalog
     assert "telegram" not in katalog, "Telegram Web ist seit 12.6.6 Luna kein Add-on mehr"
@@ -230,7 +230,7 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
         status, stand = tour("POST", "/api/addons", {"action": "uninstall", "id": kennung})
         assert status == 200 and kennung not in stand["active"], kennung
 
-    # -- virtual-machine-Eingabe, Home Assistant, Lager, Google ---------------------
+
     status, _ = tour("POST", "/api/werkstatt/eingabe", {"art": "type", "text": "x"})
     assert status == (400 if ultra else 403)
     status, antwort = tour("POST", "/api/ha", {"url": "http://127.0.0.1:1", "token": "t"})
@@ -242,14 +242,14 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
     assert tour("POST", "/api/google", {"action": "finish", "code": "x"})[1]["ok"] is False
     assert tour("POST", "/api/google", {"action": "disconnect"})[1]["ok"]
 
-    # -- Abmelden -------------------------------------------------------------
+
     assert tour("POST", "/api/auth/logout", {})[0] == 200
     assert tour("GET", "/api/config")[0] == 401
     tour.kein_serverfehler()
 
 
-#: Werkzeuge, die ohne Internet auskommen, mit Argumenten -- und was dabei
-#: herauskommen muss.
+
+
 WERKZEUGE: list[tuple[str, dict[str, Any], str]] = [
     ("calculate", {"expression": "(3+4)*6"}, '"result": "42"'),
     ("remember", {"text": "Ich mag Tee"}, '"saved": true'),
@@ -261,7 +261,7 @@ WERKZEUGE: list[tuple[str, dict[str, Any], str]] = [
     ("change_setting", {"setting": "AQUATICY_VM_USER_MODE", "value": "an"}, "nicht aus dem"),
     ("fetch_page", {"url": "file:///etc/passwd"}, "invalid_url"),
     ("fetch_page", {"url": "http://127.0.0.1:1/"}, '"ok": false'),
-    # Die Rueckfrage beantwortet der Test ueber /api/answer, wie der Browser.
+
     ("ask_user", {"question": "Welche Farbe?", "options": ["rot", "blau"]}, "blau"),
 ]
 
@@ -301,7 +301,7 @@ def test_what_each_account_is_offered(tour: Tour) -> None:
     angeboten = {n for zeile in fake_llm.ANFRAGEN for n in json.loads(zeile)["tool_names"]}
     ultra = tour("GET", "/api/account")[1]["ultra"]
     assert ("lan_check" in angeboten) is ultra, "das Heimnetz gehoert zu Ultra"
-    # Nicht eingerichtet -> nicht angeboten: kein Werkzeug, das nur scheitern kann.
+
     for name in ("github", "read_feeds", "ha_states", "ha_call",
                  "storage_find", "mail_search", "calendar_events", "desktop_open"):
         assert name not in angeboten, name

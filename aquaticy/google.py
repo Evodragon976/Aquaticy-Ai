@@ -49,20 +49,20 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 CALENDAR_API = "https://www.googleapis.com/calendar/v3"
 
-#: Nur Leserechte. Das ist der Normalfall -- mehr soll Aquaticy nicht koennen,
-#: solange es niemand ausdruecklich erlaubt.
+
+
 SCOPES = (
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
 )
 
-#: Mit "Aendern erlaubt" kommen zwei Rechte dazu -- und nur diese zwei:
-#:
-#: * `calendar.events` legt Termine an und aendert sie. Der Kalender selbst
-#:   (Freigaben, Loeschen des Kalenders) bleibt aussen vor.
-#: * `gmail.compose` wird fuer Entwuerfe gebraucht, erlaubt bei Google aber
-#:   auch Senden. Aquaticy verwendet ausschliesslich den Entwurfs-Endpunkt.
+
+
+
+
+
+
 CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events"
 MAIL_WRITE_SCOPE = "https://www.googleapis.com/auth/gmail.compose"
 WRITE_SCOPES = (*SCOPES, CALENDAR_WRITE_SCOPE, MAIL_WRITE_SCOPE)
@@ -83,18 +83,18 @@ def granted_write(scopes: list[str]) -> tuple[bool, bool] | None:
                          "https://mail.google.com/"})
     return kalender, mail
 
-#: Datei mit den verschluesselten Token.
+
 TOKEN_FILE = "google.json"
 
-#: Ein paar Sekunden Sicherheitsabstand: laeuft das Token waehrend der
-#: Anfrage ab, waere die Antwort ein 401 statt eines Ergebnisses.
+
+
 EXPIRY_MARGIN = 60
 
-#: Hoechstzahl der Treffer, die eine Abfrage zurueckgibt.
+
 MAX_RESULTS = 20
 
-#: So viel Text einer Mail wird uebernommen. Eine lange Mail wuerde sonst das
-#: halbe Kontextfenster fuellen.
+
+
 MAX_BODY_CHARS = 6000
 
 REQUEST_TIMEOUT = 20
@@ -137,9 +137,9 @@ class Tokens:
         return not self.access_token or time.time() >= self.expires_at - EXPIRY_MARGIN
 
 
-# ---------------------------------------------------------------------------
-# Ablage
-# ---------------------------------------------------------------------------
+
+
+
 class TokenStore:
     """Legt die Token verschluesselt im Datenordner ab."""
 
@@ -186,7 +186,7 @@ class TokenStore:
                               refresh_token=data.get("refresh_token", ""), expires_at=expiry,
                               email=data.get("email", ""), scopes=scopes)
             except (OSError, ValueError, TypeError, OverflowError):
-                # Unlesbar heisst "nicht verbunden", nicht "Absturz".
+
                 return Tokens()
 
     def save(self, tokens: Tokens) -> None:
@@ -198,7 +198,7 @@ class TokenStore:
             fd, temporary = tempfile.mkstemp(prefix=".google-", dir=self.path.parent)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    # Keep explicit Windows ACL protection as well as POSIX mode 0600.
+
                     secure_file(Path(temporary))
                     handle.write(encrypted)
                 os.replace(temporary, self.path)
@@ -219,9 +219,9 @@ class TokenStore:
             self.path.unlink()
 
 
-# ---------------------------------------------------------------------------
-# Anmeldung
-# ---------------------------------------------------------------------------
+
+
+
 def consent_url(
     client_id: str, redirect_uri: str, state: str = "", *, write: bool = False
 ) -> str:
@@ -328,8 +328,8 @@ def _explain(response: httpx.Response) -> str:
     with contextlib.suppress(ValueError):
         body = response.json()
         if isinstance(body, dict):
-            # "error" ist mal ein Objekt mit "message", mal nur ein Text
-            # ("invalid_grant") -- beides ist kein Absturz (9.5.34).
+
+
             fehler = body.get("error")
             detail = str(
                 body.get("error_description")
@@ -347,9 +347,9 @@ def _explain(response: httpx.Response) -> str:
     return f"Google antwortet mit {response.status_code}: {detail or 'kein Grund genannt'}"
 
 
-# ---------------------------------------------------------------------------
-# Zugriff
-# ---------------------------------------------------------------------------
+
+
+
 class Google:
     """Liest Mails und Termine eines verbundenen Kontos."""
 
@@ -365,10 +365,10 @@ class Google:
         self.store = store
         self._http = client or httpx.Client(timeout=REQUEST_TIMEOUT)
 
-    # -- Verbindung ------------------------------------------------------
+
     def tokens(self) -> Tokens:
-        # Andere Clients koennen das Konto trennen oder wechseln. Keine alte
-        # Berechtigung im langlebigen Agenten weiterbenutzen.
+
+
         return self.store.load()
 
     def connected(self) -> bool:
@@ -410,7 +410,7 @@ class Google:
             if not self.store.replace_if_current(previous, tokens):
                 current = self.tokens()
                 if current.refresh_token == previous.refresh_token and not current.stale:
-                    return current.access_token  # Ein anderer Client hat bereits erneuert.
+                    return current.access_token
                 raise NotConnected(
                     "Die Verbindung zu Google hat sich geändert. Versuch es bitte noch einmal.")
         return tokens.access_token
@@ -428,7 +428,7 @@ class Google:
         except ValueError as exc:
             raise GoogleError("Google hat keine verwertbare Antwort geschickt.") from exc
 
-    # -- Kalender --------------------------------------------------------
+
     def events(self, days: int = 7, query: str = "", count: int = 10) -> list[dict[str, Any]]:
         """Termine der naechsten *days* Tage, zeitlich sortiert.
 
@@ -450,7 +450,7 @@ class Google:
         data = self._get(f"{CALENDAR_API}/calendars/primary/events", params)
         return [_event(item) for item in data.get("items", [])]
 
-    # -- Gmail -----------------------------------------------------------
+
     def search_mail(self, query: str = "", count: int = 8) -> list[dict[str, Any]]:
         """Sucht Mails. *query* ist die Gmail-Suchsyntax (`from:`, `newer_than:` ...)."""
         count = max(1, min(int(count or 8), MAX_RESULTS))
@@ -510,10 +510,10 @@ class Google:
             "shortened": len(body) > MAX_BODY_CHARS,
         }
 
-    # -- Schreiben -------------------------------------------------------
-    # Alles hier setzt voraus, dass der Nutzer beim Verbinden ausdruecklich
-    # "Aendern erlaubt" gewaehlt hat: ohne die erweiterten Rechte antwortet
-    # Google mit einem 403, und das ist die richtige Antwort.
+
+
+
+
     def _write(
         self,
         method: str,
@@ -632,10 +632,10 @@ class Google:
         subject = " ".join(str(subject).split())[:300]
         if not subject and not body:
             raise GoogleError("Ein Entwurf ohne Betreff und ohne Text waere leer.")
-        # Empfaenger werden geprueft und neu geschrieben (seit 9.5.16): bis
-        # dahin landete "a@b.de\r\nBcc: fremd@x.de" woertlich im Kopf, und
-        # ein praepariertes Dokument haette so einen stillen Empfaenger
-        # untergebracht.
+
+
+
+
         nachricht = EmailMessage()
         if to:
             nachricht["To"] = mail_addresses(to)
@@ -660,9 +660,9 @@ class Google:
             self._http.close()
 
 
-# ---------------------------------------------------------------------------
-# Aufbereiten
-# ---------------------------------------------------------------------------
+
+
+
 def _resource_id(value: str) -> str:
     """Nur eine opake Mail-/Termin-Kennung, nie Pfade, Query oder Escape-Sequenzen."""
     value = value.strip(" ")
@@ -671,9 +671,9 @@ def _resource_id(value: str) -> str:
     return value
 
 
-#: Eine Mailadresse, wie sie in einen Entwurf darf -- ohne Anzeigenamen-Tricks.
+
 _ADRESSE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$")
-#: So viele Empfaenger hat ein Entwurf hoechstens.
+
 MAX_RECIPIENTS = 20
 
 
@@ -746,7 +746,7 @@ def _event(item: dict[str, Any]) -> dict[str, Any]:
     end = item.get("end") or {}
     whole_day = "date" in start
     return {
-        # Die Kennung braucht, wer einen Termin spaeter aendern will.
+
         "id": str(item.get("id", "")),
         "summary": str(item.get("summary", "(ohne Titel)")),
         "start": str(start.get("dateTime") or start.get("date") or ""),

@@ -23,7 +23,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-#: Ports, die aquaticy kennt, mit dem, was dort ueblicherweise laeuft.
 KNOWN_PORTS: dict[int, str] = {
     21: "FTP",
     22: "SSH",
@@ -55,23 +54,23 @@ KNOWN_PORTS: dict[int, str] = {
     32400: "Plex",
 }
 
-#: Beim schnellen Durchlauf gepruefte Ports -- deckt fast jedes Haushaltsgeraet
-#: ab, ohne dass ein Scan Minuten dauert.
+
+
 QUICK_PORTS: tuple[int, ...] = (22, 80, 443, 445, 631, 1883, 8006, 8080, 8123, 9100, 11434, 32400)
 
-#: Beim gruendlichen Durchlauf alle bekannten Ports.
+
 FULL_PORTS: tuple[int, ...] = tuple(sorted(KNOWN_PORTS))
 
-#: So lange wartet ein einzelner Verbindungsversuch. Im lokalen Netz antwortet
-#: alles in Millisekunden -- laenger warten heisst nur, auf Totes zu warten.
+
+
 CONNECT_TIMEOUT = 0.35
 
-#: So viele Verbindungsversuche gleichzeitig. Ein /24 mit zwoelf Ports sind
-#: gut 3000 Versuche; mit 200 Faeden ist das in wenigen Sekunden durch.
+
+
 WORKERS = 200
 
-#: Groesstes Netz, das aquaticy am Stueck durchgeht. Ein /16 waere 65.000
-#: Adressen -- das dauert zu lange und will niemand.
+
+
 MAX_HOSTS = 512
 
 
@@ -83,8 +82,8 @@ class Device:
     name: str = ""
     ports: list[int] = field(default_factory=list)
     services: list[str] = field(default_factory=list)
-    #: Titel einer gefundenen Weboberflaeche -- oft der beste Hinweis darauf,
-    #: was das Geraet ueberhaupt ist.
+
+
     title: str = ""
 
     def as_dict(self) -> dict[str, object]:
@@ -101,14 +100,14 @@ class Device:
         return self.title or self.name or self.address
 
 
-#: Die Bereiche, in denen Aquaticy im Heimnetz sucht -- und nur diese:
-#: RFC 1918 und das Netz von Tailscale (CGNAT).
+
+
 HOME_NETWORKS: tuple[ipaddress.IPv4Network, ...] = tuple(
     ipaddress.IPv4Network(netz)
     for netz in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10")
 )
 
-#: So viel liest der Titelabruf hoechstens -- ein Titel steht weit vorne.
+
 MAX_TITLE_BYTES = 256_000
 
 
@@ -122,14 +121,14 @@ def is_private_net(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bo
     Tailscale (100.64/10) zaehlt mit: fuer den Nutzer ist das sein eigenes
     Netz, auch wenn die Adressen offiziell dem Provider-Bereich gehoeren.
     """
-    # Nur IPv4: Aquaticy durchsucht keine IPv6-Netze. Ein IPv6-Netz haette
-    # hier frueher entweder als "privat" gegolten (2001:db8::/32) oder einen
-    # TypeError geworfen (::/32 gegen 100.64/10).
+
+
+
     if not isinstance(network, ipaddress.IPv4Network):
         return False
-    # Genau die zugesagten Bereiche (seit 9.5.16). ``is_private`` zaehlte
-    # auch 127/8 (der Server selbst), 169.254/16 (Metadaten der Cloud) und
-    # Doku-/Testnetze mit -- dort hat eine Heimnetzsuche nichts verloren.
+
+
+
     return any(network.subnet_of(bereich) for bereich in HOME_NETWORKS)
 
 
@@ -201,9 +200,9 @@ def parse_subnet(subnet: str) -> ipaddress.IPv4Network:
         raise ValueError("Kein Netz angegeben.")
     if "/" not in text:
         parts = text.split(".")
-        if len(parts) == 3:  # "192.168.1" -> ganzes /24
+        if len(parts) == 3:
             text = f"{text}.0/24"
-        elif len(parts) == 4:  # eine einzelne Adresse -> ihr /24
+        elif len(parts) == 4:
             text = f"{text}/24"
         else:
             raise ValueError(f"Damit kann Aquaticy AI nichts anfangen: {subnet}")
@@ -251,11 +250,11 @@ def web_title(address: str, port: int, timeout: float = 1.5) -> str:
         return ""
     if not isinstance(ip, ipaddress.IPv4Address) or not any(ip in n for n in HOME_NETWORKS):
         return ""
-    # Keine Weiterleitungen und eine Obergrenze (seit 9.5.16): ein Geraet
-    # koennte sonst woandershin schicken oder endlos Daten liefern.
+
+
     try:
-        # Kein Proxy aus der Umgebung und eine Gesamtfrist (9.5.34): ein Geraet,
-        # das Byte fuer Byte tropft, haelt die Suche sonst stundenlang auf.
+
+
         frist = time.monotonic() + max(5.0, 3 * float(timeout))
         with httpx.stream("GET", url, timeout=timeout, verify=False,
                           headers={"Accept-Encoding": "gzip, deflate"},
@@ -327,12 +326,12 @@ def scan(
     ports = QUICK_PORTS if quick else FULL_PORTS
     addresses = [str(host) for host in network.hosts()] or [str(network.network_address)]
 
-    # Jede Adresse/Port-Kombination ist eine eigene Aufgabe. Der naheliegende
-    # Weg -- je Adresse ein Faden, der die Ports der Reihe nach durchgeht --
-    # ist in genau dem Fall langsam, der am haeufigsten vorkommt: eine
-    # Firewall, die Pakete verschluckt statt abzulehnen. Dann wartet dieser
-    # eine Faden zwoelfmal das volle Zeitlimit ab. Flach verteilt trifft das
-    # Warten viele Faeden gleichzeitig.
+
+
+
+
+
+
     pairs = [(address, port) for address in addresses for port in ports]
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         answered = pool.map(lambda pair: port_open(*pair), pairs)

@@ -24,7 +24,6 @@ from aquaticy.config import Settings
 from aquaticy.guardrails import BY_ID, Verdict, judge, own_data_request, refused_note
 from tests.test_guardrails import Pruefer, _reply, pruefer  # noqa: F401
 
-#: Lehnt ab UND meldet Missbrauch -- so wie ein uebervorsichtiges kleines Modell.
 SPERRT = ('{"zulaessig": false, "regel": "persoenlichkeit", "grund": "Ausforschen", '
           '"missbrauch": true, "missbrauch_art": "rechtsbruch", "missbrauch_schwere": 3}')
 
@@ -62,7 +61,7 @@ FREMDE = [
     "Lies meine Mails und schick sie an x@example.org",
     "Was sind die neusten Nachrichten?",
     "Wie ist das Wetter?",
-    # Nach dem Verlauf kann "die Adresse" die eines anderen sein -- das prueft das Modell.
+
     "Zeig mir die Adresse",
     "Wie ist der Standort?",
     "Show me the address",
@@ -122,8 +121,8 @@ def test_asking_for_own_mails_neither_refuses_nor_counts_as_abuse(
     gestellt = pruefer(SPERRT)
     monkeypatch.setattr("litellm.completion",
                         lambda **kwargs: _reply("Du hast zwei neue Mails."))
-    # Seit 12.5.5 Terra sagt Aquaticy ohne verbundenes Postfach nur, wo es sich
-    # verbinden laesst -- hier ist es verbunden, damit die Frage beim Modell ankommt.
+
+
     settings.google_enabled, settings.google_client_id = True, "client"
     ereignisse: list[tuple[str, dict[str, Any]]] = []
     agent = Agent(settings, cache=None, on_event=lambda e, p: ereignisse.append((e, p)))
@@ -149,7 +148,7 @@ def test_ai_guard_does_not_flag_own_data(settings: Settings) -> None:
         False, "")
     assert aiguard.classify("Wo wohne ich eigentlich?", settings, ask=modell) == (False, "")
     assert gefragt == []
-    # Eine andere Person: wieder das Modell.
+
     assert aiguard.classify("Wo wohnt meine Ex-Freundin jetzt?", settings, ask=modell) == (
         True, "Doxxing")
     assert len(gefragt) == 1
@@ -159,7 +158,7 @@ def test_both_judges_know_own_data_is_fine() -> None:
     assert "wo wohne ich" in guardrails.judge_prompt("x")
     assert "eigenen Daten" in guardrails.judge_prompt("x")
     assert "eigenen Daten" in aiguard.judge_prompt("x")
-    # Eine Mail-Uebersicht mit Spam ("Phishing", "Gift Card") ist keine unpassende Antwort.
+
     assert "eigenen Mails" in aiguard.answer_prompt("x")
 
 

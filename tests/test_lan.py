@@ -39,7 +39,7 @@ def listener():
         thread.join(timeout=5)
 
 
-# -- Grenzen --------------------------------------------------------------
+
 def test_only_private_networks_are_scanned() -> None:
     """Fremde Netze durchsucht aquaticy nicht -- weder gewollt noch in Ordnung."""
     for public in ("8.8.8.0/24", "1.1.1.1", "93.184.216.0/24"):
@@ -77,7 +77,7 @@ def test_nonsense_is_rejected_clearly() -> None:
             lan.parse_subnet(bad)
 
 
-# -- Der eigentliche Durchlauf --------------------------------------------
+
 def test_an_open_port_is_found(listener: int) -> None:
     assert lan.port_open("127.0.0.1", listener)
 
@@ -127,7 +127,7 @@ def test_known_ports_get_a_plain_name() -> None:
 
 def test_quick_ports_are_a_subset_of_all() -> None:
     assert set(lan.QUICK_PORTS) <= set(lan.FULL_PORTS)
-    assert 8123 in lan.QUICK_PORTS  # Home Assistant muss im schnellen Lauf dabei sein
+    assert 8123 in lan.QUICK_PORTS
 
 
 def test_a_device_describes_itself() -> None:
@@ -155,7 +155,7 @@ def test_own_subnet_is_private_or_empty() -> None:
     assert subnet == "" or lan.is_private_net(ipaddress.ip_network(subnet))
 
 
-# -- Im Container -----------------------------------------------------------
+
 def test_no_hint_outside_a_container(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lan, "in_container", lambda: False)
     assert lan.container_hint("172.17.0.0/24") == ""

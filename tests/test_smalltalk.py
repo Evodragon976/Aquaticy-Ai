@@ -89,7 +89,7 @@ def test_the_creator_answer_names_jonas_and_aquaticy() -> None:
 def test_ok_after_a_question_from_aquaticy_goes_to_the_model() -> None:
     assert smalltalk.art_von("ok") is not None
     assert smalltalk.art_von("ok", frage_offen=True) is None
-    # Ein Gruss bleibt ein Gruss, auch nach einer Rueckfrage.
+
     assert smalltalk.art_von("danke", frage_offen=True) is not None
 
 

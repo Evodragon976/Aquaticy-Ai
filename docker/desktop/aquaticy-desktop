@@ -37,15 +37,15 @@ VERSION = "1"
 DISPLAY = ":1"
 BREITE, HOEHE = 1280, 800
 
-#: Alle 100 Pixel eine Linie mit Beschriftung -- damit ein Bildmodell
-#: Koordinaten ablesen kann, statt sie zu schaetzen.
+
+
 RASTER = 100
 
-#: Tastennamen, wie xdotool sie kennt: Return, ctrl+l, alt+F4, Page_Down ...
+
 TASTE = re.compile(r"^[A-Za-z0-9_]{1,24}(\+[A-Za-z0-9_]{1,24}){0,3}$")
 
-#: Was sich oeffnen laesst. Mehr braucht es nicht, und eine feste Liste heisst:
-#: aus einem App-Namen wird nie ein beliebiger Befehl.
+
+
 APPS: dict[str, list[str]] = {
     "browser": ["falkon"],
     "writer": ["libreoffice", "--writer"],
@@ -55,21 +55,21 @@ APPS: dict[str, list[str]] = {
     "dateien": ["pcmanfm"],
     "terminal": ["xterm"],
     "grafik": ["gimp"],
-    # Add-ons: sie liegen nicht im Abbild, sondern auf ihrem eigenen
-    # Datentraeger unter /addons/<name> -- und sind nur da, wenn der Nutzer sie
-    # installiert und eingeschaltet hat (sonst ist nichts eingehaengt).
+
+
+
     "whatsapp": [],
     "signal": [],
     "blender": [],
 }
 
-#: Wo die Add-ons haengen.
+
 ADDONS = Path("/addons")
 
-#: Web-Apps laufen in Firefox, jede mit eigenem Profil (also eigener Anmeldung).
+
 WEBAPPS = {"whatsapp"}
 
-#: Die Grundeinstellungen fuer LibreOffice (siehe profil_anlegen).
+
 LIBREOFFICE_PROFIL = """<?xml version="1.0" encoding="UTF-8"?>
 <oor:items xmlns:oor="http://openoffice.org/2001/registry"
   xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -79,10 +79,10 @@ LIBREOFFICE_PROFIL = """<?xml version="1.0" encoding="UTF-8"?>
 </oor:items>
 """
 
-#: So viele Fenster nennt die Liste hoechstens.
+
 MAX_FENSTER = 50
 
-#: Scrollrichtung -> Mausknopf (so meldet X das Mausrad).
+
 RAD = {"up": "4", "down": "5", "left": "6", "right": "7"}
 
 
@@ -94,12 +94,12 @@ def umgebung() -> dict[str, str]:
     env = dict(os.environ)
     env["DISPLAY"] = DISPLAY
     env.setdefault("HOME", str(home()))
-    # Der Browser bringt eine eigene Sandbox mit, die in einem Container ohne
-    # Faehigkeiten nicht starten kann. Die Wand ist hier die Werkstatt selbst.
+
+
     env["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
     env["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
     env["NO_AT_BRIDGE"] = "1"
-    # Die Programme sprechen Deutsch -- der Nutzer sieht die Bildschirmfotos.
+
     env["LANG"] = "de_DE.UTF-8"
     env["LANGUAGE"] = "de_DE:de"
     return env
@@ -121,7 +121,7 @@ def im_hintergrund(name: str, args: list[str]) -> None:
     protokolle = home() / ".cache" / "aquaticy"
     protokolle.mkdir(parents=True, exist_ok=True)
     with open(protokolle / f"{name}.log", "ab") as log:
-        subprocess.Popen(  # noqa: S603 - feste Liste, keine Shell
+        subprocess.Popen(  # noqa: S603
             args, env=umgebung(), stdin=subprocess.DEVNULL, stdout=log, stderr=log,
             start_new_session=True, cwd=str(home()),
         )
@@ -148,19 +148,19 @@ def profil_anlegen(kennung: str) -> None:
     )
     zeilen = ["[Web-URL-Settings]", "homepage=about:blank", "afterLaunch=0", ""]
     if kennung:
-        # Kein Zeilenumbruch, kein Gleichheitszeichen am Anfang: die Kennung
-        # kommt zwar von Aquaticy selbst, aber eine kaputte Datei waere ein
-        # Browser mit Standardkennung -- also einer, der sich nicht zu
-        # erkennen gibt.
+
+
+
+
         sauber = " ".join(kennung.split())[:300].replace("\\", "").replace('"', "")
-        # In Anfuehrungszeichen: sonst liest Qt beim ersten Semikolon nur noch
-        # einen Kommentar, und vom "(X11; Linux ...)" bliebe "(X11" uebrig.
+
+
         zeilen = ["[Web-Browser-Settings]", f'UserAgent="{sauber}"', "", *zeilen]
     (falkon / "profiles" / "default" / "settings.ini").write_text(
         "\n".join(zeilen), encoding="utf-8"
     )
-    # LibreOffice: ohne "Tipp des Tages" und ohne "Was ist neu" -- beides sind
-    # Fenster, die sonst vor jedem ersten Handgriff weggeklickt werden muessen.
+
+
     office = home() / ".config" / "libreoffice" / "4" / "user"
     office.mkdir(parents=True, exist_ok=True)
     (office / "registrymodifications.xcu").write_text(LIBREOFFICE_PROFIL, encoding="utf-8")
@@ -286,7 +286,7 @@ def aktive_klasse(fenster: list[dict[str, str]]) -> str:
 
 
 def fertig(**mehr: object) -> int:
-    time.sleep(0.6)  # dem Programm einen Augenblick geben, bevor jemand nachsieht
+    time.sleep(0.6)
     print(json.dumps({"ok": True, "fenster": aktives_fenster(), **mehr}, ensure_ascii=False))
     return 0
 
@@ -337,7 +337,7 @@ def freie_tasten(belegung: str) -> tuple[list[int], set[str]]:
         namen = teile[1].split()
         if namen:
             belegt.update(namen)
-        elif nummer >= 100:  # unten liegen die echten Tasten, oben ist Platz
+        elif nummer >= 100:
             frei.append(nummer)
     return frei, belegt
 
@@ -361,14 +361,14 @@ def sonderzeichen_belegen(text: str) -> None:
     befehle: list[str] = []
     for zeichen in gebraucht:
         name = keysym_fuer(zeichen)
-        # xmodmap nennt belegte Tasten mit Namen (adiaeresis), nicht als Zahl --
-        # doppelt belegen schadet nicht, fehlende Tasten schon.
+
+
         if not frei:
             break
         befehle += ["-e", f"keycode {frei.pop()} = {name} {name}"]
     if befehle:
         rufe("xmodmap", *befehle, zeit=10)
-        time.sleep(0.3)  # den Programmen Zeit geben, die neue Belegung zu lesen
+        time.sleep(0.3)
 
 
 def cmd_type(_args: list[str]) -> int:
@@ -378,8 +378,8 @@ def cmd_type(_args: list[str]) -> int:
         return 1
     klartext = text.decode("utf-8", "replace")
     if any(ord(zeichen) > 0xFFFF for zeichen in klartext):
-        # Jenseits der Unicode-Grundebene (Emoji) kommt das Zeichen in Qt-
-        # Programmen verstuemmelt an. Lieber gar nicht tippen als falsch.
+
+
         print("Zeichen ausserhalb der Unicode-Grundebene (etwa Emoji) gehen nicht.",
               file=sys.stderr)
         return 2
@@ -441,10 +441,10 @@ def fenster_zeilen(ausgabe: str, rechner: str) -> list[dict[str, str]]:
             klasse, _, titel = teile[2].partition(" ")
         klasse, titel = klasse.strip(), titel.strip()
         if klasse.lower().startswith("tint2"):
-            continue  # die Leiste unten ist kein Fenster, das man bedient
+            continue
         liste.append({"id": teile[0], "klasse": klasse[:80], "titel": titel[:200]})
         if len(liste) >= MAX_FENSTER:
-            break  # mehr liest niemand -- und die Antwort bleibt klein
+            break
     return liste
 
 
@@ -498,8 +498,8 @@ def addon_befehl(app: str, ziel: str) -> list[str]:
         adresse = str(info.get("adresse", ""))
         if programm is None or not adresse.startswith("https://"):
             raise fehlt
-        # Die Web-App oeffnet nur ihre eigene Adresse -- ein Ziel von aussen
-        # wuerde aus dem WhatsApp-Profil einen Browser fuer alles machen.
+
+
         return [str(programm), "--no-remote", "--new-instance", "--profile",
                 str(ADDONS / app / "profil"), "--class", f"aquaticy-{app}", adresse]
     programm = innerhalb(ADDONS / app, str(info.get("start", "")))
@@ -540,16 +540,16 @@ def cmd_open(args: list[str]) -> int:
     if not args or args[0] not in APPS:
         raise ValueError(f"App: {', '.join(APPS)}")
     app, ziel = args[0], (args[1] if len(args) > 1 else "")
-    # Ein Ziel mit Strich vorn waere fuer das Programm eine Option statt einer
-    # Adresse oder Datei. Draussen wird das schon geprueft -- hier noch einmal.
+
+
     if ziel.startswith("-"):
         raise ValueError("Das Ziel darf nicht mit '-' beginnen.")
     befehl = addon_befehl(app, ziel) if not APPS[app] else [*APPS[app], *([ziel] if ziel else [])]
     offen = fenster_liste()
     vorher = {fenster["id"] for fenster in offen}
     if not APPS[app] and addon_laeuft(app):
-        # Ein Add-on laeuft schon: nach vorn holen statt ein zweites Mal
-        # starten -- zweimal dasselbe Profil mag weder Firefox noch Signal.
+
+
         kennzeichen = f"aquaticy-{app}" if app in WEBAPPS else app
         passend = [f for f in offen if kennzeichen in f["klasse"].lower()
                    or kennzeichen in f["titel"].lower()]
@@ -559,13 +559,13 @@ def cmd_open(args: list[str]) -> int:
         return fertig(neu=[], hinweis="Laeuft schon -- siehe desktop_windows.")
     im_hintergrund(app, befehl)
     if app == "browser" and any("falkon" in f["klasse"].lower() for f in offen):
-        # Der Browser laeuft schon: er oeffnet die Adresse als neuen Tab im
-        # vorhandenen Fenster. Auf ein neues Fenster zu warten hiesse dreissig
-        # Sekunden warten auf etwas, das nicht kommt.
+
+
+
         time.sleep(2.0)
         return fertig(neu=[], hinweis="Im schon offenen Browser als neuer Tab geoeffnet.")
-    # Warten, bis ein neues Fenster da ist -- Office braucht beim ersten Mal
-    # ein paar Sekunden. Wer nicht wartet, klickt ins Leere.
+
+
     for _ in range(60):
         time.sleep(0.5)
         neu = [f for f in fenster_liste() if f["id"] not in vorher]

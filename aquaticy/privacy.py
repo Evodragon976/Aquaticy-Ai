@@ -40,11 +40,10 @@ from pathlib import Path
 
 from aquaticy.memory import CipherError, load_secret_file
 
-#: Die Datei mit dem Hauptschluessel -- neben der Kontendatenbank.
 KEY_FILE = "data.key"
-#: So beginnt ein verschluesselter Text (Datenbankspalten).
+
 TEXT_PREFIX = "enc2:"
-#: So beginnt eine verschluesselte Datei.
+
 FILE_MAGIC = b"AQENC2\x00"
 _NONCE = 12
 
@@ -59,8 +58,8 @@ def key_root(folder: Path | str) -> tuple[Path, str]:
     Schluessel in ``<daten>``. Sonst (Terminal ohne Konten) im Ordner selbst.
     """
     ordner = Path(folder).resolve()
-    # Nur eine echte Kontokennung (32 Hexzeichen) unter "users" -- ein
-    # Datenordner, der zufaellig /srv/users/aquaticy heisst, ist kein Profil.
+
+
     if ordner.parent.name == "users" and re.fullmatch(r"[0-9a-f]{32}", ordner.name):
         return ordner.parent.parent, ordner.name
     return ordner, "lokal"
@@ -95,7 +94,7 @@ class Sealer:
 
         self._aead = AESGCM(key)
 
-    # -- Bytes --------------------------------------------------------------
+
     def seal_bytes(self, data: bytes, aad: str) -> bytes:
         nonce = secrets.token_bytes(_NONCE)
         return FILE_MAGIC + nonce + self._aead.encrypt(nonce, bytes(data), aad.encode("utf-8"))
@@ -117,7 +116,7 @@ class Sealer:
         except (InvalidTag, ValueError) as exc:
             raise CipherError("Verschlüsselte Daten lassen sich nicht öffnen.") from exc
 
-    # -- Text ---------------------------------------------------------------
+
     def seal_text(self, text: str, aad: str) -> str:
         if not text:
             return ""
@@ -127,7 +126,7 @@ class Sealer:
     def open_text(self, value: str, aad: str) -> str:
         wert = str(value or "")
         if not wert.startswith(TEXT_PREFIX):
-            return wert  # Klartext aus der Zeit vor 9.5.32
+            return wert
         try:
             roh = base64.urlsafe_b64decode(wert[len(TEXT_PREFIX):].encode("ascii"))
         except (ValueError, UnicodeEncodeError) as exc:
@@ -164,9 +163,9 @@ def read_private(path: Path | str, profile: Path | str | None = None) -> bytes:
     return profile_sealer(profil).open_bytes(daten, "datei:" + quelle.name)
 
 
-# ---------------------------------------------------------------------------
-# Kontendatenbank: Schluessel-Hashes und verschluesselte Spalten
-# ---------------------------------------------------------------------------
+
+
+
 class ServerSecrets:
     """Werkzeuge fuer die Kontendatenbank einer Installation."""
 

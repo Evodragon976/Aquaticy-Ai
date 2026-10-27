@@ -60,15 +60,15 @@ __all__ = [
     "url_problem",
 ]
 
-#: Namen, die nie nach draussen zeigen -- auch ohne Namensaufloesung.
+
 BLOCKED_NAMES = frozenset({
     "localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback",
     "metadata", "metadata.google.internal", "instance-data",
 })
 BLOCKED_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa", ".intranet")
 
-#: Wie lange eine Entscheidung ueber einen Namen gilt (der Browser fragt fuer
-#: jedes Bild einer Seite -- ohne Merken waeren das hundert DNS-Anfragen).
+
+
 DECISION_TTL = 30.0
 
 _decisions: dict[tuple[str, int], tuple[float, str, bool]] = {}
@@ -122,17 +122,17 @@ def ip_allowed(value: str) -> bool:
         elif ip.teredo is not None:
             return False
         elif ip in _NAT64:
-            # 9.6.0: DNS64 schreibt oeffentliche IPv4-Adressen so -- geprueft wird
-            # die eingebettete IPv4-Adresse, nicht der (reservierte) Praefix.
+
+
             return ip_allowed(str(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)))
         if getattr(ip, "is_site_local", False):
-            # fec0::/10 -- veraltet, aber intern; Python nennt es "global" (9.6.0).
+
             return False
     return bool(ip.is_global) and not (ip.is_multicast or ip.is_reserved or ip.is_loopback
                                        or ip.is_link_local or ip.is_private)
 
 
-#: Der bekannte NAT64-Praefix (RFC 6052).
+
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
 
 
@@ -171,7 +171,7 @@ def checked_addresses(host: str, port: int | None) -> list[str]:
         return [name]
     kurz = _numeric_ipv4(name)
     if kurz:
-        # "127.1", "0x7f.0.0.1", "2130706433" -- alles 127.0.0.1 in anderer Schreibweise.
+
         if not ip_allowed(kurz):
             raise BlockedTarget(f"{name} ist keine öffentliche Adresse.")
         return [kurz]
@@ -198,7 +198,7 @@ def _decide(host: str, port: int) -> tuple[str, bool]:
     return "", False
 
 
-#: Ein DNS-Aussetzer wird nur kurz gemerkt -- er sagt nichts ueber das Ziel.
+
 UNRESOLVED_TTL = 5.0
 
 
@@ -260,8 +260,8 @@ def check_url(url: str, request: httpx.Request | None = None) -> None:
         raise (Unresolvable if aussetzer else BlockedTarget)(problem, request=request)
 
 
-# -- Verbindungsaufbau: nur zu gepruften Adressen ----------------------------------------
-# -- Ein vorgeschalteter Proxy (seit 9.5.16) ---------------------------------------------
+
+
 class ProxySetupError(OSError):
     """``AQUATICY_PROXY`` ist gesetzt, aber so nicht nutzbar (9.6.0)."""
 
@@ -292,8 +292,8 @@ def upstream_proxy() -> tuple[str, int, str] | None:
             return None
     teile = urlsplit(wert if "://" in wert else f"http://{wert}")
     if teile.scheme != "http" or not teile.hostname:
-        # Bis 9.5.34 ging es dann still direkt ins Netz -- am eingerichteten
-        # Proxy vorbei. Jetzt wird lieber gar nicht abgerufen.
+
+
         raise ProxySetupError(
             "AQUATICY_PROXY wird nicht unterstützt (nur http://host:port) -- kein Abruf.")
     anmeldung = ""
@@ -318,7 +318,7 @@ def _connect_answer_ok(kopf: bytes) -> bool:
     return len(erste) >= 2 and erste[1] == b"200"
 
 
-#: So lange darf ein Verbindungsversuch dauern, wenn noch eine Adresse folgt.
+
 ATTEMPT_SECONDS = 2.5
 
 
@@ -367,9 +367,9 @@ class _GuardedBackend(httpcore.SyncBackend):
         for nummer, adresse in enumerate(reihe):
             frist = _restzeit(timeout)
             if nummer < len(reihe) - 1:
-                # Nicht der letzte Versuch: kurz halten. Ein IPv6-Weg, der ins
-                # Leere fuehrt, kostete sonst die ganze Wartezeit -- und die
-                # IPv4-Adresse dahinter kam nie dran (11.1).
+
+
+
                 frist = ATTEMPT_SECONDS if frist is None else min(frist, ATTEMPT_SECONDS)
             try:
                 if proxy is None:
@@ -405,7 +405,7 @@ class _GuardedBackend(httpcore.SyncBackend):
         return stream
 
 
-#: Bis wann der laufende Abruf in diesem Thread fertig sein muss (9.6.0).
+
 _FRIST: contextvars.ContextVar[float | None] = contextvars.ContextVar(
     "aquaticy_netguard_frist", default=None)
 
@@ -455,8 +455,8 @@ def guarded_transport(**kwargs: Any) -> httpx.HTTPTransport:
     transport = httpx.HTTPTransport(**kwargs)
     pool = getattr(transport, "_pool", None)
     if pool is None or not hasattr(pool, "_network_backend"):
-        # Seit 9.6.0 fail-closed: ohne eigenes Backend gaebe es keinen Schutz
-        # gegen DNS-Rebinding -- dann lieber gar kein Client.
+
+
         raise RuntimeError("httpx/httpcore hat sich geändert: Netzschutz nicht einsetzbar.")
     pool._network_backend = _GuardedBackend()
     return transport
@@ -473,15 +473,15 @@ def guarded_client(**kwargs: Any) -> httpx.Client:
     haken = dict(kwargs.pop("event_hooks", {}) or {})
     haken["request"] = [_request_hook, *haken.get("request", [])]
     kwargs.setdefault("transport", guarded_transport())
-    # 9.6.0: nur Verfahren, die _lesen gedeckelt auspacken kann -- kein br/zstd,
-    # auch wenn das Paket dafuer irgendwann installiert ist.
+
+
     kopf = httpx.Headers(kwargs.pop("headers", None) or {})
     kopf.setdefault("Accept-Encoding", ACCEPT_ENCODING)
     kwargs["headers"] = kopf
     return httpx.Client(event_hooks=haken, **kwargs)
 
 
-# -- Abrufen mit Grenze ---------------------------------------------------------------------
+
 Limit = int | Callable[[httpx.Headers], tuple[int, bool]]
 
 
@@ -508,7 +508,7 @@ def _gesamtfrist(client: httpx.Client, timeout: Any) -> float:
     return max(30.0, 4 * sekunden)
 
 
-#: Was ein abgesicherter Client annimmt (9.6.0).
+
 ACCEPT_ENCODING = "gzip, deflate"
 
 
@@ -522,7 +522,7 @@ class _Entpacker:
 
     def __init__(self, verfahren: str) -> None:
         self._roh = verfahren == "deflate"
-        # 32 + MAX_WBITS: gzip und zlib werden erkannt; rohes deflate s. unten.
+
         self._d = zlib.decompressobj(zlib.MAX_WBITS | 32)
         self._erstes = True
 
@@ -547,7 +547,7 @@ def _stuecke(response: httpx.Response, rest: Callable[[], int]) -> Iterator[byte
         raise httpx.DecodingError("Nicht unterstützte Komprimierung der Antwort.",
                                   request=response.request)
     if hasattr(response, "_content"):
-        # Schon im Speicher (z. B. eine fertige Antwort in Tests) -- nichts zu deckeln.
+
         yield from response.iter_bytes()
         return
     if verfahren in {"", "identity"}:
@@ -612,7 +612,7 @@ def read_response(response: httpx.Response, max_bytes: int,
     return _lesen(response, limit, deadline)
 
 
-#: Kopfzeilen, die nach dem Auspacken nicht mehr stimmen.
+
 _WEG = frozenset({"content-encoding", "content-length", "transfer-encoding"})
 
 
@@ -672,8 +672,8 @@ def _get(client: httpx.Client, aktuell: str, frist: float, max_bytes: Limit,
                          "Api-Key", "X-Auth-Token"):
                 request.headers.pop(name, None)
             request.url = request.url.copy_with(username=None, password=None)
-            # Keep cookies explicitly scoped to the destination; never carry
-            # a raw Cookie header or unscoped client cookies to another origin.
+
+
             scoped = httpx.Cookies()
             for cookie in client.cookies.jar:
                 if cookie.domain:
@@ -724,12 +724,12 @@ def browser_route(route: Any) -> None:
         route.abort("blockedbyclient")
 
 
-# -- Der Browser hinter der Netzregel (seit 9.5.16) ------------------------------------------
-#: So lange darf eine Verbindung des Browsers still sein, bevor sie endet.
+
+
 PROXY_IDLE = 60.0
-#: So lange darf der Verbindungsaufbau zu einem Ziel dauern.
+
 PROXY_CONNECT_TIMEOUT = 15.0
-#: Groesser ist kein Anfragekopf.
+
 PROXY_MAX_HEAD = 65_536
 
 
@@ -840,7 +840,7 @@ class BrowserProxy:
         self._sock.settimeout(1.0)
         self.port: int = self._sock.getsockname()[1]
         self.open = True
-        #: Wie viele Verbindungen abgewiesen wurden -- fuer Tests und Protokoll.
+
         self.blocked = 0
         threading.Thread(target=self._annehmen, name="aquaticy-browserproxy",
                          daemon=True).start()
@@ -931,8 +931,8 @@ def browser_proxy() -> BrowserProxy:
         return _browser_proxy
 
 
-#: Was Chromium zusaetzlich braucht, damit wirklich alles ueber den Proxy geht:
-#: WebRTC nimmt sonst UDP an ihm vorbei (STUN/TURN zu beliebigen Adressen).
+
+
 BROWSER_NET_ARGS: tuple[str, ...] = (
     "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
     "--webrtc-ip-handling-policy=disable_non_proxied_udp",

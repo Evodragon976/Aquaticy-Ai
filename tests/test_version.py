@@ -13,7 +13,7 @@ import aquaticy
 
 ROOT = Path(__file__).resolve().parents[1]
 NUMMER = "12.6.6"
-NAME = "Terra"
+NAME = "Sol"
 LABEL = f"{NUMMER} {NAME}"
 
 
@@ -39,9 +39,10 @@ def test_package_is_this_release() -> None:
 
 def test_release_files_name_this_release() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    # Seit 12.4.4 Sol gibt es keine Pruefberichte mehr im Repo (auf Wunsch geloescht).
-    # Verweist das README doch auf eine Datei, muss es sie auch geben.
+
+
     for name in re.findall(r"\((TESTREPORT-[^)]+\.md)\)", readme):
         assert (ROOT / name).exists(), name
     constraints = (ROOT / "constraints.txt").read_text(encoding="utf-8")
-    assert constraints.startswith(f"# Aquaticy {LABEL} --")
+    pins = [line for line in constraints.splitlines() if line.strip()]
+    assert pins and all(re.fullmatch(r"[A-Za-z0-9_.-]+==\S+", line) for line in pins)

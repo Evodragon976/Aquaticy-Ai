@@ -43,7 +43,7 @@ EIGEN_MISTRAL = "eigen-mistral-geheim-1111"
 EIGEN_NVIDIA = "nvapi-eigen-geheim-2222"
 
 
-# -- Der Schluesselbund ---------------------------------------------------------------
+
 def _tresor(tmp_path: Path, konto: str = "konto-a", geheim: bytes = GEHEIM) -> KeyVault:
     return KeyVault(tmp_path / "konten.sqlite3", konto, geheim)
 
@@ -68,15 +68,15 @@ def test_another_account_can_neither_see_nor_use_the_keys(tmp_path: Path) -> Non
     anna, bernd = _tresor(tmp_path, "konto-a"), _tresor(tmp_path, "konto-b")
     anna.set("NVIDIA_NIM_API_KEY", EIGEN_NVIDIA)
     assert bernd.keys() == {} and bernd.public() == [] and bernd.count() == 0
-    # Wer die Zeile in ein anderes Konto umkopiert, hat nichts davon: jedes
-    # Konto hat seinen eigenen Schluessel zum Schluesselbund.
+
+
     with sqlite3.connect(tmp_path / "konten.sqlite3") as conn:
         conn.execute(
             "INSERT INTO api_keys SELECT 'konto-b', name, token, hint, added_at "
             "FROM api_keys WHERE account_id = 'konto-a'"
         )
     assert bernd.keys() == {} and bernd.public() == [] and bernd.count() == 0
-    # Und wer nur die Datenbank hat, ohne das Geheimnis des Servers, auch nicht.
+
     assert _tresor(tmp_path, "konto-a", b"x" * 32).keys() == {}
     assert anna.keys() == {"NVIDIA_NIM_API_KEY": EIGEN_NVIDIA}
 
@@ -84,8 +84,8 @@ def test_another_account_can_neither_see_nor_use_the_keys(tmp_path: Path) -> Non
 def test_only_known_slots_and_real_looking_keys_are_taken(tmp_path: Path) -> None:
     tresor = _tresor(tmp_path)
     for name, wert in [
-        ("GROQ_API_KEY", "gsk-abcdefgh1234"),         # kein Platz dafuer
-        ("AQUATICY_HA_TOKEN", "x" * 20),               # erst recht nicht
+        ("GROQ_API_KEY", "gsk-abcdefgh1234"),
+        ("AQUATICY_HA_TOKEN", "x" * 20),
         ("MISTRAL_API_KEY", ""),
         ("MISTRAL_API_KEY", "kurz"),
         ("MISTRAL_API_KEY", "mit leerzeichen drin"),
@@ -128,7 +128,7 @@ def test_the_server_secret_is_made_once_and_kept_private(tmp_path: Path) -> None
         assert stat.S_IMODE(pfad.stat().st_mode) == 0o600
 
 
-# -- Wohin ein Schluessel geht ----------------------------------------------------------
+
 def _eigen(**mehr: Any) -> Settings:
     werte: dict[str, Any] = {
         "model": "mistral/mistral-large-latest",
@@ -151,17 +151,17 @@ def test_an_own_key_is_used_for_its_provider_and_only_there(
     fremd = "nvidia_nim/meta/llama-3.3-70b-instruct"
     assert settings.key_source(fremd) == "operator"
     assert EIGEN_MISTRAL not in json.dumps(settings.llm_kwargs_for(fremd))
-    # Ohne eigenen Schluessel gilt der gestellte.
+
     ohne = Settings(model="mistral/mistral-large-latest")
     assert ohne.key_source(ohne.model) == "operator"
     assert ohne.api_key == "betreiber-mistral-0000"
 
 
 def test_a_model_on_the_operators_server_stays_provided(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Der Betreiber stellt openai/fake-modell auf seinem eigenen Server. Ein
-    # allgemeiner eigener Schluessel darf dieses Modell nicht an sich reissen
-    # -- sonst ginge er an den Server des Betreibers, und das Modell zaehlte
-    # nicht mehr.
+
+
+
+
     monkeypatch.setenv("OPENAI_API_KEY", "sk-betreiber-0000")
     monkeypatch.delenv("AQUATICY_API_KEY", raising=False)
     basis = "http://betreiber.example/v1"
@@ -173,7 +173,7 @@ def test_a_model_on_the_operators_server_stays_provided(monkeypatch: pytest.Monk
     assert settings.key_source("openai/fake-modell") == "operator"
     weg = settings.llm_kwargs_for("openai/fake-modell")
     assert weg.get("api_base") == basis and "eigen-allgemein" not in json.dumps(weg)
-    # Bei einem anderen Anbieter ist der allgemeine eigene Schluessel gemeint.
+
     assert settings.key_source("groq/llama-3.1-8b-instant") == "own"
     assert settings.llm_kwargs_for("groq/llama-3.1-8b-instant") == {
         "api_key": "eigen-allgemein-3333"
@@ -183,16 +183,16 @@ def test_a_model_on_the_operators_server_stays_provided(monkeypatch: pytest.Monk
 def test_the_operators_address_belongs_to_the_operators_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Bis 9.5.14 galt die Adresse des Betreibers fuer den Anbieter des Modells,
-    # das ein Konto gewaehlt hatte -- ein Mistral-Modell landete so beim LM
-    # Studio des Betreibers.
+
+
+
     monkeypatch.setenv("MISTRAL_API_KEY", "betreiber-mistral-0000")
     basis = "http://lmstudio.example:1234/v1"
     settings = Settings(model="mistral/mistral-large-latest", api_base=basis,
                         api_base_for="openai/lokales-modell")
     assert "api_base" not in settings.llm_kwargs_for("mistral/mistral-large-latest")
     assert settings.llm_kwargs_for("openai/lokales-modell")["api_base"] == basis
-    # Lokal ohne Konten bleibt es beim Hauptmodell.
+
     lokal = Settings(model="openai/lokales-modell", api_base=basis)
     assert lokal.llm_kwargs_for("openai/lokales-modell")["api_base"] == basis
 
@@ -208,7 +208,7 @@ def test_no_operator_key_goes_to_an_address_the_account_set(
     assert settings.llm_kwargs_for("openai/mein-modell") == {
         "api_base": eigene_adresse, "api_key": NO_KEY,
     }
-    # Mit eigenem Schluessel geht der eigene dorthin -- und nur der.
+
     settings.api_keys = {"AQUATICY_API_KEY": "eigen-allgemein-3333"}
     settings.own_key_names = frozenset({"AQUATICY_API_KEY"})
     assert settings.key_source("openai/mein-modell") == "own"
@@ -241,13 +241,13 @@ def test_every_key_counts_as_a_secret(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = _eigen(search_keys={"TAVILY_API_KEY": "tvly-eigen-geheim-5555"})
     assert {"nvapi-betreiber-0000", EIGEN_MISTRAL, "tvly-eigen-geheim-5555"} <= set(
         settings.secrets())
-    assert settings.search_key_source == "operator"  # duckduckgo braucht keinen
+    assert settings.search_key_source == "operator"
     settings.search_backend = "tavily"
     settings.own_key_names = frozenset({"MISTRAL_API_KEY", "TAVILY_API_KEY"})
     assert settings.search_key_source == "own"
 
 
-# -- Was zaehlt ---------------------------------------------------------------------------
+
 @pytest.fixture
 def kontingent(tmp_path: Path) -> Quota:
     return Quota(tmp_path / "konten.sqlite3", "konto-a", time.time() - 3600)
@@ -268,7 +268,7 @@ def test_own_key_calls_do_not_count_but_provided_ones_do(
     assert not kontingent.status()["session"]["active"], "die Sitzung beginnt nicht einmal"
     metering.record(settings, "nvidia_nim/meta/llama-3.3-70b-instruct", 1_000, 500)
     assert _verbraucht(kontingent) == 1_500
-    # Die Statistik des Profils kennt beide Aufrufe.
+
     assert UsageLog(settings.db_path).total_tokens() == 3_000
 
 
@@ -277,7 +277,7 @@ def test_at_the_limit_own_keys_still_answer_but_server_work_stops(
 ) -> None:
     settings = _eigen(data_dir=tmp_path / "profil", quota=kontingent)
     kontingent.record(SESSION_TOKENS, "gestellt")
-    metering.check(settings, model="mistral/mistral-large-latest")  # eigener Schluessel
+    metering.check(settings, model="mistral/mistral-large-latest")
     with pytest.raises(QuotaExceeded):
         metering.check(settings, model="nvidia_nim/meta/llama-3.3-70b-instruct")
     for art in metering.WORK_COSTS:
@@ -296,7 +296,7 @@ def test_server_work_is_charged_in_tokens(tmp_path: Path, kontingent: Quota) -> 
     metering.charge_work(settings, "suche", 2)
     metering.charge_work(settings, "seite")
     assert _verbraucht(kontingent) == 450 + 100 + 100
-    # Ohne Kontingent (Pro, lokal) zaehlt nichts -- und nichts bricht.
+
     metering.charge_work(_eigen(quota=None), "werkstatt", 100)
 
 
@@ -341,10 +341,10 @@ def test_tools_book_their_server_work_and_refuse_at_the_limit(
     assert set(WORK_TOOLS.values()) <= set(metering.WORK_COSTS)
 
 
-# -- Ende zu Ende: zwei Konten, ein Betreiber, ein "Anbieter" ------------------------------
-#: Der echte Rechtspruefer -- conftest ersetzt ihn sonst durch "zulaessig".
+
+
 ECHTER_PRUEFER = guardrails._ask_model
-#: Seit 12.2.3 Astra Nemotron -- Llama 3.3 70B hat NVIDIA abgeschaltet.
+
 NVIDIA = "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"
 
 
@@ -360,8 +360,8 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "AQUATICY_MODEL": "openai/fake-modell",
         "AQUATICY_API_BASE": f"http://127.0.0.1:{betreiber_port}/v1",
         "OPENAI_API_KEY": "sk-betreiber-fake",
-        # Hinter eigenen NVIDIA-Schluesseln steht hier der zweite Testserver --
-        # der "Anbieter". Sonst ginge die Anfrage ins Netz.
+
+
         "NVIDIA_NIM_API_BASE": f"http://127.0.0.1:{anbieter_port}/v1",
         "AQUATICY_SUBAGENTS_AUTO": "false",
         "AQUATICY_DATA_DIR": str(tmp_path / "daten"),
@@ -374,8 +374,8 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv(key, raising=False)
     config.reset_settings_cache()
     monkeypatch.setattr(guardrails, "_ask_model", ECHTER_PRUEFER)
-    # Das Add-on fragt beim Verknuepfen den Anbieter -- hier ohne Netz. Eine
-    # bekannte leere Liste bietet seit 12.2.4 keine geratenen Standardmodelle an.
+
+
     monkeypatch.setattr(linked, "inspect", lambda provider, key, client=None: {
         "models": [{"id": system.PROVIDER_MODELS[provider]},
                    {"id": system.FAST_MODELS[provider]}], "tier": "", "tokens": None})
@@ -404,8 +404,8 @@ def _req(port: int, method: str, path: str, body: Any = None,
     conn.request(method, path, body=None if body is None else json.dumps(body), headers=headers)
     antwort = conn.getresponse()
     ergebnis = antwort.status, antwort.read()
-    # Seit 9.5.31 kann eine Antwort zwei Cookies setzen (Geraete-Kennung und
-    # Sitzung) -- die Sitzung kommt zuletzt.
+
+
     kopf = (antwort.headers.get_all("Set-Cookie") or [""])[-1]
     conn.close()
     if kopf:
@@ -459,21 +459,21 @@ def _modell_waehlen(port: int, cookie: str, modell: str) -> None:
 def test_the_addon_says_what_is_stored_and_never_the_key(server: dict[str, Any]) -> None:
     port = server["port"]
     anna = _konto(port)
-    # Den Bereich "API-Schluessel" in den Einstellungen gibt es nicht mehr (12.0.0 Luna).
+
     assert _req(port, "GET", "/api/keys", cookie=anna)[0] == 404
     assert _req(port, "POST", "/api/keys", {"action": "set", "name": "NVIDIA_NIM_API_KEY",
                                             "value": EIGEN_NVIDIA}, anna)[0] == 404
     karten = {a["id"]: a for a in _json(port, "GET", "/api/addons", anna)["addons"]}
     assert not karten["nvidia_nim"]["installed"]
     assert not karten["nvidia_nim"]["konto"]["linked"]
-    # Erst installieren -- vorher nimmt Aquaticy keinen Schluessel.
+
     status, daten = _req(port, "POST", "/api/linked", {
         "action": "link", "provider": "nvidia_nim", "key": EIGEN_NVIDIA}, anna)
     assert status == 400 and "Installiere zuerst" in json.loads(daten)["error"]
     antwort = _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
     assert next(k for k in antwort["accounts"] if k["provider"] == "nvidia_nim")["linked"]
 
-    # Was nicht passt, wird nicht angenommen -- mit einem Satz dazu.
+
     _json(port, "POST", "/api/addons", anna, {"action": "install", "id": "mistral"})
     for falsch in ({"action": "link", "provider": "mistral", "key": "zu kurz"},
                    {"action": "link", "provider": "mistral", "key": EIGEN_NVIDIA},
@@ -482,19 +482,19 @@ def test_the_addon_says_what_is_stored_and_never_the_key(server: dict[str, Any])
         status, daten = _req(port, "POST", "/api/linked", falsch, anna)
         assert status == 400 and json.loads(daten)["error"]
 
-    # Kein Endpunkt gibt den Schluessel heraus -- auch nicht dem Besitzer.
+
     for pfad in ("/api/addons", "/api/linked", "/api/config", "/api/account", "/api/usage",
                  "/api/models?mode=code", "/api/header", "/"):
         status, daten = _req(port, "GET", pfad, cookie=anna)
         assert status == 200, pfad
         assert b"eigen-geheim" not in daten, f"{pfad} verraet einen Schluessel"
-    # Auf der Platte nur verschluesselt, in keiner .env, nicht in der Umgebung.
+
     for datei in server["wurzel"].rglob("*"):
         if datei.is_file():
             assert b"eigen-geheim" not in datei.read_bytes(), datei
     assert not any("eigen-geheim" in wert for wert in os.environ.values())
 
-    # Deinstallieren loescht den Schluessel mit.
+
     _json(port, "POST", "/api/addons", anna, {"action": "uninstall", "id": "nvidia_nim"})
     karte = {a["id"]: a for a in _json(port, "GET", "/api/addons", anna)["addons"]}["nvidia_nim"]
     assert not karte["installed"] and not karte["konto"]["linked"]
@@ -505,14 +505,14 @@ def test_keys_and_their_models_belong_to_one_account(server: dict[str, Any]) -> 
     anna, bernd = _konto(port), _konto(port)
     _eigener_schluessel(port, anna, "nvidia_nim", EIGEN_NVIDIA)
 
-    # Bernd sieht Annas Schluessel nicht -- und nicht die Modelle dazu.
+
     bei_bernd = _json(port, "GET", "/api/linked", bernd)
     assert not any(k["linked"] for k in bei_bernd["accounts"])
     modelle_bernd = _json(port, "GET", "/api/models?mode=chat", bernd)
     assert not any(m["id"].startswith("nvidia_nim/") for m in modelle_bernd["models"])
     assert all(m.get("source") != "own" for m in modelle_bernd["models"])
 
-    # Anna sieht sie, markiert, in einer eigenen Gruppe -- die gestellten dazu.
+
     modelle_anna = _json(port, "GET", "/api/models?mode=chat", anna)
     eigene = [m for m in modelle_anna["models"] if m.get("source") == "own"]
     assert {m["id"] for m in eigene} >= {NVIDIA}
@@ -523,8 +523,8 @@ def test_keys_and_their_models_belong_to_one_account(server: dict[str, Any]) -> 
     assert [g["title"] for g in gruppen] == ["Mit deinem Schlüssel", "Gestellt"]
     assert "nicht in dein Limit" in gruppen[0]["note"]
 
-    # Bernd kann Annas Modell waehlen -- aber es laeuft nicht mit ihrem
-    # Schluessel. Bei ihm ist es gestellt (hier: gar kein Schluessel da).
+
+
     _modell_waehlen(port, bernd, NVIDIA)
     fake_llm.ANFRAGEN.clear()
     _chat(port, bernd, "Bernd fragt mit dem NVIDIA-Modell")
@@ -566,14 +566,14 @@ def test_an_own_key_model_runs_at_the_provider_and_does_not_count(
     konto = _json(port, "GET", "/api/account", anna)
     assert konto["usage"]["session"]["percent"] == 0, "das Modell zaehlt nicht ins Limit"
 
-    # Bernd hat keinen eigenen Schluessel: gestellt, beim Betreiber, gezaehlt.
+
     fake_llm.ANFRAGEN.clear()
     assert "42" in _antwort(_chat(port, bernd, "Bernd rechnet 6 mal 7"))
     anfragen = _anfragen()
     assert all(a["port"] == server["betreiber"] for a in anfragen)
     assert all(a["auth"] == "Bearer sk-be" for a in anfragen)
     assert _json(port, "GET", "/api/account", bernd)["usage"]["session"]["percent"] >= 1
-    # Annas Schluessel ist nie beim Betreiber angekommen.
+
     assert _json(port, "GET", "/api/account", anna)["usage"]["session"]["percent"] == 0
 
 
@@ -595,7 +595,7 @@ def test_at_the_limit_an_own_key_still_answers_but_server_tools_stop(
         port, anna, 'Am Limit suchen: WERKZEUG:web_search {"query": "Seashell"}'))
     assert "5-Stunden-Sitzung" in antwort and "kontingent" in antwort, antwort
 
-    # Zurueck zum gestellten Modell: das zaehlt -- und ist am Limit gesperrt.
+
     _modell_waehlen(port, anna, "openai/fake-modell")
     status, daten = _req(port, "POST", "/api/chat", {"message": "Und gestellt?"}, anna)
     assert status == 429 and json.loads(daten)["code"] == "quota"
@@ -604,15 +604,15 @@ def test_at_the_limit_an_own_key_still_answers_but_server_tools_stop(
 def test_a_provider_that_quotes_the_key_never_gets_it_to_the_browser(
     server: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Der Verbindungstest prueft nebenbei die Suchmaschine -- hier ohne Netz.
+
     monkeypatch.setattr("aquaticy.probe.check_search", lambda *args, **kwargs: (True, "ok"))
     port = server["port"]
     anna = _konto(port)
-    zitiert = "nvapi-leak-geheim-7777"   # der Testserver zitiert Schluessel mit "leak"
+    zitiert = "nvapi-leak-geheim-7777"
     _eigener_schluessel(port, anna, "nvidia_nim", zitiert)
     _modell_waehlen(port, anna, NVIDIA)
 
-    # Der Anbieter zitiert den Schluessel in seiner Ablehnung (Add-on: Aktualisieren).
+
     def zitiert_ihn(provider: str, key: str, client: Any = None) -> dict[str, Any]:
         raise linked.LinkError(f"Incorrect API key provided: {key}")
 
@@ -628,9 +628,9 @@ def test_a_provider_that_quotes_the_key_never_gets_it_to_the_browser(
 
 
 def test_the_settings_form_takes_no_key_anymore(server: dict[str, Any]) -> None:
-    # Bis 11.4.1 landete ein Schluessel aus dem Formular im Schluesselbund. Seit
-    # 12.0.0 Luna gibt es Schluessel nur noch ueber die Add-ons NVIDIA NIM und
-    # Mistral -- das alte Feld wird nicht mehr angenommen.
+
+
+
     port = server["port"]
     konten = server["wurzel"] / "konten" / "users"
     vorher = set(konten.iterdir()) if konten.exists() else set()
@@ -673,7 +673,7 @@ def test_keys_from_an_old_profile_env_move_into_the_vault(
         assert "alt-mistral" not in env, "raus aus dem Klartext"
         assert "AQUATICY_LOCATION=Köln" in env and "# aus 9.5.13" in env
         assert store.vault(konto).keys() == {"MISTRAL_API_KEY": "alt-mistral-geheim-6666"}
-        # Ein zweites Laden aendert nichts mehr.
+
         wieder = web._profile_settings(profil, "normal", konto)
         assert wieder.api_keys["MISTRAL_API_KEY"] == "alt-mistral-geheim-6666"
     finally:
@@ -687,15 +687,15 @@ def test_the_version_carries_its_name(tmp_path: Path, monkeypatch: pytest.Monkey
     from aquaticy import cli, config
     from aquaticy.auth import AuthStore, pro_code_for
 
-    # Seit 9.6.0 mit Stufe dahinter, wenn es eine interne Fassung ist ("Intern").
+
     teile = (aquaticy.__version__, aquaticy.__codename__, aquaticy.__stage__)
     erwartet = " ".join(t for t in teile if t)
     assert erwartet == aquaticy.VERSION_LABEL
     assert aquaticy.__codename__ == NAME
     runner = CliRunner()
     assert aquaticy.VERSION_LABEL in runner.invoke(cli.app, ["version"]).output
-    # "aquaticy list" zeigt, wie viele eigene Schluessel ein Konto hat --
-    # nie welche, nie was darin steht.
+
+
     monkeypatch.setenv("AQUATICY_DATA_DIR", str(tmp_path))
     config.reset_settings_cache()
     try:
@@ -704,7 +704,7 @@ def test_the_version_carries_its_name(tmp_path: Path, monkeypatch: pytest.Monkey
                                username="Liste", terms_accepted=True, terms_version="1")
         store.vault(konto).set("NVIDIA_NIM_API_KEY", "nvapi-liste-geheim-9999")
         ausgabe = runner.invoke(cli.app, ["list"], env={"COLUMNS": "200"}).output
-        assert "Schlüss" in ausgabe  # Spalte "Eigene Schlüssel" (ggf. gekürzt)
+        assert "Schlüss" in ausgabe
         zeile = next(z for z in ausgabe.splitlines() if z.startswith("Liste"))
         assert "1" in zeile.split(), "wie viele -- sonst nichts"
         assert "geheim" not in ausgabe and "9999" not in ausgabe
@@ -715,7 +715,7 @@ def test_the_version_carries_its_name(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_key_checks_are_limited_per_account(
     server: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Seit 12.0.0 Luna prueft das Add-on ("Aktualisieren") -- gezaehlt wie vorher.
+
     from aquaticy.auth import RateLimiter
 
     monkeypatch.setattr(web, "KEY_TEST_LIMIT", RateLimiter(attempts=2, window_seconds=60))
@@ -739,7 +739,7 @@ def test_the_picker_puts_own_models_in_their_own_group() -> None:
     assert [g["title"] for g in mit["groups"]] == ["Mit deinem Schlüssel", "Gestellt"]
     assert mit["groups"][0]["models"] == [eigen] and mit["groups"][0]["note"] == (
         "zählt nicht in dein Limit")
-    # Ohne Limit (Pro) gibt es nichts, worin es nicht zaehlte.
+
     assert picker_view("normal", [eigen], [], limited=False)["groups"] == [
         {"title": "Mit deinem Schlüssel", "note": "auf deine Rechnung beim Anbieter",
          "models": [eigen]}]

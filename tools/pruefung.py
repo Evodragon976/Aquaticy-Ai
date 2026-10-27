@@ -34,13 +34,13 @@ import subprocess
 import sys
 import tempfile
 import time
-import xml.etree.ElementTree as ET  # nosec B405 - liest nur die eigene JUnit-Datei
+import xml.etree.ElementTree as ET  # nosec B405
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SCHRITTE = ("ruff", "mypy", "bandit", "ui-js", "pytest")
-#: So viele Zeilen der Ausgabe stehen bei einem Fehler im Bericht.
+
 AUSZUG = 40
 
 
@@ -49,7 +49,7 @@ class Ergebnis:
     """Was ein Schritt ergeben hat."""
 
     schritt: str
-    status: str  # "ok", "fehler" oder "uebersprungen"
+    status: str
     dauer_s: float = 0.0
     befehl: str = ""
     zusammenfassung: str = ""
@@ -118,7 +118,7 @@ def bandit() -> Ergebnis:
     befehl = [*aufruf, "-q", "-r", "aquaticy", "-ll", "-ii", "-f", "json"]
     if basis.exists():
         befehl += ["-b", str(basis.relative_to(REPO))]
-    _, text, dauer = _lauf("bandit", befehl)  # 1 heisst nur "Hinweise gefunden"
+    _, text, dauer = _lauf("bandit", befehl)
     try:
         start = text.index("{")
         daten = json.loads(text[start:text.rindex("}") + 1])
@@ -156,7 +156,7 @@ def _junit(pfad: Path) -> tuple[dict[str, int], list[dict[str, str]]]:
     liste: list[dict[str, str]] = []
     if not pfad.exists():
         return zahlen, liste
-    wurzel = ET.parse(pfad).getroot()  # nosec B314 - die Datei schreibt pytest selbst
+    wurzel = ET.parse(pfad).getroot()  # nosec B314
     for fall in wurzel.iter("testcase"):
         zahlen["tests"] += 1
         for art, schluessel in (("failure", "fehlschlaege"), ("error", "fehler"),
@@ -187,7 +187,7 @@ def pytest(tests: list[str]) -> Ergebnis:
     kurz = (f"{zahlen['tests']} Tests: {gruen} bestanden, {zahlen['uebersprungen']} "
             f"übersprungen, {rot} fehlgeschlagen")
     ok = code == 0
-    if code == 5:  # keine Tests gefunden
+    if code == 5:
         ok, kurz = False, "keine Tests gefunden"
     befehl_text = " ".join(befehl).replace(f"--junitxml={junit}", "--junitxml=<temp>")
     return Ergebnis("pytest", "ok" if ok else "fehler", round(dauer, 1), befehl_text, kurz,

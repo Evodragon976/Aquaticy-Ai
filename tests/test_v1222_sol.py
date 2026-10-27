@@ -47,7 +47,7 @@ def _lokal(tmp_path: Any) -> Settings:
                     data_dir=tmp_path / "d")
 
 
-# -- Der Pruefer ---------------------------------------------------------------------------
+
 def test_the_model_the_chat_uses_steps_in(monkeypatch, tmp_path) -> None:
     gefragt = _pruefer(monkeypatch, {})
     urteil = guardrails.judge("Wie wird das Wetter morgen in Bremen?", _lokal(tmp_path),
@@ -76,7 +76,7 @@ def test_its_refusal_counts_and_nothing_is_remembered(monkeypatch, tmp_path) -> 
     ersatz = lambda: ["mistral/mistral-large-latest"]  # noqa: E731
     urteil = guardrails.judge("Etwas Heikles bitte", _lokal(tmp_path), fallback=ersatz)
     assert not urteil.allowed and urteil.reason == "nein"
-    # Ein Urteil des Ersatzmodells wird nicht gemerkt -- beim naechsten Mal neu gefragt.
+
     guardrails.judge("Etwas Heikles bitte", _lokal(tmp_path), fallback=ersatz)
     assert gefragt.count("mistral/mistral-large-latest") == 2
 
@@ -99,7 +99,7 @@ def test_a_tool_call_uses_the_fallback_too(monkeypatch, tmp_path) -> None:
     assert "mistral/mistral-large-latest" in gefragt
 
 
-# -- Im Chat -------------------------------------------------------------------------------
+
 @pytest.mark.parametrize("mode", ["code", "pro"])
 def test_code_and_pro_with_an_api_model_are_not_refused(
         monkeypatch, tmp_path, mode: str) -> None:
@@ -139,7 +139,7 @@ def test_auto_pick_counts_as_the_chat_model(monkeypatch, tmp_path, toolbox) -> N
     assert agent.guard is not None and agent.guard.fallback == agent._guard_models
 
 
-# -- Ai-guard ------------------------------------------------------------------------------
+
 def test_aiguard_asks_the_main_model_when_the_fast_one_is_down(monkeypatch, tmp_path) -> None:
     gefragt: list[str] = []
 
@@ -154,6 +154,6 @@ def test_aiguard_asks_the_main_model_when_the_fast_one_is_down(monkeypatch, tmp_
                         data_dir=tmp_path / "d")
     assert aiguard._ask_model("Prüfe das", settings).startswith("{")
     assert gefragt == ["ollama/qwen3:4b", "mistral/mistral-large-latest"]
-    # Fallen alle aus, bleibt es beim Fehler -- classify macht daraus "unklar".
+
     with pytest.raises(ConnectionError):
         aiguard._ask_model("x", _lokal(tmp_path))

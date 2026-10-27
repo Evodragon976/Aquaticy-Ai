@@ -51,10 +51,9 @@ from typing import Any
 from aquaticy import metering
 from aquaticy.jsonutil import loads
 
-#: Die Groesse des Bildschirms in der virtual machine (siehe aquaticy-desktop).
 WIDTH, HEIGHT = 1280, 800
 
-#: Was sich oeffnen laesst -- dieselbe Liste wie im Hilfsprogramm.
+
 APPS: dict[str, str] = {
     "browser": "Webbrowser (Falkon)",
     "writer": "Textverarbeitung (LibreOffice Writer)",
@@ -64,20 +63,20 @@ APPS: dict[str, str] = {
     "dateien": "Dateimanager",
     "terminal": "Terminal",
     "grafik": "Bildbearbeitung (GIMP)",
-    # Add-ons -- nur oeffenbar, wenn installiert und eingeschaltet
-    # (aquaticy/addons.py). Sonst sind sie in der virtual machine gar nicht da.
+
+
     "whatsapp": "WhatsApp Web (Add-on)",
     "signal": "Signal Desktop (Add-on)",
     "blender": "Blender (Add-on)",
 }
 
-#: Diese Adressen oeffnet der gewoehnliche Browser nicht: Messenger laufen nur
-#: ueber ihr Add-on -- mit den Rechten, die der Nutzer dort eingestellt hat.
+
+
 MESSENGER_HOSTS = frozenset({"web.whatsapp.com", "web.telegram.org"})
 
-#: Dieselben Adressen im Fliesstext -- auch mit Punkt am Ende, Grossbuchstaben
-#: oder davorgesetzter Subdomain (seit 9.5.16: bis dahin kam man ueber die
-#: Adresszeile oder "web.whatsapp.com." an der Sperre vorbei).
+
+
+
 MESSENGER_TEXT_RE = re.compile(
     r"(?:^|[^a-z0-9-])(?:[a-z0-9-]+\.)*web\.(?:whatsapp\.com|telegram\.org)\.?(?:$|[^a-z0-9-])",
     re.IGNORECASE,
@@ -89,20 +88,20 @@ def messenger_host(host: str) -> bool:
     name = (host or "").strip().rstrip(".").lower()
     return any(name == ziel or name.endswith("." + ziel) for ziel in MESSENGER_HOSTS)
 
-#: Tasten, die in einem Messenger mit "Nur lesen" gehen: blaettern, nichts
-#: schreiben, nichts abschicken.
+
+
 READ_ONLY_KEYS = frozenset({
     "Up", "Down", "Left", "Right", "Page_Up", "Page_Down", "Home", "End", "Escape", "Tab",
     "shift+Tab", "ctrl+Tab", "ctrl+shift+Tab", "alt+Up", "alt+Down", "ctrl+Home", "ctrl+End",
 })
 
-#: Die Programme, die von einem Add-on kommen.
+
 ADDON_APPS = frozenset({"whatsapp", "signal", "blender"})
 
-#: Die Arten, die das Vision-Modell vergeben kann.
+
 KINDS = ("harmlos", "senden", "kaufen", "loeschen", "anmelden", "captcha", "alle_akzeptieren")
 
-#: Arten, die nur nach Rueckfrage gehen -- mit dem Satz fuer die Rueckfrage.
+
 CONFIRM: dict[str, str] = {
     "senden": "Damit geht etwas an andere (Formular, Nachricht, Beitrag oder Anmeldung).",
     "kaufen": "Damit wird etwas gekauft, gebucht oder bezahlt.",
@@ -110,7 +109,7 @@ CONFIRM: dict[str, str] = {
     "unklar": "Was dadurch passiert, war auf dem Bildschirm nicht eindeutig zu erkennen.",
 }
 
-#: Arten, die nie gehen -- mit Kennung und Begruendung fuer das Modell.
+
 REFUSE: dict[str, tuple[str, str]] = {
     "anmelden": (
         "login",
@@ -154,20 +153,20 @@ REFUSE: dict[str, tuple[str, str]] = {
     ),
 }
 
-#: Diese Tasten koennen etwas ausloesen (Formular absenden, Knopf druecken) --
-#: vor ihnen wird nachgesehen wie vor einem Klick.
-TRIGGER_KEYS = frozenset({"Return", "KP_Enter", "ISO_Enter", "Linefeed", "space"})  # 9.5.34
 
-#: Tastennamen, wie xdotool sie kennt: Return, ctrl+l, alt+F4, Page_Down ...
+
+TRIGGER_KEYS = frozenset({"Return", "KP_Enter", "ISO_Enter", "Linefeed", "space"})
+
+
 KEY_RE = re.compile(r"^[A-Za-z0-9_]{1,24}(\+[A-Za-z0-9_]{1,24}){0,3}$")
 
-#: Nur Webadressen oeffnen den Browser -- keine Dateien, keine Sonderschemata.
+
 URL_RE = re.compile(r"^https?://[^\s\"'<>]{1,2000}$", re.IGNORECASE)
 
-#: Wie viel auf einmal getippt werden darf. Fuer mehr: Datei mit vm_write.
+
 MAX_TYPE_CHARS = 5_000
 
-#: Antworten, die als Zustimmung zaehlen.
+
 YES = frozenset({"ja", "j", "yes", "ok", "mach", "los", "klar", "ja, mach"})
 
 NO_VISION = (
@@ -181,14 +180,14 @@ class DesktopError(RuntimeError):
     """Der Desktop ist nicht bedienbar (kein User mode, kein Bildmodell ...)."""
 
 
-# ---------------------------------------------------------------------------
-# Zahlungsdaten -- erkannt am Text, bevor irgendein Modell ihn sieht
-# ---------------------------------------------------------------------------
-#: Ziffernfolgen, die hoechstens durch einzelne Leerzeichen oder Striche
-#: unterbrochen sind -- so schreibt man Kartennummern ("4111 1111 ...").
+
+
+
+
+
 _DIGIT_RUN = re.compile(r"[0-9]+(?:[ -][0-9]+)*")
-#: Moegliche IBANs: zwei Buchstaben, zwei Pruefziffern, dann Buchstaben und
-#: Ziffern, auch in Vierergruppen.
+
+
 _IBAN_START = re.compile(r"(?<![A-Z0-9])[A-Z]{2}[0-9]{2}")
 
 
@@ -279,9 +278,9 @@ def payment_data(text: str) -> bool:
     return any(_iban_at(gross, treffer.start()) for treffer in _IBAN_START.finditer(gross))
 
 
-# ---------------------------------------------------------------------------
-# Das Bildmodell
-# ---------------------------------------------------------------------------
+
+
+
 _RASTER = (
     f"Das ist ein Bildschirmfoto eines Linux-Desktops ({WIDTH}x{HEIGHT} Pixel). Rote "
     "Linien mit Zahlen markieren alle 100 Pixel die Koordinaten (x nach rechts, y nach "
@@ -353,7 +352,7 @@ def key_prompt(key: str) -> str:
 
 def chat_prompt() -> str:
     return (
-        # Telegram ist kein Add-on mehr, wird als Fenster aber weiter erkannt.
+
         "Das Bild zeigt einen Messenger (WhatsApp, Signal oder Telegram).\n"
         'Antworte nur mit JSON: {"chat": "Name des gerade geoeffneten Chats, oder leer", '
         '"gruppe": true oder false oder null}\n'
@@ -427,9 +426,9 @@ def ask_vision(image: bytes, prompt: str, settings: Any, max_tokens: int = 600) 
     return str(response.choices[0].message.content or "").strip()
 
 
-# ---------------------------------------------------------------------------
-# Der Desktop
-# ---------------------------------------------------------------------------
+
+
+
 Emit = Callable[..., None]
 Ask = Callable[[str, list[str]], str]
 
@@ -461,10 +460,10 @@ class Desktop:
         self._emit_hook = emit
         self._vision = vision
 
-    # -- Fuer die Messenger-Bruecke (12.6.6 Luna) ----------------------------
-    # Die Bruecke (aquaticy/bridge.py) liest und schreibt in einem Messenger, weil der
-    # Besitzer sie dafuer eingeschaltet hat. Ihre Regeln pruft sie selbst; diese beiden
-    # Zugaenge fuehren nur aus. Die Werkzeuge des Agenten erreichen sie nicht.
+
+
+
+
     def see(self, image: bytes, prompt: str) -> str:
         """Fragt das Vision-Modell zu einem Bildschirmfoto."""
         return self._see(image, prompt)
@@ -474,7 +473,7 @@ class Desktop:
         """Ruft das Hilfsprogramm des Desktops auf (click, type, key ...)."""
         return self._helper(*args, stdin=stdin, timeout=timeout)
 
-    # -- Hilfen -----------------------------------------------------------
+
     def _emit(self, event: str, **payload: Any) -> None:
         if self._emit_hook is not None:
             self._emit_hook(event, **payload)
@@ -533,7 +532,7 @@ class Desktop:
             "was": what,
         }
 
-    # -- Messenger-Rechte (9.5.10) ------------------------------------------
+
     def _messenger(self) -> tuple[str, dict[str, str]]:
         """Ist vorn ein Messenger? Returns: (Name, Rechte) oder ("", {})."""
         from aquaticy.addons import messenger_of, messenger_rights
@@ -562,7 +561,7 @@ class Desktop:
         antwort = parse_object(self._see(self.box.screenshot(), chat_prompt())) or {}
         chat = str(antwort.get("chat") or "").strip()[:80]
         if antwort.get("gruppe") is not False:
-            # Nicht sicher ein Einzelchat -- dann wie eine Gruppe behandeln.
+
             return self._refuse("messenger_gruppe", f"{name}: {chat or 'unklarer Chat'}"), ""
         return None, chat
 
@@ -571,10 +570,10 @@ class Desktop:
         try:
             number = round(float(value))
         except (TypeError, ValueError, OverflowError):
-            return None  # auch "nan" und "inf" -- das sind keine Stellen
+            return None
         return number if 0 <= number < upper else None
 
-    # -- Sehen ------------------------------------------------------------
+
     def screenshot(self) -> bytes:
         return self.box.screenshot()
 
@@ -595,7 +594,7 @@ class Desktop:
     def windows(self) -> dict[str, Any]:
         return self._helper("windows", timeout=20)
 
-    # -- Handeln ----------------------------------------------------------
+
     def click(
         self,
         target: str = "",
@@ -640,7 +639,7 @@ class Desktop:
                                              point_prompt()))
             art = kind_of(antwort.get("art")) if antwort else "unklar"
             was = str((antwort or {}).get("was") or f"Stelle {px},{py}")[:200]
-        # Nur wo ein Klick etwas schicken koennte, lohnt der Blick aufs Fenster.
+
         messenger, rechte = (
             self._messenger() if art in ("senden", "loeschen", "kaufen", "unklar") else ("", {})
         )
@@ -674,9 +673,9 @@ class Desktop:
             return self._refuse("zahlung", "Zahlungsdaten im Text")
         ausserhalb = sorted({zeichen for zeichen in text if ord(zeichen) > 0xFFFF})
         if ausserhalb:
-            # Emoji und andere Zeichen jenseits der Unicode-Grundebene kommen in
-            # den Programmen der virtual machine verstuemmelt an (aus 😀 wird ein
-            # anderes Zeichen). Lieber gar nicht als falsch.
+
+
+
             return {
                 "error": (
                     "Diese Zeichen kann die virtual machine nicht eintippen: "
@@ -686,8 +685,8 @@ class Desktop:
                 )
             }
         if MESSENGER_TEXT_RE.search(text):
-            # Die Adresse einer Messenger-Web-App in die Adresszeile tippen ist
-            # derselbe Weg wie desktop_open -- und derselbe Umweg am Add-on vorbei.
+
+
             return self._refuse("messenger_browser", "Adresse getippt")
         messenger, rechte = self._messenger()
         if messenger:
@@ -705,10 +704,10 @@ class Desktop:
             return self._refuse("zahlung", "Zahlungsfeld")
         if art in ("captcha", "anmelden"):
             return self._refuse(art, "Eingabefeld")
-        # "senden", "kaufen" und "loeschen" halten das Tippen nicht auf: Tippen
-        # schickt nichts ab. Abgeschickt wird erst mit Enter oder einem Klick --
-        # und beide werden vorher geprueft. Zweimal zu fragen haette nur
-        # zur Folge, dass die zweite Frage niemand mehr liest.
+
+
+
+
         if "\n" in text and feld not in ("dokument", "terminal"):
             return {
                 "error": (
@@ -738,13 +737,13 @@ class Desktop:
         falsch = [taste for taste in liste if not KEY_RE.fullmatch(taste)]
         if falsch:
             return {"error": f"Das sind keine Tastennamen: {', '.join(falsch)}"}
-        # Blaettern geht immer -- erst bei anderen Tasten zaehlt, was vorn ist.
+
         messenger, rechte = (
             self._messenger() if any(t not in READ_ONLY_KEYS for t in liste) else ("", {})
         )
         if messenger and rechte.get("zugriff") != "schreiben":
-            # Nur lesen: blaettern ja, alles andere nicht -- kein Enter, kein
-            # Einfuegen, kein Tastenkuerzel, das etwas abschickt.
+
+
             fremd = [taste for taste in liste if taste not in READ_ONLY_KEYS]
             if fremd:
                 return self._refuse("messenger_lesen", f"{messenger}: {' '.join(fremd)}")
@@ -803,8 +802,8 @@ class Desktop:
                     "Nutzer selbst: Einstellungen -> virtual machine -> Add-ons."
                 )}
             if ziel and app != "blender":
-                # Eine Web-App oeffnet nur ihre eigene Seite -- sonst waere das
-                # angemeldete Profil ein Browser fuer alles.
+
+
                 return {"error": f"{APPS[app]} oeffnet sich ohne target."}
         if ziel:
             if app == "browser":

@@ -25,43 +25,42 @@ from typing import Any, Protocol
 
 from aquaticy.fetch import SiteRules, load_rules
 
-#: Wie lange warten wir maximal auf Netzruhe?
 NETWORK_IDLE_TIMEOUT_MS = 6_000
-#: Wie lange darf ein einzelner Klick brauchen?
+
 CLICK_TIMEOUT_MS = 2_500
 
-#: Wie lange warten wir hoechstens darauf, dass ein Video wirklich laeuft.
-#: Eine Webcam braucht nach dem Start ein paar Sekunden, bis der erste
-#: dekodierte Frame steht -- vorher zeigt der Player nur sein Vorschaubild.
+
+
+
 PLAYBACK_TIMEOUT_MS = 12_000
-#: Wie lange nach dem ersten Bild noch gewartet wird. Der erste Frame ist oft
-#: ein Standbild aus dem Puffer; nach einer Sekunde Wiedergabe steht das
-#: aktuelle Bild.
+
+
+
 PLAYBACK_SETTLE_MS = 1_200
 
-#: Ab wann ein einzelnes haengendes Bild nicht mehr aufhalten darf. Ein
-#: Zaehlpixel, eine Anzeige oder ein fremder Rahmen laedt manchmal nie zu
-#: Ende -- das ganze Zeitlimit dafuer abzuwarten bringt kein besseres Bild.
+
+
+
 PICTURE_GRACE_SECONDS = 3.0
 
-#: Und ab wann ein Video, das nicht anspringt, den Bildweg freigibt. Auch
-#: ein Werbevideo in einem fremden Rahmen zaehlt als Video; ohne diese
-#: Grenze wartete eine gewoehnliche Bild-Webcam deshalb das ganze Zeitlimit
-#: ab, nur weil irgendwo eine Anzeige lag. Grosszuegiger als bei Bildern:
-#: ein echter Player braucht nach dem Klick ein paar Sekunden.
+
+
+
+
+
 VIDEO_GRACE_SECONDS = 6.0
 
-#: Chromium-Argumente fuer den Betrieb im Container. Dort steht der eigene
-#: Sandbox-Mechanismus des Browsers meist nicht zur Verfuegung -- was
-#: vertretbar ist, weil der ganze Prozess bereits im Container isoliert
-#: laeuft. Ausserhalb eines Containers bleibt die Browser-Sandbox aktiv.
+
+
+
+
 CONTAINER_ARGS = ("--no-sandbox", "--disable-dev-shm-usage")
 
-#: Entfernt Overlays und loest die Scroll-Sperre.
-#: Seit 9.5.34: Ein Overlay, das nach Bezahlschranke oder Anmeldung aussieht,
-#: bleibt stehen -- und dann auch die Scroll-Sperre. Die allgemeinen Muster
-#: ("[role=dialog]", "[class*=backdrop]") trafen sonst auch Abo- und
-#: Login-Dialoge, und das waere ein Umgehen der Schranke.
+
+
+
+
+
 REMOVE_OVERLAYS_JS = """
 (selectors) => {
   const schranke = new RegExp([
@@ -112,8 +111,8 @@ REMOVE_OVERLAYS_JS = """
 """
 
 
-#: Startet jede Wiedergabe auf der Seite. Stumm und `playsinline`, sonst
-#: verweigert Chromium das automatische Abspielen ueberhaupt.
+
+
 START_PLAYBACK_JS = """
 () => {
   const videos = Array.from(document.querySelectorAll('video'));
@@ -131,9 +130,9 @@ START_PLAYBACK_JS = """
 }
 """
 
-#: Laeuft schon ein echtes Bild? Ein Video zaehlt erst, wenn es dekodierte
-#: Daten hat UND die Zeit laeuft -- `readyState` allein steht auch beim
-#: Vorschaubild schon auf 2.
+
+
+
 PLAYBACK_STATE_JS = """
 () => {
   const videos = Array.from(document.querySelectorAll('video'));
@@ -146,12 +145,12 @@ PLAYBACK_STATE_JS = """
 }
 """
 
-#: Das Live-Element finden, in drei Schritten. Ein Ausschnitt davon ist das
-#: eigentliche Bild -- ohne Kopfzeile, Werbeflaeche und Bedienleiste.
-#: Erster Schritt: alle Kandidaten markieren und ihren Stand festhalten.
-#: Bewusst OHNE Fensterausschnitt -- eine Webcam-Seite zeigt oft eine Reihe
-#: von Vorschaubildern und darunter das eigentliche Livebild. Wer nur nimmt,
-#: was gerade zu sehen ist, nimmt zuverlaessig die Vorschau.
+
+
+
+
+
+
 MARK_CANDIDATES_JS = """
 () => {
   const nodes = Array.from(document.querySelectorAll('video, canvas, img'));
@@ -184,9 +183,9 @@ MARK_CANDIDATES_JS = """
 }
 """
 
-#: Zweiter Schritt: nach der Wartezeit noch einmal hinsehen. Was sich in der
-#: Zwischenzeit geaendert hat, ist ein laufendes Bild -- ein Vorschaubild
-#: bleibt, wie es war.
+
+
+
 RESCAN_CANDIDATES_JS = """
 () => {
   const nodes = Array.from(document.querySelectorAll('[data-aquaticy-cand]'));
@@ -199,8 +198,8 @@ RESCAN_CANDIDATES_JS = """
 }
 """
 
-#: Dritter Schritt: den Gewaehlten markieren, sichtbar scrollen und melden,
-#: wie gross er im Fenster ist.
+
+
 PICK_CANDIDATE_JS = """
 (index) => {
   const node = document.querySelector('[data-aquaticy-cand="' + index + '"]');
@@ -213,18 +212,18 @@ PICK_CANDIDATE_JS = """
 }
 """
 
-#: Wie lange zwischen den beiden Blicken liegt. Lang genug, dass eine Kamera
-#: mit Sekundentakt sich einmal erneuert; kurz genug, dass es niemandem
-#: auffaellt.
+
+
+
 RESCAN_WAIT_MS = 1_600
 
-#: Ein Bild in einem Link ist fast immer eine Vorschau, die woanders hinfuehrt.
+
 MALUS_IN_LINK = 0.35
-#: Und drei gleich grosse Bilder nebeneinander sind eine Vorschaureihe.
+
 MALUS_THUMBNAIL_ROW = 0.4
 THUMBNAIL_ROW_FROM = 3
 
-#: Womit ein Player startet, wenn `play()` an der Autoplay-Sperre scheitert.
+
 PLAY_BUTTON_SELECTORS = (
     ".ytp-large-play-button",
     ".vjs-big-play-button",
@@ -321,7 +320,7 @@ def dismiss_consent(page: Any, rules: SiteRules | None = None) -> str:
     if selector:
         return f"cmp:{selector}"
 
-    # Sourcepoint und Quantcast rendern ihren Dialog in einem iFrame.
+
     for frame in getattr(page, "frames", [])[1:]:
         selector = click_known_reject_button(frame, rules.cmp_reject_selectors)
         if selector:
@@ -334,8 +333,8 @@ def dismiss_consent(page: Any, rules: SiteRules | None = None) -> str:
     if label:
         return f"text:{label}"
 
-    # Kein Ablehnen-Button? Dann NICHT akzeptieren, sondern das Overlay
-    # entfernen -- der Inhalt liegt fast immer schon im DOM.
+
+
     removed = remove_overlays(page, rules.overlay_remove_selectors)
     return f"removed:{removed}" if removed else "nothing"
 
@@ -349,9 +348,9 @@ def click_play_buttons(page: Any) -> int:
     """
     geklickt = 0
     for scope in _playback_scopes(page):
-        # Je Bereich hoechstens ein Klick: ein eingebetteter Player liegt in
-        # seinem eigenen Rahmen und braucht seinen eigenen. Weiterklicken
-        # wuerde nur noch die Seite bedienen.
+
+
+
         getroffen = False
         for selector in PLAY_BUTTON_SELECTORS:
             for element in _visible_elements(scope, selector):
@@ -421,9 +420,9 @@ def pictures_ready(stände: list[dict[str, int]], seconds: float) -> bool:
     ganze Zeitlimit ab -- und das, obwohl auf der Hauptseite laengst alles
     stand.
     """
-    # Ueber `.get` und nicht ueber den Index: die Funktion ist von aussen
-    # aufrufbar, und ein Zustand ohne alle vier Felder soll sie nicht
-    # abbrechen lassen. Was fehlt, zaehlt als null.
+
+
+
     def bilder(stand: dict[str, int]) -> int:
         return int(stand.get("images") or 0)
 
@@ -435,8 +434,8 @@ def pictures_ready(stände: list[dict[str, int]], seconds: float) -> bool:
         return True
     if seconds <= PICTURE_GRACE_SECONDS:
         return False
-    # Nach der Gnadenfrist reicht: irgendwo steht ein Bild, oder die
-    # Hauptseite ist fuer sich fertig.
+
+
     return any(geladen(stand) for stand in stände) or (
         bool(stände) and geladen(stände[0]) >= bilder(stände[0])
     )
@@ -464,18 +463,18 @@ def wait_for_live_frame(page: Any, timeout_ms: int = PLAYBACK_TIMEOUT_MS) -> str
         verstrichen = _time.monotonic() - start
         videos = sum(stand["videos"] for stand in stände)
         if videos and sum(stand["playing"] for stand in stände):
-            # Der erste Frame ist oft noch der gepufferte; eine Sekunde
-            # Wiedergabe spaeter steht das aktuelle Bild.
+
+
             page.wait_for_timeout(PLAYBACK_SETTLE_MS)
             return "video"
-        # Ein Video bekommt Vorrang -- aber nicht unbegrenzt. Springt es
-        # auch nach der Frist nicht an, zaehlt wieder, was an Bildern da
-        # ist: sonst haelt ein Werbevideo die Kamera daneben endlos auf.
+
+
+
         wartet_auf_video = bool(videos) and verstrichen <= VIDEO_GRACE_SECONDS
         if not wartet_auf_video and pictures_ready(stände, verstrichen):
             return "bild"
-        # Erst warten, dann messen -- andersherum entscheidet die naechste
-        # Runde auf einem Stand, der schon vierhundert Millisekunden alt ist.
+
+
         neu_starten = bool(videos) and not geklickt
         if neu_starten:
             geklickt = bool(click_play_buttons(page))
@@ -509,11 +508,11 @@ def _browser_limit() -> int:
         return 3
 
 
-#: Jeder Chromium braucht 100 bis 300 MB. Zehn parallele Abrufe sollen nicht
-#: zehn Browser starten (11.2.1); die uebrigen warten kurz.
+
+
 BROWSER_SLOTS = threading.BoundedSemaphore(_browser_limit())
 
-#: So lange wartet ein Abruf hoechstens auf einen freien Browser (Sekunden).
+
 SLOT_WAIT = 60.0
 
 
@@ -611,27 +610,27 @@ def render_page(
         with browser_slot(), sync_playwright() as playwright:
             browser = launch_browser(playwright)
             try:
-                # Frischer Kontext je Abruf -- nichts wird uebernommen.
+
                 context = browser.new_context(
                     user_agent=user_agent,
                     locale="de-DE",
-                    permissions=[],  # Notifications, Geolocation & Co. verweigert
+                    permissions=[],
                     java_script_enabled=True,
                     accept_downloads=False,
                 )
                 context.grant_permissions([])
                 context.set_default_timeout(timeout_ms)
-                # Jede Anfrage des Browsers -- Seite, Rahmen, Skript, Bild --
-                # nur an oeffentliche Ziele (aquaticy/netguard.py, seit 9.5.15).
+
+
                 guard_context(context)
                 page = context.new_page()
                 page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                # Seiten mit Dauer-Polling werden nie "idle" -- das ist kein Fehler.
+
                 with contextlib.suppress(Exception):
                     page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT_MS)
 
                 dismiss_consent(page, rules)
-                # Nach dem Klick baut sich die Seite oft neu auf.
+
                 with contextlib.suppress(Exception):
                     page.wait_for_load_state("networkidle", timeout=3_000)
                 remove_overlays(page, rules.overlay_remove_selectors)
@@ -673,8 +672,8 @@ def capture_visual(
         return None
     try:
         with browser_slot(), sync_playwright() as playwright:
-            # Ohne diese Freigabe verweigert Chromium jedes `play()` ohne
-            # Mausklick -- und genau daran scheiterte die Live-Aufnahme.
+
+
             browser = launch_browser(
                 playwright, ["--autoplay-policy=no-user-gesture-required", "--mute-audio"])
             try:
@@ -688,8 +687,8 @@ def capture_visual(
                 )
                 context.grant_permissions([])
                 context.set_default_timeout(timeout_ms)
-                # Jede Anfrage des Browsers -- Seite, Rahmen, Skript, Bild --
-                # nur an oeffentliche Ziele (aquaticy/netguard.py, seit 9.5.15).
+
+
                 guard_context(context)
                 page = context.new_page()
                 page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
@@ -699,8 +698,8 @@ def capture_visual(
                 with contextlib.suppress(Exception):
                     page.wait_for_load_state("networkidle", timeout=3_000)
                 remove_overlays(page, rules.overlay_remove_selectors)
-                # Erst jetzt starten: vorher haette der Consent-Dialog den
-                # Player verdeckt und jeder Klick haette den Dialog getroffen.
+
+
                 with contextlib.suppress(Exception):
                     wait_for_live_frame(page, timeout_ms=PLAYBACK_TIMEOUT_MS)
                 data = _shot(page)
@@ -736,8 +735,8 @@ def _bewerte(vorher: list[dict[str, Any]], nachher: dict[int, dict[str, Any]],
         bewegt = (
             neu_src != alt_src
             or bool(spaeter.get("playing") or eintrag.get("playing"))
-            # Ein Stream, der in ein Canvas gezeichnet wird, sieht von aussen
-            # unbewegt aus -- er ist trotzdem eher das Ziel als ein Foto.
+
+
             or str(eintrag.get("tag")) == "CANVAS"
         )
         if eintrag.get("inLink"):
@@ -745,10 +744,10 @@ def _bewerte(vorher: list[dict[str, Any]], nachher: dict[int, dict[str, Any]],
         reihe = (int(eintrag.get("frame") or 0), str(eintrag.get("key")))
         if gleiche.get(reihe, 0) >= THUMBNAIL_ROW_FROM:
             punkte *= MALUS_THUMBNAIL_ROW
-        # Bewegung schlaegt Groesse, immer und unabhaengig davon, wie gross.
-        # Dass ein Bild sich erneuert, ist ein Beweis; dass es gross ist, nur
-        # eine Vermutung -- und ein grosses Vorschaubild ueber einer kleinen
-        # Live-Ansicht ist genau der Fall, in dem die Vermutung danebenliegt.
+
+
+
+
         stufe = 1 if bewegt else 0
         if stufe > beste_stufe or (stufe == beste_stufe and punkte > beste_punkte):
             bester, beste_punkte, beste_stufe = nummer, punkte, stufe
@@ -773,10 +772,10 @@ def _image_candidates(page: Any) -> tuple[list[dict[str, Any]], dict[int, tuple[
                 continue
             index = len(candidates)
             origins[index] = (scope, local_index)
-            # Die Rahmennummer bleibt am Kandidaten haengen: gleich grosse
-            # Bilder sind nur INNERHALB eines Dokuments ein Hinweis auf eine
-            # Vorschaureihe. Ueber Rahmen hinweg ist dieselbe Groesse normal
-            # -- es ist derselbe Einbau, nur mehrfach.
+
+
+
+
             candidates.append({**item, "index": index, "frame": rahmen})
     return candidates, origins
 
@@ -825,8 +824,8 @@ def _shot(page: Any) -> bytes:
             anteil = 0.0
             with contextlib.suppress(Exception):
                 anteil = float(scope.evaluate(PICK_CANDIDATE_JS, local_index) or 0.0)
-            # Nach dem Scrollen steht das Element mittig im Fenster. Ist es
-            # trotzdem winzig, ist die ganze Ansicht die ehrlichere Auskunft.
+
+
             if anteil >= 0.08:
                 with contextlib.suppress(Exception):
                     element = scope.query_selector(f'[data-aquaticy-cand="{local_index}"]')

@@ -258,9 +258,9 @@ def test_paywalls_never_trigger_the_browser(fixture_html, monkeypatch) -> None:
     assert page.skipped_reason == "paywall"
 
 
-# ---------------------------------------------------------------------------
-# Betrieb im Container
-# ---------------------------------------------------------------------------
+
+
+
 class _Chromium:
     """Merkt sich die Startversuche -- der erste mit Sandbox scheitert auf Wunsch."""
 
@@ -294,7 +294,7 @@ def test_browser_sandbox_is_always_tried_first(monkeypatch: pytest.MonkeyPatch) 
     assert pw.chromium.versuche[0][0] == "--disable-dev-shm-usage"
     assert "--no-sandbox" not in pw.chromium.versuche[0]
     assert "--no-sandbox" not in launch_args()
-    # Seit 9.5.16: alles ueber den Proxy der Netzregel, auch Loopback.
+
     assert pw.chromium.proxies[0]["server"].startswith("http://127.0.0.1:")
     assert pw.chromium.proxies[0]["bypass"] == "<-loopback>"
     assert any("disable_non_proxied_udp" in arg for arg in pw.chromium.versuche[0])
@@ -325,9 +325,9 @@ def test_without_the_flag_there_is_no_fallback(
 
 
 
-# ---------------------------------------------------------------------------
-# Live statt Ladebildschirm
-# ---------------------------------------------------------------------------
+
+
+
 class LivePage:
     """Eine Seite, die auf Wunsch erst nach ein paar Blicken abspielt."""
 
@@ -499,7 +499,7 @@ def test_the_refreshing_picture_beats_the_bigger_preview() -> None:
         [vorschau, live],
         spaeter=[
             {"index": 0, "src": vorschau["src"], "playing": False},
-            # Dieselbe Kamera, neuer Zeitstempel -- sie erneuert sich.
+
             {"index": 1, "src": "https://cam.example/1.jpg?t=99", "playing": False},
         ],
     )
@@ -564,9 +564,9 @@ def test_detached_frame_does_not_break_main_page_capture() -> None:
     assert _shot(page) == b"ausschnitt"
 
 
-# ---------------------------------------------------------------------------
-# Ein fremder Rahmen darf die Aufnahme nicht aufhalten
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_hanging_advert_frame_does_not_block_the_shot() -> None:
     """Ein Werbebild, das nie fertig laedt, kostete das ganze Zeitlimit.
 

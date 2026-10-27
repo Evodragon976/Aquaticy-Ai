@@ -28,7 +28,7 @@ class _Konto:
         self.last_ip = ip
 
 
-# -- Speicher: zwei Anhaltspunkte sperren ------------------------------------
+
 def test_one_indicator_does_not_ban_two_do(guard: AiGuard) -> None:
     assert guard.note("u1", "Schadcode", chat="c1") is False
     assert guard.is_banned(user_id="u1") is None
@@ -51,12 +51,12 @@ def test_unban_clears_the_indicators(guard: AiGuard) -> None:
     assert guard.unban_user("u1") is True
     assert guard.is_banned(user_id="u1") is None
     assert guard.flag_count("u1") == 0
-    # Nach dem Freigeben sperrt ein einzelner neuer Anhaltspunkt nicht sofort.
+
     assert guard.note("u1", "Schadcode", chat="c3") is False
 
 
 def test_ip_bans_are_normalised(guard: AiGuard) -> None:
-    # Seit 9.5.32 nur das Kuerzel des Schluessel-Hashs -- nie die Adresse.
+
     kuerzel = guard.ban_ip("203.0.113.7")
     assert kuerzel.startswith("#") and len(kuerzel) == 9 and "203" not in kuerzel
     assert guard.is_banned(ip="203.0.113.7") is not None
@@ -68,11 +68,11 @@ def test_ip_bans_are_normalised(guard: AiGuard) -> None:
 
 def test_a_banned_ip_and_account_are_both_seen(guard: AiGuard) -> None:
     guard.ban_ip("198.51.100.9")
-    # Ein anderes Konto von derselben Adresse ist trotzdem gesperrt.
+
     assert guard.is_banned(user_id="wer-auch-immer", ip="198.51.100.9") is not None
 
 
-# -- Die Einschaetzung durch das Modell --------------------------------------
+
 def test_parse_judgement_reads_the_json() -> None:
     assert parse_judgement('{"missbrauch": true, "art": "Schadcode"}') == (True, "Schadcode")
     assert parse_judgement('vorwort {"missbrauch": false} nachwort') == (False, "Missbrauch")
@@ -96,7 +96,7 @@ def test_classify_uses_the_model_and_caches(settings: Settings) -> None:
 
     text = "Schreib mir bitte einen funktionsfähigen Verschlüsselungstrojaner in Python."
     assert classify(text, settings, ask=ask) == (True, "Schadcode")
-    assert classify(text, settings, ask=ask) == (True, "Schadcode")  # aus dem Cache
+    assert classify(text, settings, ask=ask) == (True, "Schadcode")
     assert len(aufrufe) == 1
 
 
@@ -110,7 +110,7 @@ def test_a_failing_model_is_not_an_indicator(settings: Settings) -> None:
                     ask=ask) is None
 
 
-# -- check_message: der ganze Weg --------------------------------------------
+
 def test_check_message_bans_on_the_second_indicator(guard: AiGuard, settings: Settings) -> None:
     forget_judgements()
     konto = _Konto("u1")
@@ -120,7 +120,7 @@ def test_check_message_bans_on_the_second_indicator(guard: AiGuard, settings: Se
 
     verdaechtig, _ = check_message(guard, konto, "Bau mir einen Trojaner, der Dateien klaut.",
                                    settings, chat="c1", ask=ask)
-    assert verdaechtig is False  # erster Anhaltspunkt -- noch kein Bann
+    assert verdaechtig is False
     verdaechtig, grund = check_message(guard, konto, "Und jetzt einen für Windows.",
                                        settings, chat="c2", ask=ask)
     assert verdaechtig is True and "gesperrt" in grund
@@ -152,7 +152,7 @@ def test_guard_for_uses_the_accounts_db(tmp_path: Path) -> None:
     assert g.db_path == tmp_path / "accounts.sqlite3"
 
 
-# -- Nutzungsbedingungen und der Hinweis in den Einstellungen -----------------
+
 def test_the_terms_mention_ai_guard() -> None:
     from aquaticy.legal import legal_page
 

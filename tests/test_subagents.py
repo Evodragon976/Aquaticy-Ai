@@ -194,9 +194,9 @@ def test_result_serialisation() -> None:
     assert "summary" not in broken
 
 
-# ---------------------------------------------------------------------------
-# Planung
-# ---------------------------------------------------------------------------
+
+
+
 def test_planner_returns_the_task_list(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -293,8 +293,8 @@ def test_an_unknown_provider_keeps_the_main_model(
 ) -> None:
     """Kennt Aquaticy zum Anbieter kein kleines Modell, bleibt es beim großen."""
     settings.subagent_model = ""
-    # Seit 12.0.0 Luna laeuft ein "fremder" Anbieter nur auf dem Server selbst --
-    # hier ein vLLM ohne bekanntes kleines Modell.
+
+
     settings.model = "hosted_vllm/riesenmodell"
     settings.api_base = "http://127.0.0.1:8000/v1"
     used: list[str] = []
@@ -329,7 +329,7 @@ def test_overflowing_subagent_calls_still_get_answers(
     monkeypatch.setattr("litellm.completion", completion)
     results = run_subagents(["Frage"], settings, parallel=1)
     assert results[0].summary == "Zusammenfassung"
-    # Der letzte Aufruf sah fuer jeden Tool-Call eine Antwort.
+
     final_history = histories[-1]
     assistant = next(m for m in final_history if m.get("tool_calls"))
     tool_ids = {m["tool_call_id"] for m in final_history if m.get("role") == "tool"}
@@ -356,7 +356,7 @@ def test_subagents_share_one_fetcher(
     monkeypatch.setattr("litellm.completion", lambda **kwargs: _reply(content="ok"))
     run_subagents(["a", "b", "c"], settings, parallel=2)
     assert len(created) == 1
-    # Und er wurde am Ende geschlossen.
+
     assert created[0]._client.is_closed
 
 
@@ -422,9 +422,9 @@ def test_the_small_model_falls_back_exactly_once(
     assert used == ["mistral/mistral-small-latest", settings.model]
 
 
-# ---------------------------------------------------------------------------
-# Tempo: ein Aufruf, kleines Modell, kein Denk-Modus
-# ---------------------------------------------------------------------------
+
+
+
 def test_plan_request_returns_decision_and_tasks(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -529,7 +529,7 @@ def test_subagents_run_without_thinking_mode(
     monkeypatch.setattr("litellm.completion", completion)
     run_subagents(["Teilfrage"], settings, parallel=1)
     assert captured["reasoning_effort"] == "disable"
-    # Aber volles Fenster -- Subagenten lesen ganze Seiten.
+
     assert captured["num_ctx"] == settings.context_tokens
 
 
@@ -543,9 +543,9 @@ def test_subagent_prompt_asks_for_detail() -> None:
     assert "Rate nie" in SUBAGENT_PROMPT
 
 
-# ---------------------------------------------------------------------------
-# Verschiedene Quellen je Agent
-# ---------------------------------------------------------------------------
+
+
+
 def test_agents_share_one_list_of_claimed_domains(monkeypatch, tmp_path) -> None:
     """Drei Teilfragen zum selben Thema sollen nicht dieselbe Seite lesen."""
     from aquaticy.config import Settings
@@ -646,9 +646,9 @@ def test_a_handful_of_agents_still_starts_at_once(
     assert max(starts) - min(starts) < 0.5
 
 
-# ---------------------------------------------------------------------------
-# Rollen
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_role_comes_out_of_the_task() -> None:
     """Reine Textarbeit -- die Zuordnung darf keine Wartezeit kosten."""
     from aquaticy.subagents import role_for
@@ -656,8 +656,8 @@ def test_the_role_comes_out_of_the_task() -> None:
     assert role_for("Was kostet ein Lastenrad in Bremen?") == "zahlen"
     assert role_for("Welche Probleme und Beschwerden gibt es zum Modell X?") == "gegenstimmen"
     assert role_for("Was hat sich seit wann an der Förderung geändert?") == "frisch"
-    # Ohne Anhaltspunkt bleibt es beim normalen Auftrag: lieber keine Rolle
-    # als eine falsche, die am Thema vorbeisucht.
+
+
     assert role_for("Cafés mit WLAN in Bremen") == "standard"
     assert role_for("") == "standard"
 
@@ -696,9 +696,9 @@ def test_an_unknown_role_falls_back(monkeypatch: pytest.MonkeyPatch, settings: S
     assert ergebnis.role == "standard"
 
 
-# ---------------------------------------------------------------------------
-# Die Pruefer
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_checkers_run_while_the_others_are_still_searching(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -850,9 +850,9 @@ def test_never_more_checkers_than_searchers(
     assert gleichzeitig["hoechstens"] <= 4, "zwei Suchende und hoechstens zwei Pruefer"
 
 
-# ---------------------------------------------------------------------------
-# Immer die volle Zahl an Agenten
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_tasks_are_filled_up_to_the_number_of_agents() -> None:
     """Der Planer liefert drei Teilfragen, obwohl zwölf Agenten bereitstehen --
     dann suchen zwölf Agenten zu dritt."""
@@ -867,7 +867,7 @@ def test_the_tasks_are_filled_up_to_the_number_of_agents() -> None:
     assert len(texte) == 12
     assert texte[:2] == ["Cafés mit WLAN Bremen Mitte", "Cafés mit Steckdosen Bremen"]
     assert len(set(texte)) == 12, "keine zwei gleichen Aufträge"
-    # Die Blickwinkel sind so gewählt, dass die Rollen von selbst passen.
+
     rollen = {task.role for task in aufgefuellt}
     assert {"zahlen", "gegenstimmen", "frisch"} <= rollen
 

@@ -22,9 +22,6 @@ from aquaticy.fetch import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Stufe 1: Saeuberung und Extraktion
-# ---------------------------------------------------------------------------
 def test_strip_removes_onetrust_nodes(fixture_html) -> None:
     html = fixture_html("onetrust_article.html")
     cleaned = strip_noise(html)
@@ -72,9 +69,9 @@ def test_page_title(fixture_html) -> None:
     assert "Café Nordwand" in page_title(fixture_html("onetrust_article.html"))
 
 
-# ---------------------------------------------------------------------------
-# Stufe 2: hat die Extraktion geklappt?
-# ---------------------------------------------------------------------------
+
+
+
 def test_consent_wall_is_detected(fixture_html) -> None:
     html = fixture_html("consent_wall.html")
     text = extract_text(html, "https://example.de/")
@@ -95,7 +92,7 @@ def test_captcha_is_detected(fixture_html) -> None:
 
 def test_status_403_is_blocked() -> None:
     assert classify_failure("<html></html>", "irgendwas", status_code=403) == "blocked_http_403"
-    # Die Nummer bleibt erhalten: 429 ist "zu oft gefragt", nicht "abgewiesen".
+
     assert classify_failure("<html></html>", "x", status_code=429) == "blocked_http_429"
 
 
@@ -116,9 +113,9 @@ def test_needs_browser_only_for_consent_and_empty(fixture_html) -> None:
     assert not needs_browser(paywall, extract_text(paywall, ""))
 
 
-# ---------------------------------------------------------------------------
-# robots.txt
-# ---------------------------------------------------------------------------
+
+
+
 def _client_returning(handler) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -165,17 +162,17 @@ def test_non_http_urls_are_rejected() -> None:
     assert not policy.allows("ftp://example.de/x")
 
 
-# ---------------------------------------------------------------------------
-# Rate-Limit
-# ---------------------------------------------------------------------------
+
+
+
 def test_throttle_spaces_requests_per_domain() -> None:
     throttle = DomainThrottle(delay_seconds=0.2)
     start = time.monotonic()
     throttle.wait("a.de")
     throttle.wait("a.de")
     elapsed = time.monotonic() - start
-    # Windows kann den monotonic-Takt um einige Millisekunden vorziehen;
-    # der zweite Aufruf muss trotzdem praktisch die ganze Sperrzeit warten.
+
+
     assert elapsed >= 0.17
 
 
@@ -187,9 +184,9 @@ def test_throttle_is_per_domain() -> None:
     assert time.monotonic() - start < 0.2
 
 
-# ---------------------------------------------------------------------------
-# Fetcher (mit MockTransport)
-# ---------------------------------------------------------------------------
+
+
+
 def _fetcher(handler, **kwargs) -> Fetcher:
     fetcher = Fetcher(
         user_agent="aquaticy-test/0.1",
@@ -229,8 +226,8 @@ def test_fetch_reports_403_as_blocked() -> None:
     with _fetcher(handler) as fetcher:
         page = fetcher.fetch("https://shop.example/artikel")
     assert not page.ok
-    # Die Nummer steht im Grund: sie unterscheidet "melde dich an" von
-    # "du fragst zu oft" -- und davon haengt ab, ob ein zweiter Versuch lohnt.
+
+
     assert page.skipped_reason == "blocked_http_403"
     assert "403" in page.as_tool_dict()["note"]
 
@@ -463,8 +460,8 @@ def test_player_and_placeholder_are_recognised() -> None:
     assert placeholder_image("https://cam.example/loading.gif")
     assert placeholder_image("https://cam.example/logo.png")
     assert not placeholder_image("https://cam.example/webcam-nord.jpg")
-    # Gegen den Zwischenspeicher haengen Webcams gern Parameter an. Was dort
-    # steht, sagt nichts darueber, was auf dem Bild ist.
+
+
     assert not placeholder_image("https://cam.example/cam.jpg?mode=default")
     assert placeholder_image("https://cam.example/spinner.png?t=17")
 
@@ -521,9 +518,9 @@ def test_lookalike_domains_are_not_blocked(fixture_html) -> None:
         assert fetcher.fetch("https://notamazon.de/artikel").ok
 
 
-# ---------------------------------------------------------------------------
-# PDF-Abruf
-# ---------------------------------------------------------------------------
+
+
+
 def _tiny_pdf(text: str) -> bytes:
     """Handgebautes Minimal-PDF mit echter Textebene."""
     import io
@@ -618,5 +615,5 @@ def test_oversized_pdf_is_skipped() -> None:
         )
 
     with _fetcher(handler) as fetcher:
-        # Seit 9.5.15 schon beim Laden abgebrochen, nicht erst danach gewogen.
+
         assert fetcher.fetch("https://x.de/riesig.pdf").skipped_reason == "too_large"

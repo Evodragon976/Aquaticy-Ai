@@ -56,7 +56,7 @@ def _tar_xz(dateien: dict[str, bytes]) -> bytes:
 def _deb(tmp: Path, version: str) -> bytes:
     bau = tmp / "debbau"
     (bau / "DEBIAN").mkdir(parents=True)
-    (bau / "DEBIAN").chmod(0o755)  # dpkg-deb verlangt dies auch bei restriktivem umask.
+    (bau / "DEBIAN").chmod(0o755)
     (bau / "DEBIAN" / "control").write_text(
         f"Package: signal-desktop\nVersion: {version}\nArchitecture: amd64\n"
         "Maintainer: Test <t@example.org>\nDescription: Test\n", encoding="utf-8"
@@ -266,7 +266,7 @@ def test_archives_cannot_break_out(helfer: ModuleType, tmp_path: Path) -> None:
     with pytest.raises(tarfile.TarError):
         helfer.tar_auspacken(archiv, tmp_path / "ziel")
     assert not (tmp_path / "ausbruch").exists()
-    # Ein absoluter Pfad landet IM Ziel -- der Schraegstrich vorn faellt weg.
+
     archiv.write_bytes(_tar_xz({"/tmp/aquaticy-ausbruch-test": b"x"}))
     helfer.tar_auspacken(archiv, tmp_path / "ziel")
     assert (tmp_path / "ziel" / "tmp" / "aquaticy-ausbruch-test").is_file()

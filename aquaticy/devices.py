@@ -40,12 +40,11 @@ import secrets
 from dataclasses import dataclass
 from typing import Any
 
-#: Ab so vielen Punkten wird kein weiteres Konto angelegt.
 BLOCK_POINTS = 3.0
-#: Ab so vielen Punkten steht ein Hinweis im Terminal.
+
 SUSPICIOUS_POINTS = 1.5
 
-#: Das Cookie mit der Geraete-Kennung. Zufaellig, zwei Jahre gueltig.
+
 DEVICE_COOKIE = "aquaticy_device"
 DEVICE_COOKIE_AGE = 2 * 365 * 86400
 
@@ -83,14 +82,14 @@ def _zahl(value: Any, hoechstens: float) -> float:
         zahl = float(value)
     except (TypeError, ValueError):
         return 0.0
-    if zahl != zahl or zahl < 0:  # NaN oder negativ
+    if zahl != zahl or zahl < 0:
         return 0.0
     return min(zahl, hoechstens)
 
 
-# ---------------------------------------------------------------------------
-# Browser aus der Kennung (User-Agent) -- serverseitig, nicht vom Skript
-# ---------------------------------------------------------------------------
+
+
+
 _BROWSER = (
     ("Edge", re.compile(r"Edg(?:e|A|iOS)?/(\d+)")),
     ("Opera", re.compile(r"(?:OPR|Opera)/(\d+)")),
@@ -173,9 +172,9 @@ def clean_device(raw: Any, *, user_agent: str = "", accept_language: str = "",
     hardware = " · ".join(teile)
     browser = browser_name(user_agent) + (f", {sprache}" if sprache else "")
 
-    # Vergleichswerte: nur, wenn es wirklich etwas zu vergleichen gibt. Ohne
-    # jede Hardware-Angabe (Skript aus, altes Formular, Tests) bleibt der Hash
-    # leer -- leere Hashes treffen nie.
+
+
+
     hat_hardware = bool(kerne or speicher or bildschirm or gpu)
     hardware_hash = hashlib.sha256(
         "\x1f".join((system, str(kerne), f"{speicher:g}", bildschirm, f"{pixel:g}",
@@ -193,9 +192,9 @@ def clean_device(raw: Any, *, user_agent: str = "", accept_language: str = "",
     )
 
 
-# ---------------------------------------------------------------------------
-# E-Mail-Adressen, die sich sehr aehneln
-# ---------------------------------------------------------------------------
+
+
+
 def _kern(email: str) -> str:
     """ "max.muster+test7@gmail.com" -> "maxmuster": ohne Punkte, Zusatz, Ziffern."""
     lokal = str(email or "").strip().lower().split("@", 1)[0]
@@ -213,16 +212,16 @@ def emails_similar(a: str, b: str) -> bool:
     return difflib.SequenceMatcher(None, ka, kb).ratio() >= 0.88
 
 
-# ---------------------------------------------------------------------------
-# Punkte gegen ein vorhandenes Konto
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass(frozen=True, slots=True)
 class Assessment:
     """Das Ergebnis der Pruefung bei einer Registrierung."""
 
     points: float = 0.0
     reasons: tuple[str, ...] = ()
-    #: Das Konto, dem die neue Registrierung am meisten aehnelt.
+
     closest: str = ""
 
     @property

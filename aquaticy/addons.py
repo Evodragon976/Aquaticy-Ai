@@ -66,10 +66,6 @@ from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
-# ---------------------------------------------------------------------------
-# Katalog
-# ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class AddOn:
@@ -80,26 +76,26 @@ class AddOn:
     icon: str
     group: str
     summary: str
-    #: Wie man sich anmeldet: token | qr | keine | feeds | apikey (Modell-Anbieter)
+
     login: str
-    #: Braucht die virtual machine im User mode (und damit Ultra)?
+
     werkstatt: bool = False
-    #: Was installiert wird: "" (nichts) | webapp | signal | blender
+
     programm: str = ""
-    #: Adresse einer Web-App.
+
     adresse: str = ""
-    #: Einer der Vorschlaege aus der Suche nach nuetzlichen Add-ons.
+
     vorschlag: bool = False
-    #: Wie die Anmeldung geht -- steht unter dem Add-on.
+
     anmelden: str = ""
-    #: Was man wissen sollte, bevor man es nutzt.
+
     hinweis: str = ""
 
 
 CATALOG: dict[str, AddOn] = {
     addon.id: addon
     for addon in (
-        # -- KI-Modelle (12.0.0 Luna): die einzigen Anbieter mit API-Schluessel --
+
         AddOn(
             "nvidia_nim", "NVIDIA NIM", "🟩", "KI-Modelle",
             "Offene Modelle bei NVIDIA, zum Beispiel Nemotron und Qwen-Coder. Viel kostenlos: 40 "
@@ -136,9 +132,9 @@ CATALOG: dict[str, AddOn] = {
             "vorbereiten. Senden nur nach deinem Ja.",
             login="qr", werkstatt=True, programm="webapp",
             adresse="https://web.whatsapp.com/",
-            anmelden="„Anmelden“ öffnet WhatsApp Web in der virtual machine. Auf dem Handy: "
+            anmelden="„Anmelden“ zeigt den QR-Code direkt in Aquaticy. Auf dem Handy: "
             "WhatsApp → Einstellungen → Verknüpfte Geräte → Gerät hinzufügen, dann den "
-            "QR-Code im Bildschirm unten scannen.",
+            "QR-Code im Anmeldefenster scannen.",
             hinweis="WhatsApp mag keine Automatisierung. Nutze es nur für dich, nie für "
             "Massennachrichten, sonst droht eine Sperre. Was Aquaticy liest, geht an dein Modell. "
             "Braucht Firefox (kommt beim Installieren mit).",
@@ -148,8 +144,8 @@ CATALOG: dict[str, AddOn] = {
             "Signal Desktop in der virtual machine (ein „Signal Web“ gibt es nicht): Aquaticy "
             "liest mit und bereitet Antworten vor. Senden nur nach deinem Ja.",
             login="qr", werkstatt=True, programm="signal",
-            anmelden="„Anmelden“ startet Signal in der virtual machine. Auf dem Handy: Signal → "
-            "Einstellungen → Gekoppelte Geräte → +, dann den QR-Code im Bildschirm unten "
+            anmelden="„Anmelden“ zeigt den QR-Code direkt in Aquaticy. Auf dem Handy: Signal → "
+            "Einstellungen → Gekoppelte Geräte → +, dann den QR-Code im Anmeldefenster "
             "scannen.",
             hinweis="Signal Desktop gibt es nur für x86_64. Nachrichten, die Aquaticy liest, "
             "gehen an dein Modell. Signal ist Ende-zu-Ende-verschlüsselt — überleg dir das also "
@@ -181,7 +177,7 @@ CATALOG: dict[str, AddOn] = {
             hinweis="Aquaticy ruft höflich ab: beachtet robots.txt, höchstens eine Anfrage pro "
             "Sekunde und Server, mit ehrlicher Kennung.",
         ),
-        # -- Neu in 9.5.17: vier kostenlose Dienste ohne Schlüssel -------------
+
         AddOn(
             "nachrichten", "Tagesschau", "🗞️", "Dienste",
             "Die aktuellen Meldungen der Tagesschau — nach Thema (Inland, Ausland, "
@@ -215,7 +211,7 @@ CATALOG: dict[str, AddOn] = {
             anmelden="Keine Anmeldung nötig.",
             hinweis="Daten von Nager.Date. Nur Jahr und Land gehen raus.",
         ),
-        # -- Eigene Plugins (11.0.0 Luna): Wissen statt Werkzeug ---------------
+
         AddOn(
             "code-review", "Code-Review", "🔍", "Plugins",
             "Prüft Code auf typische Fehler. Besonders auf die, die KI-Code oft hat: erfundene "
@@ -239,10 +235,10 @@ CATALOG: dict[str, AddOn] = {
     )
 }
 
-#: Die Modell-Anbieter unter den Add-ons. Sie liefern Modelle, keine Werkzeuge.
+
 MODEL_ADDONS = frozenset(a.id for a in CATALOG.values() if a.login == "apikey")
 
-#: Was die beiden Pruef-Plugins abdecken -- fuer das Add-on-Fenster.
+
 PLUGIN_CONTENT: dict[str, tuple[str, ...]] = {
     "code-review": (
         "Logik: Bedingungen, Randfälle (leer, None, 0, negativ), um eins daneben",
@@ -262,9 +258,9 @@ PLUGIN_CONTENT: dict[str, tuple[str, ...]] = {
     ),
 }
 
-# ---------------------------------------------------------------------------
-# Rechte je Add-on (9.5.10)
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass(frozen=True)
 class Recht:
     """Eine Einstellung im Add-on-Fenster: eine Frage, zwei oder drei Antworten.
@@ -278,7 +274,7 @@ class Recht:
     label: str
     options: tuple[tuple[str, str], ...]
     default: str
-    #: Nur sichtbar/wirksam, wenn ein anderes Recht diesen Wert hat.
+
     nur_wenn: tuple[str, str] | None = None
 
 
@@ -336,18 +332,18 @@ RIGHTS: dict[str, tuple[Recht, ...]] = {
     ),
 }
 
-#: Die Messenger mit eigenem Add-on -- fuer die Pruefungen im Desktop.
+
 MESSENGERS = ("whatsapp", "signal")
 
-#: Messenger ohne Add-on (12.6.6 Luna: Telegram Web ist kein Add-on mehr). Ihr Fenster
-#: wird weiter erkannt -- und bekommt die strengsten Rechte, also nur lesen.
+
+
 OTHER_MESSENGERS = ("telegram",)
 
-#: Add-ons, die es nicht mehr gibt. Ihr Eintrag und ihr Datentraeger werden aufgeraeumt.
+
 RETIRED = ("telegram",)
 
-#: Die strengsten Rechte: gelten, wenn ein Messenger-Fenster da ist, das zu
-#: keinem eingeschalteten Add-on gehoert (etwa im gewoehnlichen Browser).
+
+
 STRICTEST = {"zugriff": "lesen", "wo": "einzeln"}
 
 
@@ -409,7 +405,7 @@ def messenger_of(klasse: str, titel: str) -> str:
     if "signal" in klasse:
         return "signal"
     for name, merkmal in (("whatsapp", "whatsapp"), ("telegram", "telegram"),
-                          ("signal", "signal")):  # telegram: kein Add-on, aber erkannt
+                          ("signal", "signal")):
         if merkmal in titel:
             return name
     return ""
@@ -422,26 +418,26 @@ def messenger_rights(settings: Any, name: str) -> dict[str, str]:
     return dict(STRICTEST)
 
 
-#: Die Web-Apps teilen sich ein Firefox -- es liegt auf einem eigenen
-#: Datentraeger und wird mit der ersten Web-App geladen, mit der letzten
-#: wieder geloescht.
+
+
+
 FIREFOX = "_firefox"
 
-#: Wo die Add-ons in der virtual machine haengen.
+
 MOUNT_ROOT = "/addons"
 
-#: Wie lange eine Installation hoechstens dauern darf.
+
 INSTALL_TIMEOUT = 1800
 
-#: Nur fuer Tests: Adresse eines Testservers, von dem statt der offiziellen
-#: Server geladen wird (docker/desktop/aquaticy-addons, --quelle).
+
+
 INSTALL_SOURCE = ""
 
 MAX_FEEDS = 20
 MAX_FEED_BYTES = 2_000_000
 MAX_FEED_ITEMS = 40
 
-#: So heisst das GitHub-Token in der .env des Kontos.
+
 GITHUB_TOKEN_KEY = "AQUATICY_GITHUB_TOKEN"
 GITHUB_API = "https://api.github.com"
 OPEN_METEO_GEO = "https://geocoding-api.open-meteo.com/v1/search"
@@ -454,7 +450,7 @@ NAGER = "https://date.nager.at/api/v3/PublicHolidays/{jahr}/{land}"
 STATE_FILE = "addons.json"
 _locks: dict[str, threading.Lock] = {}
 _locks_lock = threading.Lock()
-#: Laufende Installationen: (Konto, Add-on) -> Thread.
+
 _jobs: dict[tuple[str, str], threading.Thread] = {}
 
 
@@ -468,9 +464,9 @@ def user_agent() -> str:
     return f"aquaticy/{__version__} (+https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai)"
 
 
-# ---------------------------------------------------------------------------
-# Zustand je Konto
-# ---------------------------------------------------------------------------
+
+
+
 def _data_dir(settings: Any) -> Path:
     return Path(getattr(settings, "data_dir", "") or ".").expanduser()
 
@@ -656,7 +652,7 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
         laeuft = installing(settings, addon.id)
         status = str(eintrag.get("status") or ("bereit" if eintrag.get("installed") else ""))
         if status == "installiert gerade" and not laeuft:
-            # Der Server wurde mitten in der Installation beendet.
+
             status, eintrag["message"] = "fehler", "Die Installation wurde unterbrochen."
         liste.append({
             "id": addon.id,
@@ -681,7 +677,7 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
                 **({"token_set": anmeldung["token_set"]} if "token_set" in anmeldung else {}),
             },
             "feeds": feeds_of(settings) if addon.id == "feeds" else [],
-            # Im Chat: /<kennung> (11.0.0 Luna) -- und was ein Pruef-Plugin abdeckt.
+
             "command": "" if addon.id in MODEL_ADDONS else f"/{addon.id}",
             "inhalt": list(PLUGIN_CONTENT.get(addon.id, ())),
             "rechte": rights_of(settings, addon.id),
@@ -702,9 +698,9 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Installieren, Schalten, Deinstallieren
-# ---------------------------------------------------------------------------
+
+
+
 def _konto(settings: Any) -> str:
     return str(_data_dir(settings).resolve())
 
@@ -791,8 +787,8 @@ def _install_job(settings: Any, addon: AddOn, on_done: Any = None) -> None:
                 "installiert Aquaticy nichts."
             )
         image = getattr(settings, "vm_desktop_image", "") or werkstatt.DESKTOP_IMAGE
-        # Fehlt das Desktop-Abbild, baut Aquaticy es jetzt (12.6.6 Luna) -- bis dahin
-        # kam nur die Meldung von Podman ("short-name ... did not resolve").
+
+
         werkstatt.ensure_image(
             runtime, image, build=True,
             progress=lambda text: _update(settings, addon.id, message=text))
@@ -910,9 +906,9 @@ def active_or_installed(settings: Any) -> list[str]:
     return [key for key in CATALOG if (state.get(key) or {}).get("installed")]
 
 
-# ---------------------------------------------------------------------------
-# Anmelden
-# ---------------------------------------------------------------------------
+
+
+
 def _env_target(settings: Any) -> Path:
     from aquaticy.config import DEFAULT_ENV_PATH, find_env_file
 
@@ -1035,8 +1031,8 @@ def _reset_profile(settings: Any, addon: AddOn) -> None:
     if fertig.returncode != 0:
         raise AddOnError("Abmelden hat nicht geklappt: " + fertig.stdout.strip()[-300:])
     if addon.programm == "webapp":
-        # Das Profil neu anlegen, damit der naechste Start wieder deutsch,
-        # ohne Willkommensseite und mit ehrlicher Kennung beginnt.
+
+
         fertig = werkstatt._runs(
             runtime.binary, "run", "--rm", "--network", "none", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--user", werkstatt.RUN_AS,
@@ -1090,9 +1086,9 @@ def _private_host(host: str) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Die Werkzeuge fuer das Modell
-# ---------------------------------------------------------------------------
+
+
+
 _throttle_lock = threading.Lock()
 _last_call: dict[str, float] = {}
 
@@ -1160,8 +1156,8 @@ def github_call(
         return {"error": f"Unbekannte Aktion. Moeglich: {', '.join(GITHUB_ACTIONS)}."}
     repo = (repo or "").strip().strip("/")
     braucht_repo = action in {"repo", "issues", "issue", "pulls", "pull", "datei", "commits"}
-    # "."/".." als Teil wuerde httpx wegnormalisieren ("../.." -> "/") -- damit
-    # liefe die Pruefung "nur oeffentlich" ins Leere (9.5.34).
+
+
     if braucht_repo and (not REPO_RE.fullmatch(repo)
                          or any(t in (".", "..") for t in repo.split("/"))):
         return {"error": "repo bitte als 'besitzer/name'."}
@@ -1208,8 +1204,8 @@ def github_call(
     except (httpx.HTTPError, ValueError) as exc:
         return {"error": f"GitHub nicht erreichbar ({type(exc).__name__})."}
     except (AttributeError, TypeError, KeyError, IndexError):
-        # GitHub hat etwas anderes geschickt als dokumentiert -- lieber das
-        # sagen als mit einem Stacktrace abbrechen.
+
+
         return {"error": "GitHub hat unerwartet geantwortet."}
     finally:
         if eigener:
@@ -1299,7 +1295,7 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
                              "von": ((c.get("commit") or {}).get("author") or {}).get("name"),
                              "datum": ((c.get("commit") or {}).get("author") or {}).get("date")}
                             for c in eintraege[:20]]}
-    # suche: Issues und Pull Requests
+
     q = " ".join(str(query or "").split())[:256]
     if not q:
         raise AddOnError("Wonach suchen? (query)")
@@ -1315,7 +1311,7 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
             "gesamt": treffer.get("total_count")}
 
 
-# -- Wetter ------------------------------------------------------------------
+
 WMO = {
     0: "klar", 1: "überwiegend klar", 2: "teils bewölkt", 3: "bedeckt", 45: "Nebel",
     48: "Nebel mit Reif", 51: "leichter Nieselregen", 53: "Nieselregen",
@@ -1407,14 +1403,14 @@ def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) ->
     }
 
 
-# -- Dienste ohne Schluessel (9.5.17) -------------------------------------------
-#: Die Tagesschau erlaubt hoechstens 60 Abrufe pro Stunde -- fuer den ganzen
-#: Server zusammen, nicht je Konto. Hier stehen die Zeitpunkte der letzten.
+
+
+
 TAGESSCHAU_PER_HOUR = 60
 _tagesschau_abrufe: list[float] = []
 _tagesschau_lock = threading.Lock()
 
-#: Die Themen der Tagesschau, wie der Nutzer sie nennt -> wie die API sie nennt.
+
 RESSORTS = {
     "": "", "alle": "", "inland": "inland", "ausland": "ausland",
     "wirtschaft": "wirtschaft", "sport": "sport", "video": "video",
@@ -1617,7 +1613,7 @@ def holidays(country: str = "DE", year: Any = None, region: str = "",
             "quelle": "Nager.Date (date.nager.at)"}
 
 
-# -- RSS-Feeds -----------------------------------------------------------------
+
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1].lower()
 
@@ -1666,7 +1662,7 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
         felder = {_local(kind.tag): kind for kind in element}
 
         def erstes(*namen: str, felder: dict[str, ET.Element] = felder) -> ET.Element | None:
-            # Nicht "or": ein Element ohne Kinder ist in Python falsch.
+
             for name in namen:
                 if felder.get(name) is not None:
                     return felder[name]
@@ -1730,7 +1726,7 @@ def read_feeds(
                     if not robots.allows(adresse):
                         raise ValueError("robots.txt verbietet den Abruf")
                     _takt(urlparse(adresse).hostname or adresse)
-                    # Beim Lesen begrenzt, nicht erst danach gewogen (9.5.15).
+
                     antwort = netguard.get(client, adresse, follow_redirects=False,
                                            max_bytes=MAX_FEED_BYTES)
                     if antwort.status_code in (301, 302, 303, 307, 308):
@@ -1758,9 +1754,9 @@ def read_feeds(
     return {"eintraege": alle[:grenze], "feeds": len(feeds), "probleme": probleme}
 
 
-# ---------------------------------------------------------------------------
-# Was das Modell ueber die Add-ons erfaehrt
-# ---------------------------------------------------------------------------
+
+
+
 APP_OF = {"whatsapp": "whatsapp", "signal": "signal", "blender": "blender"}
 
 

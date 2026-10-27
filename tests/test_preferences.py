@@ -10,9 +10,6 @@ from aquaticy import preferences
 from aquaticy.preferences import BadValue
 
 
-# ---------------------------------------------------------------------------
-# Die Grenze
-# ---------------------------------------------------------------------------
 @pytest.mark.parametrize(
     "name",
     ["ha_control", "google", "storage_access", "storage_url", "lan_enabled", "memory"],
@@ -51,9 +48,9 @@ def test_nothing_protected_leaked_into_the_catalogue() -> None:
     assert not keys & set(preferences.PROTECTED)
 
 
-# ---------------------------------------------------------------------------
-# Namen und Zweitnamen
-# ---------------------------------------------------------------------------
+
+
+
 @pytest.mark.parametrize(
     "said", ["aussehen", "hintergrund", "Farbe", "theme", "design", " Modus "]
 )
@@ -84,9 +81,9 @@ def test_a_nonsense_appearance_is_refused() -> None:
         preferences.coerce(preferences.find("aussehen"), "kariert")
 
 
-# ---------------------------------------------------------------------------
-# Werte pruefen
-# ---------------------------------------------------------------------------
+
+
+
 @pytest.mark.parametrize("said", ["an", "ja", "true", "EIN", "1"])
 def test_switches_understand_yes(said: str) -> None:
     assert preferences.coerce(preferences.find("subagenten"), said) == "true"
@@ -129,9 +126,9 @@ def test_an_empty_text_is_refused() -> None:
         preferences.coerce(preferences.find("sprache"), "   ")
 
 
-# ---------------------------------------------------------------------------
-# Modelle
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_model_gets_its_provider_prefix() -> None:
     """Wer die ID von der Anbieterseite kopiert, vergisst das Kuerzel."""
     assert preferences.coerce(preferences.find("modell"), "nvidia/nemotron-3-ultra-550b-a55b") == (
@@ -145,9 +142,9 @@ def test_a_broken_model_is_refused_before_it_breaks_the_chat() -> None:
         preferences.coerce(preferences.find("modell"), "voelliger-quatsch")
 
 
-# ---------------------------------------------------------------------------
-# Speichern
-# ---------------------------------------------------------------------------
+
+
+
 def test_storing_writes_the_env_and_takes_effect(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -160,8 +157,8 @@ def test_storing_writes_the_env_and_takes_effect(
     assert written == target
     assert "AQUATICY_LOCATION=Hamburg" in target.read_text(encoding="utf-8")
 
-    # Ohne override haette die alte Umgebungsvariable gewonnen und die
-    # Aenderung waere erst nach einem Neustart wirksam geworden.
+
+
     import os
 
     assert os.environ["AQUATICY_LOCATION"] == "Hamburg"

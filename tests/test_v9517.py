@@ -24,12 +24,12 @@ def store(tmp_path: Path) -> AuthStore:
     return AuthStore(tmp_path, "PROCODE12", "Abcdef1234567!")
 
 
-# -- Ultra-Code --------------------------------------------------------------
+
 def test_ultra_code_needs_14_chars_with_variety() -> None:
-    assert not valid_ultra_code("Abcdef1234567")       # 13
-    assert not valid_ultra_code("Abcdefghijklmn")      # keine Ziffer/Zeichen
-    assert not valid_ultra_code("Abcdef123456789")     # 15, kein Zeichen
-    assert not valid_ultra_code("Abc def1234567!")     # Leerzeichen
+    assert not valid_ultra_code("Abcdef1234567")
+    assert not valid_ultra_code("Abcdefghijklmn")
+    assert not valid_ultra_code("Abcdef123456789")
+    assert not valid_ultra_code("Abc def1234567!")
     assert valid_ultra_code("Abcdef1234567!")
     for _ in range(20):
         assert valid_ultra_code(new_ultra_code())
@@ -38,10 +38,10 @@ def test_ultra_code_needs_14_chars_with_variety() -> None:
 def test_ultra_code_is_stored_and_stable(tmp_path: Path) -> None:
     a = ultra_code_for(tmp_path)
     assert valid_ultra_code(a)
-    assert ultra_code_for(tmp_path) == a  # bleibt gleich
+    assert ultra_code_for(tmp_path) == a
 
 
-# -- Tarife ------------------------------------------------------------------
+
 def test_the_three_tiers_register_with_their_codes(store: AuthStore) -> None:
     n = store.register("n@e.de", "ein langes Passwort", "normal", username="nn", **TERMS)
     p = store.register("p@e.de", "ein langes Passwort", "pro", "PROCODE12", username="pp", **TERMS)
@@ -72,7 +72,7 @@ def test_pro_gets_more_than_the_normal_quota(store: AuthStore) -> None:
     assert store.quota(p).week_tokens == PRO_WEEK_TOKENS
 
 
-# -- Ein Konto pro Adresse (seit 9.5.31: nur noch ein Anhaltspunkt) --------
+
 def test_one_account_per_public_ip(store: AuthStore) -> None:
     """Seit 9.5.31 reicht dieselbe Adresse allein nicht mehr zum Sperren --
     zwei Menschen im selben Haushalt duerfen je ein Konto haben. Dieselbe
@@ -83,7 +83,7 @@ def test_one_account_per_public_ip(store: AuthStore) -> None:
                           user_agent="Mozilla/5.0 (Windows NT 10.0) Chrome/126.0")
     store.register("anna.muster@e.de", "ein langes Passwort", "normal", username="aa",
                    ip="203.0.113.5", device=geraet, **TERMS)
-    # Selbe Adresse, andere Person: geht durch.
+
     store.register("bernd@e.de", "ein langes Passwort", "normal", username="bb",
                    ip="203.0.113.5", **TERMS)
     with pytest.raises(ValueError, match="schon ein Konto"):
@@ -110,12 +110,12 @@ def test_the_last_used_address_also_blocks_a_second_account(store: AuthStore) ->
 def test_loopback_is_exempt_from_one_per_ip(store: AuthStore) -> None:
     store.register("a@e.de", "ein langes Passwort", "normal", username="aa", ip="127.0.0.1",
                    **TERMS)
-    # Der eigene Rechner (Tests) darf mehrere -- die Regel gilt fremden Anschlüssen.
+
     store.register("b@e.de", "ein langes Passwort", "normal", username="bb", ip="127.0.0.1",
                    **TERMS)
 
 
-# -- Ai-guard je Tarif -------------------------------------------------------
+
 class _Konto:
     def __init__(self, ident: str, ultra: bool = False) -> None:
         self.id = ident
@@ -144,24 +144,24 @@ def test_ultra_is_only_warned_never_banned(tmp_path: Path, settings: Settings, c
         verdaechtig, _ = _flag(guard, konto, settings, chat)
         assert verdaechtig is False
     assert guard.is_banned(user_id="u2") is None
-    assert guard.flag_count("u2") >= 2  # Anhaltspunkte werden vermerkt
+    assert guard.flag_count("u2") >= 2
     assert "nur Warnung" in capsys.readouterr().out
 
 
 def test_the_ban_reason_is_printed(tmp_path: Path, capsys: Any) -> None:
     guard = AiGuard(tmp_path / "accounts.sqlite3")
     guard.note("u3", "Schadcode", chat="c1")
-    guard.note("u3", "DDoS", chat="c2")  # zweiter -> Bann
+    guard.note("u3", "DDoS", chat="c2")
     assert "gesperrt" in capsys.readouterr().out
 
 
-# -- Oberflaeche ---------------------------------------------------------------
+
 def test_only_a_complete_slash_command_glows_in_the_accent_colour() -> None:
     html = (Path(__file__).resolve().parent.parent / "aquaticy" / "webui.html").read_text(
         encoding="utf-8"
     )
     assert ".input-mirror .command-word{color:var(--accent-text)" in html
-    # Seit 11.0.0 Luna zaehlen auch die Plugins des Kontos (/code-review ...).
+
     assert 'const wort = match ? match[2].toLowerCase() : "";' in html
     assert "(slashBefehle.has(wort) || pluginNamen.has(wort))" in html
     assert 'input.classList.toggle("is-command", Boolean(erkannt))' in html
@@ -169,7 +169,7 @@ def test_only_a_complete_slash_command_glows_in_the_accent_colour() -> None:
         'inputMirror.append(wort, document.createTextNode(input.value.slice(match[0].length)))'
         in html
     )
-    # Nach dem Absenden wird auch der Spiegel geleert.
+
     assert html.count('input.value = ""; input.style.height = "auto"; markiereBefehl()') >= 3
 
 

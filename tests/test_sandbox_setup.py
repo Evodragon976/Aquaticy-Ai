@@ -56,7 +56,7 @@ def test_only_the_three_needed_places_are_mounted(dienst: dict) -> None:
     """Konten, Ausgaben und die Ablage der inneren Kiste -- sonst nichts."""
     ziele = {str(a).split(":")[1] for a in dienst["volumes"]}
     assert ziele == {"/data", "/work", "/home/aquaticy/.local/share/containers"}
-    # Kein Heimverzeichnis und kein Wurzelverzeichnis des Wirts.
+
     for ablage in dienst["volumes"]:
         quelle = str(ablage).split(":")[0]
         assert quelle in ("aquaticy-data", "aquaticy-workshop", "./exports"), quelle
@@ -73,8 +73,8 @@ def test_the_image_builds_the_inner_runtime_without_the_host() -> None:
     text = (WURZEL / "Dockerfile").read_text(encoding="utf-8")
     assert "FROM browser AS web" in text
     assert "podman" in text
-    # Der vfs-Treiber braucht keine zusaetzlichen Rechte -- fuse-overlayfs
-    # waere schneller, wollte dafuer aber /dev/fuse in der Kiste.
+
+
     assert 'driver = "vfs"' in text
     assert "AQUATICY_SANDBOXED=1" in text
 

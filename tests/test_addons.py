@@ -48,14 +48,14 @@ def _mock(antworten: dict[str, Any], gefragt: list[httpx.Request]) -> httpx.Clie
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-# -- Katalog ---------------------------------------------------------------------
+
 def test_the_catalogue_has_what_was_asked_for_plus_suggestions() -> None:
     for gewuenscht in ("github", "whatsapp", "signal", "blender"):
         assert gewuenscht in addons.CATALOG
     vorschlaege = [a for a in addons.CATALOG.values() if a.vorschlag]
     assert len(vorschlaege) >= 2
     for addon in addons.CATALOG.values():
-        # "apikey" seit 12.0.0 Luna: NVIDIA NIM und Mistral, die Modell-Anbieter.
+
         assert addon.login in {"token", "qr", "keine", "feeds", "apikey"}, addon.id
         assert addon.summary and addon.anmelden, addon.id
         if addon.programm == "webapp":
@@ -69,7 +69,7 @@ def test_signal_says_honestly_that_there_is_no_signal_web() -> None:
     assert addons.CATALOG["signal"].programm == "signal"
 
 
-# -- Installieren, Schalten, Deinstallieren ----------------------------------------
+
 def test_every_addon_has_install_even_without_download(konto: Settings) -> None:
     addons.install(konto, "github", pro=False)
     eintrag = addons.load_state(konto)["github"]
@@ -162,7 +162,7 @@ def test_firefox_stays_while_another_web_app_needs_it(
     monkeypatch.setattr(werkstatt, "find_runtime", lambda: SimpleNamespace(binary="docker"))
     monkeypatch.setattr(werkstatt, "remove_addon_volume",
                         lambda runtime, volume: geloescht.append(volume) or True)
-    # Seit 12.6.6 Luna ist WhatsApp die einzige Web-App; die zweite ist gestellt.
+
     monkeypatch.setitem(addons.CATALOG, "zweite",
                         dataclasses.replace(addons.CATALOG["whatsapp"], id="zweite",
                                             name="Zweite"))
@@ -191,7 +191,7 @@ def test_the_state_file_ignores_what_it_does_not_know(konto: Settings) -> None:
     assert addons.load_state(konto) == {}
 
 
-# -- Installation in der Wegwerf-virtual machine (gestellt) ----------------------------
+
 class FakeBox:
     """Nimmt die Aufrufe des Installers entgegen und antwortet wie aquaticy-addons."""
 
@@ -226,7 +226,7 @@ def fake_werkstatt(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     monkeypatch.setattr(werkstatt, "find_runtime", lambda: SimpleNamespace(binary="docker"))
     monkeypatch.setattr(werkstatt, "ensure_addon_volume",
                         lambda runtime, volume, image: angelegt.append(volume))
-    # Neu seit 12.6.6 Luna: Fehlt das Desktop-Abbild, baut die Installation es selbst.
+
     monkeypatch.setattr(werkstatt, "ensure_image", lambda runtime, image, **kw: None)
     monkeypatch.setattr(werkstatt, "Sandbox", FakeBox)
     FakeBox.antworten = {}
@@ -282,7 +282,7 @@ def test_no_runtime_means_no_install(konto: Settings, monkeypatch: pytest.Monkey
     assert eintrag["status"] == "fehler" and "Docker" in eintrag["message"]
 
 
-# -- GitHub ------------------------------------------------------------------------
+
 def test_github_login_checks_the_token_and_stores_it(konto: Settings) -> None:
     addons.install(konto, "github", pro=False)
     gefragt: list[httpx.Request] = []
@@ -361,7 +361,7 @@ def test_github_without_token_asks_nothing() -> None:
     assert "nicht angemeldet" in addons.github_call("", "repos")["error"]
 
 
-# -- Wetter ------------------------------------------------------------------------
+
 def test_weather_finds_the_place_and_translates_the_codes() -> None:
     gefragt: list[httpx.Request] = []
     client = _mock({
@@ -399,7 +399,7 @@ def test_weather_clamps_the_days() -> None:
     assert gefragt[-1].url.params["forecast_days"] == "7"
 
 
-# -- RSS-Feeds ---------------------------------------------------------------------
+
 RSS = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>T</title>
 <item><title>Alt</title><link>https://n.example/alt</link>
 <pubDate>Mon, 21 Sep 2026 08:00:00 +0200</pubDate>
@@ -485,7 +485,7 @@ def test_the_feed_list_is_checked(konto: Settings) -> None:
         addons.set_feeds(konto, [f"https://f{i}.example/rss" for i in range(21)])
 
 
-# -- Was das Modell sieht -------------------------------------------------------------
+
 def test_tools_exist_only_for_switched_on_addons(konto: Settings) -> None:
     from aquaticy.tools import addon_schemas_for
 
@@ -588,7 +588,7 @@ def test_the_helper_and_the_host_agree_on_the_addon_apps() -> None:
     assert set(addons.APP_OF.values()) == set(desktop.ADDON_APPS)
 
 
-# -- Das Fenster im Web ------------------------------------------------------------
+
 def _sitzung(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plan: str,
              user_mode: bool = True) -> Any:
     from aquaticy import web
@@ -724,7 +724,7 @@ def test_the_human_types_directly_into_the_workshop(
         (("type",), passwort.encode(), False),
         (("key", "Return"), None, False),
     ], "nur an die laufende virtual machine, nichts startet"
-    # Das Passwort geht an die virtual machine -- und sonst nirgendwohin.
+
     for datei in (tmp_path / "konto-pro").rglob("*"):
         if datei.is_file():
             assert passwort.encode() not in datei.read_bytes(), datei
@@ -763,7 +763,7 @@ def test_direct_input_is_ultra_and_user_mode_only(
     monkeypatch.setattr(werkstatt, "shared", lambda settings: box)
     _sitzung(tmp_path, monkeypatch, "normal")
     assert web.workshop_input({"art": "key", "key": "Return"})[1] == 403
-    # Seit 9.5.17 gehoert der User mode zu Ultra -- auch Pro bekommt 403.
+
     _sitzung(tmp_path, monkeypatch, "pro")
     assert web.workshop_input({"art": "key", "key": "Return"})[1] == 403
     _sitzung(tmp_path, monkeypatch, "ultra", user_mode=False)
@@ -794,7 +794,7 @@ def test_the_ui_has_the_addon_window_and_login_apps() -> None:
                  "Installieren", "Deinstallieren", "/api/addons", "/api/werkstatt/eingabe",
                  "Das gibt es nur mit einem Ultra-Konto"):
         assert teil in html, teil
-    # Der Add-ons-Knopf sitzt direkt beim User-mode-Schalter, die Login-Apps darunter.
+
     zeile = html.index('id="usermode"')
     assert zeile < html.index('id="btn-addons"') < html.index('id="btn-loginapps"')
     assert html.index('id="btn-loginapps"') < html.index('id="usermode-note"')

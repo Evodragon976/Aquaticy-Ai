@@ -84,7 +84,7 @@ def test_upgrade_ui_follows_async_start_and_stops_after_closing(upgrade_page):
     page.clock.install()
     page.locator("#upgrade-on").check()
     expect(page.locator("#upgrade-panel")).to_be_visible()
-    # The worker starts after the POST response, not inside that response.
+
     state["running"] = True
     page.clock.run_for(11_000)
     expect(page.locator("#upgrade-status")).to_contain_text("Trainiert gerade")
@@ -341,7 +341,7 @@ def test_real_model_requests_keep_rules_and_live_knowledge_without_history_mutat
     assert FACT in system and RULES in system
     assert agent.messages[:len(before)] == before
     assert FACT not in json.dumps(agent.messages)
-    # Repeated preparation starts with the original rules each time.
+
     next_messages = metering.prepare_messages(settings, settings.model, agent.messages)
     assert next_messages[0]["content"] == system
 

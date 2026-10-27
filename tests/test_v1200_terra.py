@@ -18,7 +18,7 @@ import pytest
 
 from aquaticy import botguard, web
 from tests.anmeldung import AGENT, BROWSER, FETCH, SPRACHE, loese, mensch, wie_die_app
-from tests.test_security import _anfrage, server  # noqa: F401 -- Fixture
+from tests.test_security import _anfrage, server  # noqa: F401
 
 PASSWORT = "ein langes Passwort"
 SKRIPT = {"User-Agent": "python-requests/2.32", "Accept": "*/*"}
@@ -28,15 +28,15 @@ def _ui() -> str:
     return web.UI_FILE.read_text(encoding="utf-8")
 
 
-# -- Die Zahl ------------------------------------------------------------------------------
+
 def test_the_three_examples_give_six_fifty_and_ninety_nine() -> None:
-    # passt zur App / 0 Fehlversuche / Geraet schon gesehen
+
     assert botguard.score(False, 0, False) == 6
     assert botguard.verdict(6) == botguard.THROUGH
-    # passt zur App / 6 Fehlversuche / neues Geraet
+
     assert botguard.score(False, 6, True) == 50
     assert botguard.verdict(50) == botguard.CHALLENGE
-    # wie ein Skript / 40 Fehlversuche / neues Geraet
+
     assert botguard.score(True, 40, True) == 99
     assert botguard.verdict(99) == botguard.DROPPED
 
@@ -50,13 +50,13 @@ def test_a_browser_is_never_dropped_only_asked() -> None:
     assert botguard.verdict(34) == botguard.CHALLENGE
     assert botguard.verdict(66) == botguard.CHALLENGE
     assert botguard.verdict(67) == botguard.DROPPED
-    # Ein Skript ohne Fehlversuch muss erst den Regler bestehen -- ab dem ersten
-    # Fehlversuch wird es abgewiesen.
+
+
     assert botguard.verdict(botguard.score(True, 0, True)) == botguard.CHALLENGE
     assert botguard.verdict(botguard.score(True, 1, True)) == botguard.DROPPED
 
 
-# -- Fingerabdruck -------------------------------------------------------------------------
+
 def test_the_fingerprint_sees_scripts_and_lets_the_app_through() -> None:
     assert botguard.fingerprint(BROWSER, True, False, True) == []
     for agent in ("curl/8.5.0", "python-requests/2.32", "Go-http-client/1.1", "",
@@ -66,11 +66,11 @@ def test_the_fingerprint_sees_scripts_and_lets_the_app_through() -> None:
                                                     True, False, True), agent
     ohne_fetch = {"User-Agent": AGENT, "Accept-Language": SPRACHE}
     assert botguard.fingerprint(ohne_fetch, True, False, True) == ["fetch"]
-    # http im Heimnetz: dort schickt kein Browser Sec-Fetch -- zaehlt nicht.
+
     assert botguard.fingerprint(ohne_fetch, True, False, False) == []
     fremd = {**BROWSER, "Sec-Fetch-Site": "cross-site"}
     assert botguard.fingerprint(fremd, True, False, True) == ["fetch"]
-    # Aelteres WebKit (Desktop-App unter Linux) schickt sie nicht immer.
+
     webkit = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 "
                             "(KHTML, like Gecko) Version/16.0 Safari/605.1.15",
               "Accept-Language": SPRACHE}
@@ -81,14 +81,14 @@ def test_the_fingerprint_sees_scripts_and_lets_the_app_through() -> None:
     assert botguard.fingerprint(BROWSER, True, True, True) == ["webdriver"]
 
 
-# -- Rechenaufgaben ------------------------------------------------------------------------
+
 def test_a_proof_is_signed_fresh_and_single_use() -> None:
     aufgabe = botguard.issue("visit")
     assert aufgabe["bits"] == botguard.VISIT_BITS and len(aufgabe["seed"]) == 32
     beweis = loese(aufgabe)
     assert botguard.check(beweis, ("visit",))
     assert not botguard.check(beweis, ("visit",)), "einmal"
-    # Die falsche Art, eine falsche Loesung, eine veraenderte Aufgabe -- alles nein.
+
     zweite = loese(botguard.issue("visit"))
     assert not botguard.check(zweite, ("human",))
     falsch = botguard.issue("visit")
@@ -118,7 +118,7 @@ def test_an_old_proof_no_longer_counts(monkeypatch: pytest.MonkeyPatch) -> None:
     assert botguard.check(menschlich, ("human",))
 
 
-# -- Der Regler ----------------------------------------------------------------------------
+
 def test_the_slider_wants_a_human_movement() -> None:
     gut = mensch(botguard.issue("human"))["track"]
     assert botguard.human_track(gut)
@@ -135,7 +135,7 @@ def test_the_slider_wants_a_human_movement() -> None:
         assert not botguard.human_track(kaputt)
 
 
-# -- Fehlversuche und Sperren --------------------------------------------------------------
+
 def test_failures_and_bans_are_kept_per_key(monkeypatch: pytest.MonkeyPatch) -> None:
     uhr = [1000.0]
     monkeypatch.setattr(botguard.time, "monotonic", lambda: uhr[0])
@@ -165,7 +165,7 @@ def test_ipv6_is_counted_per_network() -> None:
     assert botguard.address_key("unbekannt") == "unbekannt"
 
 
-# -- Ueber echtes HTTP ---------------------------------------------------------------------
+
 def _zustimmung(port: int) -> str:
     _, kopf, _ = _anfrage(port, "POST", "/api/consent", {"accepted": True})
     return kopf["Set-Cookie"].split(";", 1)[0]
@@ -191,7 +191,7 @@ def konto(server: int, monkeypatch: pytest.MonkeyPatch) -> tuple[int, str, list[
         "email": "terra@example.org", "username": "Terra", "password": PASSWORT,
         "plan": "normal", "terms_accepted": True}, cookie)
     assert status == 200, daten
-    # Wer bis zum Passwort kommt, wird hier mitgeschrieben.
+
     gehasht: list[str] = []
     echt = web.AUTH.authenticate
 
@@ -209,7 +209,7 @@ def test_the_app_logs_in_without_noticing_anything(konto) -> None:
                                                 "password": PASSWORT}), BROWSER, cookie)
     assert status == 200 and daten["ok"], daten
     assert gehasht == ["terra@example.org"]
-    # Die Aufgabe holt die Seite ohne Anmeldung; sie verraet nichts.
+
     status, _, aufgabe = _anfrage(port, "GET", "/api/auth/challenge")
     assert status == 200 and set(aufgabe) == {"token", "seed", "bits"}
     assert aufgabe["bits"] == botguard.VISIT_BITS
@@ -219,27 +219,27 @@ def test_the_app_logs_in_without_noticing_anything(konto) -> None:
 def test_a_script_is_asked_before_the_password_and_then_dropped(konto) -> None:
     port, cookie, gehasht = konto
     body = {"email": "terra@example.org", "password": PASSWORT}
-    # 6 + 40 + 0 + 20 = 66: erst der Nachweis -- das Passwort wird nicht angefasst.
+
     status, _, daten = _post(port, body, SKRIPT, cookie)
     assert status == 428 and daten["challenge"]["bits"] == botguard.HUMAN_BITS, daten
     assert "Mensch" in daten["error"] and gehasht == []
-    # Den Regler "besteht" es -- aber mit dem falschen Passwort.
+
     falsch = {**body, "password": "falsch", "human": mensch(daten["challenge"])}
     status, _, _ = _post(port, falsch, SKRIPT, cookie)
     assert status == 401 and gehasht == ["terra@example.org"]
-    # 6 + 40 + 4 + 20 = 70: abgewiesen, ohne Passwortpruefung, 15 Minuten.
+
     status, kopf, daten = _post(port, body, SKRIPT, cookie)
     assert status == 429 and daten["code"] == "dropped", daten
     assert dict(kopf)["Retry-After"] == str(botguard.BAN_SECONDS)
     assert "15 Minuten" in daten["error"] and len(gehasht) == 1
-    # Auch mit dem richtigen Passwort und bestandenem Regler: die Adresse ist gesperrt.
+
     status, _, aufgabe = _anfrage(port, "GET", "/api/auth/challenge")
     nochmal = {**body, "proof": loese(aufgabe),
                "human": mensch(botguard.issue("human"))}
     status, _, daten = _post(port, nochmal, SKRIPT, cookie)
     assert status == 429 and len(gehasht) == 1
-    # Ein Mensch im Browser hinter derselben Adresse ist nicht gesperrt -- nach
-    # zwei Fehlversuchen von hier (6 + 8 + 20 = 34) schiebt er kurz den Regler.
+
+
     status, _, daten = _post(port, wie_die_app(body), BROWSER, cookie)
     assert status == 428, daten
     status, _, daten = _post(port, {**body, "human": mensch(daten["challenge"])}, BROWSER,
@@ -252,24 +252,24 @@ def test_many_failures_ask_a_browser_to_slide(konto) -> None:
     body = {"email": "terra@example.org", "password": PASSWORT}
     status, _, _ = _post(port, wie_die_app({**body, "password": "falsch"}), BROWSER, cookie)
     assert status == 401 and web.BOT_FAILS.count("ip:127.0.0.1") == 1
-    # Ein Fehlversuch: 6 + 4 + 20 = 30 -- noch durch.
+
     status, _, _ = _post(port, wie_die_app({**body, "password": "falsch"}), BROWSER, cookie)
     assert status == 401 and len(gehasht) == 2
     for _ in range(4):
         web.BOT_FAILS.add("ip:127.0.0.1")
-    # 6 + 24 + 20 = 50: "Bestaetige kurz, dass du ein Mensch bist".
+
     status, _, daten = _post(port, wie_die_app(body), BROWSER, cookie)
     assert status == 428 and len(gehasht) == 2
-    # Ein Ruck ans Ende reicht nicht ...
+
     ruck = {**loese(daten["challenge"]), "track": [[0, 0], [10, 1]]}
     status, _, nochmal = _post(port, wie_die_app({**body, "human": ruck}), BROWSER, cookie)
     assert status == 428 and len(gehasht) == 2
-    # ... der Regler wie von Hand schon -- und der Nachweis gilt nur einmal.
+
     beweis = mensch(nochmal["challenge"])
     status, _, daten = _post(port, {**body, "human": beweis}, BROWSER, cookie)
     assert status == 200 and daten["ok"], daten
-    # Verbraucht -- und ohne gueltigen Nachweis sieht der Client wie ein Skript aus:
-    # 6 + 40 + 24 + 20 = 90, abgewiesen.
+
+
     status, _, _ = _post(port, {**body, "human": beweis}, BROWSER, cookie)
     assert status == 429 and len(gehasht) == 3
 
@@ -278,7 +278,7 @@ def test_a_proof_used_once_does_not_count_again(konto) -> None:
     port, cookie, _ = konto
     beweis = wie_die_app({"email": "terra@example.org", "password": PASSWORT})
     assert _post(port, beweis, BROWSER, cookie)[0] == 200
-    # Derselbe Nachweis noch einmal: "nachweis" fehlt -- 6 + 40 + 20 = 66.
+
     assert _post(port, beweis, BROWSER, cookie)[0] == 428
 
 
@@ -301,13 +301,13 @@ def test_a_known_device_counts_only_by_its_cookie(konto) -> None:
     bekannt = clean_device({"platform": "Linux"}, user_agent=AGENT, accept_language=SPRACHE,
                            cookie=kennung)
     assert web.AUTH.seen_device_for_login("Terra@Example.org", bekannt)
-    # Hardware und Browser allein meldet der Client selbst -- das reicht nicht.
+
     fremd = clean_device({"platform": "Linux"}, user_agent=AGENT, accept_language=SPRACHE,
                          cookie="")
     assert not web.AUTH.seen_device_for_login("terra@example.org", fremd)
     assert not web.AUTH.seen_device_for_login("niemand@example.org", bekannt)
     assert not web.AUTH.seen_device_for_login("kaputt", bekannt)
-    # Mit der Kennung: 6 Fehlversuche ergeben 6 + 24 + 0 = 30 -- durch, ohne Regler.
+
     mit = f"{cookie}; {DEVICE_COOKIE}={kennung}"
     body = {"email": "terra@example.org", "password": PASSWORT}
     for _ in range(6):
@@ -323,10 +323,10 @@ def test_registering_is_not_asked(server: int) -> None:  # noqa: F811
     assert status == 200, daten
 
 
-# -- Oberflaeche ---------------------------------------------------------------------------
+
 def test_the_page_solves_in_the_background_and_shows_the_slider() -> None:
     html = _ui()
-    skript = html[html.index("/* ---------- Anmeldeschutz gegen Bots (12.0.0 Terra"):]
+    skript = html[html.index("const SHA_K = new Uint32Array(["):]
     skript = skript[: skript.index('$("#auth-form").addEventListener("submit"')]
     assert 'api("/api/auth/challenge", {quietErrors:true})' in skript
     assert "Math.clz32(sha256Kopf(vorn + zahl)) >= bits" in skript

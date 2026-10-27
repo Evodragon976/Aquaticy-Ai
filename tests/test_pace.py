@@ -21,9 +21,9 @@ def _sauber(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     pace.forget_gates()
 
 
-# ---------------------------------------------------------------------------
-# Der Taktgeber selbst
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_gate_without_limits_never_waits() -> None:
     gate = pace.Gate()
     start = time.monotonic()
@@ -42,7 +42,7 @@ def test_calls_are_spread_over_the_minute() -> None:
     for _ in range(3):
         with gate.slot():
             pass
-    # Der erste Aufruf geht sofort los, die beiden anderen warten je 0,1s.
+
     assert time.monotonic() - start >= 0.15
 
 
@@ -67,23 +67,23 @@ def test_only_so_many_calls_at_a_time() -> None:
     assert drin.wait(2.0)
     b = threading.Thread(target=zweiter)
     b.start()
-    assert not zweiter_drin.wait(0.2)  # der Platz ist belegt
+    assert not zweiter_drin.wait(0.2)
     weiter.set()
-    assert zweiter_drin.wait(2.0)  # und jetzt frei
+    assert zweiter_drin.wait(2.0)
     a.join()
     b.join()
 
 
 def test_the_wait_has_an_upper_bound() -> None:
     """Lieber ein 429, das der Wiederholungsversuch auffaengt, als Stillstand."""
-    gate = pace.Gate(rpm=1)  # eine Minute Abstand
+    gate = pace.Gate(rpm=1)
     assert gate.spacing == pytest.approx(60.0)
     assert pace.MAX_WAIT < 60.0
 
 
-# ---------------------------------------------------------------------------
-# Welche Grenzen fuer wen gelten
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_known_providers_have_limits() -> None:
     assert pace.limits_for("nvidia_nim") == (40, 4)
     assert pace.limits_for("mistral") == (240, 8)

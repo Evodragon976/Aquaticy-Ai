@@ -214,7 +214,7 @@ def test_magicdns_pairing_pins_ips_and_keeps_encryption_and_confirmation(
         assert asked and not a.joined and not b.joined
         with pytest.raises(cluster.ClusterError):
             a.confirm(invitation.id, invitation.code)
-        # Ein DNS-Wechsel darf keinen spaeteren Zugriff auf das neue Ziel ausloesen.
+
         monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _dns(["8.8.8.8"]))
         b.answer(invitation.id, True)
         _warte(lambda: invitation.status == "accepted")
@@ -236,7 +236,7 @@ def test_magicdns_pairing_pins_ips_and_keeps_encryption_and_confirmation(
         destination, _, body, source = next(
             item for item in reversed(requests) if item[1] == "/cluster/rpc")
         with pytest.raises(cluster.ClusterError):
-            destination.handle_rpc(body, source)  # Wiederholung
+            destination.handle_rpc(body, source)
         with pytest.raises(cluster.ClusterError):
             destination.handle_rpc(body, "8.8.8.8")
     finally:
@@ -260,7 +260,7 @@ def test_model_tunnel_over_tailnet_ip_uses_existing_encrypted_protocol(
     calls = []
 
     def route(endpoint, *args, **kwargs):
-        # Nur der simulierte Tailnet-Hop wird auf den echten lokalen HTTP-Server gelegt.
+
         if endpoint == (address, port):
             calls.append(endpoint)
             endpoint = ("127.0.0.1", port)
@@ -320,7 +320,7 @@ def test_rpc_and_chat_forward_over_tailnet_ip_with_real_http(tmp_path, monkeypat
         assert response.startswith(b"HTTP/1.0 200")
         assert account.email.encode() in response
         assert len(calls) == 2
-        # Eine Tailscale-Adresse erteilt weiterhin keine Berechtigung ohne Schluessel.
+
         entrance.state["cluster"]["secret"] = cluster._b64(b"x" * 32)
         with pytest.raises(cluster.ClusterError):
             entrance.call(home.node_id, "ping")

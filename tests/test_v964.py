@@ -64,8 +64,8 @@ def test_old_cluster_key_cannot_impersonate_surviving_node(tmp_path, receiver):
     new_key = b"n" * 32
     link = b"l" * 32
     if receiver == "master":
-        # Entfernen des einzigen Mitglieds: ein Angreifer kennt den alten
-        # Gruppenschluessel und gibt sich anschliessend als Master aus.
+
+
         master.remove(member.node_id, notify=False)
         target = master
         new_key = master.key

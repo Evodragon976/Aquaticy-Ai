@@ -59,7 +59,7 @@ def test_html_embeds_images_and_comparison() -> None:
     html = to_html([_turn()])
     assert '<img src="https://cdn.shop.de/yoga.jpg"' in html
     assert "<h3>Vergleich</h3>" in html
-    # ThinkPad hat kein RAM -> Platzhalter statt geratenem Wert.
+
     assert "<td>–</td>" in html
     assert "notebookcheck.com/test" in html
 
@@ -79,7 +79,7 @@ def test_csv_has_one_row_per_product(tmp_path: Path) -> None:
     assert "CPU" in rows[0] and "RAM" in rows[0]
     assert len(rows) == 3
     assert rows[1][0] == "Lenovo Yoga Pro 7"
-    # Fehlende Specs bleiben leer statt geraten.
+
     assert rows[2][rows[0].index("RAM")] == ""
 
 
@@ -121,7 +121,7 @@ def test_download_images_writes_files_and_rewrites_links(
 
     from aquaticy import netguard
 
-    # Seit 9.5.15 laufen Bilder ueber die Netzregel -- der Transport ist gestellt.
+
     monkeypatch.setattr(netguard, "guarded_transport", lambda **kw: httpx.MockTransport(
         lambda request: httpx.Response(200, headers={"content-type": "image/jpeg"},
                                        content=b"BILD")))

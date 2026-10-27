@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from typing import Any
 
-#: Einmal gesehen, dass LiteLLM ohne `mcp` nicht kann -- dann gleich am Gateway vorbei.
 _OHNE_MCP = False
 
 

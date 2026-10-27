@@ -39,10 +39,10 @@ def _lokal(url: str, tmp_path, modell: str = "qwen2.5-coder:14b", tokens: int = 
                     context_tokens=tokens, subagents_auto=False)
 
 
-# --- Kontextfenster: hoechstens 5 GB -------------------------------------------
+
 
 def test_the_ram_per_token_comes_from_the_model(ollama) -> None:
-    # qwen2.5-coder:14b: 48 Schichten x 8 KV-Koepfe x (128 + 128) x 2 Byte.
+
     assert local_model.kv_bytes_per_token("qwen2.5-coder:14b", ollama.url) == 196_608
     assert local_model.kv_bytes_per_token("qwen3:8b", ollama.url) == 147_456
     assert local_model.kv_bytes_per_token("unbekannt:1b", ollama.url) == 0
@@ -52,7 +52,7 @@ def test_the_ram_per_token_comes_from_the_model(ollama) -> None:
         assert belegt <= 5 * GIB, modell
         assert belegt > 4.5 * GIB, "und nicht unnoetig klein"
         assert grenze % 1024 == 0
-    # Ohne Angaben: der bisherige Standard, nicht mehr.
+
     assert local_model.context_limit("unbekannt:1b", ollama.url) == 16384
 
 
@@ -61,20 +61,20 @@ def test_per_layer_kv_heads_and_the_trained_length_count(monkeypatch) -> None:
             "x.attention.head_count": [8, 8, 8, 8], "x.attention.head_count_kv": [2, 2, 1, 1],
             "x.embedding_length": 1024, "x.context_length": 4096}
     monkeypatch.setattr(local_model, "_show", lambda *a, **k: {"model_info": info})
-    # (2+2+1+1) KV-Koepfe x (128 + 128) x 2 Byte
+
     assert local_model.kv_bytes_per_token("x", "http://o") == 6 * 256 * 2
-    assert local_model.context_limit("x", "http://o") == 4096   # trainiert: 4096
+    assert local_model.context_limit("x", "http://o") == 4096
 
 
 def test_every_local_call_stays_under_5_gb(ollama, tmp_path) -> None:
     viel = _lokal(ollama.url, tmp_path, tokens=1_000_000)
     assert viel.llm_kwargs_for(viel.model)["num_ctx"] == 26624
     wenig = _lokal(ollama.url, tmp_path, tokens=8192)
-    assert wenig.llm_kwargs_for(wenig.model)["num_ctx"] == 8192     # darunter: wie gewollt
+    assert wenig.llm_kwargs_for(wenig.model)["num_ctx"] == 8192
     wolke = Settings(model="mistral/mistral-large-latest", context_tokens=1_000_000,
                      data_dir=tmp_path / "w")
     assert "num_ctx" not in wolke.llm_kwargs_for(wolke.model)
-    assert wolke.context_for(wolke.model) == 1_000_000            # Anbieter haelt es selbst
+    assert wolke.context_for(wolke.model) == 1_000_000
 
 
 def test_the_agent_trims_history_to_the_capped_window(ollama, tmp_path) -> None:
@@ -91,7 +91,7 @@ def test_context_view_for_the_slider(ollama, tmp_path) -> None:
     assert sicht["local"] and sicht["known"] and sicht["max"] == 26624
     assert sicht["effective"] == 16384 and sicht["cap_gb"] == 5
     assert sicht["ram_gb"] == round(16384 * 196_608 / GIB, 2)
-    # Normale Konten bleiben zusaetzlich bei ihrer Obergrenze.
+
     assert web.context_view(lokal, lokal.model, account_cap=8192)["max"] == 8192
     wolke = web.context_view(lokal, "mistral/mistral-large-latest")
     assert wolke == {"local": False, "model": "mistral/mistral-large-latest", "tokens": 16384}
@@ -101,12 +101,12 @@ def test_context_endpoint(client, session, ollama, tmp_path) -> None:  # noqa: F
     session._settings = _lokal(ollama.url, tmp_path)
     status, body = client("GET", "/api/context")
     assert status == 200 and json.loads(body)["max"] == 26624
-    # Ein Modellname mit fremden Zeichen wird nicht weitergereicht.
+
     status, body = client("GET", "/api/context?model=%0Aboese%22")
     assert status == 200 and json.loads(body)["model"] == session._settings.model
 
 
-# --- Fuzz-Funde: kaputte Adressen ----------------------------------------------
+
 
 @pytest.mark.parametrize("adresse", ["x" * 3000, "\u0000퟿", "[1, 'a', None]",
                                      "{'a': {'b': []}}", "[]", "ha .local"])
@@ -130,7 +130,7 @@ def test_ha_and_storage_probes_answer_400_style_not_500(client, session,  # noqa
             assert json.loads(body)["ok"] is False
 
 
-# --- Abgerissene Verbindungen ---------------------------------------------------
+
 
 def test_a_reset_connection_prints_no_traceback() -> None:
     server = web.AquaticyServer(("127.0.0.1", 0), web.Handler)
@@ -144,7 +144,7 @@ def test_a_reset_connection_prints_no_traceback() -> None:
                 verbindung.sendall(b"GET / HT")
                 verbindung.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER,
                                       struct.pack("ii", 1, 0))
-                verbindung.close()      # RST, wie ein Handy, das einschlaeft
+                verbindung.close()
             time.sleep(0.5)
     finally:
         server.shutdown()
@@ -174,7 +174,7 @@ def test_the_real_servers_use_the_quiet_class() -> None:
     assert "AquaticyServer((host, kandidat), Handler)" in inspect.getsource(web.bind_server)
 
 
-# --- Modellauswahl: nur, was wirklich antwortet ---------------------------------
+
 
 def _ohne_schluessel(monkeypatch) -> None:
     for name in ("MISTRAL_API_KEY", "NVIDIA_NIM_API_KEY", "AQUATICY_API_KEY",
@@ -201,9 +201,9 @@ def test_what_counts_as_usable(monkeypatch, tmp_path) -> None:
     _ohne_schluessel(monkeypatch)
     s = Settings(model="openai/lokal", api_base="http://localhost:1234/v1",
                  data_dir=tmp_path / "d")
-    assert model_usable(s, "openai/lokal")                    # eingetragene Adresse
-    assert not model_usable(s, "anthropic/claude-x")          # kein Schluessel
-    # Seit 12.0.0 Luna auch mit Schluessel nicht: nur Mistral, NVIDIA NIM oder lokal.
+    assert model_usable(s, "openai/lokal")
+    assert not model_usable(s, "anthropic/claude-x")
+
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant")
     assert not model_usable(s, "anthropic/claude-x")
     assert not model_usable(s, "fremd/eigenes")
@@ -211,11 +211,11 @@ def test_what_counts_as_usable(monkeypatch, tmp_path) -> None:
     assert not model_usable(s, "fremd/eigenes")
     monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test")
     assert model_usable(s, "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5")
-    # Abgeschaltet (12.2.3 Astra): auch mit Schluessel nicht mehr waehlbar.
+
     assert not model_usable(s, "nvidia_nim/meta/llama-3.3-70b-instruct")
-    assert not model_usable(s, SPLIT_MODEL_ID)                # zeigt web.py nur, wenn er laeuft
+    assert not model_usable(s, SPLIT_MODEL_ID)
     assert not model_usable(s, "")
-    # Lokal zaehlt nur, was installiert ist -- `name` und `name:latest` sind dasselbe.
+
     assert model_usable(s, "ollama_chat/gemma3", ["gemma3:latest"])
     assert not model_usable(s, "ollama_chat/gemma3", ["gemma3n:e4b"])
 
@@ -227,10 +227,10 @@ def test_a_deleted_ollama_model_disappears_and_a_new_one_appears(ollama, tmp_pat
     _ohne_schluessel(monkeypatch)
     s = _lokal(ollama.url, tmp_path, modell="qwen3:8b")
     assert "ollama_chat/qwen3:8b" in [m["id"] for m in available_models(s)]
-    ollama.installiert = ["gemma3:4b"]           # qwen3 geloescht
+    ollama.installiert = ["gemma3:4b"]
     ids = [m["id"] for m in available_models(s)]
     assert ids == ["ollama_chat/gemma3:4b"], "kein 'Aktuell eingestellt' fuer Geloeschtes"
-    ollama.installiert = ["gemma3:4b", "llama3.2:3b"]   # eben mit `ollama pull` geholt
+    ollama.installiert = ["gemma3:4b", "llama3.2:3b"]
     assert "ollama_chat/llama3.2:3b" in [m["id"] for m in available_models(s)]
 
 
@@ -281,7 +281,7 @@ def test_the_web_start_reports_what_ollama_has(ollama, tmp_path, monkeypatch) ->
     cli._ollama_beim_start(s)
     assert "1 Modell" in zeilen[0]
     assert any("nicht installiert" in z for z in zeilen[1:])
-    # Kein Ollama, Hauptmodell in der Wolke: kein Wort und kein Start.
+
     zeilen.clear()
     monkeypatch.setattr(local_model, "start_server",
                         lambda *a, **k: pytest.fail("darf nicht starten"))
@@ -303,7 +303,7 @@ def test_a_local_main_model_starts_an_installed_ollama(tmp_path, monkeypatch) ->
     s = Settings(model="ollama_chat/qwen3:8b", data_dir=tmp_path / "d")
     assert cli._ollama_beim_start(s) == ["qwen3:8b"]
     assert gestartet == [local_model.DEFAULT_OLLAMA_URL]
-    # Ein fremder Rechner wird nie "gestartet".
+
     gestartet.clear()
     fern = Settings(model="ollama_chat/qwen3:8b", api_base="http://10.0.0.5:11434",
                     data_dir=tmp_path / "f")
@@ -336,7 +336,7 @@ def test_a_deleted_upgrade_version_is_not_offered(tmp_path) -> None:
     neu = "ollama_chat/" + up.model_name(BASE, [1, 1])
     da = [{"id": f"ollama_chat/{BASE}", "label": BASE}, {"id": neu, "label": "x"}]
     assert neu in [m["id"] for m in up.picker_entries(tmp_path, da, False)]
-    # `ollama rm` der neuen Fassung: sie steht nicht mehr zur Wahl.
+
     weg = up.picker_entries(tmp_path, da[:1], False)
     assert neu not in [m["id"] for m in weg] and weg
 
@@ -358,7 +358,7 @@ def test_the_picker_has_the_context_slider() -> None:
     assert 'type="range" id="ctx-regler"' in regler and "5 GB" in regler
     oeffnen = html[html.index("async function openPicker"):html.index("async function chooseModel")]
     assert "zeigeKontext(currentModel)" in oeffnen
-    assert '$("#picker-ctx").hidden = true' in oeffnen     # alte Zeile weg, auch bei leerer Liste
+    assert '$("#picker-ctx").hidden = true' in oeffnen
     skript = html[html.index("async function zeigeKontext"):
                   html.index("async function chooseModel")]
     assert '"/api/context?model="' in skript and "AQUATICY_CONTEXT_TOKENS" in skript

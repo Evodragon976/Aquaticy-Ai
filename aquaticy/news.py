@@ -28,8 +28,6 @@ from typing import Any
 
 from aquaticy.models import SearchResult
 
-#: Schlagzeilen je Land. Mehrere Quellen, damit eine ausgefallene nicht reicht,
-#: um die Antwort leer zu lassen -- und damit nicht nur eine Redaktion spricht.
 HEADLINE_FEEDS: dict[str, tuple[str, ...]] = {
     "de": (
         "https://www.tagesschau.de/index~rss2.xml",
@@ -54,10 +52,10 @@ HEADLINE_FEEDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-#: So viele Schlagzeilen bekommt das Modell -- genug fuer einen Ueberblick.
+
 HEADLINE_COUNT = 12
 
-#: Je Feed hoechstens so viele, damit nicht eine Redaktion alles fuellt.
+
 PER_FEED = 6
 
 _NOMEN = r"nachrichten|news|schlagzeilen|neuigkeiten|headlines|tagesthemen|tagesschau"
@@ -65,12 +63,12 @@ _AKTUELL = (r"neu(e)?ste[nrs]?|aktuelle[nrs]?|heutige[nrs]?|letzte[nrs]?|wichtig
             r"top|heute|gestern|gerade|jetzt|momentan|derzeit|latest|today|yesterday|breaking|"
             r"current|recent")
 
-#: "neueste Nachrichten", "Nachrichten von heute", "latest news" ...
+
 _FRAGE_RE = re.compile(rf"\b({_NOMEN})\b", re.IGNORECASE)
 _AKTUELL_RE = re.compile(rf"\b({_AKTUELL})\b", re.IGNORECASE)
-#: "Meldungen" allein ist zu breit ("Meldungen im Log") -- nur mit "neueste" o. ae.
+
 _MELDUNG_RE = re.compile(r"\bmeldungen\b", re.IGNORECASE)
-#: "Was ist heute passiert?", "Was gibt's Neues?", "what's happening in the world"
+
 _PASSIERT_RE = re.compile(
     r"\bwas\s+(ist|war|gibt'?s|gibt\s+es)\s+(denn\s+)?(heute|gerade|aktuell|so|neues|"
     r"in\s+der\s+welt|in\s+deutschland)\b.*\b(passiert|los|neues)\b"
@@ -78,17 +76,17 @@ _PASSIERT_RE = re.compile(
     r"|\bwhat'?s\s+(happening|new)\b|\bwhat\s+happened\s+today\b",
     re.IGNORECASE,
 )
-#: Nachrichten im Sinn von Post: "meine Nachrichten", "neue Nachrichten auf WhatsApp".
+
 _POST_RE = re.compile(
     r"\b(meine[nm]?|my|whatsapp|signal|telegram|sms|e-?mails?|mails?|postfach|"
     r"inbox|chat|chats|geschickt|geschrieben|bekommen|erhalten)\b",
     re.IGNORECASE,
 )
-#: Schreibauftraege: "schreib eine Nachricht", "formuliere Schlagzeilen".
+
 _SCHREIBEN_RE = re.compile(
     r"\b(schreib\w*|formulier\w*|verfass\w*|erfind\w*|ausdenk\w*|write|draft)\b", re.IGNORECASE)
 
-#: Woerter, die kein Thema sind. Was danach uebrig bleibt, ist das Thema.
+
 _FUELLWOERTER = frozenset({
     "was", "sind", "ist", "war", "gibt", "gibt's", "es", "die", "der", "das", "den", "dem",
     "des", "ein", "eine", "einen", "einem", "einer", "neueste", "neuesten", "neuester",

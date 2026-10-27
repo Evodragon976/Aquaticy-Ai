@@ -25,18 +25,16 @@ import httpx
 from aquaticy.models import SearchResult, domain_of
 from aquaticy.queries import fuse
 
-#: Abstand, mit dem parallele Anfragen losgeschickt werden. Gleichzeitig
-#: abgefeuert quittieren die offenen Engines das gern mit einem Rate-Limit.
 STAGGER_SECONDS = 0.35
 
-#: Offene Engines, die `ddgs` ohne Key abfragt.
+
 OPEN_ENGINES = ("duckduckgo", "mojeek", "startpage", "brave", "yahoo", "wikipedia")
 
-#: Backends, die ohne Key auskommen.
+
 KEYLESS_BACKENDS = ("duckduckgo", "ddg", "open", "searxng")
 
-#: Die Namen der offenen Metasuche selbst -- von hier gibt es kein weiteres
-#: Fallback, sie IST das Fallback.
+
+
 OPEN_BACKEND_NAMES = frozenset({"duckduckgo", "ddg", "open"})
 
 
@@ -81,7 +79,7 @@ class _DuckDuckGoHTML(HTMLParser):
             self._item[self._field] += data
 
 
-#: Tags ohne End-Tag -- sie duerfen die Tiefe nicht erhoehen (9.5.34).
+
 _LEERE_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
                          "meta", "source", "track", "wbr"})
 
@@ -91,7 +89,7 @@ def _result_url(value: str) -> str:
     value = unescape(value).strip()
     parsed = urlsplit(value)
     if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
-        # parse_qs dekodiert schon -- ein zweites unquote machte aus "%26" ein "&".
+
         return (parse_qs(parsed.query).get("uddg") or [""])[0]
     return value
 
@@ -141,16 +139,16 @@ class SearchOptions:
     count: int = 8
     country: str = "de"
     lang: str = "de"
-    #: Der Schluessel der Suchmaschine. ``None`` = aus der Umgebung des Servers
-    #: (Kommandozeile); ein Text -- auch ein leerer -- gilt genau so (seit
-    #: 9.5.16: ein Konto ohne eigenen Schluessel bekommt nicht still den
-    #: des Betreibers).
+
+
+
+
     api_key: str | None = None
-    #: Komma-Liste fuer die offene Metasuche, z.B. "duckduckgo,mojeek".
+
     engines: str = ""
-    #: Basis-URL der eigenen SearXNG-Instanz.
+
     instance_url: str = ""
-    #: Wohin Fehler einzelner Engines gemeldet werden (fuer die Anzeige).
+
     notes: list[str] = field(default_factory=list)
 
 
@@ -171,9 +169,9 @@ def _dedupe(results: list[SearchResult], count: int) -> list[SearchResult]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Backends ohne Schluessel
-# ---------------------------------------------------------------------------
+
+
+
 def _search_open(query: str, options: SearchOptions) -> list[SearchResult]:
     """Metasuche ueber offene Engines -- kein API-Key, kein Konto.
 
@@ -201,10 +199,10 @@ def _search_open(query: str, options: SearchOptions) -> list[SearchResult]:
             backend=backend,
         )
     except DDGSException as exc:
-        # `ddgs` benutzt `primp` (Rust/rustls). Einige Gegenstellen beenden
-        # HTTP/2 ohne TLS close_notify; das ist ein Serverfehler, darf aber
-        # nicht die Recherche des Nutzers beenden. Der HTML-Endpunkt läuft
-        # über httpx und HTTP/1.1 und ist deshalb davon unabhängig.
+
+
+
+
         try:
             return _search_duckduckgo_html(query, options)
         except (httpx.HTTPError, SearchError) as fallback:
@@ -285,9 +283,9 @@ def _search_searxng(query: str, options: SearchOptions) -> list[SearchResult]:
     ]
 
 
-# ---------------------------------------------------------------------------
-# Backends mit Schluessel
-# ---------------------------------------------------------------------------
+
+
+
 def _search_brave(query: str, options: SearchOptions) -> list[SearchResult]:
     key = options.api_key if options.api_key is not None else os.environ.get(
         "BRAVE_API_KEY", "")
@@ -342,7 +340,7 @@ def _search_tavily(query: str, options: SearchOptions) -> list[SearchResult]:
 Backend = Callable[[str, SearchOptions], list[SearchResult]]
 
 BACKENDS: dict[str, Backend] = {
-    "duckduckgo": _search_open,  # historischer Name der offenen Metasuche
+    "duckduckgo": _search_open,
     "ddg": _search_open,
     "open": _search_open,
     "searxng": _search_searxng,
@@ -402,9 +400,9 @@ def search_web(
     except SearchError:
         raise
     except (httpx.HTTPError, ValueError, AttributeError, TypeError, KeyError) as exc:
-        # Seit 9.5.34: Netzfehler und unerwartete Antworten (eine Liste statt
-        # eines Objekts, "web": null) kommen als SearchError -- sonst brach eine
-        # einzige gestoerte Anfrage die ganze Mehrfachsuche ab.
+
+
+
         raise SearchError(f"Die Suche ist gerade gestört ({type(exc).__name__}).") from exc
     return _dedupe(roh, count)
 
@@ -490,8 +488,8 @@ def search_broadly(
     if len(wanted) == 1:
         return runner(wanted[0], count), wanted
 
-    # Etwas mehr je Anfrage holen, als am Ende gebraucht wird: erst die
-    # Ueberlappung zwischen den Listen macht das Mischen aussagekraeftig.
+
+
     per_query = min(count + 4, 20)
 
     def one(position: int, query: str) -> list[SearchResult]:

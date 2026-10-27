@@ -74,14 +74,14 @@ Mitglieder, Links, ein Zeitungsartikel ueber sie.
 Deine Teilfrage lautet:
 %(task)s"""
 
-#: Die Rollen. Vierundzwanzig gleiche Agenten suchen vierundzwanzigmal
-#: dasselbe: was oben in den Treffern steht. Wer nach Preisen sucht, braucht
-#: aber andere Genauigkeit als wer nach Erfahrungen sucht -- und wer nach
-#: Kritik sucht, findet sie nur, wenn er ausdruecklich danach fragt.
-#:
-#: Die Rolle steht als kurzer Absatz im Prompt und aendert sonst nichts:
-#: dieselben Werkzeuge, dasselbe Budget, dieselbe Form der Antwort. Wer
-#: keine Rolle bekommt, arbeitet wie bisher -- das ist der Normalfall.
+
+
+
+
+
+
+
+
 ROLE_EXTRA = {
     "standard": "",
     "zahlen": """
@@ -120,16 +120,16 @@ alt. Ist etwas seit Jahren unveraendert, sag auch das.
 """,
 }
 
-#: Wie die Rolle in der Oberflaeche heisst. Leer heisst: keine Marke, das ist
-#: der normale Rechercheauftrag.
+
+
 ROLE_LABELS = {"standard": "", "zahlen": "Zahlen", "gegenstimmen": "Gegenstimmen",
                "frisch": "Aktuelles", "tiefe": "Spurensuche"}
 
-#: Woran eine Rolle zu erkennen ist. Reine Textarbeit, kein Modellaufruf --
-#: die Zuordnung darf keine Wartezeit kosten. Gezaehlt werden Treffer; die
-#: Rolle mit den meisten gewinnt, bei Gleichstand die weiter oben. Trifft
-#: nichts, bleibt es beim normalen Auftrag: lieber keine Rolle als eine
-#: falsche, die den Agenten am Thema vorbeisuchen laesst.
+
+
+
+
+
 _ROLE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("zahlen", ("preis", "kosten", "kostet", "guenstig", "günstig", "teuer", "euro",
                 "€", "gebuehr", "gebühr", "tarif", "miete", "gehalt", "rabatt",
@@ -158,10 +158,10 @@ def role_for(task: str) -> str:
     return beste
 
 
-#: Der Pruefer. Er recherchiert nicht neu, er kontrolliert -- und zwar auf
-#: anderen Seiten als der Kollege, dessen Ergebnis er vor sich hat. Das
-#: erledigt die gemeinsame Domainliste von selbst: was gelesen wurde, ist aus
-#: seinen Treffern heraussortiert.
+
+
+
+
 CHECK_PROMPT = """\
 Du bist Pruefer. Ein Kollege hat gerade recherchiert, du kontrollierst sein \
 Ergebnis -- auf ANDEREN Seiten als er. Die Seiten, die er gelesen hat, sind \
@@ -190,7 +190,7 @@ Teilfrage des Kollegen:
 Sein Ergebnis:
 %(summary)s"""
 
-#: Die drei Urteile, in der Reihenfolge, in der sie zaehlen.
+
 VERDICTS = ("ABWEICHUNG", "UNKLAR", "BESTAETIGT")
 
 
@@ -200,8 +200,8 @@ def verdict_of(text: str) -> str:
     for urteil in VERDICTS:
         if anfang.startswith(urteil):
             return urteil
-    # Manche Modelle stellen einen Satz voran. Dann suchen wir das Wort im
-    # ersten Absatz -- aber nur dort, sonst faengt man es aus der Begruendung.
+
+
     kopf = (text or "").strip().upper()[:200]
     for urteil in VERDICTS:
         if urteil in kopf:
@@ -249,12 +249,12 @@ Bei blosser Konversation: {"recherche": false, "teilfragen": [], "rueckfrage": "
 
 %(context)sNachricht: %(question)s"""
 
-#: Blickwinkel zum Auffuellen. Kommt der Planer mit weniger Teilfragen zurueck
-#: als Agenten bereitstehen, wird der Rest daraus gebildet: dieselbe Frage,
-#: anderer Blickwinkel. Das ist keine Verlegenheitsloesung -- genau diese
-#: Seiten fehlen sonst in der Antwort, weil niemand danach gesucht hat. Die
-#: Formulierungen sind so gewaehlt, dass `role_for` ihnen von selbst die
-#: passende Rolle gibt: Preise werden zu Zahlen, Kritik zu Gegenstimmen.
+
+
+
+
+
+
 ANGLES = (
     "Preise, Kosten und Gebuehren",
     "Erfahrungen, Kritik und bekannte Probleme",
@@ -272,11 +272,11 @@ ANGLES = (
     "Erfahrungsberichte aus Foren und Gruppen",
 )
 
-#: Und WO gesucht wird. Reicht die Zahl der Blickwinkel nicht (bei `/max` sind
-#: es vierundvierzig Agenten), entsteht die zweite Haelfte aus dieser Liste:
-#: dieselbe Frage, anderer Ort zum Suchen. Die Reihenfolge ist die aus der
-#: Recherche zu schwer auffindbaren Dingen -- Karte und Verzeichnisse zuerst,
-#: weil sie finden, was keine Suchmaschine kennt.
+
+
+
+
+
 SOURCES = (
     "in der Karte (OpenStreetMap) statt in der Suchmaschine",
     "in Verzeichnissen wie Das Oertliche, Gelbe Seiten, 11880, meinestadt.de",
@@ -308,7 +308,7 @@ def spread_tasks(question: str, tasks: Sequence[Any], limit: int) -> list[Task]:
         if len(out) >= limit:
             return out
         out.append(Task(text=f"{kern} -- {angle}"))
-    # Immer noch Platz: dieselben Blickwinkel auf die Auftraege des Planers.
+
     for angle in ANGLES:
         for task in _distinct(tasks):
             if len(out) >= limit:
@@ -318,9 +318,9 @@ def spread_tasks(question: str, tasks: Sequence[Any], limit: int) -> list[Task]:
             out.append(Task(text=f"{task.text} -- {angle}"))
         if len(out) >= limit:
             break
-    # Und wenn das immer noch nicht reicht (bei `/max` sind es vierundvierzig
-    # Agenten und manchmal nur ein Auftrag), kommt die zweite Achse dazu:
-    # nicht WAS, sondern WO gesucht wird.
+
+
+
     for quelle in SOURCES:
         for angle in ANGLES:
             if len(out) >= limit:
@@ -330,17 +330,17 @@ def spread_tasks(question: str, tasks: Sequence[Any], limit: int) -> list[Task]:
             break
     return _distinct(out)[:limit]
 
-#: Ein knappes Schema haelt kleine Modelle bei der Sache und beendet die
-#: Ausgabe frueher -- das ist der Loewenanteil der Wartezeit.
+
+
 PLANNER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "recherche": {"type": "boolean"},
         "teilfragen": {"type": "array", "items": {"type": "string"}},
-        # Fehlt eine entscheidende Angabe (11.4.0 Terra): erst fragen, dann suchen.
+
         "rueckfrage": {"type": "string"},
         "optionen": {"type": "array", "items": {"type": "string"}},
-        # Weitere Rueckfragen hinter der ersten (12.1.1 Luna): das Fenster zeigt 1/3, 2/3 ...
+
         "weitere_fragen": {"type": "array", "maxItems": 2, "items": {
             "type": "object",
             "properties": {"frage": {"type": "string"},
@@ -360,7 +360,7 @@ class Plan(tuple):
 
     rueckfrage: str = ""
     optionen: tuple[str, ...] = ()
-    #: Weitere Rueckfragen hinter der ersten: [(frage, optionen), ...] (12.1.1 Luna).
+
     weitere: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     def __new__(cls, needs: bool, tasks: list[str], rueckfrage: str = "",
@@ -405,7 +405,7 @@ def _parse_questions(raw: str) -> tuple[str, list[str], list[tuple[str, list[str
     for eintrag in (roh_weitere if isinstance(roh_weitere, list) else [])[:2]:
         if isinstance(eintrag, dict) and kurz(eintrag.get("frage"), 200):
             weitere.append((kurz(eintrag.get("frage"), 200), optionen_aus(eintrag.get("optionen"))))
-    # Ohne erste Frage ruecken die weiteren nach vorn.
+
     optionen = optionen_aus(payload.get("optionen"))
     if not frage and weitere:
         (frage, optionen), weitere = weitere[0], weitere[1:]
@@ -486,7 +486,7 @@ def _parse_plan(raw: str, question: str, limit: int) -> tuple[bool, list[str]]:
                 payload = None
 
     if not isinstance(payload, dict):
-        # Vielleicht kam nur ein nacktes Array -- auch das nehmen wir.
+
         tasks = _parse_task_list(raw)
         return True, (tasks[:limit] if tasks else [question.strip()])
 
@@ -495,8 +495,8 @@ def _parse_plan(raw: str, question: str, limit: int) -> tuple[bool, list[str]]:
 
     roh = payload.get("teilfragen") or []
     if isinstance(roh, str):
-        # Ein Text statt einer Liste (9.5.34) -- vorher wurde er in einzelne
-        # Buchstaben zerlegt: "Preise" -> P, r, e, i.
+
+
         roh = [roh]
     tasks = [
         str(item).strip() for item in (roh if isinstance(roh, list) else [])
@@ -536,20 +536,20 @@ def _parse_task_list(raw: str) -> list[str]:
     return [str(item).strip() for item in data if str(item).strip()]
 
 
-#: Normal-Modus (seit 9.6.1): Obergrenzen, damit die Suche nicht auf den
-#: langsamsten Agenten wartet. Bis 9.6.0 durfte jeder Agent bis zu sieben
-#: Modellrunden drehen, jeder Aufruf bis zu 90 Sekunden haengen und jede Seite
-#: 15 Sekunden laden -- ein einziger haengender Agent hielt die ganze Antwort
-#: auf. Jetzt gibt es eine Frist je Agent: ist sie um, sucht er nicht weiter,
-#: sondern fasst zusammen, was er gefunden hat -- mit Quellen wie immer. Der
-#: Pro-Modus bleibt bewusst ohne Frist: dort geht Genauigkeit vor Tempo.
+
+
+
+
+
+
+
 NORMAL_DEADLINE = 40.0
 NORMAL_CALL_TIMEOUT = 45.0
 NORMAL_FETCH_TIMEOUT = 8.0
-#: So viele Agenten fuellt der Normal-Modus hoechstens auf (der Planer selbst
-#: darf mehr Teilfragen liefern -- die laufen alle). Zwoelf Kopien derselben
-#: Frage unter anderen Blickwinkeln stauen sich sonst an der Ratenbremse des
-#: Anbieters und kosten Wartezeit, ohne viel Neues zu finden.
+
+
+
+
 NORMAL_FILL = 6
 
 
@@ -587,10 +587,10 @@ class Task:
     """
 
     text: str
-    #: Die Rolle in eigenen Worten. Leer heisst: die aus dem Wortlaut
-    #: abgeleitete Rolle (siehe `role_for`).
+
+
     angle: str = ""
-    #: Auf das starke Modell, mit groesserem Budget.
+
     strong: bool = False
 
     @property
@@ -629,15 +629,15 @@ class SubagentResult:
     searches: list[str] = field(default_factory=list)
     tool_calls: int = 0
     error: str = ""
-    #: Mit welcher Rolle gearbeitet wurde -- fuer die Anzeige und damit der
-    #: Hauptagent weiss, unter welchem Blickwinkel etwas gefunden wurde.
+
+
     role: str = "standard"
-    #: Die Rolle in den Worten des Masters, falls er eine vergeben hat.
+
     angle: str = ""
-    #: Lief er auf dem starken Modell?
+
     strong: bool = False
-    #: Was der Pruefer dazu gesagt hat, und sein Urteil in einem Wort. Leer,
-    #: wenn nicht geprueft wurde -- das ist der Normalfall.
+
+
     check: str = ""
     verdict: str = ""
     check_sources: list[dict[str, str]] = field(default_factory=list)
@@ -706,8 +706,8 @@ def _run_one(
     box = toolbox or Toolbox(settings, cache=cache, on_event=None)
     owns_box = toolbox is None
 
-    # Die Rolle des Masters steht ueber der bekannten: sie ist auf diesen
-    # einen Auftrag gemuenzt, die andere bringt die Technik mit.
+
+
     rollentext = ROLE_EXTRA[role]
     if angle.strip():
         rollentext = f"\nDein Auftrag im Team: {angle.strip()}\n{rollentext}"
@@ -715,23 +715,23 @@ def _run_one(
     if getattr(settings, "legal_guard", True):
         from aquaticy.guardrails import subagent_note
 
-        # Hinter die Rolle, vor alles andere: wer er ist, steht weiter im
-        # ersten Satz, und der Auftrag bleibt das Letzte, was er liest --
-        # daran haengt, dass er ihn nicht aus den Augen verliert.
+
+
+
         rolle, _, rest = auftrag.partition("\n\n")
         regeln = subagent_note().strip()
         auftrag = f"{rolle}\n\n{regeln}\n\n{rest}" if rest else f"{regeln}\n\n{auftrag}"
     guard = getattr(box, "guard", None)
     if guard is not None and not guard.topic:
-        # Ein frischer Werkzeugkasten kennt die Frage des Nutzers nicht --
-        # fuer ihn ist der Auftrag der Anlass (auch im Grundschutz).
+
+
         guard.topic = task
     messages: list[dict[str, Any]] = [{"role": "user", "content": auftrag}]
     budget = max(1, int(budget) or settings.subagent_budget)
     used = 0
-    # Faellt das kleine Subagenten-Modell aus (nicht geladen, abgestuerzt),
-    # uebernimmt das Hauptmodell -- langsamer, aber die Teilfrage wird
-    # beantwortet statt verworfen.
+
+
+
     model_in_use = model or settings.effective_subagent_model
     ende = time.monotonic() + deadline if deadline > 0 else 0.0
     call_timeout = NORMAL_CALL_TIMEOUT if deadline > 0 else 0.0
@@ -739,11 +739,11 @@ def _run_one(
     try:
         while used < budget:
             if ende and used and time.monotonic() >= ende:
-                # Frist um: nicht weiter suchen, sondern zusammenfassen (unten).
+
                 break
             if stop is not None and stop.is_set():
-                # Abgebrochen. Was bis hierher gefunden wurde, geht mit --
-                # der Hauptagent kann es noch verwenden.
+
+
                 result.error = result.error or "Abgebrochen."
                 break
             try:
@@ -775,8 +775,8 @@ def _run_one(
             from aquaticy.agent import repair_tool_calls, run_calls, tool_calls_from_text
 
             if not calls:
-                # 11.2.2 Terra: qwen2.5-coder & Co. schreiben den Aufruf als JSON in
-                # den Text. Ohne das galt er als "Ergebnis" -- gesucht wurde nie.
+
+
                 aus_text = tool_calls_from_text(
                     content, (t["function"]["name"] for t in TOOL_SCHEMAS), task)
                 if aus_text:
@@ -802,10 +802,10 @@ def _run_one(
                 {"role": "assistant", "content": content, "tool_calls": call_dicts}
             )
 
-            # Was ins Budget passt, laeuft nebeneinander; der Rest bekommt
-            # eine Absage. Auch abgeschnittene Aufrufe BRAUCHEN eine Antwort
-            # -- ein Tool-Call ohne Antwort macht den Verlauf ungueltig und
-            # der abschliessende Aufruf wuerde abgelehnt.
+
+
+
+
             room = max(0, budget - used)
             doable, cut = call_dicts[:room], call_dicts[room:]
             used += len(doable)
@@ -848,7 +848,7 @@ def _run_one(
             )
 
         if not result.summary:
-            # Budget aufgebraucht -- ein letzter Aufruf ohne Werkzeuge.
+
             messages.append(
                 {
                     "role": "user",
@@ -896,19 +896,19 @@ def _run_one(
             )
 
 
-#: Ab wie vielen gleichzeitigen Agenten sie versetzt starten -- und um wie
-#: viel. Nicht der Hoeflichkeit wegen: vierundzwanzig Anfragen in derselben
-#: Millisekunde sind fuer jeden Anbieter ein Ausschlag, auf den er mit einer
-#: Ratenbegrenzung antwortet. Ein Subagent, der die abbekommt, faellt aus --
-#: seine Teilfrage bleibt unbeantwortet. Ueber knapp zwei Sekunden verteilt
-#: passiert das nicht, und neben einer Recherche von vielen Sekunden faellt
-#: der Versatz nicht auf. Bis vier Agenten bleibt alles wie bisher.
+
+
+
+
+
+
+
 STAGGER_AFTER = 4
 LAUNCH_STAGGER = 0.08
 MAX_LAUNCH_DELAY = 2.0
 
-#: Wie viel mehr Werkzeug-Budget ein starker Agent bekommt. Er sitzt an dem,
-#: was die anderen nicht gefunden haben -- da reicht eine Suche selten.
+
+
 STRONG_EXTRA_BUDGET = 6
 
 
@@ -977,13 +977,13 @@ def run_subagents(
     if not clean:
         return []
 
-    # Die Rolle steckt im Auftrag: wer nach Preisen fragt, bekommt den
-    # Agenten, der auf Zahlen achtet. Das kostet keinen Modellaufruf.
+
+
     roles = [task.role for task in clean]
-    # Nie mehr Pruefer als Rechercheure gleichzeitig: bei einem lokalen
-    # Modell laufen zwei Agenten nebeneinander, und vier Pruefer obendrauf
-    # waeren sechs Anfragen an dieselbe Grafikkarte -- die rechnet sie
-    # ohnehin nacheinander, es wuerde nur alles langsamer.
+
+
+
+
     checkers = max(0, min(int(checkers), max(1, parallel)))
     if on_event:
         on_event(
@@ -998,10 +998,10 @@ def run_subagents(
         if checkers:
             on_event("checkers", {"count": checkers})
 
-    # Ein gemeinsamer Fetcher fuer alle: dessen Drossel und robots.txt-Cache
-    # gelten damit ueber die Subagenten hinweg. Mit je eigenem Fetcher wuerden
-    # zwei parallele Subagenten dieselbe Domain gleichzeitig treffen -- und
-    # unser Versprechen von einem Request pro Sekunde und Domain waere hin.
+
+
+
+
     from aquaticy.fetch import Fetcher
 
     shared_fetcher = Fetcher(
@@ -1012,12 +1012,12 @@ def run_subagents(
         enable_browser=settings.enable_playwright,
     )
     boxes = [Toolbox(settings, cache=cache, fetcher=shared_fetcher) for _ in clean]
-    # Eine Menge fuer alle: was ein Agent gelesen hat, ist fuer die anderen
-    # verbraucht. Ohne das laufen drei Teilfragen zum selben Thema auf
-    # dieselben zwei Seiten zu und die Zerlegung bringt keine Breite.
-    # Zugegriffen wird darauf aus mehreren Threads; set.add und die Pruefung
-    # beim Filtern sind jeweils ein einzelner Bytecode-Schritt, da braucht es
-    # kein Schloss.
+
+
+
+
+
+
     shared_domains: set[str] = set()
     for box in boxes:
         box.avoid_domains = shared_domains
@@ -1033,7 +1033,7 @@ def run_subagents(
         if stop is not None and stop.is_set():
             return
         if result.error or not result.summary.strip():
-            return  # nichts da, was sich pruefen liesse
+            return
         if on_event:
             on_event("check", {"task": result.task})
         box = Toolbox(settings, cache=cache, fetcher=shared_fetcher)
@@ -1053,23 +1053,23 @@ def run_subagents(
                 % {"task": result.task, "summary": result.summary[:4000]},
             )
         finally:
-            # Der Fetcher gehoert dem gesamten Auftrag: andere Suchende und
-            # Pruefer benutzen ihn noch parallel.
+
+
             box.close(close_fetcher=False)
         if geprueft.error:
             return
         result.check = geprueft.summary
         result.verdict = verdict_of(geprueft.summary)
         result.check_sources = list(geprueft.sources)
-        # Was der Pruefer gesucht hat, zaehlt mit: sonst steht am Ende eine
-        # Zahl unter der Antwort, die kleiner ist als das, was wirklich lief.
+
+
         result.searches.extend(geprueft.searches)
 
     try:
-        # Die Pruefer bekommen eigene Faeden: sie sollen arbeiten, WAEHREND
-        # die anderen noch suchen. Ist die Recherche durch, stehen ihre Faeden
-        # dem Ruecksstau an Pruefungen zur Verfuegung -- aus vier Pruefern
-        # werden dann alle.
+
+
+
+
         def einer(task: Task, box: Toolbox) -> SubagentResult:
             """Ein Agent. Die starken laufen auf dem starken Modell und
             bekommen mehr Budget -- sie sitzen an den schweren Auftraegen."""
@@ -1100,9 +1100,9 @@ def run_subagents(
                 time.sleep(min(position * LAUNCH_STAGGER, MAX_LAUNCH_DELAY))
             ergebnis = einer(task, box)
             if checkers:
-                # Sofort weiterreichen, nicht erst am Ende: die Pruefung des
-                # ersten Ergebnisses laeuft, waehrend die letzte Teilfrage
-                # noch sucht.
+
+
+
                 auftrag = pool.submit(pruefe, ergebnis)
                 with schloss:
                     offene_pruefungen.append(auftrag)
@@ -1114,11 +1114,11 @@ def run_subagents(
                 for position, (task, box) in enumerate(zip(clean, boxes, strict=True))
             ]
             results = [future.result() for future in futures]
-            # Der Ausstieg aus dem `with` wartet auf die Pruefungen, die noch
-            # laufen oder in der Warteschlange stehen. Erst danach stehen die
-            # Vermerke in den Ergebnissen.
-        # Eine gescheiterte Pruefung aendert nichts an der Recherche -- still
-        # verschwinden soll sie trotzdem nicht.
+
+
+
+
+
         for auftrag in offene_pruefungen:
             fehler = auftrag.exception()
             if fehler is not None and on_event:

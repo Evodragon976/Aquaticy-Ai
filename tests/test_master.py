@@ -39,9 +39,9 @@ def _antwortet(monkeypatch: pytest.MonkeyPatch, payload: Any) -> list[dict[str, 
     return gesehen
 
 
-# ---------------------------------------------------------------------------
-# Beauftragen
-# ---------------------------------------------------------------------------
+
+
+
 def test_every_agent_gets_its_own_role(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -67,7 +67,7 @@ def test_every_agent_gets_its_own_role(
     ]
     assert mission.tasks[0].angle == "sucht Betreiberseiten"
     assert mission.tasks[1].strong is True
-    # Die Rolle für die Technik-Hinweise fällt dabei von selbst ab.
+
     assert mission.tasks[1].role == "zahlen"
 
 
@@ -142,9 +142,9 @@ def test_nonsense_instead_of_json_is_survivable(
     assert plan_mission("Frage", settings).fallback is True
 
 
-# ---------------------------------------------------------------------------
-# Bewerten und nachschicken
-# ---------------------------------------------------------------------------
+
+
+
 def test_gaps_lead_to_a_second_round(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:

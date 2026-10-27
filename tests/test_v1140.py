@@ -17,7 +17,7 @@ def einstellungen(tmp_path) -> Settings:
                     subagents_auto=False, keep_full_results=1)
 
 
-# --- Ort im Chat: einmal gesagt, gilt fuer den Chat -----------------------------
+
 
 def _ort_runde() -> list[Any]:
     """Erste Frage: Rueckfrage nach dem Ort, dann vier Suchen, dann die Antwort."""
@@ -37,8 +37,8 @@ def test_a_place_from_the_question_window_is_kept_for_the_next_question(
     agent = Agent(einstellungen, cache=None)
     agent.set_ask_handler(lambda frage, optionen: "Bremen")
     agent.ask("Welche Cafés haben WLAN?", stream=False)
-    # Nach vier Suchen ist die Antwort aus dem Fenster noch da -- bis 11.3.2 wurde
-    # sie wie jede alte Werkzeug-Ausgabe zum Platzhalter.
+
+
     fenster = [m for m in agent.messages if m.get("name") == "ask_user"]
     assert fenster and "Bremen" in fenster[0]["content"]
     agent.ask("Und wie wird das Wetter morgen?", stream=False)
@@ -60,12 +60,12 @@ def test_the_place_survives_reopening_the_chat(tmp_path, monkeypatch) -> None:
     agent.ask("Welche Cafés haben WLAN?", stream=False)
     eintraege = cache.chat_history(agent.session_id)
     assert eintraege[-1].meta["clarified"] == [["Für welchen Ort?", "Bremen"]]
-    # Ein frischer Agent (anderes Geraet, Neustart) oeffnet den Chat wieder.
+
     neu = Agent(einstellungen, cache=cache)
     web._resume(neu, agent.session_id, eintraege, untrusted=False)
     assert neu.clarified == [("Für welchen Ort?", "Bremen")]
     assert "Bremen" in neu._planner_context()
-    # Ein neuer Chat beginnt ohne die Angaben des alten.
+
     neu.clear()
     assert neu.clarified == [] and neu._clarified_note() == ""
 
@@ -80,7 +80,7 @@ def test_clarified_answers_are_bounded_and_the_newest_wins(einstellungen) -> Non
     assert len(agent.clarified) == 12
 
 
-# --- Gezielte Angaben: "Was laeuft im Kino?" will Filme, keine Kinos ------------
+
 
 def test_a_cinema_question_without_films_goes_back_once(einstellungen, monkeypatch,
                                                         toolbox) -> None:  # noqa: F811
@@ -149,7 +149,7 @@ def test_the_planner_hears_which_detail_is_wanted(einstellungen) -> None:
     assert "Gesucht ist" not in agent._planner_context()
 
 
-# --- Weg und wieder da: die Antwort wartet ----------------------------------------
+
 
 def test_a_finished_answer_waits_far_longer_than_15_minutes() -> None:
     from aquaticy import web
@@ -158,14 +158,14 @@ def test_a_finished_answer_waits_far_longer_than_15_minutes() -> None:
     lauf.chat = "chat-1"
     lauf.add({"type": "chunk", "text": "Antwort"})
     lauf.finish()
-    lauf.finished -= 2 * 3600            # zwei Stunden weg
+    lauf.finished -= 2 * 3600
     stand = lauf.state()
     assert stand["resume"] is True and stand["chat"] == "chat-1"
-    lauf.delivered = True                 # zu Ende gesehen: nicht noch einmal
+    lauf.delivered = True
     assert lauf.state()["resume"] is False
     alt = web.Run("def", "x")
     alt.finish()
-    alt.finished -= 8 * 24 * 3600         # nach einer Woche liegt sie im Verlauf
+    alt.finished -= 8 * 24 * 3600
     assert alt.state()["resume"] is False
 
 
@@ -181,9 +181,9 @@ def test_the_run_knows_its_chat_and_the_ui_reattaches_after_the_background() -> 
                      html.index("function sichtbarWieder")]
     assert "if (versteckt) await sichtbarWieder();" in anhaengen
     aufnehmen = html[html.index("async function wiederAufnehmen"):
-                     html.index("/* ---------- Eingabe ---------- */")]
+                     html.index("const slashBefehle = new")]
     assert "await openChat(stand.chat)" in aufnehmen
-    # Nur Stopp und Chatwechsel brechen ab -- nicht der Browser im Hintergrund.
+
     assert '(meins || running)?.signal?.aborted' in html
 
 
@@ -205,12 +205,12 @@ def test_a_replayed_question_window_closes_again() -> None:
     html = (Path(web.__file__).parent / "webui.html").read_text(encoding="utf-8")
     handle = html[html.index("function handle(ev){"):html.index("function handle(ev){") + 40000]
     beantwortet = handle[handle.index('case "ask_done":'):][:200]
-    assert 'finishAsk(ev.answer || "", true)' in beantwortet       # leise: nichts senden
+    assert 'finishAsk(ev.answer || "", true)' in beantwortet
     fertig = handle[handle.index('case "done":'):][:300]
     assert 'if (asking && asking.bubble === bubble) finishAsk("", true);' in fertig
 
 
-# --- Zu viele Anfragen: kein Stolpern, kein haengender Abruf --------------------
+
 
 def test_too_many_requests_says_when_to_come_back(monkeypatch) -> None:
     """Am Ende des Browser-Rundgangs lief das Konto ins Anfragen-Limit. Die Seite
@@ -259,11 +259,11 @@ def test_the_page_waits_on_429_and_always_reads_error_bodies() -> None:
 
     html = (Path(web.__file__).parent / "webui.html").read_text(encoding="utf-8")
     api = html[html.index("function api(path, options = {}, versuch = 0){"):
-               html.index("/* ---------- Einwilligung und Konto ---------- */")]
+               html.index("const authGate = ")]
     assert 'res.status === 429 && lesen && versuch < 3' in api
     assert 'res.headers.get("Retry-After")' in api
     assert "const text = await res.text()" in api
-    assert "return new Response(ohneKoerper ? null : text" in api      # 304 & Co. (11.4.1)
+    assert "return new Response(ohneKoerper ? null : text" in api
     start = html.index('try { cfg = await (await api("/api/config")).json(); }')
     einstellungen = html[start:start + 400]
     assert 'typeof cfg.values !== "object"' in einstellungen

@@ -27,7 +27,7 @@ def test_german_number_formats() -> None:
     """Preise stehen auf deutschen Seiten als 1.099,99."""
     assert calculate("1.099,99 + 0,01") == pytest.approx(1100.0)
     assert calculate("12,5 * 2") == pytest.approx(25.0)
-    # Englische Schreibweise bleibt englisch.
+
     assert calculate("12.5 * 2") == pytest.approx(25.0)
 
 

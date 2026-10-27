@@ -80,9 +80,9 @@ def test_write_env_file_preserves_comments(tmp_path: Path) -> None:
     assert "AQUATICY_MODEL=alt" not in content
 
 
-# ---------------------------------------------------------------------------
-# Weitere Anbieter
-# ---------------------------------------------------------------------------
+
+
+
 def test_nvidia_nim_key_is_recognised() -> None:
     """NVIDIA-Modell-IDs enthalten mehrere Schraegstriche."""
     assert config.provider_of("nvidia_nim/meta/llama-3.3-70b-instruct") == "nvidia_nim"
@@ -140,13 +140,13 @@ def test_generic_key_does_not_override_known_providers(
 ) -> None:
     monkeypatch.setenv("AQUATICY_API_KEY", "geheim")
     assert config.api_key_name_for("mistral/mistral-large-latest") == "MISTRAL_API_KEY"
-    # Ollama braucht weiterhin keinen Key.
+
     assert config.api_key_name_for("ollama/llama3.1") == ""
 
 
-# ---------------------------------------------------------------------------
-# Modell-IDs pruefen
-# ---------------------------------------------------------------------------
+
+
+
 def test_valid_models_pass() -> None:
     for model in (
         "mistral/mistral-large-latest",
@@ -155,7 +155,7 @@ def test_valid_models_pass() -> None:
         "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b",
     ):
         assert config.model_problem(model) == "", model
-    # Seit 12.0.0 Luna bekannt, aber nicht erlaubt (bis 11.4.1 standen sie oben).
+
     for model in ("anthropic/claude-sonnet-4-6", "openai/gpt-4o"):
         assert config.model_problem(model) == config.MODEL_RULE_TEXT, model
 
@@ -192,9 +192,9 @@ def test_resolve_model_reports_the_provider() -> None:
     assert config.resolve_model("") == ""
 
 
-# ---------------------------------------------------------------------------
-# Kwargs je Modell -- gemischte Anbieter
-# ---------------------------------------------------------------------------
+
+
+
 def test_kwargs_for_the_same_provider_are_passed_through(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -225,15 +225,15 @@ def test_main_model_key_is_not_sent_to_other_providers(
         model="anthropic/claude-sonnet-4-6", subagent_model="ollama_chat/qwen3:1.7b"
     )
     kwargs = settings.llm_kwargs_for(settings.effective_subagent_model)
-    # Kein fremder Key -- aber das Kontextfenster bekommt das lokale Modell.
+
     assert "api_key" not in kwargs and "api_base" not in kwargs
     assert kwargs["num_ctx"] == 16384
 
 
 
-# ---------------------------------------------------------------------------
-# Kontextfenster fuer lokale Modelle
-# ---------------------------------------------------------------------------
+
+
+
 def test_ollama_models_get_a_real_context_window() -> None:
     """Ohne num_ctx nimmt Ollama 2048-4096 Token und wirft bei Ueberlauf
     still den Verlaufsanfang weg -- "er erinnert sich nicht an die letzte
@@ -265,8 +265,8 @@ def test_context_tokens_is_configurable(
         monkeypatch.setenv("AQUATICY_API_BASE", nachbau.url)
         monkeypatch.setenv("AQUATICY_CONTEXT_TOKENS", "32768")
         assert config.get_settings().llm_kwargs()["num_ctx"] == 32768
-        # Seit 11.3.0 Luna hoechstens 5 GB: nennt Ollama den Aufbau des Modells
-        # nicht, gilt der Standard (16384) -- 32768 Tokens koennen 12 GB sein.
+
+
         config.get_settings.cache_clear()
         monkeypatch.setenv("AQUATICY_MODEL", "ollama_chat/gemma4:12b")
         assert config.get_settings().llm_kwargs()["num_ctx"] == 16384
@@ -279,9 +279,9 @@ def test_context_tokens_zero_uses_the_ollama_default() -> None:
     assert "num_ctx" not in settings.llm_kwargs()
 
 
-# ---------------------------------------------------------------------------
-# Parallelitaet der Subagenten
-# ---------------------------------------------------------------------------
+
+
+
 def test_local_models_run_two_subagents() -> None:
     """Mehr bringt lokal nichts -- die GPU rechnet ohnehin nacheinander."""
     settings = config.Settings(model="ollama_chat/gemma4:12b")
@@ -353,9 +353,9 @@ def test_an_explicit_parallelism_is_never_exceeded() -> None:
     assert settings.parallel_for(24) == 6
 
 
-# ---------------------------------------------------------------------------
-# Groesse der virtual machine: normal oder plus
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_default_size_matches_the_old_fixed_numbers(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -400,6 +400,6 @@ def test_a_hand_picked_number_wins_over_the_size(
     settings = config.get_settings()
     assert settings.vm_size == "plus"
     assert settings.vm_cpus == 2
-    # Die anderen beiden Zahlen kommen weiterhin aus der Groesse.
+
     assert settings.vm_memory_mb == 6144
     assert settings.vm_disk_gb == 20

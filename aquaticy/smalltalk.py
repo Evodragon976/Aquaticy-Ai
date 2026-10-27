@@ -22,10 +22,9 @@ import re
 import threading
 from dataclasses import dataclass
 
-#: Zufall aus dem Betriebssystem -- nicht vorhersagbar, keine Saat noetig.
 _ZUFALL = random.SystemRandom()
 
-#: Welche Antwort je Art zuletzt kam -- damit sie sich nicht gleich wiederholt.
+
 _LETZTE: dict[str, str] = {}
 _LOCK = threading.Lock()
 
@@ -37,7 +36,7 @@ class Art:
     name: str
     muster: re.Pattern[str]
     antworten: tuple[str, ...]
-    #: Nur, wenn Aquaticy gerade keine Frage offen hat ("ok" als Antwort darauf).
+
     nicht_bei_offener_frage: bool = False
 
 
@@ -620,7 +619,7 @@ ARTEN: tuple[Art, ...] = (
             "Funktioniert! Was soll ich für dich tun?",
             "Hier! Alles bereit für deine erste Frage.",
         ),
-        # "123" kann die Antwort auf eine Rueckfrage sein (9.5.34).
+
         nicht_bei_offener_frage=True,
     ),
     Art(
@@ -687,7 +686,7 @@ def art_von(text: str, *, frage_offen: bool = False) -> Art | None:
             continue
         if frage_offen and art.name == "danke" and re.match(
                 r"(?:ok(?:ay)?|super|top|perfekt|cool|klasse|prima|alles\s+klar)\b", kern):
-            # "ok danke" auf eine offene Rueckfrage ist eine Antwort darauf (9.5.34)
+
             continue
         if art.muster.fullmatch(kern):
             return art

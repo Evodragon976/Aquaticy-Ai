@@ -50,8 +50,8 @@ def test_a_double_sent_answer_never_answers_the_next_question(
     ergebnisse: list[bool] = []
 
     def doppelt() -> None:
-        # Der Browser schickt die Antwort auf Frage 1 ein zweites Mal (Doppelklick,
-        # wiederholte Anfrage) -- nachdem Frage 1 schon beantwortet ist.
+
+
         ergebnisse.append(session.answer("bis 800"))
 
     agent = ZweiFragen(nach_erster=doppelt)
@@ -76,7 +76,7 @@ def test_an_answer_after_giving_up_is_refused(client, session: web.ChatSession, 
     spaet: list[bool] = []
 
     def zu_spaet() -> None:
-        # Frage 1 ist abgelaufen; jetzt kommt die Antwort doch noch.
+
         spaet.append(session.answer("zu spaet"))
 
     agent = ZweiFragen(nach_erster=zu_spaet)

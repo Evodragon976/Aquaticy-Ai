@@ -13,7 +13,7 @@ from aquaticy import web
 
 def _handy_css() -> str:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    start = html.index("/* Eine Zeile fuer alles: Anhaengen, Modell, Mikrofon, Senden.")
+    start = html.index(".crow{gap:5px}")
     return html[start: html.index("}", html.index(".modelpick{", start)) + 1]
 
 
@@ -21,7 +21,7 @@ def test_the_model_button_ends_behind_its_arrow_on_phones() -> None:
     css = _handy_css()
     assert ".modelpick{flex:0 1 auto;max-width:none}" in css
     assert "space-between" not in css and "flex:1 1 auto" not in css
-    # Die Luecke bis zum Mikrofon fuellt ein leerer Platzhalter, kein Knopf.
+
     assert ".crow .spacer{display:block;flex:1 1 0;min-width:0}" in css
 
 

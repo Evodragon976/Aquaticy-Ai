@@ -14,7 +14,7 @@ from aquaticy import devices
 from aquaticy.auth import AuthStore
 from aquaticy.config import Settings
 from aquaticy.devices import clean_device, emails_similar, new_device_token, score, token_hash
-from tests.test_end_to_end import _req, server  # noqa: F401 -- Fixture
+from tests.test_end_to_end import _req, server  # noqa: F401
 
 TERMS = {"terms_accepted": True, "terms_version": "1"}
 HANDY_UA = ("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 "
@@ -33,7 +33,7 @@ def store(tmp_path: Path) -> AuthStore:
     return AuthStore(tmp_path, "PROCODE12", "Abcdef1234567!")
 
 
-# -- Geraete-Angaben ------------------------------------------------------------------
+
 def test_the_device_summary_is_readable() -> None:
     geraet = clean_device(PC, user_agent=PC_UA, accept_language="de-DE,de;q=0.9")
     assert geraet.hardware.startswith("Windows · 16 Kerne · 8 GB · 2560x1440")
@@ -63,7 +63,7 @@ def test_what_the_browser_sends_is_cleaned() -> None:
     assert "<" not in geraet.hardware and "\x00" not in geraet.hardware
     assert "‮" not in geraet.hardware
     assert len(geraet.hardware) <= 200 and len(geraet.browser) <= 80
-    # Kaputtes Nicht-Woerterbuch geht auch.
+
     assert clean_device("Unsinn", user_agent="").hardware_hash == ""
     assert clean_device(None).browser_hash == ""
 
@@ -91,13 +91,13 @@ def test_device_tokens() -> None:
     ("anna.schmidt@web.de", "anna.schmitt@web.de", True),
     ("anna@web.de", "bernd@web.de", False),
     ("mama.meier@web.de", "papa.meier@web.de", False),
-    ("a1@x.de", "a2@x.de", False),  # zu kurz, um etwas zu sagen
+    ("a1@x.de", "a2@x.de", False),
 ])
 def test_similar_emails(a: str, b: str, gleich: bool) -> None:
     assert emails_similar(a, b) is gleich
 
 
-# -- Punkte ---------------------------------------------------------------------------
+
 def _punkte(**mehr: Any) -> float:
     werte: dict[str, Any] = {"email": "neu@x.de", "ip": "", "device": clean_device({}),
                              "other_email": "alt@y.de", "other_ips": set(), "other_devices": []}
@@ -109,21 +109,21 @@ def test_the_examples_from_the_request() -> None:
     handy = clean_device(HANDY, user_agent=HANDY_UA, cookie="A" * 32)
     fremd = clean_device(PC, user_agent=PC_UA, cookie="B" * 32)
     zeile = (handy.cookie_hash, handy.hardware_hash, handy.browser_hash)
-    # Dieselbe IP-Adresse allein ist nur merkwuerdig.
+
     assert _punkte(ip="203.0.113.1", other_ips={"203.0.113.1"}) == devices.POINTS_IP
-    # Selbe Adresse und selber Browser: geht durch.
+
     browser_gleich = clean_device({"lang": "de-DE"}, user_agent=HANDY_UA)
     p = _punkte(ip="203.0.113.1", other_ips={"203.0.113.1"}, device=browser_gleich,
                 other_devices=[zeile])
     assert p == 1.5 and p < devices.BLOCK_POINTS
-    # Dasselbe Handy (Geraete-Kennung): Sperre.
+
     assert _punkte(device=handy, other_devices=[zeile]) >= devices.BLOCK_POINTS
-    # Adresse + aehnliche E-Mail + gleiche Hardware: Sperre.
+
     gleiche_hw = clean_device(HANDY, user_agent=HANDY_UA.replace("126", "125"))
     assert _punkte(email="max.muster@x.de", other_email="maxmuster@y.de", ip="1.2.3.4",
                    other_ips={"1.2.3.4"}, device=gleiche_hw,
                    other_devices=[zeile]) >= devices.BLOCK_POINTS
-    # Ein fremdes Geraet zaehlt nichts.
+
     assert _punkte(device=fremd, other_devices=[zeile]) == 0
 
 
@@ -143,7 +143,7 @@ def test_only_the_strongest_device_match_counts() -> None:
     assert _punkte(device=handy, other_devices=[zeile] * 5) == 1.5
 
 
-# -- Registrierung --------------------------------------------------------------------
+
 def _reg(store: AuthStore, mail: str, name: str, ip: str = "", device: Any = None) -> Any:
     return store.register(mail, "ein langes Passwort", "normal", username=name, ip=ip,
                           device=device, **TERMS)
@@ -154,14 +154,14 @@ def test_a_household_can_have_two_accounts(store: AuthStore) -> None:
     kind = clean_device(HANDY, user_agent=HANDY_UA, cookie="K" * 32)
     _reg(store, "petra.meier@web.de", "petra", "203.0.113.7", mama)
     _reg(store, "lena2010@gmx.de", "lena", "203.0.113.7", kind)
-    # Selber Browser auf einem anderen Geraet geht auch.
+
     _reg(store, "opa@t-online.de", "opa", "203.0.113.7", clean_device({}, user_agent=PC_UA))
 
 
 def test_the_same_device_cannot_make_a_second_account(store: AuthStore) -> None:
     handy = clean_device(HANDY, user_agent=HANDY_UA, cookie="H" * 32)
     _reg(store, "eins@web.de", "eins", "203.0.113.8", handy)
-    # Anderes Netz (Mobilfunk), andere Mail -- aber dasselbe Handy.
+
     with pytest.raises(ValueError, match="schon ein Konto"):
         _reg(store, "zweiundzwanzig@gmx.de", "zwei", "198.51.100.3", handy)
 
@@ -177,7 +177,7 @@ def test_a_device_seen_at_login_counts_too(store: AuthStore) -> None:
 def test_loopback_does_not_count_as_same_address(store: AuthStore) -> None:
     geraet = clean_device(PC, user_agent=PC_UA)
     _reg(store, "max.muster@web.de", "aa", "127.0.0.1", geraet)
-    # Aehnliche Mail + Hardware/Browser = 2,5; die Loopback-Adresse zaehlt nicht.
+
     _reg(store, "maxmuster@gmx.de", "bb", "127.0.0.1", geraet)
 
 
@@ -196,7 +196,7 @@ def test_devices_are_listed_and_deleted_with_the_account(store: AuthStore) -> No
     assert hardware.startswith("Windows") and browser.startswith("Chrome 126")
     store.note_device(konto.id, clean_device(HANDY, user_agent=HANDY_UA))
     assert store.last_device(konto.id)[0].startswith("Android")
-    # Hoechstens 20 Geraete je Konto.
+
     for nummer in range(30):
         store.note_device(konto.id, clean_device({"cores": nummer + 1}, user_agent=PC_UA))
     import sqlite3
@@ -217,7 +217,7 @@ def test_note_device_ignores_nonsense(store: AuthStore) -> None:
     assert store.last_device(konto.id) == ("", "")
 
 
-# -- aquaticy list --------------------------------------------------------------------
+
 def test_the_list_shows_only_how_many_devices(tmp_path: Path,
                                            monkeypatch: pytest.MonkeyPatch) -> None:
     from typer.testing import CliRunner
@@ -231,13 +231,13 @@ def test_the_list_shows_only_how_many_devices(tmp_path: Path,
         store = AuthStore(tmp_path, pro_code_for(tmp_path))
         _reg(store, "liste@example.org", "Liste", "",
              clean_device(PC, user_agent=PC_UA, accept_language="de-DE"))
-        # Rich-Markup aus dem Browser darf die Tabelle nicht umfaerben.
+
         _reg(store, "markup@example.org", "Markup", "",
              clean_device({"cores": 2, "gpu": "[red]rot[/red]"}, user_agent=PC_UA))
         _reg(store, "ohne@example.org", "Ohne")
         ausgabe = CliRunner().invoke(cli.app, ["list"], env={"COLUMNS": "400"}).output
-        # Seit 9.5.32 sieht der Betreiber Hardware und Browser nicht mehr --
-        # nur wie viele Geraete ein Konto hat (tests/test_v9532.py).
+
+
         assert "Geräte" in ausgabe
         assert "Windows" not in ausgabe and "RTX 4070" not in ausgabe
         assert "Chrome" not in ausgabe and "[red]rot" not in ausgabe
@@ -247,7 +247,7 @@ def test_the_list_shows_only_how_many_devices(tmp_path: Path,
         config.reset_settings_cache()
 
 
-# -- Internet fuer die virtual machine (nur Ultra) -----------------------------------
+
 def _sitzung(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plan: str) -> Path:
     from aquaticy import web
 
@@ -265,13 +265,13 @@ def test_normal_and_pro_cannot_switch_the_vm_lan_on(
     from aquaticy import web
 
     profil = _sitzung(tmp_path, monkeypatch, plan)
-    # Seit 9.5.34: Internet haben Normal und Pro immer -- das lokale Netz nie.
+
     for wert in ("true", "1", "on", "ja", "TRUE "):
         with pytest.raises(ValueError, match="Ultra"):
             web.save_values({"AQUATICY_VM_LAN": wert})
     assert not (profil / ".env").exists() or "VM_LAN=true" not in (
         profil / ".env").read_text()
-    # Ausschalten geht immer.
+
     web.save_values({"AQUATICY_VM_LAN": "false"})
 
 
@@ -294,7 +294,7 @@ def test_the_env_switch_only_counts_for_ultra(tmp_path: Path) -> None:
                                  encoding="utf-8")
     assert web._profile_settings(profil, "ultra").vm_internet is True
     assert web._profile_settings(profil, "ultra").vm_lan is True
-    # Normal und Pro: seit 9.6.0 gar kein Netz in der virtual machine.
+
     for plan in ("pro", "normal"):
         einstellungen = web._profile_settings(profil, plan)
         assert einstellungen.vm_internet is False and einstellungen.vm_lan is False
@@ -346,11 +346,11 @@ def test_the_vm_with_internet_is_locked_like_user_mode() -> None:
     box = sandbox.Sandbox(internet=True, headless=True)
     flags = _flags(box)
     assert "--network" not in flags
-    assert "NET_ADMIN" in flags and "ALL" in flags  # nur diese eine Faehigkeit
+    assert "NET_ADMIN" in flags and "ALL" in flags
     assert "no-new-privileges" in flags and "--read-only" in flags
-    # iptables-legacy braucht ein beschreibbares /run fuer die Sperre.
+
     assert "/run:rw,nosuid,nodev,size=8m" in flags
-    # Kein Desktop: kein DISPLAY, kein grosses /dev/shm.
+
     assert "--shm-size" not in flags
     assert not any(f.startswith("DISPLAY=") for f in flags)
     assert box.image == sandbox.DESKTOP_IMAGE and box.netz_offen
@@ -404,7 +404,7 @@ def test_the_model_is_told_about_the_internet() -> None:
     assert "Heimnetz" in VM_NET_INTERNET
 
 
-# -- Ende zu Ende: Geraete-Kennung ---------------------------------------------------
+
 def _registrieren(port: int, mail: str, name: str, cookie: str = "",
                   geraet: dict[str, Any] | None = None) -> tuple[int, dict[str, str], bytes]:
     _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
@@ -436,11 +436,11 @@ def test_registration_sets_the_device_cookie(server: tuple[int, Path]) -> None: 
     assert geraet, kekse
     assert "HttpOnly" in geraet[0] and "SameSite" in geraet[0]
     kennung = geraet[0].split(";", 1)[0]
-    # Dasselbe Geraet (Cookie) kann kein zweites Konto anlegen -- auch nicht von
-    # der Loopback-Adresse, denn die Kennung wiegt allein 3 Punkte.
+
+
     status, _, daten = _registrieren(port, "voellig.anders@example.org", "geraet2", kennung)
     assert status == 400 and "schon ein Konto" in daten.decode(), daten
-    # Ein anderes Geraet (ohne Cookie) schon.
+
     status, _, daten = _registrieren(port, "noch.jemand@example.org", "geraet3")
     assert status == 200, daten
 
@@ -464,5 +464,5 @@ def test_a_forged_device_cookie_is_replaced(server: tuple[int, Path]) -> None:  
     assert antwort.status == 200
     neu = [k for k in kekse if k.startswith(devices.DEVICE_COOKIE + "=")]
     assert neu and "<kaputt>" not in neu[0]
-    # Die Sitzung kommt zuletzt -- einfache Clients behalten nur das letzte.
+
     assert kekse[-1].startswith("aquaticy_session=")

@@ -42,7 +42,7 @@ TERMIN = {"summary": "Zahnarzt", "start": "2026-11-02T10:00:00"}
 ENTWURF = {"subject": "Hallo", "body": "Text", "to": "anna@example.org"}
 
 
-# -- Was hat Google erlaubt? -------------------------------------------------------------
+
 @pytest.mark.parametrize(("scopes", "erwartet"), [
     ([], None),
     (LESEN, (False, False)),
@@ -57,7 +57,7 @@ def test_granted_rights_are_read_from_the_scopes(scopes: list[str],
     assert granted_write(scopes) == erwartet
 
 
-# -- Ein nachgestelltes Google ---------------------------------------------------------------
+
 def _kasten(settings: Settings, scopes: list[str], *, direct: bool = False, write: bool = True,
             antwort: str = "ja") -> tuple[Toolbox, list[str], list[tuple[str, str]]]:
     settings.google_enabled, settings.google_client_id = True, "cid"
@@ -97,7 +97,7 @@ def _kasten(settings: Settings, scopes: list[str], *, direct: bool = False, writ
     return kasten, gefragt, anfragen
 
 
-# -- Fehlende Rechte werden erklärt, nicht still verschluckt -------------------------------
+
 def test_read_only_rights_are_explained_before_anything_is_sent(settings: Settings) -> None:
     kasten, gefragt, anfragen = _kasten(settings, LESEN)
     fehler = kasten.call("calendar_add", dict(TERMIN))["error"]
@@ -133,7 +133,7 @@ def test_with_the_switch_off_nothing_is_created(settings: Settings) -> None:
     assert anfragen == []
 
 
-# -- Ohne Rückfrage ---------------------------------------------------------------------------
+
 def test_with_the_switch_no_question_is_asked(settings: Settings) -> None:
     kasten, gefragt, _ = _kasten(settings, ALLES, direct=True, antwort="nein")
     assert kasten.call("calendar_add", dict(TERMIN))["created"] is True
@@ -204,7 +204,7 @@ def test_resetting_the_flag_clears_both_kinds(settings: Settings) -> None:
     assert kasten._untrusted_hard
 
 
-# -- Coworker -------------------------------------------------------------------------------
+
 def _coworker(settings: Settings, regel: str):
     store = cw.CoworkerStore(settings.db_path)
     mitarbeiter = store.add("Kalender", "Trage Termine ein.", plan="pro")
@@ -261,7 +261,7 @@ def test_the_allow_rule_does_not_hold_after_foreign_text(settings: Settings) -> 
     assert "niemand" in kasten.call("calendar_add", dict(TERMIN))["note"]
 
 
-# -- Einstellung, Anzeige, Modell ------------------------------------------------------------
+
 def test_the_model_cannot_turn_the_switch_on() -> None:
     assert "AQUATICY_GOOGLE_DIRECT" in preferences.PROTECTED
     assert preferences.find("AQUATICY_GOOGLE_DIRECT") is None

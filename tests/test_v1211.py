@@ -44,7 +44,7 @@ def _mit_antworten(box: Toolbox, antworten: list[str]) -> tuple[list[tuple[str, 
     return gefragt, ereignisse
 
 
-# -- Das Werkzeug --------------------------------------------------------------------------
+
 def test_several_questions_are_asked_one_after_another_with_a_counter(
         toolbox: Toolbox) -> None:  # noqa: F811
     gefragt, ereignisse = _mit_antworten(toolbox, ["Bremen", "Sport", "eine Stunde"])
@@ -108,7 +108,7 @@ def test_the_series_has_limits(toolbox: Toolbox) -> None:  # noqa: F811
     gefragt, _ = _mit_antworten(toolbox, ["x"] * 10)
     toolbox.ask_user(questions=[{"question": f"Frage {i}?"} for i in range(9)])
     assert len(gefragt) == MAX_BATCH == 5
-    # Doppelte und leere fallen weg, "question" kommt vor "questions".
+
     assert Toolbox._ask_list(" Eine? ", ["a", " ", "b"], [{"question": "Eine?"}, "Zwei?", {},
                                                           None, {"question": ""}]) == [
         ("Eine?", ["a", "b"]), ("Zwei?", [])]
@@ -159,7 +159,7 @@ def test_the_schema_and_the_call_know_questions(toolbox: Toolbox) -> None:  # no
     assert "questions=[" in ASK_PROMPT
 
 
-# -- Der Planer ----------------------------------------------------------------------------
+
 def test_the_planner_can_ask_up_to_three_questions() -> None:
     roh = json.dumps({"recherche": True, "teilfragen": ["x"], "rueckfrage": "Wo wohnst du?",
                       "optionen": ["Bremen"], "weitere_fragen": [
@@ -168,7 +168,7 @@ def test_the_planner_can_ask_up_to_three_questions() -> None:
     frage, optionen, weitere = _parse_questions(roh)
     assert (frage, optionen) == ("Wo wohnst du?", ["Bremen"])
     assert weitere == [("Was interessiert dich?", ["Sport", "Politik"]), ("Wie viel Zeit?", [])]
-    # Ohne erste Frage ruecken die weiteren nach vorn.
+
     frage, _, weitere = _parse_questions(json.dumps(
         {"recherche": True, "teilfragen": [], "weitere_fragen": [{"frage": "Nur diese?"}]}))
     assert (frage, weitere) == ("Nur diese?", [])
@@ -222,7 +222,7 @@ def test_three_questions_from_the_planner_without_a_place_question(
     gefragt, ereignisse = _mit_antworten(toolbox, ["Bremen", "Sport", "10 Minuten"])
     agent = Agent(_denken(einstellungen), cache=None, toolbox=toolbox)
     agent.ask(NACHRICHTEN, stream=False, structured=True)
-    # Der Planer fragt selbst nach dem Ort -- keine vierte Frage davor.
+
     assert [f for f, _ in gefragt] == ["Wo wohnst du?", "Was interessiert dich?",
                                        "Wie viel Zeit?"]
     assert [(d["index"], d["total"]) for n, d in ereignisse if n == "ask"] == [
@@ -245,7 +245,7 @@ def test_pro_mode_asks_the_series_too(
     assert "fürs Büro" in gemeistert[0]
 
 
-# -- Fragen im Text ------------------------------------------------------------------------
+
 def test_questions_in_the_text_are_split_one_by_one() -> None:
     fragen = text_questions("Gern! Wo wohnst du? Und was interessiert dich?\n- Sport\n- Politik")
     assert fragen == [{"question": "Wo wohnst du?", "options": []},
@@ -291,7 +291,7 @@ def test_the_model_can_ask_a_series_itself(
     assert len(json.loads(antwort["content"])["answers"]) == 2
 
 
-# -- Oberflaeche ---------------------------------------------------------------------------
+
 def _ui() -> str:
     return web.UI_FILE.read_text(encoding="utf-8")
 
@@ -310,7 +310,8 @@ def test_the_window_has_a_counter_top_right() -> None:
 
 def test_between_two_questions_the_window_stays_open_but_times_out() -> None:
     html = _ui()
-    fertig = html[html.index("async function finishAsk("):html.index("  // Was gefragt und")]
+    fertig = html[html.index("async function finishAsk("):
+                  html.index("if (open.bubble?.parentNode){")]
     assert "if (open.index < open.total){" in fertig
     assert 'classList.add("wartet")' in fertig and "closeOverlay(askBox);" in fertig
     assert "setTimeout(() => { if (!asking) closeOverlay(askBox); }, 12000);" in fertig

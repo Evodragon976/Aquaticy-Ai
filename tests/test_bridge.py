@@ -48,7 +48,7 @@ def konto(tmp_path: Path) -> Settings:
     return Settings(data_dir=ordner, env_path=ordner / ".env")
 
 
-# -- Einstellungen -------------------------------------------------------------------------------
+
 def test_defaults_are_the_narrowest_choice() -> None:
     vorgabe = normalize_config({})
     assert vorgabe["an"] is False and vorgabe["wer"] == "selbst" and vorgabe["nummern"] == []
@@ -95,7 +95,7 @@ def test_there_is_no_bridge_for_other_messengers(konto: Settings) -> None:
             bridge.set_config(konto, name, {})
 
 
-# -- Wer darf? -----------------------------------------------------------------------------------
+
 @pytest.mark.parametrize(("titel", "eintrag", "erwartet"), [
     ("+49 151 23456789", "0151 23456789", True),
     ("+49 151 23456789", "+49 151 23456789", True),
@@ -115,7 +115,7 @@ SELBST = "Du (Nachricht an dich selbst)"
 
 
 @pytest.mark.parametrize(("wer", "titel", "gruppe", "nur_ausgehend", "erlaubt", "vertraut"), [
-    # Der eigene Chat geht immer -- aber nur als Einzelchat, in dem nur der Besitzer schreibt.
+
     ("selbst", SELBST, False, True, True, True),
     ("selbst", "Notiz an mich", False, True, True, True),
     ("selbst", "Note to Self", False, True, True, True),
@@ -124,7 +124,7 @@ SELBST = "Du (Nachricht an dich selbst)"
     ("selbst", SELBST, True, True, False, False),
     ("selbst", SELBST, False, False, False, False),
     ("selbst", "~Nachricht an dich selbst", False, True, False, False),
-    # Fremde Chats: bei "selbst" nie.
+
     ("selbst", "Anna", False, False, False, False),
     ("selbst", "Familie", True, False, False, False),
     ("nummern", "Anna", False, False, False, False),
@@ -186,7 +186,7 @@ def test_in_groups_only_the_keyword_counts(text: str, gruppe: bool, erwartet: st
     assert strip_trigger(text, gruppe) == erwartet
 
 
-# -- Was der Agent darf --------------------------------------------------------------------------
+
 def test_strangers_get_public_tools_only() -> None:
     voll = {"web": "an", "haus": "schalten", "mail": "aendern", "kalender": "aendern",
             "github": "lesen", "lager": "schreiben"}
@@ -267,7 +267,7 @@ def test_the_bridge_never_widens_what_the_app_allows() -> None:
     assert not voll.ha_control and not voll.google_write and voll.storage_access == "read"
 
 
-# -- Antworttext ---------------------------------------------------------------------------------
+
 def test_replies_are_plain_text_with_the_signature() -> None:
     antwort = ("## Wetter\n**Bremen** heute: 14 °C\n- Regen am Abend\n- [mehr](https://x.de/a)\n"
                "| Tag | Temp |\n|---|---|\n| Mo | 12 |\n```py\nprint(1)\n```")
@@ -296,7 +296,7 @@ def test_the_bridge_recognises_its_own_texts() -> None:
     assert not bridge.is_own_text("Hallo [Aquaticy]")
 
 
-# -- Was das Vision-Modell liefert --------------------------------------------------------------
+
 def test_scan_parsing_drops_everything_unusable() -> None:
     scan = parse_scan({"angemeldet": "false", "offen": "Anna\x00", "chats": [
         {"titel": "Anna", "gruppe": False, "ungelesen": True, "vorschau": "Hi", "x": 100,
@@ -341,7 +341,7 @@ def test_group_or_single_chat_is_decided_by_the_open_chat() -> None:
     assert bridge.group_flag(None, None) is None
 
 
-# -- Ein Durchgang -------------------------------------------------------------------------------
+
 class FakeDriver:
     """Ein Messenger, den der Test Schritt für Schritt umbaut."""
 
@@ -473,7 +473,7 @@ def test_the_own_reply_is_not_a_new_command(konto: Settings) -> None:
     werkstatt.durchgang()
     selbst_chat(werkstatt, [nachricht("ich", "Frage?", "10:05")], "Frage?")
     assert werkstatt.durchgang().beantwortet == 1
-    # In der Liste steht jetzt die eigene Antwort -- nichts zu lesen, nichts zu tun.
+
     selbst_chat(werkstatt, [nachricht("ich", "Frage?", "10:05"),
                             nachricht("ich", "[Aquaticy] Es ist zehn Uhr.", "10:06")],
                 "[Aquaticy] Es ist zehn Uhr.")
@@ -488,7 +488,7 @@ def test_a_message_is_never_answered_twice(konto: Settings) -> None:
     frage = [nachricht("ich", "Frage?", "10:05")]
     selbst_chat(werkstatt, frage, "Frage?")
     werkstatt.durchgang()
-    # Dieselbe Nachricht, die Liste zeigt sie noch als geändert (etwa wegen eines Punkts).
+
     werkstatt.treiber.scan_result.chats[0].ungelesen = True
     assert werkstatt.durchgang().beantwortet == 0
     assert len(werkstatt.treiber.gesendet) == 1
@@ -690,7 +690,7 @@ def test_state_and_view_hold_no_message_text(konto: Settings) -> None:
     assert oct((konto.data_dir / bridge.STATE_FILE).stat().st_mode & 0o777) == "0o600"
 
 
-# -- Voraussetzungen -----------------------------------------------------------------------------
+
 def addon_bereit(konto: Settings, **felder: Any) -> None:
     from aquaticy import addons
 
@@ -746,7 +746,7 @@ def test_the_view_carries_the_choices_and_the_reason(konto: Settings) -> None:
     assert [t["value"] for t in katalog["takt"]] == list(bridge.INTERVALS)
 
 
-# -- Der Antwortgeber ----------------------------------------------------------------------------
+
 class FakeAgent:
     """Merkt sich, womit er gebaut wurde, und antwortet."""
 
@@ -835,7 +835,7 @@ def test_web_off_means_an_offline_agent(antwortgeber) -> None:
     assert FakeAgent.gebaut[0].fragen[0][1]["online"] is False
 
 
-# -- Der echte Agent der Brücke ------------------------------------------------------------------
+
 def test_the_real_bridge_agent_offers_only_allowed_tools_and_blocks_the_rest(
         konto: Settings) -> None:
     konfig = cfg(dienste={"haus": "lesen"})
@@ -856,7 +856,7 @@ def test_the_real_bridge_agent_offers_only_allowed_tools_and_blocks_the_rest(
     agent.close()
 
 
-# -- Der Treiber ---------------------------------------------------------------------------------
+
 class FakeDesktop:
     def __init__(self, fenster: list[dict[str, str]] | None = None) -> None:
         self.fenster = fenster or []
@@ -937,7 +937,7 @@ def test_the_driver_reads_the_screen_through_the_vision_model() -> None:
     assert [a[0] for a in desktop.aufrufe] == ["see", "see", "see"]
 
 
-# -- Der Hintergrundlauf -------------------------------------------------------------------------
+
 class FakeBridge:
     def __init__(self) -> None:
         self.aufrufe: list[str] = []

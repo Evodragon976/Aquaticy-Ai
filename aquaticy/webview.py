@@ -30,7 +30,7 @@ WOCHENTAGE_KURZ = ("Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So.")
 MONATE_KURZ = ("Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.",
                "Okt.", "Nov.", "Dez.")
 
-#: Die Anbieter im Einstellungsfenster: (Kennung, Name, Schluessel, Beispiel, Form).
+
 PROVIDERS: tuple[tuple[str, str, str, str, str], ...] = (
     ("nvidia_nim", "NVIDIA NIM", "NVIDIA_NIM_API_KEY",
      "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvapi-…"),
@@ -38,20 +38,20 @@ PROVIDERS: tuple[tuple[str, str, str, str, str], ...] = (
     ("ollama_chat", "Ollama (lokal)", "", "ollama_chat/gemma4:12b", ""),
 )
 
-#: Wie die Rollen der Agenten heissen (Schluessel wie in aquaticy/subagents.py).
+
 ROLE_LABELS = {"zahlen": "Zahlen", "gegenstimmen": "Gegenstimmen", "frisch": "Aktuelles",
                "tiefe": "Spurensuche"}
-#: Wie die Urteile der Pruefer heissen.
+
 VERDICT_LABELS = {"BESTAETIGT": "bestätigt", "ABWEICHUNG": "Abweichung gefunden",
                   "UNKLAR": "nichts Belastbares gefunden"}
-#: Dasselbe auf Englisch (11.2.2 Sol).
+
 ROLE_LABELS_EN = {"zahlen": "numbers", "gegenstimmen": "counter-voices", "frisch": "latest",
                   "tiefe": "deep dive"}
 VERDICT_LABELS_EN = {"BESTAETIGT": "confirmed", "ABWEICHUNG": "found a difference",
                      "UNKLAR": "nothing solid found"}
 
-#: Vorschlaege und Begruessungen auf der Startseite -- je Modus, mindestens 50
-#: (seit 9.6.0 in aquaticy/starttexte.py).
+
+
 from aquaticy.starttexte import GREETINGS, SUGGESTIONS  # noqa: E402
 
 
@@ -67,7 +67,7 @@ def start_texts() -> dict[str, Any]:
     }
 
 
-# -- Zahlen und Zeiten ---------------------------------------------------------
+
 def size_text(nbytes: Any) -> str:
     """1234567 -> "1,2 MB"."""
     try:
@@ -146,7 +146,7 @@ def with_groups(chats: list[dict[str, Any]], now: float | None = None) -> list[d
     return [{**chat, "group": chat_group(chat.get("touched"), now)} for chat in chats]
 
 
-# -- Auftraege -----------------------------------------------------------------
+
 def _hhmm(stunde: Any, minute: Any) -> str:
     return f"{int(stunde or 0):02d}:{int(minute or 0):02d}"
 
@@ -157,8 +157,8 @@ def job_view(job: dict[str, Any]) -> dict[str, Any]:
            "image": "Bildsuche"}.get(str(job.get("kind") or ""), "Recherche")
     minuten = {"minutes5": 5, "minutes15": 15, "minutes30": 30}.get(str(job.get("rhythm")))
     rhythmus = str(job.get("rhythm") or "")
-    # "jede Minute" und "die ganze Zeit" fehlten hier bis 9.5.15 -- angezeigt
-    # wurde dann "täglich um 08:00".
+
+
     if rhythmus == "always":
         takt = "die ganze Zeit"
     elif rhythmus == "minutes1":
@@ -182,13 +182,13 @@ def job_view(job: dict[str, Any]) -> dict[str, Any]:
             "toggle_label": "Anhalten" if job.get("enabled") else "Weiter"}
 
 
-# -- Einstellungen ---------------------------------------------------------------
+
 def provider_view() -> list[dict[str, str]]:
     """Die Anbieter mit dem Satz, der unter der Auswahl steht."""
     liste = []
     for kennung, name, schluessel, beispiel, form in PROVIDERS:
         if schluessel:
-            # Seit 12.0.0 Luna nur noch ueber das Add-on des Anbieters.
+
             hinweis = (f"{name} braucht einen Schlüssel"
                        + (f" (beginnt mit {form})" if form else "")
                        + f". Den verknüpfst du unter Add-ons → {name} — sonst gilt der "
@@ -205,7 +205,7 @@ def provider_view() -> list[dict[str, str]]:
     return liste
 
 
-# -- Kopfzeile -------------------------------------------------------------------
+
 def header_view(
     settings: Any,
     stand: dict[str, Any],
@@ -279,13 +279,13 @@ def picker_view(mode: str, models: list[dict[str, Any]],
     """
     nur_starke = mode in ("code", "pro")
     liste = list(strong if nur_starke else models)
-    # Seit 9.5.14 Seashell: Modelle mit dem eigenen Schluessel des Kontos
-    # stehen fuer sich -- sie sieht nur dieses Konto, und sie zaehlen nicht ins
-    # Limit. Gruppiert wird nur, wenn es eigene gibt.
+
+
+
     eigene = [m for m in liste if m.get("source") == "own"]
     gruppen: list[dict[str, Any]] = [
         {"title": "Mit deinem Schlüssel",
-         # Ohne Limit (Pro, lokal) gibt es nichts, worin es nicht zaehlte.
+
          "note": "zählt nicht in dein Limit" if limited else "auf deine Rechnung beim Anbieter",
          "models": eigene},
         {"title": "Gestellt", "note": "", "models": [m for m in liste if m.get("source") != "own"]},

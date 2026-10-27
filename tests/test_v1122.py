@@ -23,12 +23,12 @@ def _css() -> str:
 
 
 def test_hover_effects_only_with_a_mouse() -> None:
-    # Am Handy blieb nach dem Antippen von "+" ein grauer Kasten stehen.
+
     css = _css()
     assert "@media (hover:hover){.iconbtn:hover{" in css
     nackt = [z for z in css.splitlines()
              if re.match(r"^[^\s@][^{]*:hover[^{]*\{", z) and "@media (hover:hover)" not in z]
-    # Uebrig bleiben nur Regeln, die zusaetzlich :focus oder einen Zustand abdecken.
+
     assert all(":focus" in z or "aria-selected" in z for z in nackt), nackt
 
 
@@ -52,7 +52,7 @@ def test_page_height_follows_the_visible_area() -> None:
     assert "interactive-widget=resizes-content" in html
     assert "html.vv,html.vv body{height:var(--app-h)}" in html
     assert 'vv.addEventListener("resize", planen)' in html
-    assert "if (vv.scale > 1.01) return;" in html  # Zoomen laesst das Layout in Ruhe
+    assert "if (vv.scale > 1.01) return;" in html
 
 
 def test_send_button_is_smaller_but_easy_to_hit() -> None:
@@ -60,14 +60,14 @@ def test_send_button_is_smaller_but_easy_to_hit() -> None:
     assert re.search(r"\.send\{[^}]*width:30px;height:30px", css)
     assert ".send{width:34px;height:34px" in css
     assert ".send{width:44px;height:44px}" not in css
-    # Unsichtbarer Rand: 44px hoch, nach rechts nicht ueber die Knopfzeile hinaus.
+
     assert '.send::after{content:"";position:absolute;inset:-7px 0 -7px -6px}' in css
     assert ".send::after{inset:-5px 0 -5px -5px}" in css
 
 
 def test_phone_start_page_puts_the_input_at_the_bottom() -> None:
     css = _css()
-    start = css.index("11.2.2 Luna: Handy und Tablet")
+    start = css.index("body.collapsed aside{box-shadow:none}")
     block = css[start:]
     assert "body.start .pane{justify-content:flex-start}" in block
     assert "body.start .chips{order:-1" in block
@@ -76,18 +76,18 @@ def test_phone_start_page_puts_the_input_at_the_bottom() -> None:
 
 
 def test_model_name_stays_visible_on_common_phones() -> None:
-    # Vorher wich der Name schon bei 360px einem Sinnbild -- der haeufigsten
-    # Android-Breite. Jetzt erst unter 340px.
+
+
     css = _css()
     assert "@media (max-width:339px){\n  .modelpick #model-name{display:none}" in css
     assert "@media (max-width:360px){\n  .modelpick #model-name" not in css
 
 
-# --- 11.2.2 Terra: lokale Modelle ohne Denk-Modus oder ohne Werkzeuge -----------------
-# Gemeldet: Nach "Agenten arbeiten" kam nur "Da ist bei Aquaticy etwas
-# schiefgelaufen" und keine Antwort. Ursache: Aquaticy schickte jedem
-# Ollama-Modell die Denktiefe mit, LiteLLM machte daraus `think: true`, und
-# Ollama lehnt das bei qwen2.5-coder, gemma & Co. ab.
+
+
+
+
+
 
 import pytest  # noqa: E402
 
@@ -106,7 +106,7 @@ def ollama():
 
 @pytest.fixture(autouse=True)
 def _frisch_gemerkt(monkeypatch):
-    # Was ein Modell kann, merkt sich Aquaticy -- jeder Test faengt leer an.
+
     monkeypatch.setattr(local_model, "_CAPS", {})
     monkeypatch.setattr(local_model, "_SHOW", {})
     monkeypatch.setattr(local_model, "_FEHLT", {})
@@ -145,8 +145,8 @@ def test_model_without_tools_answers_without_tools(ollama, tmp_path) -> None:
 
 
 def test_old_ollama_teaches_aquaticy_by_its_error(tmp_path) -> None:
-    # Ein aelteres Ollama nennt keine Faehigkeiten. Dann lernt Aquaticy aus der
-    # Ablehnung, versucht es sofort ohne -- und schickt es danach nie wieder.
+
+
     nachbau = Ollama(alt=True)
     try:
         ereignisse: list = []
@@ -161,7 +161,7 @@ def test_old_ollama_teaches_aquaticy_by_its_error(tmp_path) -> None:
 
 
 def test_rejected_thinking_is_learned_too(ollama, tmp_path, monkeypatch) -> None:
-    # Sagt Ollama "thinking", lehnt es aber trotzdem ab: einmal lernen, dann ohne.
+
     monkeypatch.setitem(local_model._CAPS, (ollama.url, "qwen2.5-coder:14b"),
                         (1e18, frozenset({"completion", "tools", "thinking"})))
     ergebnis = _frage(ollama.url, "ollama_chat/qwen2.5-coder:14b", tmp_path)
@@ -184,7 +184,7 @@ def test_capabilities_are_remembered(ollama) -> None:
         assert local_model.ollama_capabilities("qwen3:8b", ollama.url) == frozenset(
             {"completion", "tools", "thinking"})
     assert len(local_model._CAPS) == 1
-    assert local_model.can("mistral/mistral-large-latest", "tools") is None  # kein Ollama
+    assert local_model.can("mistral/mistral-large-latest", "tools") is None
 
 
 def test_cloud_models_are_not_asked_for_capabilities(monkeypatch) -> None:
@@ -207,9 +207,9 @@ def test_the_real_reason_reaches_the_operator_terminal(client, session, capsys) 
         "message": 'BadRequestError: "qwen2.5-coder:14b" does not support thinking'})])
     _, body = client("POST", "/api/chat", {"message": "Hallo"})
     fehler = [e for e in sse_events(body) if e["type"] == "error"]
-    # Im Chat weiter nur der allgemeine Satz ...
+
     assert fehler and fehler[0]["message"] == web.GENERIC_ERROR
-    # ... im Terminal des Betreibers aber der Grund.
+
     assert "[Fehler] BadRequestError" in capsys.readouterr().out
 
 
@@ -228,7 +228,7 @@ def test_no_research_agents_for_a_model_without_tools(ollama, tmp_path) -> None:
     assert Agent(einstellungen)._auto_subagents_wanted() is True
 
 
-# --- 11.2.2 Terra: Werkzeugaufrufe, die ein Modell als Text schreibt ------------------
+
 
 from aquaticy.agent import tool_calls_from_text  # noqa: E402
 from tests.test_agent import ScriptedLLM, _message, _tool_call  # noqa: E402
@@ -286,7 +286,7 @@ def test_main_agent_runs_a_tool_call_written_as_text(monkeypatch, settings, tool
     ergebnis = agent.ask("Cafés in Bremen?", stream=False)
     assert ergebnis.answer == "In Bremen gibt es das Café Sonntag."
     assert ergebnis.searches == ["Bremen"]
-    # Das JSON war nie eine Antwort.
+
     assert not any(n == "answer_chunk" and "web_search" in p.get("text", "")
                    for n, p in ereignisse)
 
@@ -330,13 +330,13 @@ def test_streamed_text_call_is_taken_back_from_the_answer(monkeypatch, settings,
                   on_event=lambda n, p: ereignisse.append((n, p)))
     ergebnis = agent.ask("Cafés in Bremen?", stream=True)
     assert ergebnis.searches == ["Bremen"]
-    assert ergebnis.answer.strip() == "Das Café Sonntag."  # _stream haengt Leerzeichen an
-    # Die Oberflaeche nimmt den gestreamten JSON-Text als Zwischennachricht zurueck.
+    assert ergebnis.answer.strip() == "Das Café Sonntag."
+
     assert any(n == "interim" and "web_search" in p["text"] for n, p in ereignisse)
 
 
 def test_too_big_context_is_halved_instead_of_failing_three_times(monkeypatch, tmp_path) -> None:
-    # Ollama: "model requires more system memory (12.5 GiB) than is available".
+
     monkeypatch.setattr("aquaticy.agent.time.sleep", lambda s: None)
     nachbau = Ollama(max_ctx=8192)
     try:
@@ -348,7 +348,7 @@ def test_too_big_context_is_halved_instead_of_failing_three_times(monkeypatch, t
         ergebnis = agent.ask("Hallo, schreib mir eine Website.", stream=True)
         assert ergebnis.error == "" and ergebnis.answer == "Fertig."
         assert [a["num_ctx"] for a in nachbau.anfragen] == [16384, 8192]
-        # Das kleinere Fenster gilt weiter -- der naechste Aufruf scheitert nicht erst.
+
         agent.ask("Und noch eine Frage.", stream=True)
         assert nachbau.anfragen[-1]["num_ctx"] == 8192
     finally:
@@ -364,7 +364,7 @@ def test_ollama_memory_message_counts_as_memory_problem() -> None:
 @pytest.mark.parametrize("modus", ["normal", "pro", "code"])
 def test_chat_with_a_local_coder_model_answers_end_to_end(client, session, ollama,
                                                            tmp_path, modus) -> None:
-    # Der gemeldete Fall, ganz durch: Browser -> Server -> Agent -> LiteLLM -> Ollama.
+
     from tests.ollama_nachbau import FAEHIGKEITEN
 
     session._settings = Settings(
@@ -379,22 +379,21 @@ def test_chat_with_a_local_coder_model_answers_end_to_end(client, session, ollam
     assert [e for e in ereignisse if e["type"] == "error"] == []
     text = "".join(str(e.get("text", "")) for e in ereignisse if e["type"] == "chunk")
     assert "Fertig." in text
-    # `think: true` nur an Modelle, die denken koennen. Im Pro- und Code-Modus nimmt
-    # Aquaticy das staerkste Modell -- hier qwen3, das darf denken.
+
+
     assert ollama.anfragen
     for anfrage in ollama.anfragen:
         if anfrage["think"] is True:
             assert "thinking" in FAEHIGKEITEN[anfrage["model"]], anfrage
 
 
-# --- 11.2.2 Sol: die virtual machine im Code-Modus ------------------------------------
-# Gemeldet: Im Code-Modus mit eingeschalteter virtual machine nutzte Aquaticy sie
-# nie und sagte auf Nachfrage, es habe keine.
+
+
+
 
 from aquaticy import agent as agent_mod  # noqa: E402
 from aquaticy import sandbox as sandbox_mod  # noqa: E402
 
-#: Die echte Suche -- tests/conftest.py stellt sie fuer alle anderen Tests auf "unbekannt".
 _RUNTIME_KNOWN_ECHT = sandbox_mod.runtime_known
 _DOCKER = sandbox_mod.Runtime("docker", "docker", "Docker (gehaertet)")
 
@@ -451,13 +450,13 @@ def test_the_nudge_comes_only_once_and_not_after_a_run(monkeypatch, settings, to
     vm_da(toolbox)
     llm = ScriptedLLM(
         _message(content="```python\nx = 1\n```"),
-        _message(content="```python\nx = 1\n```"),  # bleibt dabei -- seine Entscheidung
+        _message(content="```python\nx = 1\n```"),
     )
     monkeypatch.setattr("litellm.completion", llm)
     ergebnis = _code_agent(settings, toolbox, []).ask(
         "Code bitte", stream=False, mode="code", sandbox=True)
     assert ergebnis.answer == "```python\nx = 1\n```" and len(llm.calls) == 2
-    # Ohne Codeblock (eine Erklaerung) gibt es keinen Anstoss.
+
     llm = ScriptedLLM(_message(content="Ein Decorator umhüllt eine Funktion."))
     monkeypatch.setattr("litellm.completion", llm)
     _code_agent(settings, toolbox, []).ask("Was ist ein Decorator?", stream=False,
@@ -489,7 +488,7 @@ def test_vm_on_without_docker_says_so(monkeypatch, settings, toolbox) -> None:
     assert "Podman oder Docker fehlt" in system and "aquaticy install-vm" in system
     assert any(n == "note" and "Podman oder Docker" in p["text"]
                and "aquaticy install-vm" in p["text"] for n, p in ereignisse)
-    assert len(llm.calls) == 1  # kein Anstoss zu etwas, das nicht geht
+    assert len(llm.calls) == 1
 
 
 def test_runtime_lookup_is_cached(monkeypatch) -> None:
@@ -516,8 +515,8 @@ def test_looking_for_docker_never_holds_up_a_question(monkeypatch) -> None:
 
     monkeypatch.setattr(sandbox_mod, "find_runtime", langsam)
     vorher = time.monotonic()
-    assert _RUNTIME_KNOWN_ECHT() == (False, None)      # noch nie gesucht
-    assert _RUNTIME_KNOWN_ECHT() == (False, None)      # sucht schon -- kein zweiter Faden
+    assert _RUNTIME_KNOWN_ECHT() == (False, None)
+    assert _RUNTIME_KNOWN_ECHT() == (False, None)
     assert time.monotonic() - vorher < 0.2
     assert gesucht.wait(3)
     for _ in range(50):
@@ -525,7 +524,7 @@ def test_looking_for_docker_never_holds_up_a_question(monkeypatch) -> None:
             break
         time.sleep(0.02)
     assert _RUNTIME_KNOWN_ECHT() == (True, _DOCKER) and aufrufe == [1]
-    # Abgelaufen: der alte Stand gilt sofort weiter, neu gesucht wird nebenher.
+
     sandbox_mod._LAUFZEIT["bis"] = 0.0
     gesucht.clear()
     vorher = time.monotonic()
@@ -549,7 +548,7 @@ def test_the_agent_answers_without_waiting_for_docker(monkeypatch, settings, too
     dauer = time.monotonic() - vorher
     frei.set()
     assert dauer < 2, "die Frage wartet nicht auf docker info"
-    # Noch unbekannt: angeboten wie vor 11.2.2 Sol.
+
     assert "vm_run" in [t["function"]["name"] for t in llm.calls[0]["tools"]]
 
 
@@ -563,7 +562,7 @@ def test_vm_status_endpoint(client, session, monkeypatch) -> None:
 
 
 def test_vm_internet_needs_ultra_at_the_server(client, session, monkeypatch) -> None:
-    # Der neue Schalter speichert ueber /api/config -- dort prueft der Server Ultra.
+
     monkeypatch.setattr(type(session), "ultra", property(lambda self: False))
     status, body = client("POST", "/api/config", {"AQUATICY_VM_INTERNET": "true"})
     assert status == 400
@@ -576,14 +575,14 @@ def test_vm_switch_text_no_longer_promises_internet() -> None:
     abschnitt = html[start:html.index("</label>", start)]
     assert "Internet" not in abschnitt
     assert 'id="werkstatt-netz"' in html and 'id="werkstatt-status"' in html
-    # Jeder sichtbare Satz hat seine englische Fassung.
+
     for satz in ("Internet für die virtual machine",
                  "Auf diesem Rechner fehlt Podman oder Docker. Darum startet die virtual "
                  "machine nicht. So richtest du es ein: im Terminal aquaticy install-vm."):
         assert f'"{satz}":' in html, satz
 
 
-# --- 11.2.2 Sol: Begruessung auch ohne Namen ---------------------------------
+
 
 def _gruss_en() -> dict[str, list[str]]:
     html = _ui()
@@ -600,11 +599,11 @@ def test_greetings_come_with_and_without_name() -> None:
     for modus in ("normal", "pro", "code"):
         saetze = GREETINGS[modus]
         assert len(saetze) == len(set(saetze))
-        # Die Saetze mit Namen bleiben, dazu kommen eigene ohne.
+
         assert sum("{name}" in s for s in saetze) >= 50, modus
         assert sum("{name}" not in s for s in saetze) >= 15, modus
         assert {"Womit fangen wir an?", "Womit fangen wir an, {name}?"} <= set(saetze)
-        # Englisch hat jetzt auch je Modus ganze Saetze, mit und ohne Namen.
+
         en = englisch[modus]
         assert len(en) >= 20 and len(en) == len(set(en)), modus
         assert any("{name}" in s for s in en) and any("{name}" not in s for s in en)
@@ -652,16 +651,16 @@ console.log(JSON.stringify({kaputt, mit,
         pytest.skip("node fehlt")
     ergebnis = json.loads(aus.stdout)
     assert ergebnis["kaputt"] == []
-    assert 1600 < ergebnis["mit"] < 2400            # rund die Haelfte
+    assert 1600 < ergebnis["mit"] < 2400
     assert "Jonas" in ergebnis["wenig"] and "Jonas" not in ergebnis["viel"]
     assert "{" not in ergebnis["gast"] and "Jonas" not in ergebnis["gast"]
     assert ergebnis["ohne"] == "Womit fangen wir an?"
-    # Ein "$" im Namen ist erlaubt (auth.USERNAME_RE) und bleibt stehen, wie er ist.
+
     assert ergebnis["dollar"] == "Womit fangen wir an, Jo$&nas$1?"
     assert "grussZiehen(saetze, when, currentUsername)" in html
 
 
-# --- 11.2.2 Sol: alles auf Englisch -------------------------------------------
+
 
 def _en() -> dict[str, str]:
     roh = re.search(r"const EN = (\{.*?\n\});", _ui(), re.S)
@@ -677,11 +676,11 @@ def _js_block(anfang: str, ende: str = "\n};") -> str:
 
 def test_run_phases_and_step_tags_have_english() -> None:
     en = _en()
-    # "Modell laden", "Agenten arbeiten" ... standen beim Schreiben auf Deutsch da.
+
     phasen = re.findall(r'\w+: "([^"]+)"', _js_block("const PHASEN = {", "};"))
     assert "Modell laden" in phasen and len(phasen) >= 15
     assert "Bild ansehen" in phasen
-    assert "Bild erstellen" not in phasen  # Bilderstellung wurde in 12.2.1 Sol entfernt.
+    assert "Bild erstellen" not in phasen
     for name in [*phasen, "Gedacht", "Keine Einzelheiten.",
                  "Das Modell hat seine Gedanken hier nicht offengelegt."]:
         assert name in en, name
@@ -772,7 +771,7 @@ def test_legal_rules_and_addons_have_english() -> None:
         for r in rechte:
             texte += [r.label] + [o[1] for o in r.options if not o[1].isdigit()]
     fehlt = {" ".join(t.split()) for t in texte if t} - set(en)
-    # Was in beiden Sprachen gleich heisst, braucht keinen Eintrag.
+
     assert fehlt <= {"Injection: SQL, Shell, XSS (innerHTML & Co.), Templates, Logs"}
 
 
@@ -793,7 +792,7 @@ def test_server_notes_and_waits_carry_english() -> None:
     html = _ui()
     assert 'sp(ev.text, ev.text_en || ev.text)' in html
     assert 'sp(ev.reason, ev.reason_en || ev.reason)' in html
-    # Sichtbare Texte mit echten Umlauten (AGENTS.md).
+
     assert "laeuft normal" not in inspect.getsource(agent_quelle)
 
 
@@ -804,7 +803,7 @@ def test_patterns_translate_texts_with_numbers_and_names() -> None:
     skript = "\n".join((
         "const EN = " + json.dumps(_en(), ensure_ascii=False) + ";",
         'const schluessel = text => text.replace(/\\s+/g, " ").trim();',
-        html[html.index("const EN_MUSTER = ["):html.index("// Fuer Text in der Antwortblase")],
+        html[html.index("const EN_MUSTER = ["):html.index("function enOderDe(")],
         """const faelle = {
   "3 Dateien": "3 files", "1 Datei": "1 file",
   "kein Ortsfilter · Pro · strukturiert · 4 Prüfer · Speicher an":
@@ -864,13 +863,13 @@ def test_role_and_verdict_names_come_from_the_server_in_both_languages() -> None
     assert set(texte["verdicts_en"]) == set(texte["verdicts"])
 
 
-# --- Nachpruefung nach 11.2.2 Sol --------------------------------------------
+
 
 def test_patterns_never_touch_text_from_the_model_or_the_user() -> None:
     import subprocess
 
     html = _ui()
-    # Suchanfragen, Gedanken, Agenten-Aufgaben, Rueckfragen, Treffer, Auftraege ...
+
     teil = html[html.index("const NUR_FEST = "):html.index("let sprache = ")]
     for auswahl in (".steps .txt", ".steps .sub", ".interim", "#ask-q", ".result-card",
                     ".cw-eintrag .inhalt", ".frage"):
@@ -880,7 +879,7 @@ def test_patterns_never_touch_text_from_the_model_or_the_user() -> None:
     skript = "\n".join((
         "const EN = " + json.dumps(_en(), ensure_ascii=False) + ";",
         'const schluessel = text => text.replace(/\\s+/g, " ").trim();',
-        html[html.index("const EN_MUSTER = ["):html.index("// Fuer Text in der Antwortblase")],
+        html[html.index("const EN_MUSTER = ["):html.index("function enOderDe(")],
         """console.log(JSON.stringify([
   aufEnglisch("Wie kann ich Cookies löschen?", 0, true),
   aufEnglisch("Sitzung Bundestag heute", 0, true),
@@ -957,7 +956,7 @@ def test_asked_for_json_the_json_is_the_answer(monkeypatch, settings, toolbox) -
     for frage in ("Gib mir ein JSON-Beispiel für eine Suche",
                   "Wie sieht ein web_search-Aufruf aus?", "Zeig einen Tool Call"):
         assert tool_calls_from_text(beispiel, NAMEN, frage) == []
-    # Ohne solche Frage bleibt es ein Aufruf (11.2.2 Terra).
+
     assert len(tool_calls_from_text(beispiel, NAMEN, "Cafés in Bremen?")) == 1
     rechnen = '{"name": "calculate", "arguments": {"expression": "2*3"}}'
     assert len(tool_calls_from_text(rechnen, {"calculate"}, "calculate 2 times 3")) == 1
@@ -968,7 +967,7 @@ def test_asked_for_json_the_json_is_the_answer(monkeypatch, settings, toolbox) -
     assert ergebnis.searches == [] and "web_search" in ergebnis.answer
 
 
-# --- 11.2.2 Sol: Podman wird mit eingerichtet ---------------------------------
+
 
 from pathlib import Path  # noqa: E402
 from types import SimpleNamespace  # noqa: E402
@@ -990,7 +989,7 @@ def test_install_steps_per_system(monkeypatch) -> None:
         ["sudo", "apt-get", "update"], ["sudo", "apt-get", "install", "-y", "podman", "uidmap"]]
     _system(monkeypatch, "Linux", {"dnf"}, root=True)
     assert vm_install.install_steps() == [["dnf", "install", "-y", "podman"]]
-    _system(monkeypatch, "Linux", {"pacman"})          # kein sudo, kein root
+    _system(monkeypatch, "Linux", {"pacman"})
     assert vm_install.install_steps() is None
     _system(monkeypatch, "Darwin", {"brew"})
     assert vm_install.install_steps()[0] == ["brew", "install", "podman"]
@@ -1006,7 +1005,7 @@ def test_run_steps_stops_at_a_failure_and_forgets_the_old_state(monkeypatch) -> 
 
     def run(befehl, **kw):
         gelaufen.append(befehl)
-        # "machine init" gibt es schon -> Fehlercode, zaehlt trotzdem.
+
         code = 1 if befehl[-1] in ("init", "kaputt") else 0
         return SimpleNamespace(returncode=code)
 
@@ -1044,7 +1043,7 @@ def test_install_vm_command(monkeypatch, tmp_path) -> None:
     stand = _fake_vm(monkeypatch)
     ergebnis = CliRunner().invoke(cli_mod.app, ["install-vm"], input="n\n")
     assert ergebnis.exit_code == 1 and stand["schritte"] == []
-    assert "sudo apt-get install -y podman" in ergebnis.output    # vorher gezeigt
+    assert "sudo apt-get install -y podman" in ergebnis.output
     ergebnis = CliRunner().invoke(cli_mod.app, ["install-vm", "--yes"])
     assert ergebnis.exit_code == 0, ergebnis.output
     assert stand["schritte"] == [["sudo", "apt-get", "install", "-y", "podman"]]
@@ -1053,11 +1052,11 @@ def test_install_vm_command(monkeypatch, tmp_path) -> None:
 
 def test_web_start_offers_podman_once(monkeypatch, tmp_path, settings, capsys) -> None:
     stand = _fake_vm(monkeypatch)
-    # Ohne Terminal (als Dienst): nur der Befehl, nichts wird ausgefuehrt.
+
     monkeypatch.setattr(cli_mod.sys.stdin, "isatty", lambda: False, raising=False)
     cli_mod._vm_beim_start(settings)
     assert stand["schritte"] == []
-    # Mit Terminal: einmal fragen; ein Nein wird gemerkt.
+
     monkeypatch.setattr(cli_mod.sys.stdin, "isatty", lambda: True, raising=False)
     monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True, raising=False)
     fragen: list[str] = []
@@ -1066,7 +1065,7 @@ def test_web_start_offers_podman_once(monkeypatch, tmp_path, settings, capsys) -
     cli_mod._vm_beim_start(settings)
     assert len(fragen) == 1 and stand["schritte"] == []
     assert (Path(settings.data_dir) / cli_mod.VM_INSTALL_NEIN).exists()
-    # install-vm vergisst das Nein wieder.
+
     (Path(settings.data_dir) / cli_mod.VM_INSTALL_NEIN).unlink()
     monkeypatch.setattr(cli_mod.typer, "confirm", lambda *a, **k: True)
     cli_mod._vm_beim_start(settings)
@@ -1075,7 +1074,7 @@ def test_web_start_offers_podman_once(monkeypatch, tmp_path, settings, capsys) -
 
 
 def test_a_failed_install_asks_again_next_time(monkeypatch, settings) -> None:
-    _fake_vm(monkeypatch, nachher=None)          # installiert, laeuft aber nicht
+    _fake_vm(monkeypatch, nachher=None)
     monkeypatch.setattr(cli_mod.sys.stdin, "isatty", lambda: True, raising=False)
     monkeypatch.setattr(cli_mod.sys.stdout, "isatty", lambda: True, raising=False)
     monkeypatch.setattr(cli_mod.typer, "confirm", lambda *a, **k: True)
@@ -1098,24 +1097,24 @@ def test_a_stopped_podman_machine_is_started(monkeypatch) -> None:
     assert vm_install.start_machine(run=run)
     assert befehle[-1] == ["podman", "machine", "start"]
     _system(monkeypatch, "Linux", {"podman"})
-    assert not vm_install.start_machine(run=run)    # unter Linux gibt es keine Maschine
+    assert not vm_install.start_machine(run=run)
 
 
 def test_the_browser_can_never_install_anything() -> None:
-    # Verwalterrechte entscheidet der Mensch am Terminal, kein Konto im Chat.
+
     import inspect
 
     assert "vm_install" not in inspect.getsource(web)
     assert "install_steps" not in _ui() and "install-vm" in _ui()
 
 
-# --- 11.2.2 Sol: mit echtem Podman gefunden ------------------------------------
+
 
 from tests.test_sandbox import FakeRun  # noqa: E402
 
 
 def test_podman_is_asked_for_its_own_version_field(monkeypatch) -> None:
-    # Podman kennt kein ".ServerVersion" -- ein laufendes Podman galt so als "fehlt".
+
     aufrufe: list[list[str]] = []
     monkeypatch.setattr(sandbox_mod, "_runs", lambda *a, **k: aufrufe.append(list(a))
                         or SimpleNamespace(returncode=0, stdout="false\n"))
@@ -1161,15 +1160,15 @@ def _startzeile(monkeypatch, binary: str) -> list[str]:
 def test_podman_mounts_work_without_nocopy_and_no_host_proxy_gets_in(monkeypatch) -> None:
     podman = _startzeile(monkeypatch, "podman")
     docker = _startzeile(monkeypatch, "docker")
-    # runc lehnte "nocopy" unter Podman als "invalid mount" ab.
+
     assert not any(":nocopy" in teil for teil in podman)
     assert any(teil.endswith(f":{sandbox_mod.WORKDIR}:nocopy") for teil in docker)
-    # Proxys samt Zugangsdaten bleiben draussen -- bei beiden Laufzeiten.
+
     for zeile in (podman, docker):
         for name in ("HTTPS_PROXY", "http_proxy", "ALL_PROXY", "no_proxy"):
             assert f"{name}=" in zeile, name
     assert "--http-proxy=false" in podman and "--http-proxy=false" not in docker
-    # Die Wand bleibt dieselbe.
+
     for zeile in (podman, docker):
         assert zeile[zeile.index("--network") + 1] == "none" and "--read-only" in zeile
 

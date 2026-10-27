@@ -31,23 +31,21 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Woran ein Container sich zu erkennen gibt. Podman legt die erste Datei
-#: an, Docker die zweite; beide sind seit Jahren stabil.
 BOX_MARKERS: tuple[tuple[str, str], ...] = (
     ("/run/.containerenv", "podman"),
     ("/.dockerenv", "docker"),
 )
 
-#: Der Socket, ueber den man den Wirt steuern koennte. Er hat in der Kiste
-#: nichts zu suchen -- siehe Modulkopf.
+
+
 HOST_SOCKETS: tuple[str, ...] = (
     "/var/run/docker.sock",
     "/run/docker.sock",
     "/run/podman/podman.sock",
 )
 
-#: Laufzeiten fuer die innere Kiste, stark zuerst. Wurzellos ist Podman hier
-#: die erste Wahl: es braucht keinen Dienst mit Wurzelrechten im Ruecken.
+
+
 NESTED_RUNTIMES: tuple[str, ...] = ("podman", "docker")
 
 
@@ -56,13 +54,13 @@ class Posture:
     """Der Stand der Dinge -- eine Zeile je Frage, die man stellen wuerde."""
 
     boxed: bool
-    #: Woran die aeussere Kiste erkannt wurde ("podman", "docker", "" ).
+
     kind: str
-    #: Die Laufzeit fuer die innere Kiste, oder "" wenn es keine gibt.
+
     nested: str
-    #: Was offen steht und offen stehen soll.
+
     openings: tuple[str, ...]
-    #: Was offen steht und NICHT offen stehen sollte.
+
     holes: tuple[str, ...]
 
     @property
@@ -95,9 +93,9 @@ def in_a_box() -> bool:
     """Laeuft dieser Prozess in einem Container?"""
     if _first_marker():
         return True
-    # Ein Container ohne Markierung ist selten, aber moeglich. Dann verraet
-    # ihn die Steuergruppe: auf einem gewoehnlichen System steht dort nicht
-    # der Name einer Container-Laufzeit.
+
+
+
     try:
         gruppen = Path("/proc/self/cgroup").read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -110,7 +108,7 @@ def nested_runtime() -> str:
     for name in NESTED_RUNTIMES:
         try:
             gefunden = shutil.which(name)
-        except OSError:  # kaputter PATH -- dann eben keine Laufzeit
+        except OSError:
             return ""
         if gefunden:
             return name
@@ -149,9 +147,9 @@ def posture() -> Posture:
     if innen:
         offen.append(f"innere Kiste fuer die virtual machine ({innen})")
 
-    # Nur in der Kiste ist der Sockel ein Loch. Auf dem eigenen Rechner ist
-    # er normal -- die virtual machine braucht ihn sogar. Bis 9.5.12 stand dort
-    # trotzdem ein rotes LOCH, und `aquaticy sandbox` endete mit Fehlercode.
+
+
+
     for pfad in reachable_host_sockets() if boxed else ():
         loecher.append(
             f"{pfad} ist erreichbar -- darueber laesst sich der Wirt steuern. "

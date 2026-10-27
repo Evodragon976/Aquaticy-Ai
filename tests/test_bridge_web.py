@@ -176,7 +176,7 @@ def test_without_the_addon_the_bridge_goes_off(
     assert bridge.load_config(eine.settings())["whatsapp"]["an"] is False
 
 
-# -- Start und Stopp ---------------------------------------------------------------------------
+
 def test_stopping_all_schedulers_stops_the_bridges(monkeypatch: pytest.MonkeyPatch) -> None:
     eins, zwei = FakeRunner(), FakeRunner()
     monkeypatch.setattr(web, "USER_BRIDGES", {"a": eins})
@@ -224,7 +224,7 @@ def test_starting_the_bridge_at_login_does_not_load_the_account_settings(
     web.start_user_bridge(SimpleNamespace(id="u1"))
 
 
-# -- Wann die Brücke wartet --------------------------------------------------------------------
+
 def gebaut(monkeypatch: pytest.MonkeyPatch, konto: Any, laeuft: bool) -> Any:
     eine = SimpleNamespace(settings=lambda: SimpleNamespace(), has_running_chat=lambda: laeuft)
     runner = web._build_bridge_runner(lambda: eine, konto)
@@ -263,10 +263,10 @@ def test_abuse_in_the_bridge_goes_to_ai_guard_like_in_jobs(
     (args, kwargs), = gemeldet
     assert args[0] == "u1" and kwargs["chat"] == "messenger" and kwargs["enforce"] is True
     monkeypatch.setattr(web, "AIGUARD", None)
-    web.bridge_abuse(konto, {"art": "x"})  # ohne Wächter: nichts, kein Fehler
+    web.bridge_abuse(konto, {"art": "x"})
 
 
-# -- Oberfläche -----------------------------------------------------------------------------------
+
 def _ui_text() -> str:
     return web.UI_FILE.read_text(encoding="utf-8")
 
@@ -285,7 +285,7 @@ def test_the_ui_has_the_bridge_section_and_sends_the_bridge_action() -> None:
     assert "function addonBruecke(a)" in html
     assert "if (a.installed && !laeuft && a.bruecke) karte.appendChild(addonBruecke(a));" in html
     assert 'action: "bridge"' in html
-    # Der Entwurf geht nur über die eigene Karte, nie als Skript-Text in die Seite.
+
     abschnitt = html[html.index("function addonBruecke(a)"):html.index("function zeigeAddons()")]
     assert "innerHTML" not in abschnitt.replace('titel.innerHTML = "<b></b>"', "")
 
@@ -312,8 +312,8 @@ def test_the_reasons_the_server_gives_have_english(tmp_path: Path) -> None:
     konto = Settings(data_dir=ordner, env_path=ordner / ".env")
     assert bridge.ready_problem(konto, "whatsapp", pro=False) in en
     assert bridge.ready_problem(konto, "whatsapp", pro=True) in en
-    # Die Sätze mit Namen laufen über Muster: jedes steht in der Seite -- und sein
-    # deutscher Satz steht in bridge.py.
+
+
     quelle = Path(bridge.__file__).read_text(encoding="utf-8")
     for muster, satz in (
             (r"ist nicht installiert\. Installiere das Add-on zuerst\.$",

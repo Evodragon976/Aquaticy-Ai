@@ -34,7 +34,7 @@ def _mock(antworten: dict[str, Any], gefragt: list[httpx.Request]) -> httpx.Clie
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-# -- Katalog -----------------------------------------------------------------
+
 def test_the_four_new_services_are_in_the_catalogue() -> None:
     for neu in ("nachrichten", "wikipedia", "waehrung", "feiertage"):
         addon = addons.CATALOG[neu]
@@ -51,11 +51,11 @@ def test_services_install_instantly_and_expose_their_tools(tmp_path: Path) -> No
         assert eintrag["installed"] and eintrag["status"] == "bereit"
     namen = {s["function"]["name"] for s in tools.addon_schemas_for(konto, pro=False)}
     assert {"news_tagesschau", "wikipedia", "currency", "holidays"} <= namen
-    # Fremder Text: die Ergebnisse gelten als nicht vertrauenswuerdig.
+
     assert {"news_tagesschau", "wikipedia", "currency", "holidays"} <= tools.UNTRUSTED_SOURCES
 
 
-# -- Tagesschau ----------------------------------------------------------------
+
 def test_news_reads_a_topic() -> None:
     gefragt: list[httpx.Request] = []
     client = _mock({f"{addons.TAGESSCHAU}/news/": {"news": [
@@ -86,10 +86,10 @@ def test_news_rejects_unknown_topics_and_respects_the_hourly_limit() -> None:
     for _ in range(addons.TAGESSCHAU_PER_HOUR):
         assert addons._tagesschau_erlaubt(jetzt)
     assert not addons._tagesschau_erlaubt(jetzt + 10)
-    assert addons._tagesschau_erlaubt(jetzt + 3601)  # eine Stunde spaeter wieder frei
+    assert addons._tagesschau_erlaubt(jetzt + 3601)
 
 
-# -- Wikipedia -----------------------------------------------------------------
+
 def test_wikipedia_finds_and_summarises() -> None:
     gefragt: list[httpx.Request] = []
     basis = addons.WIKIPEDIA.format(sprache="de")
@@ -115,7 +115,7 @@ def test_wikipedia_needs_a_term_and_only_knows_two_languages() -> None:
     assert gefragt[0].url.host == "de.wikipedia.org"
 
 
-# -- Waehrung ------------------------------------------------------------------
+
 def test_currency_converts() -> None:
     gefragt: list[httpx.Request] = []
     client = _mock({addons.FRANKFURTER: {"amount": 1.0, "base": "EUR", "date": "2026-09-25",
@@ -131,7 +131,7 @@ def test_currency_rejects_nonsense() -> None:
     assert "groesser" in addons.currency(-5, "EUR")["error"]
 
 
-# -- Feiertage -----------------------------------------------------------------
+
 def test_holidays_filter_by_state() -> None:
     gefragt: list[httpx.Request] = []
     client = _mock({addons.NAGER.format(jahr=2026, land="DE"): [
@@ -151,7 +151,7 @@ def test_holidays_reject_nonsense() -> None:
     assert "1990" in addons.holidays("DE", 3000)["error"]
 
 
-# -- Rechte werden im Werkzeug durchgesetzt ---------------------------------------
+
 def test_the_holiday_right_only_germany_is_enforced(tmp_path: Path) -> None:
     konto = Settings(data_dir=tmp_path, env_path=tmp_path / ".env")
     addons.install(konto, "feiertage", pro=False)

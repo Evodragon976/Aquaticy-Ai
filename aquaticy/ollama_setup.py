@@ -34,14 +34,14 @@ def _run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     except (OSError, subprocess.SubprocessError) as exc:
         raise SetupError("Ollama-Einrichtung: Befehl konnte nicht ausgeführt werden.") from exc
     if result.returncode:
-        # Dienst-Umgebungen koennen Geheimnisse enthalten: keine rohe Ausgabe anzeigen.
+
         raise SetupError("Ollama-Einrichtung: Dienstbefehl fehlgeschlagen.")
     return result
 
 
 def _parallel(value: str) -> bool:
-    # Vorhandene groessere Werte gehoeren dem Betreiber. Nur ungueltige
-    # Zahlen ersetzen; keine neue Obergrenze fuer seine Parallelitaet setzen.
+
+
     return (len(value) <= 19 and value.isascii() and value.isdecimal()
             and 2 <= int(value) <= 2 ** 63 - 1)
 
@@ -67,7 +67,7 @@ def _linux(command: list[str]) -> None:
         values = dict(item.split("=", 1) for item in shlex.split(environment) if "=" in item)
     except ValueError as exc:
         raise SetupError("Die Umgebung des Ollama-Dienstes konnte nicht gelesen werden.") from exc
-    # Eine bewusst groessere Einstellung bleibt erhalten.
+
     count = values.get("OLLAMA_NUM_PARALLEL", "")
     count = count if _parallel(count) else str(PARALLEL)
     content = f'[Service]\nEnvironment="OLLAMA_NUM_PARALLEL={count}"\n'
@@ -80,7 +80,7 @@ def _linux(command: list[str]) -> None:
         prefix = [] if root else ["sudo"]
         if prefix and not shutil.which("sudo"):
             raise SetupError("Für den Ollama-Dienst fehlen Verwalterrechte (sudo).")
-        # Feste Ziele und Inhalt ueber stdin: keine Shell, keine ausfuehrbare Tempdatei.
+
         _run([*prefix, "mkdir", "-p", "--", str(SERVICE_FILE.parent)])
         _run([*prefix, "install", "-m", "0644", "/dev/stdin", str(SERVICE_FILE)],
              input=content)
@@ -136,19 +136,19 @@ def _macos(*, running: bool) -> None:
     except (OSError, ValueError, TypeError, plistlib.InvalidFileException) as exc:
         raise SetupError("Der Homebrew-Dienst von Ollama konnte nicht gelesen werden.") from exc
     domain = f"gui/{os.getuid()}"
-    # Erst ausladen, dann die persistente plist ersetzen und neu laden.
+
     try:
         _run(["launchctl", "print", f"{domain}/homebrew.mxcl.ollama"], capture_output=True)
     except SetupError:
-        pass  # Noch nicht geladen: bootstrap uebernimmt den ersten Start.
+        pass
     else:
         _run(["launchctl", "bootout", domain, str(target)], capture_output=True)
     _write(target, content)
     _run(["launchctl", "bootstrap", domain, str(target)], capture_output=True)
 
 
-# Fester PowerShell-Code: weder Pfade noch andere Nutzereingaben werden hineinkopiert.
-# Ein fremder Benutzer oder ein anderer Dienst auf Port 11434 wird nicht beendet.
+
+
 _WINDOWS = r"""
 $ErrorActionPreference = 'Stop'
 $binary = [IO.Path]::GetFullPath($env:AQUATICY_OLLAMA_SETUP_BINARY)

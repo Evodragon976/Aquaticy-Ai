@@ -100,7 +100,7 @@ def test_free_keys_are_found_in_the_keymap(helfer: ModuleType) -> None:
         "keycode  38 = a A a A",
         "keycode 200 =",
         "keycode 201 = ",
-        "keycode  90 =",  # zu weit unten -- echte Tasten bleiben in Ruhe
+        "keycode  90 =",
         "keycode 202 = adiaeresis",
     ])
     frei, belegt = helfer.freie_tasten(belegung)
@@ -239,7 +239,7 @@ def test_an_addon_start_path_stays_in_its_folder(helfer: ModuleType, tmp_path: P
     except OSError as exc:
         if getattr(exc, "winerror", None) != 1314:
             raise
-        # Windows ohne Entwickler-Modus darf keine Symlinks anlegen.
+
         symlink_available = False
     else:
         symlink_available = True

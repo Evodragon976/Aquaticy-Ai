@@ -78,7 +78,7 @@ def _antwort(request: httpx.Request) -> httpx.Response:
                         "opening_hours": "Mo-Fr 09:00-18:00",
                     },
                 },
-                # Ohne Namen ist ein Punkt auf der Karte keine Auskunft.
+
                 {"type": "node", "lat": 53.081, "lon": 8.801, "tags": {"shop": "bicycle"}},
             ]
         },
@@ -174,7 +174,7 @@ def test_one_request_per_second(monkeypatch: pytest.MonkeyPatch) -> None:
         faden.start()
     for faden in faeden:
         faden.join()
-    # Vier Laeufe zu je zwei Aufrufen: sieben Wartezeiten liegen dazwischen.
+
     assert max(zeiten) - start >= 0.05 * 6
 
 
@@ -185,8 +185,8 @@ def test_an_unknown_word_is_searched_by_name() -> None:
     assert _filter_for("bestes Café") == "nwr[amenity=cafe]"
     assert _filter_for("Fahrradladen") == "nwr[shop=bicycle]"
     assert 'name~"segelmacher"' in _filter_for("Segelmacher")
-    # Sonderzeichen fliegen raus, bevor sie in die Abfrage kommen: aus einem
-    # Versuch, die Abfrage zu schliessen, wird ein harmloses Suchwort.
+
+
     gebaut = _filter_for('a"];out;//')
     assert gebaut == 'nwr[name~"aout",i]'
     assert "];" not in gebaut and ";" not in gebaut
@@ -264,9 +264,9 @@ def test_the_place_dict_leaves_out_what_is_missing() -> None:
     assert schlicht.as_dict() == {"name": "Kiosk"}
 
 
-# ---------------------------------------------------------------------------
-# Das Werkzeug am Werkzeugkasten
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_tool_uses_the_location_filter(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:

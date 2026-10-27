@@ -55,11 +55,11 @@ from typing import Any
 
 LOG = logging.getLogger("aquaticy.bridge")
 
-#: Die Messenger, die sich anbinden lassen.
+
 MESSENGERS = ("whatsapp", "signal")
 NAMES = {"whatsapp": "WhatsApp", "signal": "Signal"}
 
-#: Wer antworten darf -- vom engsten zum weitesten.
+
 SCOPES = ("selbst", "nummern", "einzeln", "gruppen")
 SCOPE_LABELS = {
     "selbst": "Nur mein eigener Chat",
@@ -68,7 +68,7 @@ SCOPE_LABELS = {
     "gruppen": "Einzelchats und Gruppen",
 }
 
-#: Die Dienste und ihre Stufen (die erste ist immer "aus").
+
 SERVICES: dict[str, tuple[str, ...]] = {
     "web": ("aus", "an"),
     "haus": ("aus", "lesen", "schalten"),
@@ -86,7 +86,7 @@ LEVEL_LABELS = {
     "aendern": "Lesen und ändern", "schreiben": "Lesen und ändern",
 }
 
-#: Wie oft nachgesehen wird (Sekunden).
+
 INTERVALS = (30, 60, 120, 300)
 DEFAULT_INTERVAL = 60
 
@@ -99,11 +99,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "takt": DEFAULT_INTERVAL,
 }
 
-#: So beginnt jede Antwort. Daran erkennt die Bruecke, was sie selbst geschrieben hat --
-#: im eigenen Chat steht sonst alles auf derselben Seite.
+
+
 SIGNATURE = "[Aquaticy]"
 
-#: Hoechstens so viele Antworten je Stunde und je Durchgang -- gegen Schleifen und Kosten.
+
 MAX_REPLIES_PER_HOUR = 40
 MAX_PER_CYCLE = 3
 MAX_CHATS_PER_CYCLE = 3
@@ -115,13 +115,13 @@ MAX_MESSAGE_CHARS = 1500
 CONFIG_FILE = "bridge.json"
 STATE_FILE = "bridge_state.json"
 
-#: Der Titel des eigenen Chats in WhatsApp und Signal.
+
 SELF_TITLE = re.compile(
     r"\((?:du|you)\)|nachricht an dich|notiz an (?:mich|dich)|note to self|message yourself|"
     r"an dich selbst|to yourself",
     re.IGNORECASE,
 )
-#: Eine Gruppennachricht gilt nur, wenn sie so beginnt.
+
 TRIGGER = re.compile(r"^\s*@?aquaticy\b[\s,:;!.\-]*", re.IGNORECASE)
 
 
@@ -129,9 +129,9 @@ class BridgeError(ValueError):
     """Ein Satz fuer Menschen."""
 
 
-# ---------------------------------------------------------------------------
-# Einstellungen
-# ---------------------------------------------------------------------------
+
+
+
 def _dir(settings: Any) -> Path:
     return Path(getattr(settings, "data_dir", None) or ".")
 
@@ -246,9 +246,9 @@ def set_config(settings: Any, messenger: str, daten: Any, *, ready: str = "") ->
     return neu
 
 
-# ---------------------------------------------------------------------------
-# Zustand: was schon gesehen wurde
-# ---------------------------------------------------------------------------
+
+
+
 def chat_key(messenger: str, titel: str) -> str:
     norm = " ".join(str(titel or "").split()).casefold()
     return hashlib.sha256(f"{messenger}|{norm}".encode()).hexdigest()[:16]
@@ -293,15 +293,15 @@ def remember(liste: list[str], neu: str) -> None:
     del liste[:-MAX_SEEN]
 
 
-# ---------------------------------------------------------------------------
-# Wer darf? (alles im Code)
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass(frozen=True)
 class Decision:
     """Das Ergebnis der Pruefung eines Chats."""
 
     allow: bool
-    #: Der Besitzer oder eine freigegebene Nummer: bekommt die privaten Dienste.
+
     trusted: bool = False
     selbst: bool = False
     group: bool = False
@@ -345,8 +345,8 @@ def decide(config: dict[str, Any], titel: str, gruppe: bool | None,
     if not titel:
         return Decision(False, why="Der Chat hat keinen lesbaren Titel.")
     ist_gruppe = gruppe is not False
-    # "~Name" zeigt WhatsApp bei Nummern, die der Besitzer nicht gespeichert hat: Den Namen
-    # hat sich der Absender selbst gegeben, er kann nie "der eigene Chat" sein.
+
+
     if (not ist_gruppe and nur_ausgehend and not titel.startswith("~")
             and SELF_TITLE.search(titel)):
         return Decision(True, trusted=True, selbst=True, why="eigener Chat")
@@ -376,17 +376,17 @@ def strip_trigger(text: str, group: bool) -> str | None:
     return (text[treffer.end():].strip() if treffer else (text or "").strip()) or None
 
 
-# ---------------------------------------------------------------------------
-# Was der Agent darf
-# ---------------------------------------------------------------------------
-#: Oeffentliche Auskunft -- fuer jeden, der antworten darf (wenn "Web" an ist).
+
+
+
+
 PUBLIC_TOOLS = frozenset({
     "web_search", "fetch_page", "search_news", "local_places", "wikipedia", "weather",
     "currency", "holidays", "news_tagesschau", "read_feeds",
 })
-#: Immer dabei.
+
 ALWAYS_TOOLS = frozenset({"calculate"})
-#: Private Dienste: Werkzeuge je Stufe (nur fuer Besitzer und freigegebene Nummern).
+
 SERVICE_TOOLS: dict[str, dict[str, frozenset[str]]] = {
     "haus": {"lesen": frozenset({"ha_states"}),
              "schalten": frozenset({"ha_states", "ha_call"})},
@@ -399,7 +399,7 @@ SERVICE_TOOLS: dict[str, dict[str, frozenset[str]]] = {
               "schreiben": frozenset({"storage_find", "storage_browse", "storage_add",
                                       "storage_edit"})},
 }
-#: Welche Frage-Art zu welchem Dienst gehoert (aquaticy/ownservices.py).
+
 SOURCE_SERVICE = {"mail": "mail", "calendar": "kalender", "home": "haus", "storage": "lager"}
 
 
@@ -423,7 +423,7 @@ def service_allowed(config: dict[str, Any], trusted: bool, service: str) -> bool
 def effective_settings(base: Any, config: dict[str, Any], decision: Decision) -> Any:
     """Die Einstellungen, die der Agent in diesem Chat sieht -- nur enger als die der App."""
     s = dataclasses.replace(base)
-    # Nie: Speicher, Heimnetz, virtual machine, Helfer, Rat. Ein Fremder bekommt davon nichts.
+
     s.memory_enabled = False
     s.lan_enabled = False
     s.vm_user_mode = False
@@ -436,7 +436,7 @@ def effective_settings(base: Any, config: dict[str, Any], decision: Decision) ->
     if not decision.selbst:
         s.legal_guard = True
     dienste = config.get("dienste", {})
-    # Schalten nur auf der Stufe "schalten" -- sonst gibt es ha_call im Systemtext gar nicht.
+
     if dienste.get("haus", "aus") != "schalten":
         s.ha_control, s.ha_direct = False, False
     if dienste.get("mail", "aus") != "aendern" and dienste.get("kalender", "aus") != "aendern":
@@ -484,9 +484,9 @@ def trust_note(decision: Decision, config: dict[str, Any]) -> str:
     return "".join(teile)
 
 
-# ---------------------------------------------------------------------------
-# Antworttext
-# ---------------------------------------------------------------------------
+
+
+
 _MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 
 
@@ -519,9 +519,9 @@ def is_own_text(text: str) -> bool:
     return kopf.startswith(SIGNATURE) or kopf.startswith(SIGNATURE[1:])
 
 
-# ---------------------------------------------------------------------------
-# Was das Vision-Modell liefert
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass
 class ChatEntry:
     """Ein Eintrag der Chat-Liste."""
@@ -545,7 +545,7 @@ class Scan:
 
 @dataclass
 class Msg:
-    von: str  # "ich" oder "andere"
+    von: str
     name: str
     text: str
     zeit: str
@@ -661,9 +661,9 @@ def read_prompt(messenger: str, raster: str) -> str:
     )
 
 
-# ---------------------------------------------------------------------------
-# Voraussetzungen
-# ---------------------------------------------------------------------------
+
+
+
 def ready_problem(settings: Any, messenger: str, pro: bool) -> str:
     """Kann die Bruecke laufen? Returns: "" -- oder ein Satz, was fehlt."""
     from aquaticy import addons
@@ -702,9 +702,9 @@ def capped_config(settings: Any, messenger: str, config: dict[str, Any]) -> dict
     return config
 
 
-# ---------------------------------------------------------------------------
-# Der Treiber: das Messenger-Fenster in der virtual machine
-# ---------------------------------------------------------------------------
+
+
+
 class VisionDriver:
     """Bedient das Messenger-Fenster -- sehen mit dem Vision-Modell, tippen mit xdotool.
 
@@ -742,7 +742,7 @@ class VisionDriver:
         ergebnis = self.desktop.open(self.messenger)
         if ergebnis.get("error"):
             return str(ergebnis["error"])
-        self._sleep(10)  # die Seite (oder das Programm) braucht einen Moment
+        self._sleep(10)
         return ""
 
     def scan(self) -> Scan:
@@ -784,9 +784,9 @@ class VisionDriver:
         self._sleep(1)
 
 
-# ---------------------------------------------------------------------------
-# Der Antwortgeber: ein eingeschraenkter Agent je Chat
-# ---------------------------------------------------------------------------
+
+
+
 def bridge_agent_class() -> type:
     """Der Agent der Bruecke -- gebaut erst, wenn er gebraucht wird (schwere Importe)."""
     from aquaticy.agent import Agent
@@ -794,7 +794,7 @@ def bridge_agent_class() -> type:
     class BridgeAgent(Agent):
         """Ein Agent mit genau den Werkzeugen, die der Chat bekommen darf."""
 
-        #: Die Grenze liegt in den Einstellungen der Bruecke, nicht in denen der App.
+
         OWN_HINTS = False
 
         def __init__(self, settings: Any, erlaubt: frozenset[str], zusatz: str,
@@ -805,8 +805,8 @@ def bridge_agent_class() -> type:
             self.use_subagents = False
             self.structured = False
             self.recheck = False
-            # Das Tor im Werkzeugkasten: ein Werkzeug ausserhalb der Liste laeuft nie,
-            # auch wenn das Modell es erfindet.
+
+
             self.toolbox.gate = self._tor
 
         def _tor(self, name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
@@ -850,8 +850,8 @@ class AgentAnswerer:
 
     def _build(self, settings: Any, erlaubt: frozenset[str], zusatz: str, trusted: bool) -> Any:
         def melden(name: str, payload: dict[str, Any]) -> None:
-            # Missbrauch zaehlt nur beim Besitzer und seinen Nummern: Ein Fremder darf ihm
-            # nicht das Konto sperren lassen.
+
+
             if name == "abuse" and trusted and self._on_abuse is not None:
                 with contextlib.suppress(Exception):
                     self._on_abuse(dict(payload))
@@ -865,8 +865,8 @@ class AgentAnswerer:
         settings = effective_settings(base, config, decision)
         erlaubt = allowed_tools(config, decision.trusted)
         zusatz = trust_note(decision, config)
-        # App-Rechte und Verbindungen koennen auch ausserhalb der Bruecke wechseln.
-        # Nur einen Hash behalten, niemals Zugangsdaten in Schluesseln oder Protokollen.
+
+
         basis_stand = hashlib.sha256(json.dumps(
             {f.name: getattr(base, f.name) for f in dataclasses.fields(base)},
             sort_keys=True, default=str).encode()).hexdigest()
@@ -884,7 +884,7 @@ class AgentAnswerer:
         if eintrag is None or eintrag[1] != stand:
             agent = self._build(settings, erlaubt, zusatz, decision.trusted)
             if eintrag is not None:
-                # Entzogene Rechte sperren auch bereits gelesene private Inhalte.
+
                 if (eintrag[3] <= erlaubt and eintrag[4] == rolle
                         and eintrag[5] == basis_stand):
                     agent.messages.extend(eintrag[0].messages[1:])
@@ -902,15 +902,15 @@ class AgentAnswerer:
             self._discard(key)
 
 
-# ---------------------------------------------------------------------------
-# Ein Durchgang
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass
 class Report:
     """Was ein Durchgang getan hat."""
 
     messenger: str
-    #: "aus", "pausiert", "ok" oder "fehler"
+
     state: str = "ok"
     gelesen: int = 0
     beantwortet: int = 0
@@ -967,13 +967,13 @@ class Bridge:
         self._driver_factory = driver_factory
         self._answerer = answerer
         self._paused = paused
-        # Vor jedem Durchgang: Gelten die Voraussetzungen noch (Add-on, Anmeldung, Rechte)?
+
         self._ready = ready or (
             lambda settings, messenger: ready_problem(settings, messenger, True))
         self._clock = clock
         self._sleep = sleep
 
-    # -- Zustand ----------------------------------------------------------
+
     def _note(self, store: StateStore, messenger: str, **felder: Any) -> None:
         def aendern(eintrag: dict[str, Any]) -> None:
             status = _dictof(eintrag.setdefault("status", {}))
@@ -1006,7 +1006,7 @@ class Bridge:
 
         store.update(messenger, aendern)
 
-    # -- Der Durchgang ----------------------------------------------------
+
     def run_once(self, messenger: str) -> Report:
         rep = Report(messenger)
         settings = self._settings()
@@ -1054,16 +1054,16 @@ class Bridge:
         neu: dict[str, str] = {}
         todo: list[ChatEntry] = []
         for eintrag in scan.chats:
-            # Vor dem Oeffnen darf die Liste "unsicher" sagen; entschieden wird danach.
+
             if not decide(config, eintrag.titel, eintrag.gruppe is True).allow:
                 continue
             key = chat_key(messenger, eintrag.titel)
             jetzt = preview_hash(eintrag.vorschau)
             neu[key] = jetzt
             if key not in alt:
-                continue  # der erste Blick merkt sich nur, was dort steht
+                continue
             if is_own_text(eintrag.vorschau):
-                continue  # das war die eigene Antwort
+                continue
             if alt.get(key) != jetzt or eintrag.ungelesen:
                 todo.append(eintrag)
 
@@ -1114,8 +1114,8 @@ class Bridge:
             alle.append(fp)
             if is_own_text(msg.text):
                 continue
-            # In Gruppen entscheidet das Stichwort, nicht die Seite; sonst zaehlt die Seite:
-            # im eigenen Chat der Besitzer ("ich"), in fremden Chats die anderen.
+
+
             if not entscheidung.group and msg.von != ("ich" if entscheidung.selbst else "andere"):
                 continue
             auftrag = strip_trigger(msg.text, entscheidung.group)
@@ -1155,7 +1155,7 @@ class Bridge:
 
         if payment_data(text):
             text = f"{SIGNATURE} Darin stehen Zahlungsdaten. Die sende ich nicht."
-        # Vor dem Tippen: ist immer noch derselbe Chat offen?
+
         jetzt_titel, jetzt_gruppe = driver.current_title()
         if not same_title(jetzt_titel, titel) or (not entscheidung.group and jetzt_gruppe is True):
             rep.uebersprungen.append(f"{titel}: der Chat hat gewechselt")
@@ -1166,9 +1166,9 @@ class Bridge:
         self._sleep(0)
 
 
-# ---------------------------------------------------------------------------
-# Der Hintergrundlauf
-# ---------------------------------------------------------------------------
+
+
+
 class Runner:
     """Ein Thread je Konto -- nur solange mindestens eine Bruecke eingeschaltet ist."""
 
@@ -1233,7 +1233,7 @@ class Runner:
                 try:
                     takt = int(load_config(self._settings())[name]["takt"])
                     rep = self._bridge.run_once(name)
-                    # Nach einem Fehler langsamer, damit er nicht jede halbe Minute kostet.
+
                     self._due[name] = jetzt + (min(takt * 2, 600) if rep.state == "fehler"
                                                else takt)
                 except Exception:
@@ -1245,9 +1245,9 @@ class Runner:
             self._wake.clear()
 
 
-# ---------------------------------------------------------------------------
-# Was die Oberflaeche sieht
-# ---------------------------------------------------------------------------
+
+
+
 def catalogue() -> dict[str, Any]:
     """Die Auswahlmoeglichkeiten fuer das Formular."""
     return {

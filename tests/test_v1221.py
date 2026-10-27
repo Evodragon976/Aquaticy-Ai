@@ -316,8 +316,8 @@ def test_preferences_lock_the_fresh_read_against_concurrent_revocation(settings,
         future = pool.submit(editing.set_preferences, colleague.id, {"sharing_chats": True})
         try:
             assert entered.wait(5)
-            # Kein zweiter Schreiber darf zwischen dem Lesen der bisherigen
-            # Freigaben und dem Speichern eines anderen Feldes dazwischenkommen.
+
+
             with sqlite3.connect(settings.db_path, timeout=0.01) as competing, \
                     pytest.raises(sqlite3.OperationalError, match="locked"):
                 competing.execute("BEGIN IMMEDIATE")

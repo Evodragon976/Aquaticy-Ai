@@ -132,8 +132,8 @@ def client(session: web.ChatSession):
         conn.close()
         return response.status, data
 
-    # Manche Tests brauchen eine eigene Verbindung -- etwa um sie mitten im
-    # Strom zu kappen. Der Port haengt deshalb am Helfer.
+
+
     request.port = server.server_address[1]
 
     try:
@@ -196,7 +196,7 @@ def test_saved_chat_setting_reloads_after_releasing_the_turn_lock(
     assert session._agent is None
 
 
-# -- Einstellungen --------------------------------------------------------
+
 def test_current_values_covers_every_setting_key(session: web.ChatSession) -> None:
     values = web.current_values()
     assert set(values) == set(web.SETTING_KEYS)
@@ -206,7 +206,7 @@ def test_current_values_covers_every_setting_key(session: web.ChatSession) -> No
 
 
 def test_current_values_are_all_strings(session: web.ChatSession) -> None:
-    # Das Formular fuellt nur Text -- Zahlen muessen konvertiert ankommen.
+
     assert all(isinstance(value, str) for value in web.current_values().values())
 
 
@@ -215,7 +215,7 @@ def test_save_values_writes_env_and_reloads(
 ) -> None:
     target = tmp_path / ".env"
     monkeypatch.setattr(web, "find_env_file", lambda: target)
-    # Seit 12.0.0 Luna ein erlaubtes Modell (bis 11.4.1 stand hier eins von Claude).
+
     written = web.save_values(
         {"AQUATICY_MODEL": "nvidia_nim/meta/llama-3.3-70b-instruct",
          "AQUATICY_LOCATION": "Hamburg"}
@@ -224,7 +224,7 @@ def test_save_values_writes_env_and_reloads(
     text = target.read_text()
     assert "AQUATICY_MODEL=nvidia_nim/meta/llama-3.3-70b-instruct" in text
     assert "AQUATICY_LOCATION=Hamburg" in text
-    # reload() wirft Agent und Einstellungen weg, damit die neuen greifen.
+
     assert session._settings is None
     assert session._agent is None
 
@@ -250,8 +250,8 @@ def test_a_users_saved_vision_model_is_active_immediately(
 def test_the_form_stores_no_api_key_anymore(
     session: web.ChatSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Bis 11.4.1 landete der Schluessel aus dem Formular unter dem Namen des
-    # Anbieters. Seit 12.0.0 Luna gibt es ihn nur ueber die Add-ons.
+
+
     target = tmp_path / ".env"
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     web.save_values(
@@ -282,7 +282,7 @@ def test_unknown_keys_are_ignored(
     assert "PATH=/boese" not in target.read_text()
 
 
-# -- Endpunkte ------------------------------------------------------------
+
 def test_index_serves_the_ui(client) -> None:
     status, body = client("GET", "/")
     assert status == 200
@@ -324,7 +324,7 @@ def test_clear_resets_the_agent(client, session: web.ChatSession) -> None:
     assert agent.cleared == 1
 
 
-# -- Streaming ------------------------------------------------------------
+
 def test_chat_streams_steps_and_answer(client, session: web.ChatSession) -> None:
     session._agent = FakeAgent(
         [
@@ -374,14 +374,14 @@ def test_a_separately_selected_vision_model_enables_public_visual_sources(
 
 
 def test_done_arrives_exactly_once(client, session: web.ChatSession) -> None:
-    # Der Agent sendet sein eigenes "done" -- der Server darf keines anhaengen.
+
     session._agent = FakeAgent([("done", {"tool_calls": 0, "hit_limit": False})])
     _, body = client("POST", "/api/chat", {"message": "Hallo"})
     assert [e["type"] for e in sse_events(body)].count("done") == 1
 
 
 def test_done_is_added_when_the_agent_sends_none(client, session: web.ChatSession) -> None:
-    # Sonst bliebe im Browser der blinkende Cursor stehen.
+
     session._agent = FakeAgent([("answer_chunk", {"text": "kurz"})])
     _, body = client("POST", "/api/chat", {"message": "Hallo"})
     assert [e["type"] for e in sse_events(body)][-1] == "done"
@@ -395,7 +395,7 @@ def test_agent_crash_becomes_an_error_event(client, session: web.ChatSession) ->
     assert status == 200
     events = sse_events(body)
     assert events[0]["type"] == "error"
-    # Seit 9.6.8 Sol: nie der technische Fehler, nur eine allgemeine Meldung.
+
     assert "Modell weg" not in events[0]["message"]
     assert events[0]["message"] == web.GENERIC_ERROR
     assert events[-1]["type"] == "done"
@@ -429,20 +429,20 @@ def test_config_post_reports_failures(
     monkeypatch.setattr(web, "write_env_file", boom)
     status, body = client("POST", "/api/config", {"AQUATICY_LOCATION": "Kiel"})
     assert status == 500
-    # Seit 9.6.8 Sol: ein Serverfehler sagt nur allgemein, dass es nicht ging.
+
     assert json.loads(body)["error"] == web.GENERIC_ERROR
 
 
-# -- Oberflaeche ----------------------------------------------------------
+
 def test_ui_file_offers_every_setting() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     for key in web.SETTING_KEYS:
         if key == "AQUATICY_MAX_SUBAGENTS":
-            continue  # Der Turn-Regler steht jetzt direkt in der Modellauswahl.
+            continue
         assert f'name="{key}"' in html, f"{key} fehlt im Formular"
-    # 9.5.17: "Eigene Modelle", zunaechst verborgen -- es taucht erst auf, wenn oben
-    # ein eigenes Modell steht. Schluessel stehen seit 12.0.0 Luna nicht mehr darin
-    # (nur noch unter Add-ons -> NVIDIA NIM und Mistral).
+
+
+
     assert 'id="sec-schluessel"' in html and 'id="keys-summary"' not in html
     assert "Eigene Modelle" in html
     assert '<fieldset id="sec-schluessel" hidden>' in html
@@ -474,8 +474,8 @@ def test_every_palette_keeps_small_text_at_wcag_aa_contrast() -> None:
     checked = 0
     for match in re.finditer(r"([^{}]+)\{([^{}]*--text-3:[^{}]*)\}", css):
         values = dict(re.findall(r"(--[\w-]+):\s*(#[0-9a-fA-F]{6})", match.group(2)))
-        # Das eigene Design setzt die Schrift der Seitenleiste ueber var(...)
-        # -- ohne feste Hex-Werte gibt es hier nichts zu pruefen.
+
+
         if not {"--surface", "--text-2", "--text-3"} <= values.keys():
             continue
         background = luminance(values["--surface"])
@@ -486,11 +486,11 @@ def test_every_palette_keeps_small_text_at_wcag_aa_contrast() -> None:
             )
             assert contrast >= 4.5, f"{match.group(1).strip()} {key}: {contrast:.2f}:1"
             checked += 1
-    # Standard hell/dunkel und Schlicht hell/dunkel -- vier Bloecke, je zwei Werte.
+
     assert checked == 4 * 2
 
 
-# -- Slash-Befehle --------------------------------------------------------
+
 def test_help_lists_the_commands(client) -> None:
     status, body = client("POST", "/api/command", {"line": "/help"})
     assert status == 200
@@ -513,7 +513,7 @@ def test_location_command_changes_the_filter(client, session: web.ChatSession) -
 def test_model_command_rejects_a_model_without_provider(client, session: web.ChatSession) -> None:
     _, body = client("POST", "/api/command", {"line": "/model nemotron-3"})
     text = json.loads(body)["text"]
-    assert "mistral/mistral-large-latest" in text  # das bisherige Modell bleibt aktiv
+    assert "mistral/mistral-large-latest" in text
 
 
 def test_model_command_without_argument_reports_the_current_one(client) -> None:
@@ -584,7 +584,7 @@ def test_image_goes_through_the_chat_path(
     status, body = client("POST", "/api/chat", {"message": f"/image {image}"})
     assert status == 200
     assert [e["type"] for e in sse_events(body)] == ["done"]
-    # Der Agent bekommt die Beschreibung als Frage, nicht den Befehl.
+
     assert "ein gruener Stuhl" in agent.asked[0]
     assert "foto.png" in agent.asked[0]
 
@@ -684,7 +684,7 @@ def test_saved_settings_take_effect_without_a_restart(
     reset_settings_cache()
 
 
-# -- Netzbetrieb ----------------------------------------------------------
+
 @pytest.fixture
 def guarded(monkeypatch: pytest.MonkeyPatch) -> str:
     """Setzt ein Zugangswort, wie es `aquaticy web --lan` tut."""
@@ -731,7 +731,7 @@ def port(session: web.ChatSession):
 
 
 def test_without_a_token_everything_stays_open(port: int) -> None:
-    # Der rein lokale Betrieb soll so einfach bleiben wie vorher.
+
     assert raw_request(port, "GET", "/")[0] == 200
 
 
@@ -830,7 +830,7 @@ def test_guarded_server_refuses_strangers(port: int, guarded: str) -> None:
 def test_token_in_the_address_opens_the_door(port: int, guarded: str) -> None:
     status, headers, _ = raw_request(port, "GET", f"/?token={guarded}")
     assert status == 200
-    # ... und wird als Cookie hinterlegt, damit nur der erste Aufruf ihn braucht.
+
     assert f"{web.TOKEN_COOKIE}={guarded}" in headers.get("Set-Cookie", "")
 
 
@@ -847,7 +847,7 @@ def test_a_wrong_token_is_refused(port: int, guarded: str) -> None:
 
 
 def test_query_string_does_not_break_routing(port: int) -> None:
-    # /?token=... ist immer noch die Startseite, nicht ein unbekannter Pfad.
+
     assert raw_request(port, "GET", "/?token=egal")[0] == 200
     assert raw_request(port, "GET", "/api/config?x=1")[0] == 200
 
@@ -857,7 +857,7 @@ def test_lan_urls_name_the_reachable_address(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(web, "tailscale_address", lambda: "")
     urls = web.urls_for("0.0.0.0", 8765)
     assert urls[0] == "http://192.168.1.44:8765/"
-    # Die eigene Maschine steht zuletzt -- die macht der Browser beim Start auf.
+
     assert urls[-1] == "http://127.0.0.1:8765/"
 
 
@@ -877,7 +877,7 @@ def test_tailscale_range_is_recognised() -> None:
     assert web.is_tailscale("100.81.120.100")
     assert web.is_tailscale("100.64.0.1")
     assert web.is_tailscale("100.127.255.254")
-    assert not web.is_tailscale("100.128.0.1")  # ausserhalb von /10
+    assert not web.is_tailscale("100.128.0.1")
     assert not web.is_tailscale("100.63.255.255")
     assert not web.is_tailscale("192.168.1.4")
     assert not web.is_tailscale("")
@@ -898,7 +898,7 @@ def test_local_urls_stay_local(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_an_explicit_host_is_used_as_given() -> None:
     assert web.urls_for("192.168.1.9", 80)[0] == "http://192.168.1.9:80/"
-    # Ein freiwilliges Zugangswort haengt weiterhin an der Adresse.
+
     assert web.urls_for("192.168.1.9", 80, "k")[0] == "http://192.168.1.9:80/?token=k"
 
 
@@ -918,7 +918,7 @@ def test_token_is_short_enough_to_type_on_a_phone() -> None:
 
 def test_lan_address_is_never_loopback() -> None:
     address = web.lan_address()
-    assert not address.startswith("127.")  # "" ist erlaubt, 127.x nie
+    assert not address.startswith("127.")
 
 
 def test_a_waiting_device_is_told_so(session: web.ChatSession) -> None:
@@ -997,7 +997,7 @@ def test_chat_route_caps_agent_slider_by_mode(client, agent: FakeAgent) -> None:
     assert agent.seen_agent_limit == 12
 
 
-# -- Aufbau der Oberflaeche ----------------------------------------------
+
 def test_style_and_script_blocks_stay_separate() -> None:
     """Ein Skriptblock im <style> faellt sonst nur im Browser auf."""
     html = web.UI_FILE.read_text(encoding="utf-8")
@@ -1019,7 +1019,7 @@ def test_every_request_carries_the_token() -> None:
     assert "localStorage.setItem" not in html
 
 
-# -- Zugangswort mit Sonderzeichen ---------------------------------------
+
 def test_comparison_survives_non_ascii(monkeypatch: pytest.MonkeyPatch) -> None:
     """compare_digest lehnt Nicht-ASCII als str ab -- ueber Bytes geht es.
 
@@ -1055,7 +1055,7 @@ def test_generated_tokens_are_always_acceptable() -> None:
         assert web.token_problem(web.new_token()) == ""
 
 
-# -- Fehler in einer Route ------------------------------------------------
+
 def test_a_broken_route_answers_500_instead_of_dying(
     port: int, monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
@@ -1073,11 +1073,11 @@ def test_a_broken_route_answers_500_instead_of_dying(
     assert "RuntimeError" in output.out
     assert "kaputt" not in output.out
     assert "Traceback" not in output.out + output.err
-    # Der Server lebt weiter.
+
     assert raw_request(port, "GET", "/")[0] == 200
 
 
-# -- Rueckfragen im Browser -----------------------------------------------
+
 class AskingAgent(FakeAgent):
     """Stellt beim Recherchieren eine Rueckfrage und wartet auf die Antwort."""
 
@@ -1112,7 +1112,7 @@ def test_the_browser_can_answer_a_question(client, session: web.ChatSession) -> 
     answered = threading.Event()
 
     def reply() -> None:
-        # Warten, bis die Rueckfrage wirklich gestellt ist.
+
         for _ in range(100):
             if session.busy():
                 break
@@ -1140,7 +1140,7 @@ def test_an_unanswered_question_gives_up(client, session: web.ChatSession,
     session._agent = agent
     status, _ = client("POST", "/api/chat", {"message": "Laptop gesucht"})
     assert status == 200
-    assert agent.got == ""  # keine Antwort, aber auch kein Haenger
+    assert agent.got == ""
 
 
 def test_stale_answers_never_leak_into_the_next_question(
@@ -1179,7 +1179,7 @@ def test_the_ui_can_show_a_question() -> None:
     assert "askcard" in html
 
 
-# -- Hochgeladene Dateien -------------------------------------------------
+
 def encode(data: bytes) -> str:
     import base64
 
@@ -1347,8 +1347,8 @@ def test_the_ui_offers_the_upload() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'id="picker"' in html and 'type="file"' in html
     assert "readAsDataURL" in html
-    assert "dragging" in html  # Ablegen per Drag-and-drop
-    assert "clipboardData" in html  # Einfuegen aus der Zwischenablage
+    assert "dragging" in html
+    assert "clipboardData" in html
 
 
 def test_old_uploads_are_cleaned_up(session: web.ChatSession, seeing: FakeAgent,
@@ -1359,11 +1359,11 @@ def test_old_uploads_are_cleaned_up(session: web.ChatSession, seeing: FakeAgent,
         attach(session, f"bild{index}.png", tiny_png())
     folder = session.settings().data_dir / "uploads"
     assert len(list(folder.iterdir())) == 3
-    # Das zuletzt hochgeladene ist noch da.
+
     assert any("bild5" in item.name for item in folder.iterdir())
 
 
-# -- Home Assistant in der Oberflaeche ------------------------------------
+
 def test_the_token_never_goes_to_the_browser(client, session: web.ChatSession) -> None:
     """Nur ob eines da ist -- nie das Token selbst."""
     session._settings.ha_url = "http://192.168.1.5:8123"
@@ -1399,7 +1399,7 @@ def test_ha_test_reports_success(client, monkeypatch: pytest.MonkeyPatch) -> Non
     assert payload["ok"] is True
     assert payload["name"] == "Zuhause 2026.8"
     assert payload["entities"] == 13
-    assert payload["url"] == "http://192.168.1.5:8123"  # Adresse wurde vervollstaendigt
+    assert payload["url"] == "http://192.168.1.5:8123"
 
 
 def test_ha_test_passes_the_error_through(client, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1458,14 +1458,14 @@ def test_a_new_ha_token_is_written(
     assert "HA_TOKEN=neues-token" in target.read_text()
 
 
-# -- Die neue Oberflaeche -------------------------------------------------
+
 def test_the_ui_looks_like_the_new_design() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "<aside>" in html                      # Seitenleiste
-    assert 'id="recents"' in html                 # zuletzt Gefragtes
-    assert 'id="greeting"' in html                # Begruessung
-    assert "--serif" in html                      # Serifenschrift fuer die Begruessung
-    assert "prefers-color-scheme" in html         # folgt dem System
+    assert "<aside>" in html
+    assert 'id="recents"' in html
+    assert 'id="greeting"' in html
+    assert "--serif" in html
+    assert "prefers-color-scheme" in html
 
 
 def test_the_default_palette_is_green_not_orange() -> None:
@@ -1499,10 +1499,10 @@ def test_every_palette_sets_the_same_variables() -> None:
             r"--([a-z0-9-]+):",
             re.search(r":root\{(.*?)\}", html, re.S).group(1),
         )
-    # Was jedes Schema selbst setzen muss, sind die Farben. Radien, Schriften,
-    # der Schatten und der weisse Knopf im Schalter sind ueberall dieselben --
-    # sie in sechzehn Bloecken zu wiederholen wuerde nur die Gelegenheit
-    # schaffen, sie an einer Stelle zu vergessen.
+
+
+
+
     ) - {"radius", "radius-lg", "serif", "sans", "mono", "shadow", "knob", "fs"}
     blocks = re.findall(
         r':root\[data-palette="([a-z]+)"\](\[data-theme="dark"\])?\{(.*?)\}', html, re.S
@@ -1529,7 +1529,7 @@ def test_the_interface_moves_within_researched_timings() -> None:
         assert f"@keyframes {name}{{" in style, name
     dauern: list[int] = []
     for line in style.splitlines():
-        if "infinite" in line:      # das Atmen des Abbruchs laeuft absichtlich lang
+        if "infinite" in line:
             continue
         dauern += [int(f) for f in re.findall(r"(?<![\w.])(\d+)ms\b", line)]
         dauern += [
@@ -1564,7 +1564,7 @@ def test_windows_close_with_an_animation_before_they_vanish() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert ".overlay.closing" in html
     assert "function closeOverlay" in html and "function openOverlay" in html
-    # Die Wartezeit im Skript muss zur Dauer im Stilblock passen.
+
     assert "CLOSE_MS = 140" in html and "--t-fast:130ms" in html
 
 
@@ -1574,8 +1574,8 @@ def test_the_settings_window_has_section_jumps() -> None:
     assert 'id="secnav"' in html
     assert "sheet-head" in html
     assert "position:sticky" in html
-    # Die Marken kommen aus den Abschnitten selbst, nicht aus einer Liste
-    # daneben -- sonst haette ein neuer Abschnitt keine.
+
+
     assert "querySelectorAll(\"fieldset\")" in html
 
 
@@ -1586,21 +1586,21 @@ def test_the_appearance_window_offers_modes_and_palettes() -> None:
     assert 'id="palettes"' in html
     for mode in ("light", "dark", "system"):
         assert f'data-tmode="{mode}"' in html
-    # Das Schema liegt beim Server, nicht im Browser -- sonst waere es auf
-    # dem Handy ein anderes als am Rechner.
+
+
     assert "aquaticy-palette" not in html
     assert "merkeZustand({ palette })" in html
-    assert "prefers-color-scheme" in html    # "wie das System" folgt dem System
+    assert "prefers-color-scheme" in html
 
 
 def test_the_design_window_has_only_standard_and_a_own_designer() -> None:
     """9.5.17: Nur Standard und Schlicht bleiben -- der Rest ist der eigene Designer."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Umbenannt und entruempelt.
+
     assert ">Design</h2>" in html and "◐ Design" in html
     for fort in ("nord", "catppuccin", "gruvbox", "tokyonight", "dracula", "rosepine"):
         assert f'data-palette="{fort}"' not in html
-    # Schlicht (Schwarz-Weiss) und das eigene Design sind da.
+
     assert '[data-palette="mono"]' in html
     assert '[data-palette="custom"]' in html
     assert 'id="designer"' in html and "Design selber erstellen" in html
@@ -1612,7 +1612,7 @@ def test_a_saved_own_design_reaches_the_page_without_a_flash() -> None:
     """Steht ein eigenes Design im Zustand, kommen die Farben schon am <html> an."""
     stil = web._design_style({"accent": "#0055aa", "bg": "#ffffff", "sidebar": "#223344"})
     assert "--accent:#0055aa" in stil and "--bg:#ffffff" in stil and "--sidebar:#223344" in stil
-    # Unfug wird gar nicht erst eingebaut.
+
     assert web._design_style({"accent": "rot", "bg": "#fff"}) == ""
 
 
@@ -1658,7 +1658,7 @@ def test_the_sidebar_lists_chats_not_single_questions() -> None:
     assert "chat.turns" in html
 
 
-# -- Modellauswahl, Auslastung, Speicher ----------------------------------
+
 def test_the_model_list_offers_what_actually_works(
     client, session: web.ChatSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1671,9 +1671,9 @@ def test_the_model_list_offers_what_actually_works(
     models = json.loads(body)["models"]
     ids = [item["id"] for item in models]
     assert "ollama_chat/gemma4:12b" in ids
-    # Ohne Schluessel keine Zeile -- sonst waehlt man etwas, das nicht laeuft.
-    # Seit 11.3.0 Luna gilt das auch fuer das eingestellte Modell: das
-    # voreingestellte Mistral ohne Mistral-Schluessel steht nicht mehr da.
+
+
+
     assert "mistral/mistral-large-latest" not in ids
     assert not any(item["id"].startswith("anthropic/") for item in models)
     assert all(item["note"] for item in models), "jede Zeile braucht eine Erklaerung"
@@ -1706,7 +1706,7 @@ def test_the_load_includes_the_storage_when_it_is_on(
     _, body = client("GET", "/api/system")
     storage = json.loads(body)["storage"]
     assert storage["limit_mb"] == 400
-    # Der Arbeitsspeicher darf davon nicht ueberschrieben werden.
+
     assert "memory" in json.loads(body)
 
 
@@ -1739,7 +1739,7 @@ def test_the_load_section_is_hidden_until_ultra() -> None:
     assert "START.load === true && kontoUltra" in html
 
 
-# -- Slash-Befehle fuer den Speicher --------------------------------------
+
 def test_memory_command_shows_what_is_stored(client, session: web.ChatSession) -> None:
     session.memory().remember("Der Nutzer wohnt in Bremen.", topic="Wohnort")
     _, body = client("POST", "/api/command", {"line": "/memory"})
@@ -1781,7 +1781,7 @@ def test_memory_command_says_when_it_is_off(client, session: web.ChatSession) ->
     assert "Einstellungen" in text
 
 
-# -- Handy-Layout ---------------------------------------------------------
+
 def test_the_ui_has_a_phone_layout() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "@media (max-width:900px)" in html
@@ -1846,7 +1846,7 @@ def test_escape_closes_the_settings_window() -> None:
     assert "closeSettings()" in handler, "dann die Einstellungen"
 
 
-# -- Anbieter-Kuerzel ergaenzen -------------------------------------------
+
 def test_a_missing_provider_prefix_is_added() -> None:
     """Wer bei NVIDIA die Modell-ID kopiert, bekommt sie ohne Kuerzel."""
     assert (
@@ -1920,15 +1920,15 @@ def test_the_ui_shows_what_a_key_looks_like() -> None:
 
     nvidia = next(p for p in provider_view() if p["id"] == "nvidia_nim")
     assert nvidia["placeholder"].startswith("nvapi-")
-    # Seit 12.2.3 Astra Nemotron -- Llama 3.3 70B hat NVIDIA abgeschaltet.
+
     assert nvidia["example"] == "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"
-    # Seit 12.0.0 Luna steht im Satz, wo der Schluessel hingehoert: beim Add-on.
+
     assert "Add-ons → NVIDIA NIM" in nvidia["note"] and "nvapi-" in nvidia["note"]
     lokal = next(p for p in provider_view() if p["id"] == "ollama_chat")
     assert lokal["key_label"] == "(nicht nötig)" and "Kein Schlüssel" in lokal["note"]
 
 
-# -- Chats statt Einzelfragen ---------------------------------------------
+
 def test_a_chat_is_named_after_its_first_question(client, session: web.ChatSession) -> None:
     """Wie ein Ordner: benannt nach dem, weswegen man ihn angelegt hat."""
     cache = Cache(session.settings().db_path, 24)
@@ -2056,7 +2056,7 @@ def test_a_new_chat_starts_a_new_entry(client, session: web.ChatSession) -> None
     assert after and after != before
 
 
-# -- Anbieterwechsel: keine fremde Adresse --------------------------------
+
 def test_an_ollama_address_never_reaches_the_cloud() -> None:
     """Ollama antwortet mit "404 page not found" -- das sieht aus wie ein
     Fehler des Anbieters, ist aber nur die falsche Adresse."""
@@ -2083,9 +2083,9 @@ def test_a_proxy_is_not_mistaken_for_ollama() -> None:
     assert not base_fits("http://192.168.1.9:11434", "mistral/mistral-large-latest")
 
 
-# ---------------------------------------------------------------------------
-# Terminal-Setup und Web-Einstellungen zeigen dasselbe
-# ---------------------------------------------------------------------------
+
+
+
 def test_everything_setup_asks_for_is_in_the_web_form() -> None:
     """Was `aquaticy setup` fragt, muss auch im Browser einstellbar sein.
 
@@ -2125,7 +2125,7 @@ def test_saving_stores_the_search_key_under_the_right_name(
     monkeypatch.setattr(web, "find_env_file", lambda: target)
     monkeypatch.setattr(web.SESSION, "reload", lambda: None)
 
-    # Seit 12.0.0 Luna nimmt das Formular keinen Schluessel der Suchmaschine mehr an.
+
     web.save_values({"AQUATICY_SEARCH_BACKEND": "brave", "__SEARCH_KEY__": "bsa-xyz123456"})
     text = target.read_text(encoding="utf-8")
     assert "AQUATICY_SEARCH_BACKEND=brave" in text and "bsa-xyz123456" not in text
@@ -2186,7 +2186,7 @@ def test_the_probe_endpoint_tests_the_form_values(client, monkeypatch: pytest.Mo
     data = json.loads(body)
     assert data["ok"] is True
     assert seen["model"] == "mistral/mistral-large-latest" and seen["backend"] == "brave"
-    # Ein eingetippter Schluessel zaehlt seit 12.0.0 Luna nicht mehr (nur Add-ons).
+
     assert seen["key"] != "sk-neu"
 
 
@@ -2221,9 +2221,9 @@ def test_a_leftover_ollama_base_is_ignored_in_the_probe(
     assert seen["base"] == ""
 
 
-# ---------------------------------------------------------------------------
-# Gmail und Kalender in den Einstellungen
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_settings_have_their_own_google_section() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "Gmail &amp; Kalender" in html, "eigene Sparte"
@@ -2284,8 +2284,8 @@ def test_an_empty_google_secret_means_unchanged(
 
 def test_the_consent_link_is_built_on_request(client, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "id-123.apps.googleusercontent.com")
-    # Seit 12.5.5 Terra startet die Anmeldung nur mit beidem -- ohne Secret haette
-    # Google zugestimmt und das Einloesen waere danach gescheitert.
+
+
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "s3cret")
     web.SESSION.reload()
     status, body = client("POST", "/api/google", {"action": "start"})
@@ -2337,7 +2337,7 @@ def test_the_return_from_google_finishes_the_connection(
     status, body = client("GET", f"/google?code=4/0AX&state={state}")
     assert status == 200
     assert b"jemand@example.com" in body
-    # Derselbe state ein zweites Mal: abgelehnt (9.5.15).
+
     status, body = client("GET", f"/google?code=4/0AX&state={state}")
     assert b"jemand@example.com" not in body and b"keiner Anmeldung" in body
 
@@ -2354,9 +2354,9 @@ def test_a_return_without_a_code_says_so(client) -> None:
     assert b"keinen Code" in body
 
 
-# ---------------------------------------------------------------------------
-# Der Strom darf nicht abreissen, waehrend das Modell nachdenkt
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_stream_starts_with_a_sign_of_life(client, session: web.ChatSession) -> None:
     """Erst mit dem ersten Byte steht die Verbindung fuer den Browser wirklich."""
     _, raw = client("POST", "/api/chat", {"message": "hallo"})
@@ -2417,9 +2417,9 @@ def test_a_broken_stream_is_explained_in_plain_words() -> None:
     assert "err instanceof TypeError" in html
 
 
-# ---------------------------------------------------------------------------
-# Abbrechen
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_upload_button_turns_into_a_stop_button() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'id="stop"' in html and "Abbrechen" in html
@@ -2473,8 +2473,8 @@ def test_stopping_cancels_the_running_agent(
     slow = Slow()
     slow.toolbox = slow
     monkeypatch.setattr(session, "agent", lambda: slow)
-    # Im Betrieb fuellt `agent()` dieses Feld; der Abbruch liest es absichtlich
-    # ohne die Sperre, weil er sonst auf das Ende des Laufs warten wuerde.
+
+
     monkeypatch.setattr(session, "_agent", slow)
 
     worker = threading.Thread(
@@ -2491,9 +2491,9 @@ def test_stopping_cancels_the_running_agent(
     assert not worker.is_alive(), "der Durchlauf endet danach von selbst"
 
 
-# ---------------------------------------------------------------------------
-# Lagerverwaltung in den Einstellungen
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_storage_is_set_up_in_the_network_section() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'name="AQUATICY_STORAGE_URL"' in html
@@ -2501,7 +2501,7 @@ def test_the_storage_is_set_up_in_the_network_section() -> None:
     for level in ('value="off"', 'value="read"', 'value="write"'):
         assert level in html, level
     assert 'id="storage-find"' in html and 'id="storage-test"' in html
-    # Der Abschnitt gehoert zu "Zuhause & Netz", nicht in ein eigenes Feld.
+
     section = html[html.index("Zuhause &amp; Netz") :]
     assert "Lagerverwaltung" in section[: section.index("</fieldset>")]
 
@@ -2605,7 +2605,7 @@ def test_a_closed_tab_keeps_the_run_alive(
     monkeypatch.setattr(session, "agent", lambda: slow)
     monkeypatch.setattr(session, "_agent", slow)
 
-    # Verbindung aufbauen, Kopfzeilen abholen, dann einfach weggehen.
+
     conn = HTTPConnection("127.0.0.1", client.port, timeout=10)
     conn.request(
         "POST",
@@ -2618,7 +2618,7 @@ def test_a_closed_tab_keeps_the_run_alive(
     conn.close()
 
     assert not cancelled.wait(timeout=0.2), "ein geschlossener Tab bricht den Chat nicht ab"
-    # Der Arbeitsthread darf normal fertig werden und gibt die Sitzung danach frei.
+
     for _ in range(100):
         if not session.busy():
             break
@@ -2679,9 +2679,9 @@ def test_the_waiting_notice_does_not_invent_another_device(
     assert "früher gestellte Anfrage" in waiting[0]["reason"]
 
 
-# ---------------------------------------------------------------------------
-# Letzte Chats: umbenennen, loeschen, sofort sichtbar
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_chat_can_be_renamed(client, session: web.ChatSession) -> None:
     cache = Cache(session.settings().db_path, 24)
     cache.add_history(session_id="s1", question="Wo liegt das Kabel?", answer="…", meta={})
@@ -2764,7 +2764,7 @@ def test_the_sidebar_groups_by_day() -> None:
     from aquaticy.webview import chat_group, with_groups
 
     jetzt = time.time()
-    assert chat_group(jetzt - 60, jetzt) in ("Heute", "Gestern")  # kurz nach Mitternacht
+    assert chat_group(jetzt - 60, jetzt) in ("Heute", "Gestern")
     assert chat_group(jetzt - 3 * 86400, jetzt) == "Letzte 7 Tage"
     assert chat_group(jetzt - 20 * 86400, jetzt) == "Letzte 30 Tage"
     assert chat_group(jetzt - 90 * 86400, jetzt) == "Älter"
@@ -2783,8 +2783,12 @@ def test_the_sidebar_offers_renaming_and_deleting() -> None:
 def test_deleting_a_chat_asks_first() -> None:
     """Das laesst sich nicht rueckgaengig machen -- also nicht auf einen Klick."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "confirm(" in html
-    assert "nicht rückgängig" in html
+    delete = html.split("async function deleteChat(chat){", 1)[1].split("\n}\n", 1)[0]
+    confirmation = delete.index("if (!await frage(")
+    cancel = delete.index(")) return;", confirmation)
+    deletion = delete.index('await chatEdit({ action: "delete"')
+    assert confirmation < cancel < deletion
+    assert "nicht rückgängig" in delete[confirmation:cancel]
 
 
 def test_no_element_name_is_used_twice() -> None:
@@ -2802,9 +2806,9 @@ def test_no_element_name_is_used_twice() -> None:
     assert doubled == [], f"mehrfach vergeben: {doubled}"
 
 
-# ---------------------------------------------------------------------------
-# Arbeitsweise und Denken kommen aus dem Browser
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_mode_reaches_the_agent(client, session: web.ChatSession, agent: FakeAgent) -> None:
     client("POST", "/api/chat", {"message": "Sortierfunktion", "mode": "code"})
     assert agent.mode == "code"
@@ -2853,8 +2857,8 @@ def test_the_composer_offers_all_three_modes() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     for modus in ("normal", "pro", "code"):
         assert f'data-mode="{modus}"' in html
-    # Seit 12.0.0 Luna in der Seitenleiste: unter dem Logo, ueber den letzten
-    # Chats. Unten bleiben Anhaengen, Modell, Mikrofon und Senden.
+
+
     leiste = html[html.index("<aside>") : html.index("</aside>")]
     assert leiste.index('class="brand"') < leiste.index('id="modes"') \
         < leiste.index("Letzte Chats")
@@ -2868,8 +2872,8 @@ def test_the_composer_offers_all_three_modes() -> None:
 def test_the_picker_offers_the_structure_switch_and_the_effort() -> None:
     """Gedacht wird immer -- der Schalter zerlegt. Deshalb heisst er anders."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Seit 9.5.34 liegen Aufwand und Weitere Einstellungen in kleinen Fenstern
-    # direkt hinter dem Menue -- alles zusammen bis zum Hauptbereich.
+
+
     picker = html[html.index('id="picker-models"') :]
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="structure"' in picker
@@ -2884,7 +2888,7 @@ def test_every_choice_is_sent_with_every_question() -> None:
     """Was oben eingestellt ist, muss auch unten ankommen."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     body = html[html.index("async function ask(text){") :]
-    body = body[: body.index("/* ---------- Eingabe ---------- */")]
+    body = body[: body.index("const slashBefehle = new")]
     korb = body[body.index("JSON.stringify({") : body.index("signal: running.signal")]
     for feld in (
         "message", "attachments", "mode", "structured", "recheck", "effort", "online", "sandbox",
@@ -2921,7 +2925,7 @@ def test_the_switch_is_not_shadowed_by_a_local_name() -> None:
     """
     html = web.UI_FILE.read_text(encoding="utf-8")
     body = html[html.index("async function ask(text){") :]
-    body = body[: body.index("/* ---------- Eingabe ---------- */")]
+    body = body[: body.index("const slashBefehle = new")]
     assert "thoughtLine" in body, "die Zeile heisst anders als der Schalter"
     assert "let answer" in body
     declared = body[body.index("let answer") : body.index("\n", body.index("let answer"))]
@@ -2929,9 +2933,9 @@ def test_the_switch_is_not_shadowed_by_a_local_name() -> None:
         assert schalter not in declared, f"verdeckt den Schalter: {declared}"
 
 
-# ---------------------------------------------------------------------------
-# Rückfragen im eigenen Fenster
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_question_opens_its_own_window() -> None:
     """Eine Karte mitten im Verlauf wird uebersehen, waehrend man auf die
     Antwort schaut -- die Anfrage steht dann still und niemand merkt warum."""
@@ -2955,12 +2959,16 @@ def test_escape_skips_the_question_instead_of_hiding_it() -> None:
     die nie kommt."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'if (e.key === "Escape" && asking) finishAsk("");' in html
-    assert "if (asking) return;              // die Rueckfrage liegt obenauf" in html
+    escape = html.split('document.addEventListener("keydown", (e) => {\n'
+                        '  if (e.key !== "Escape") return;', 1)[1].split("\n});", 1)[0]
+    assert escape.index("if (asking) return;") < escape.index("closeOverlay(")
 
 
 def test_clicking_beside_the_window_does_not_dismiss_it() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "Nur daneben tippen soll die Frage NICHT wegwischen" in html
+    assert 'askBox.addEventListener("click"' not in html
+    assert '$("#ask-send").addEventListener("click"' in html
+    assert '$("#ask-skip").addEventListener("click"' in html
 
 
 def test_the_answer_stays_in_the_thread() -> None:
@@ -2994,8 +3002,8 @@ def test_the_standard_mode_starts_no_agents_in_the_ui() -> None:
 def test_the_picker_offers_the_web_switch() -> None:
     """Ohne Web bleibt Aquaticy bei seinem Wissen und den eigenen Dateien."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Seit 9.5.34 liegen Aufwand und Weitere Einstellungen in kleinen Fenstern
-    # direkt hinter dem Menue -- alles zusammen bis zum Hauptbereich.
+
+
     picker = html[html.index('id="picker-models"') :]
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="online"' in picker
@@ -3016,13 +3024,13 @@ def test_the_web_switch_reaches_the_agent(
 def test_the_workshop_switch_belongs_to_the_code_mode() -> None:
     """Web und Gegenpruefen gehoeren zur Recherche, die virtual machine zum Code."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Seit 9.5.34 liegen Aufwand und Weitere Einstellungen in kleinen Fenstern
-    # direkt hinter dem Menue -- alles zusammen bis zum Hauptbereich.
+
+
     picker = html[html.index('id="picker-models"') :]
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="werkstatt"' in picker
     assert "Code echt ausprobieren" in picker
-    # Der virtual-machine-Schalter steht im Code-Modus, die beiden anderen daneben.
+
     werkstatt = picker[picker.index('id="werkstatt"') - 200 : picker.index('id="werkstatt"')]
     assert "only-code" in werkstatt
     for schalter in ('id="online"', 'id="recheck"'):
@@ -3067,8 +3075,8 @@ def test_the_recheck_leaves_a_mark_on_the_answer() -> None:
     assert "function mark(" in html
     assert "Gegengeprüft" in html
     assert ".answer-note{" in html
-    # "mark" gehoert dem Logo in der Seitenleiste -- zwei Bedeutungen unter
-    # einem Namen, und die neue Regel hat das Logo umgestylt.
+
+
     assert html.count(".mark{") == 1
 
 
@@ -3077,14 +3085,14 @@ def test_code_blocks_carry_their_language_and_a_copy_button() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "codeblock" in html and "code-head" in html
     assert "clipboard.writeText" in html
-    # Die Sprache wird aus dem Zaun gelesen, nicht mitgeschrieben.
+
     assert "```([a-zA-Z0-9+#._-]*)" in html
 
 
 def test_the_recheck_switch_sits_under_the_structure_switch() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Seit 9.5.34 liegen Aufwand und Weitere Einstellungen in kleinen Fenstern
-    # direkt hinter dem Menue -- alles zusammen bis zum Hauptbereich.
+
+
     picker = html[html.index('id="picker-models"') :]
     picker = picker[: picker.index('<main id="main">')]
     assert picker.index('id="structure"') < picker.index('id="recheck"')
@@ -3107,8 +3115,8 @@ def test_the_recheck_is_off_unless_asked_for(
     assert agent.recheck is False
     assert 'id="recheck"' in web.UI_FILE.read_text(encoding="utf-8")
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Kein "checked" im Element selbst -- der Wortlaut des Elements darf sich
-    # aendern, das Fehlen des Hakens nicht.
+
+
     element = html[html.index('id="recheck"') - 200 : html.index('id="recheck"') + 40]
     element = element[element.rindex("<input") :]
     assert " checked" not in element, f"Gegenpruefen steht auf an: {element}"
@@ -3126,9 +3134,9 @@ def test_a_running_recheck_is_visible() -> None:
     assert "gegenprüfen" in _kopf({"recheck": True})["status"], "und steht in der Kopfzeile"
 
 
-# ---------------------------------------------------------------------------
-# Nutzung, Speicher, Chats durchsuchen, Export, Auftraege
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_counter_can_be_read_but_not_reset(client, web_settings: Settings) -> None:
     from aquaticy.usage import UsageLog
 
@@ -3138,7 +3146,7 @@ def test_the_counter_can_be_read_but_not_reset(client, web_settings: Settings) -
     status, data = client("GET", "/api/usage")
     assert status == 200
     zahlen = json.loads(data)
-    # Ohne Kontingent (lokal, Pro): die Statistik -- fertig aufbereitet vom Server.
+
     assert zahlen["limits"]["limited"] is False
     assert zahlen["stats"]["tiles"][2]["wert"] == "330"
     assert "300 hinein · 30 heraus · 1 Aufrufe" in zahlen["stats"]["tiles"][2]["dazu"]
@@ -3197,7 +3205,7 @@ def test_chats_can_be_searched(client, web_settings: Settings) -> None:
     assert payload["query"] == "mietvertrag"
     assert [chat["session_id"] for chat in payload["chats"]] == ["s1"]
 
-    # Ohne q bleibt es die gewohnte Liste.
+
     payload = json.loads(client("GET", "/api/chats")[1])
     assert len(payload["chats"]) == 2
 
@@ -3279,9 +3287,9 @@ def test_a_workshop_file_is_never_served_as_html(client) -> None:
     assert "nosniff" in stelle
 
 
-# ---------------------------------------------------------------------------
-# Was die Oberflaeche zeigen muss
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_settings_show_the_usage_limits() -> None:
     """Seit 9.5.14: Sitzung und Woche als Balken in Prozent -- wie bei Claude."""
     html = web.UI_FILE.read_text(encoding="utf-8")
@@ -3347,14 +3355,14 @@ def test_an_attachment_lands_in_the_workshop_of_this_turn(
     """
     agent = SimpleNamespace(mode="normal", sandbox=False, workshop_on=False)
 
-    # Erste Frage: Code-Modus mit virtual machine kommt neu herein.
+
     assert web.ChatSession._workshop_wanted(agent, "code", True) is True
-    # Ohne virtual machine nicht.
+
     assert web.ChatSession._workshop_wanted(agent, "code", False) is False
-    # Und im Standardmodus auch dann nicht, wenn die virtual machine anstünde.
+
     assert web.ChatSession._workshop_wanted(agent, "normal", True) is False
 
-    # Nichts mitgeschickt heißt: der Stand des Agenten gilt weiter.
+
     agent.mode, agent.sandbox = "code", True
     assert web.ChatSession._workshop_wanted(agent, "", None) is True
 
@@ -3377,14 +3385,14 @@ def test_without_the_workshop_an_attachment_is_not_copied_anywhere(
     assert versuche == [], "ohne virtual machine wird nichts hineingelegt"
 
 
-# ---------------------------------------------------------------------------
-# Der Denken-Schalter und die Schalter selbst
-# ---------------------------------------------------------------------------
+
+
+
 def test_thinking_has_its_own_switch_next_to_structuring() -> None:
     """Ein eigener Schalter -- er ersetzt Strukturieren nicht, er steht daneben."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Seit 9.5.34 liegen Aufwand und Weitere Einstellungen in kleinen Fenstern
-    # direkt hinter dem Menue -- alles zusammen bis zum Hauptbereich.
+
+
     picker = html[html.index('id="picker-models"') :]
     picker = picker[: picker.index('<main id="main">')]
     assert 'id="denken"' in picker
@@ -3402,11 +3410,11 @@ def test_the_thinking_switch_belongs_to_the_standard_mode() -> None:
 def test_the_thinking_switch_only_changes_what_is_shown() -> None:
     """Gedacht wird immer -- der Schalter geht deshalb nicht an den Server."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    # Der Anfragekörper kennt ihn nicht.
+
     koerper = html[html.index("JSON.stringify({") :]
     koerper = koerper[: koerper.index("})")]
     assert "denken" not in koerper
-    # Er schaltet eine Klasse am Körper, mehr nicht.
+
     assert 'document.body.classList.toggle("denken", denken)' in html
     assert "body.denken .trace.think{display:flex}" in html
 
@@ -3451,14 +3459,14 @@ def test_no_plain_checkbox_is_left_over() -> None:
     assert '<input type="checkbox" id="consent-learning">' in html
 
 
-# ---------------------------------------------------------------------------
-# Ein Chat bleibt ein Chat
-# ---------------------------------------------------------------------------
+
+
+
 def test_changing_a_setting_does_not_start_a_new_chat(
     session: web.ChatSession, web_settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Wer das Modell wechselt, will ein anderes Modell -- kein anderes Gespräch."""
-    # `reload` liest die Einstellungen neu ein -- in echt aus derselben .env.
+
     monkeypatch.setattr(web, "get_settings", lambda: web_settings)
     erst = session.agent()
     vorher = erst.session_id
@@ -3470,7 +3478,7 @@ def test_changing_a_setting_does_not_start_a_new_chat(
 
     assert danach is not erst, "der Agent wird wirklich neu gebaut"
     assert danach.session_id == vorher, "aber der Chat ist derselbe geblieben"
-    # Und er weiß noch, worüber gesprochen wurde.
+
     verlauf = " ".join(str(m.get("content") or "") for m in danach.messages)
     assert "Erste Frage" in verlauf
     assert "Erste Antwort" in verlauf
@@ -3507,15 +3515,15 @@ def test_saving_settings_keeps_the_chat(client, session: web.ChatSession) -> Non
     assert nachher == vorher, "das Speichern hat den Chat gewechselt"
 
 
-# ---------------------------------------------------------------------------
-# Denken zeigt nur der Denken-Schalter
-# ---------------------------------------------------------------------------
+
+
+
 def test_reading_along_does_not_show_the_thoughts() -> None:
     """Sonst stünde der Block da, obwohl „Denken" aus ist."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "body.tracing .trace.think{display:none}" in html
     assert "body.denken .trace.think{display:flex}" in html
-    # Und die Reihenfolge muss stimmen: die spätere Regel gewinnt.
+
     assert html.index("body.tracing .trace.think{display:none}") < html.index(
         "body.denken .trace.think{display:flex}"
     )
@@ -3526,9 +3534,9 @@ def test_the_reading_along_text_says_where_the_thoughts_are() -> None:
     assert "Gedanken selbst siehst du mit" in html
 
 
-# ---------------------------------------------------------------------------
-# Arbeitsweise wechseln
-# ---------------------------------------------------------------------------
+
+
+
 def test_switching_the_mode_opens_a_new_chat() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "async function neuerChat(" in html
@@ -3541,9 +3549,9 @@ def test_switching_to_the_same_mode_changes_nothing() -> None:
     assert "const anders = button.dataset.mode !== mode;" in html
 
 
-# ---------------------------------------------------------------------------
-# Dem Browser nichts glauben
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_number_field_with_letters_is_refused(client) -> None:
     """Sonst meldet das Formular „gespeichert" und die Einstellung tut nichts."""
     status, data = client("POST", "/api/config", {"AQUATICY_CONTEXT_TOKENS": "achtundzwanzig"})
@@ -3573,7 +3581,7 @@ def test_the_request_rate_is_settable_and_checked(client) -> None:
     assert status == 400
     assert "ausserhalb" in json.loads(data)["error"]
 
-    # Leer heißt "was der Anbieter verträgt" -- und ist erlaubt.
+
     assert client("POST", "/api/config", {"AQUATICY_RPM": ""})[0] == 200
 
 
@@ -3603,7 +3611,7 @@ def test_normal_account_cannot_select_plus_workshop(
     session.account = web.Account("normal", "normal@example.org", "normal", 0)
     status, data = client("POST", "/api/config", {"AQUATICY_VM_SIZE": "plus"})
     assert status == 400
-    # Die große virtual machine gehört seit 9.5.17 zu Ultra.
+
     assert "Ultra" in json.loads(data)["error"]
     assert client("POST", "/api/config", {"AQUATICY_VM_SIZE": "normal"})[0] == 200
 
@@ -3646,9 +3654,9 @@ def test_good_values_still_get_through(client) -> None:
     assert json.loads(data)["ok"] is True
 
 
-# ---------------------------------------------------------------------------
-# Der Zustand der Oberfläche kommt vom Server
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_state_can_be_read_and_written(client) -> None:
     status, data = client("GET", "/api/prefs")
     assert status == 200
@@ -3719,9 +3727,9 @@ def test_more_attachments_than_allowed_are_cut(client, agent: FakeAgent) -> None
     assert status == 200
 
 
-# ---------------------------------------------------------------------------
-# Pro-Modus
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_pro_button_looks_like_the_others() -> None:
     """Optisch derselbe Knopf -- kein Abzeichen, keine eigene Farbe.
 
@@ -3733,9 +3741,9 @@ def test_the_pro_button_looks_like_the_others() -> None:
     modes = modes[: modes.index("</div>")]
     knoepfe = re.findall(r'<button class="([^"]*)"\s+data-mode="([^"]+)"', modes)
     assert [mode for _, mode in knoepfe] == ["normal", "pro", "code"]
-    # Nur der aktive Knopf traegt "on" -- sonst tragen alle dieselbe Klasse.
+
     assert {klassen.replace(" on", "") for klassen, _ in knoepfe} == {"mode"}
-    # Und keine eigene Regel, die den Pro-Knopf heraushebt.
+
     assert '[data-mode="pro"]' not in html
 
 
@@ -3816,8 +3824,8 @@ def test_the_code_mode_suggests_code(client) -> None:
     assert "Cafés" in normal
     assert "Cafés" not in code
     assert "Python" in code or "FastAPI" in code
-    # Beide Listen stehen im HTML und werden per Klasse getauscht -- so ist
-    # von der ersten Zeile an die richtige da.
+
+
     assert normal.count('class="chip"') == code.count('class="chip"') == 3
 
 
@@ -3826,7 +3834,7 @@ def test_the_pro_mode_switches_structuring_on() -> None:
     nur ein staerkeres Modell. Der Schalter bleibt trotzdem ein Schalter."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'if (merken && mode === "pro" && !structured) setStructured(true);' in html
-    # Beim Laden nicht: wer es im Pro-Modus ausgeschaltet hat, hat es so gemeint.
+
     assert 'setMode(START.mode || "normal", { merken: false });' in html
 
 
@@ -3840,9 +3848,9 @@ def test_the_checkers_report_what_they_do() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     for event in ("checkers", "check", "check_done", "checks_done"):
         assert f'case "{event}"' in html, f"{event} wird nicht angezeigt"
-    # Eine Abweichung ist der Fall, den man sehen soll -- also gelb.
+
     assert 'ev.verdict === "ABWEICHUNG" ? "warn" : ""' in html
-    # Und wie bei der Gegenprobe im Standardmodus steht es an der Antwort.
+
     assert "Gegengeprüft — ${ev.checked} Teilergebnisse" in html
 
 
@@ -3866,9 +3874,9 @@ def test_the_header_says_when_four_are_checking() -> None:
     assert "gegenprüfen" in _kopf({"mode": "normal", "recheck": True})["status"]
 
 
-# ---------------------------------------------------------------------------
-# Der Lauf gehoert dem Server -- nicht der Verbindung
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_run_survives_a_lost_connection(client, session: web.ChatSession) -> None:
     """Wer die Seite verlässt, soll nicht neu fragen müssen."""
     lauf = web.RUNS.start("Was kostet ein Lastenrad?")
@@ -3883,7 +3891,7 @@ def test_a_run_survives_a_lost_connection(client, session: web.ChatSession) -> N
 
     lauf.add({"type": "done"})
     lauf.finish()
-    # Fertig, aber niemand hat es zu Ende gesehen: es bleibt abzuholen.
+
     _, roh = client("GET", "/api/runstate")
     zustand = json.loads(roh)
     assert zustand["running"] is False and zustand["resume"] is True
@@ -3899,8 +3907,8 @@ def test_reattaching_replays_everything(client, session: web.ChatSession) -> Non
     _, roh = client("GET", "/api/run?since=0")
     strom = roh.decode()
     assert "Hallo" in strom and "Welt" in strom
-    # Und wer es bis zum Schluss gesehen hat, bekommt es nicht noch einmal
-    # vorgesetzt.
+
+
     _, zustand = client("GET", "/api/runstate")
     assert json.loads(zustand)["resume"] is False
 
@@ -3932,7 +3940,7 @@ def test_a_run_does_not_grow_without_end() -> None:
     lauf = web.Run("x", "Frage")
     for _ in range(web.MAX_RUN_EVENTS + 500):
         lauf.add({"type": "chunk", "text": "x"})
-    # Die Grenze plus ein einziger Hinweis, dass hier gekuerzt wurde.
+
     assert len(lauf.events) == web.MAX_RUN_EVENTS + 1
     assert lauf.events[-1]["type"] == "note" and "gekürzt" in lauf.events[-1]["text"]
 
@@ -3963,7 +3971,7 @@ def test_the_page_picks_a_run_back_up() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "async function wiederAufnehmen()" in html
     assert 'api("/api/runstate")' in html
-    # Genau der Lauf, den runstate nannte (9.5.15) -- nicht "der letzte".
+
     assert 'api("/api/run?since=0&id=" + encodeURIComponent(stand.id' in html
     assert "wiederAufnehmen();" in html, "beim Laden wird nachgesehen"
     assert "[Weiter]" in html, "und es steht dran, dass weitergelaufen wurde"
@@ -4007,11 +4015,11 @@ def test_the_sidebar_glows_until_it_is_read() -> None:
     assert ".recent.neu::before" in html, "der leuchtende Punkt"
     assert "@keyframes leuchten" in html
     assert 'chat.unread ? " neu" : ""' in html
-    # Auf dem Handy ist die Leiste zu -- dort trägt der Knopf den Punkt.
+
     assert "body.hat-neues #btn-side::after" in html
     assert 'classList.toggle("hat-neues"' in html
-    # Und es wird nachgesehen, ohne dass jemand die Seite neu lädt.
-    # Seit 9.6.1 nicht im Hintergrund-Tab -- beim Zurueckkehren wird nachgeholt.
+
+
     assert ("setInterval(() => { if (!busy && !chatQuery && !document.hidden) loadRecents(); "
             "}, 60_000);") in html
     assert 'addEventListener("visibilitychange"' in html
@@ -4025,7 +4033,7 @@ def test_the_picker_offers_only_the_strong_ones_in_code_and_pro() -> None:
     for modus in ("code", "pro"):
         auswahl = picker_view(modus, alle, stark)
         assert auswahl["models"] == stark
-        # Gewählt wird dort das Code-Modell -- der Standardmodus behält seins.
+
         assert auswahl["field"] == "AQUATICY_CODE_MODEL"
     assert picker_view("pro", alle, stark)["heading"] == "Stärkstes Modell wählen"
     normal = picker_view("normal", alle, stark)
@@ -4062,13 +4070,13 @@ def test_the_whole_picker_scrolls_not_just_the_list() -> None:
     assert "overflow-y:auto" in picker
     assert "max-height:calc(100vh - 140px)" in picker
     assert "display:flex;flex-direction:column" in picker
-    # Die Liste bekommt einen kleineren Anteil, sonst füllt sie alles.
+
     assert "min(38vh,320px)" in picker
 
 
-# ---------------------------------------------------------------------------
-# Bildauftrag: Bild hochladen und danach suchen lassen
-# ---------------------------------------------------------------------------
+
+
+
 def test_an_image_job_stores_the_picture_privately(client, session: web.ChatSession) -> None:
     """Das Vergleichsbild landet im Datenordner des Kontos, nicht im Auftrag."""
     import base64
@@ -4285,9 +4293,9 @@ def test_a_fresh_form_can_be_saved_as_it_is(client, web_settings: Settings) -> N
     assert status == 200, data
 
 
-# ---------------------------------------------------------------------------
-# 9.5.14: Was der Browser anzeigt, rechnet der Server
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_header_comes_from_the_server_and_follows_the_switches(
     client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -4388,7 +4396,7 @@ def test_the_probe_counts_for_a_normal_account(
     assert len(gefragt) == 1, "am Limit fragt der Test das Modell nicht mehr"
 
 
-# -- 9.5.18 Sunflower: XSS-Schutz und gesperrte Uploads -----------------------------
+
 def test_the_page_runs_scripts_only_with_its_nonce(port: int) -> None:
     import re as _re
 
@@ -4401,7 +4409,7 @@ def test_the_page_runs_scripts_only_with_its_nonce(port: int) -> None:
     skripte = _re.findall(r"<script([^>]*)>", html)
     assert skripte and all(f'nonce="{nonce}"' in attr for attr in skripte)
     assert "object-src 'none'" in csp and "script-src-attr 'none'" in csp
-    # Jede Seite bekommt eine neue Nonce.
+
     _, headers2, _ = raw_request(port, "GET", "/")
     assert _re.search(r"'nonce-([^']+)'", headers2["Content-Security-Policy"]).group(1) != nonce
     assert headers["Cross-Origin-Opener-Policy"] == "same-origin"

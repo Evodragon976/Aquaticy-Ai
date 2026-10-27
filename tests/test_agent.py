@@ -17,9 +17,6 @@ from aquaticy.models import Product, SearchResult
 from aquaticy.tools import Toolbox
 
 
-# ---------------------------------------------------------------------------
-# Attrappen
-# ---------------------------------------------------------------------------
 def _tool_call(name: str, arguments: dict[str, Any], call_id: str = "c1") -> SimpleNamespace:
     return SimpleNamespace(
         id=call_id,
@@ -92,9 +89,9 @@ def _stub_search(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+
+
+
 def test_agent_searches_reads_and_answers(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -113,7 +110,7 @@ def test_agent_searches_reads_and_answers(
     assert result.searches == ["cafés mönchengladbach"]
     assert result.sources[0]["domain"] == "cafe-sonntag.de"
     assert not result.hit_limit
-    # Der Verlauf enthaelt beide Tool-Antworten.
+
     assert sum(1 for m in agent.messages if m["role"] == "tool") == 2
 
 
@@ -124,7 +121,7 @@ def test_tools_are_offered_to_the_llm(
     monkeypatch.setattr("litellm.completion", llm)
     Agent(settings, cache=None, toolbox=toolbox).ask("Frage", stream=False)
     names = [tool["function"]["name"] for tool in llm.calls[0]["tools"]]
-    # Ohne Cache kein Merkzettel-Werkzeug; das Heimnetz ist standardmaessig dabei.
+
     assert names == [
         "web_search",
         "fetch_page",
@@ -222,18 +219,18 @@ def test_home_tools_follow_the_settings(settings: Settings) -> None:
     settings.lan_enabled = True
     assert "lan_scan" in names() and "lan_check" in names()
 
-    # Der Speicher ebenso -- ohne Freigabe kein Werkzeug.
+
     assert "save_memory" not in names()
     settings.memory_enabled = True
     assert "save_memory" in names() and "recall_memory" in names()
 
-    # Home Assistant erscheint erst mit Adresse UND Token.
+
     settings.ha_url = "http://192.168.1.5:8123"
     assert "ha_states" not in names()
     settings.ha_token = "geheim"
     assert "ha_states" in names()
 
-    # Schalten erst, wenn es ausdruecklich erlaubt ist.
+
     assert "ha_call" not in names()
     settings.ha_control = True
     assert "ha_call" in names()
@@ -256,7 +253,7 @@ def test_budget_limit_forces_interim_answer(
     assert result.hit_limit
     assert result.tool_calls == 3
     assert "Zwischenstand" in result.answer
-    # Der letzte Aufruf laeuft ohne Werkzeuge.
+
     assert "tools" not in llm.calls[-1]
 
 
@@ -307,7 +304,7 @@ def test_llm_error_is_reported_not_raised(
     result = agent.ask("Frage", stream=False)
     assert "Modell nicht erreichbar" in result.error
     assert result.answer == ""
-    # Die unbeantwortete Frage bleibt nicht im Verlauf stehen.
+
     assert all(m["role"] != "user" for m in agent.messages)
 
 
@@ -416,9 +413,9 @@ def test_parse_spec_json(raw: str, expected: dict[str, str]) -> None:
     assert _parse_spec_json(raw) == expected
 
 
-# ---------------------------------------------------------------------------
-# Stabilitaet
-# ---------------------------------------------------------------------------
+
+
+
 def test_transient_errors_are_retried(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -497,7 +494,7 @@ def test_old_tool_results_are_trimmed(
     tool_messages = [m for m in agent.messages if m["role"] == "tool"]
     assert len(tool_messages) == 5
     assert sum(1 for m in tool_messages if m["content"] == TRIMMED_NOTE) == 3
-    # Die juengsten bleiben vollstaendig.
+
     assert all(m["content"] != TRIMMED_NOTE for m in tool_messages[-2:])
 
 
@@ -573,9 +570,9 @@ def test_subagent_tool_without_runner_is_reported(settings: Settings, toolbox: T
     assert "nicht aktiv" in toolbox.call("research_subtasks", {"tasks": ["x"]})["error"]
 
 
-# ---------------------------------------------------------------------------
-# Automatische Vorrecherche
-# ---------------------------------------------------------------------------
+
+
+
 def _planner_llm(monkeypatch: pytest.MonkeyPatch, tasks: list[str], *answers: str):
     """Erst die Planungsantwort, dann die normalen Antworten.
 
@@ -608,15 +605,15 @@ def test_every_question_is_split_automatically(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     result = agent.ask("Zusammengesetzte Frage", stream=False)
 
-    # Die Teilfragen des Planers stehen vorn -- der Rest wird aufgefuellt, im
-    # Normal-Modus seit 9.6.1 aber nur bis NORMAL_FILL (schneller).
+
+
     from aquaticy.subagents import NORMAL_FILL
 
     assert [task.text for task in seen[0][:2]] == ["Teil A", "Teil B"]
     assert len(seen[0]) == min(settings.max_subagents, NORMAL_FILL, 3)
     assert result.answer == "Endantwort"
-    # Die Vorrecherche steht dem Hauptagenten zur Verfuegung -- als Text,
-    # nicht als JSON.
+
+
     from aquaticy.agent import PRE_RESEARCH_PREFIX
 
     blob = next(
@@ -695,13 +692,13 @@ def test_subagent_calls_count_towards_the_budget(
     )
     agent = Agent(settings, cache=None, toolbox=toolbox)
     agent.ask("Frage", stream=False)
-    # Der Hauptagent darf danach nicht so tun, als haette er das volle Budget.
+
     assert agent.last_result is not None
 
 
-# ---------------------------------------------------------------------------
-# Regressionen aus der Fehlersuche
-# ---------------------------------------------------------------------------
+
+
+
 def test_llm_error_mid_turn_leaves_no_orphan_tool_calls(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -723,10 +720,10 @@ def test_llm_error_mid_turn_leaves_no_orphan_tool_calls(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     result = agent.ask("Meine Frage", stream=False)
     assert result.error
-    # Kompletter Turn verworfen: nur der Systemprompt bleibt.
+
     assert [m["role"] for m in agent.messages] == ["system"]
 
-    # Und die naechste Frage funktioniert wieder.
+
     monkeypatch.setattr("litellm.completion", ScriptedLLM(_message(content="geht wieder")))
     assert agent.ask("Neue Frage", stream=False).answer == "geht wieder"
 
@@ -791,9 +788,9 @@ def test_planner_context_hides_internal_messages(
     assert "[Ortsfilter:" not in context
 
 
-# ---------------------------------------------------------------------------
-# Kaputtes Tool-Call-JSON (Ollama/Gemma) -- Regression zu "Extra data"
-# ---------------------------------------------------------------------------
+
+
+
 def test_split_json_objects() -> None:
     from aquaticy.agent import split_json_objects
 
@@ -823,7 +820,7 @@ def test_repair_splits_concatenated_calls() -> None:
         {"query": "a"},
         {"query": "b"},
     ]
-    # IDs bleiben eindeutig.
+
     assert len({c["id"] for c in repaired}) == 2
 
 
@@ -965,9 +962,9 @@ def test_final_answer_sends_a_sanitized_history(
             json.loads(call["function"]["arguments"])
 
 
-# ---------------------------------------------------------------------------
-# Datum und Merkzettel im Systemprompt
-# ---------------------------------------------------------------------------
+
+
+
 def test_system_prompt_carries_todays_date(settings: Settings, toolbox: Toolbox) -> None:
     """Sonst sucht ein Modell mit altem Wissensstand nach "Test 2024"."""
     from datetime import date
@@ -985,7 +982,7 @@ def test_notes_are_injected_into_the_system_prompt(
     cache.add_note("Budget fuer den Laptop: 1200 Euro")
     agent = Agent(settings, cache=cache, toolbox=toolbox)
     assert "Budget fuer den Laptop: 1200 Euro" in agent.messages[0]["content"]
-    # /clear behaelt den Merkzettel.
+
     agent.clear()
     assert "Budget fuer den Laptop" in agent.messages[0]["content"]
 
@@ -1004,9 +1001,9 @@ def test_memory_tool_is_offered_only_with_a_cache(
     assert "remember" in names
 
 
-# ---------------------------------------------------------------------------
-# Vorpruefung: Chat oder Recherche?
-# ---------------------------------------------------------------------------
+
+
+
 @pytest.mark.parametrize(
     "greeting",
     ["hallo", "Hi!", "danke", "Vielen Dank!", "guten Morgen", "ok", "tschüss", "wie geht's?"],
@@ -1031,7 +1028,7 @@ def test_small_talk_skips_planning_without_any_llm_call(
     )
     result = Agent(settings, cache=None, toolbox=toolbox).ask(greeting, stream=False)
     assert researched == []
-    # Auch die Antwort ist lokal festgelegt: kein Anbieter, kein Planer.
+
     assert calls == []
     assert result.answer
 
@@ -1123,8 +1120,8 @@ def test_ambiguous_messages_ask_the_small_model_with_a_time_limit(
         "das zweite klingt gut, oder was meinst du?", stream=False
     )
     assert researched == []
-    # Laeuft auf dem kleinen Modell, nicht auf dem grossen -- das spart auf
-    # einer knappen Karte den Modellwechsel.
+
+
     assert planner["model"] == "ollama_chat/qwen3:1.7b"
     assert planner["timeout"] == 20.0
     assert planner["max_tokens"] <= 200
@@ -1255,9 +1252,9 @@ def test_agent_requests_the_large_context_from_ollama(
     assert seen["num_ctx"] == settings.context_tokens
 
 
-# ---------------------------------------------------------------------------
-# Kontext ueber mehrere Turns
-# ---------------------------------------------------------------------------
+
+
+
 def _bare_agent(context_tokens: int) -> Agent:
     from aquaticy.config import Settings as RealSettings
 
@@ -1303,7 +1300,7 @@ def test_pre_research_blocks_do_not_pile_up(
     ]
     assert len(full_blocks) == 1, "nur der juengste Block darf voll bleiben"
     assert any(m.get("content") == TRIMMED_RESEARCH for m in agent.messages)
-    # Der Verlauf waechst nur noch um die Antworten, nicht um die Bloecke.
+
     assert sizes[-1] - sizes[-2] < 500
 
 
@@ -1377,9 +1374,9 @@ def test_earlier_questions_survive_a_normal_conversation(
         assert f"Frage Nummer {number}" in text
 
 
-# ---------------------------------------------------------------------------
-# Ausfuehrlichkeit und Kontext-Sparsamkeit
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_normal_mode_asks_for_thorough_answers() -> None:
     """Der Prompt hat frueher zur Knappheit gedraengt ("knapp", "hoechstens
     ein Satz") -- genau das machte die Antworten duenn."""
@@ -1389,10 +1386,10 @@ def test_the_normal_mode_asks_for_thorough_answers() -> None:
     assert "GROSSZUEGIG" in ANSWER_PROMPT
     assert "Fazit" in ANSWER_PROMPT
     assert "Nicht gefunden:" in ANSWER_PROMPT
-    # Die alten Bremsen sind weg.
+
     assert "Deutsch, knapp" not in ANSWER_PROMPT
     assert "hoechstens ein Satz" not in ANSWER_PROMPT
-    # Vollstaendigkeit darf Genauigkeit nie ersetzen.
+
     assert "Vollstaendigkeit ersetzt niemals Genauigkeit" in ANSWER_PROMPT
 
 
@@ -1419,7 +1416,7 @@ def test_findings_are_plain_text_not_json() -> None:
     )
     assert text.startswith("### Cafés mit WLAN")
     assert '{"' not in text
-    # Doppelte Quellen fliegen raus, Reihenfolge bleibt.
+
     assert text.count("https://a.de") == 1
     assert text.index("https://a.de") < text.index("https://b.de")
 
@@ -1459,7 +1456,7 @@ def test_pre_research_reaches_the_agent_as_text(
     assert '"summary"' not in blob
 
 
-# -- Rueckfragen nur mit Gegenueber --------------------------------------
+
 def test_ask_tool_appears_only_with_a_handler(settings: Settings) -> None:
     """Ohne jemanden am anderen Ende waere das Werkzeug eine Falle."""
     agent = Agent(settings)
@@ -1481,7 +1478,7 @@ def test_ask_instructions_follow_the_handler(settings: Settings) -> None:
     assert "ask_user(question, options)" in prompt
     assert "hoechstens zweimal" in prompt
 
-    # Zweimal anmelden haengt den Absatz nicht zweimal an.
+
     agent.set_ask_handler(lambda question, options: "ja")
     assert agent.messages[0]["content"] == prompt
 
@@ -1505,9 +1502,9 @@ def test_setting_the_handler_keeps_the_notes_in_the_prompt(tmp_path) -> None:
     assert "Bremen" in agent.messages[0]["content"]
 
 
-# ---------------------------------------------------------------------------
-# Mitlesen: Gedanken und Aktionen
-# ---------------------------------------------------------------------------
+
+
+
 def test_every_tool_call_is_announced_with_its_arguments(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -1618,9 +1615,9 @@ def test_reasoning_tokens_are_passed_on_but_never_answered(
     assert "nachdenken" not in result.answer
 
 
-# ---------------------------------------------------------------------------
-# Gmail und Kalender: nur, wenn freigegeben
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_model_never_sees_the_mail_tools_by_default(
     settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -1690,7 +1687,7 @@ def test_permission_makes_the_three_writing_tools_appear(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     names = {schema["function"]["name"] for schema in agent.tools}
     assert {"calendar_add", "calendar_edit", "mail_draft"} <= names
-    # Und weiterhin nichts, womit sich etwas verschicken oder loeschen liesse.
+
     for verboten in ("mail_send", "mail_delete", "calendar_delete"):
         assert verboten not in names
 
@@ -1758,9 +1755,9 @@ def test_without_anyone_to_ask_the_prompt_stays_honest(
     assert "ask_user" not in [schema["function"]["name"] for schema in agent.tools]
 
 
-# ---------------------------------------------------------------------------
-# Eine Frage gehoert in das Fenster -- notfalls nach einem Anstoss
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_pure_question_is_recognised() -> None:
     """Nicht "kommt ein Fragezeichen vor" -- was bleibt ohne die Fragesaetze."""
     from aquaticy.agent import is_only_a_question as frage
@@ -1802,7 +1799,7 @@ def test_a_question_in_the_text_is_sent_back(
 
     assert result.answer == "In Bremen wird es morgen 12 Grad."
     assert gefragt == ["Welcher Ort?"], "die Frage ging durch das Fenster"
-    # Der Anstoss steht im Verlauf, damit das Modell weiss, warum.
+
     angestossen = [m for m in agent.messages if "nur aus einer Frage" in str(m.get("content"))]
     assert len(angestossen) == 1
 
@@ -1909,9 +1906,9 @@ def test_the_screen_is_cleared_before_the_second_try(
     assert "answer_reset" in ereignisse
 
 
-# ---------------------------------------------------------------------------
-# Wer ist das hier eigentlich
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_agent_introduces_itself_as_aquaticy(settings: Settings, toolbox: Toolbox) -> None:
     """Auf "wer bist du" kommt Aquaticy von Jonas, nicht der Anbieter."""
     agent = Agent(settings, cache=None, toolbox=toolbox)
@@ -1942,9 +1939,9 @@ def test_a_question_about_identity_needs_no_research(
     assert result.tool_calls == 0
 
 
-# ---------------------------------------------------------------------------
-# Mehrere Werkzeuge einer Runde laufen nebeneinander
-# ---------------------------------------------------------------------------
+
+
+
 def test_several_pages_are_read_at_once(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -1992,7 +1989,7 @@ def test_the_answers_keep_the_order_of_the_calls(
     import time
 
     def uneven(url: str):
-        # Die letzte Seite ist die schnellste -- ohne Sortierung stuende sie vorn.
+
         time.sleep(0.2 if url.endswith("0") else 0.01)
         return {"url": url}
 
@@ -2054,7 +2051,7 @@ def test_a_mixed_round_runs_in_order(
     )
     monkeypatch.setattr("litellm.completion", llm)
 
-    # Seit 9.5.15: nach einer gelesenen Seite fragt "merken" erst nach.
+
     gefragt: list[str] = []
     toolbox.ask_handler = lambda frage, optionen: gefragt.append(frage) or "ja"
     agent = Agent(settings, cache=None, toolbox=toolbox)
@@ -2063,9 +2060,9 @@ def test_a_mixed_round_runs_in_order(
     assert gefragt and "Inhalte aus dem Web" in gefragt[0]
 
 
-# ---------------------------------------------------------------------------
-# Abbrechen
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_cancelled_run_stops_before_the_next_round(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2073,7 +2070,7 @@ def test_a_cancelled_run_stops_before_the_next_round(
     calls: list[int] = []
 
     def fetch(url: str):
-        agent.cancel()      # mitten in der Runde abgebrochen
+        agent.cancel()
         return {"url": url}
 
     monkeypatch.setattr(toolbox, "fetch_page", fetch)
@@ -2149,9 +2146,9 @@ def test_a_cancel_belongs_to_one_question_only(
     assert second.stopped is False
 
 
-# ---------------------------------------------------------------------------
-# Lagerverwaltung: die Rechtestufe entscheidet, was das Modell sieht
-# ---------------------------------------------------------------------------
+
+
+
 def _names(agent: Agent) -> set[str]:
     return {schema["function"]["name"] for schema in agent.tools}
 
@@ -2208,9 +2205,9 @@ def test_the_prompt_forbids_guessing_ids(settings: Settings, toolbox: Toolbox) -
     assert "Loeschen kannst du nicht" in prompt
 
 
-# ---------------------------------------------------------------------------
-# Arbeitsweise: normal und Code
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_code_mode_replaces_the_verbose_answer_format(
     settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2264,9 +2261,9 @@ def test_the_code_mode_still_demands_sources(settings: Settings, toolbox: Toolbo
     assert "Erfundene Funktionsnamen" in CODE_PROMPT
 
 
-# ---------------------------------------------------------------------------
-# Denken an und aus
-# ---------------------------------------------------------------------------
+
+
+
 def test_without_thinking_there_is_no_planning_call(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2467,7 +2464,7 @@ def test_the_standard_mode_talks_instead_of_reporting(
 ) -> None:
     """Ohne Denken steht der Gespraechstext im Systemprompt, nicht der Bericht."""
     agent = Agent(settings, cache=None, toolbox=toolbox)
-    agent.ask("", structured=False)          # setzt nur den Zustand
+    agent.ask("", structured=False)
     system = agent.messages[0]["content"]
     assert "du fuehrst ein Gespraech" in system
     assert "Nicht gefunden:" not in system
@@ -2538,9 +2535,9 @@ def test_the_ask_paragraph_survives_a_change_of_mode(
     assert "Rueckfragen sind hier nicht moeglich" in agent.messages[0]["content"]
 
 
-# ---------------------------------------------------------------------------
-# Ohne Web: eigenes Wissen, eigene Dateien
-# ---------------------------------------------------------------------------
+
+
+
 def test_without_the_web_the_web_tools_are_gone(
     settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2593,9 +2590,9 @@ def test_without_the_web_there_is_no_second_round(
     assert result.rechecked is False
 
 
-# ---------------------------------------------------------------------------
-# Die virtual machine
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_workshop_exists_only_in_the_code_mode(
     settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2721,7 +2718,7 @@ def test_blender_run_writes_the_script_before_running_it(toolbox: Toolbox) -> No
                     return {"exit_code": 0, "stdout": "fertig", "stderr": "", "seconds": 1.2}
 
             assert "blender --background --python" in command
-            assert timeout == 90  # BLENDER_TIMEOUT, nicht COMMAND_TIMEOUT
+            assert timeout == 90
             return Result()
 
     toolbox._sandbox_box = FakeBox()
@@ -2758,9 +2755,9 @@ def test_blender_run_without_a_runtime_is_an_answer_not_a_crash(
     assert "fuehre ich nichts aus" in antwort["error"]
 
 
-# ---------------------------------------------------------------------------
-# Was Aquaticy sich von selbst merkt
-# ---------------------------------------------------------------------------
+
+
+
 def test_personal_notes_stand_in_the_system_prompt(
     settings: Settings, tmp_path
 ) -> None:
@@ -2807,7 +2804,7 @@ def test_a_saved_name_is_there_in_the_next_conversation(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     agent.ask("Ich heisse Jonas.", stream=False)
 
-    # Neuer Chat, neuer Agent, neuer Werkzeugkasten -- nur der Speicher bleibt.
+
     spaeter = Agent(settings, cache=None, toolbox=Toolbox(settings, cache=None))
     assert "heisst Jonas" in spaeter.messages[0]["content"]
 
@@ -2825,9 +2822,9 @@ def test_the_memory_rule_tells_the_model_to_save_on_its_own(
     assert "gemerkt" in system, "und er sagt es dazu"
 
 
-# ---------------------------------------------------------------------------
-# Code-Modus: das staerkste Modell
-# ---------------------------------------------------------------------------
+
+
+
 def test_code_mode_runs_on_the_strongest_model(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2855,12 +2852,12 @@ def test_a_hand_picked_code_model_wins(monkeypatch: pytest.MonkeyPatch, tmp_path
     eigenes = "nvidia_nim/qwen/qwen3-coder-480b-a35b-instruct"
     settings = Settings(model="ollama_chat/llama3.1", code_model=eigenes)
     assert strongest_model(settings) == eigenes
-    # Seit 11.3.0 Luna nur, wenn es auch antwortet: ohne jeden Schluessel
-    # fuer das eingetragene Modell gilt wieder die Rangliste.
+
+
     monkeypatch.delenv("NVIDIA_NIM_API_KEY")
     assert strongest_model(settings) == "mistral/mistral-large-latest"
-    # Seit 12.0.0 Luna gewinnt ein Modell eines anderen Anbieters nie -- auch
-    # nicht mit dem allgemeinen Schluessel (bis 11.4.1 war das hier der Fall).
+
+
     monkeypatch.setenv("AQUATICY_API_KEY", "sk-allgemein")
     fremd = Settings(model="ollama_chat/llama3.1", code_model="fremd/eigenes-modell")
     assert strongest_model(fremd) == "mistral/mistral-large-latest"
@@ -2906,7 +2903,7 @@ def test_the_strongest_model_follows_the_available_providers(
     monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-test")
     assert strongest_model(settings).startswith("nvidia_nim/")
 
-    # Mistral steht in der Rangfolge vorn -- es antwortet spürbar schneller.
+
     monkeypatch.setenv("MISTRAL_API_KEY", "mistral-test")
     assert strongest_model(settings).startswith("mistral/")
 
@@ -2928,9 +2925,9 @@ def test_without_any_cloud_key_the_biggest_local_model_wins(
     assert strongest_model(Settings()) == "ollama_chat/gross:70b"
 
 
-# ---------------------------------------------------------------------------
-# Gegenprüfen: zweite Runde mit anderen Quellen
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_second_round_searches_before_it_asks_the_model(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -2954,8 +2951,8 @@ def test_the_second_round_searches_before_it_asks_the_model(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     toolbox.stats.sources.append({"url": "https://alt.example/x", "domain": "alt.example"})
 
-    # Keine Frage nach einer bestimmten Angabe (Preis): die schickt seit 11.4.0 Luna
-    # eine Antwort ohne gelesene Seite einmal zurueck -- hier geht es um die Gegenprobe.
+
+
     result = agent.ask("Wie schwer ist ein Lastenrad?", stream=False, structured=False,
                        recheck=True)
     assert gesucht == ["Wie schwer ist ein Lastenrad?"], "die Gegenprobe sucht selbst"
@@ -2985,8 +2982,8 @@ def test_the_second_round_ignores_hits_from_pages_already_read(
         "litellm.completion", ScriptedLLM(_message(content="Erste."), _message(content="Neu."))
     )
     agent = Agent(settings, cache=None, toolbox=toolbox)
-    # Was die erste Runde gelesen hat, steht beim Start der zweiten in
-    # avoid_domains -- hier direkt gesetzt, statt eine Runde nachzustellen.
+
+
     toolbox.avoid_domains.add("alt.example")
     agent.ask("Frage", stream=False, structured=False, recheck=True)
     assert not [
@@ -3095,7 +3092,7 @@ def test_a_capped_second_round_keeps_tool_calls_and_answers_paired(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
     """Auch in der Gegenpruefung darf kein unbeanworteter Call im Verlauf bleiben."""
-    settings.max_tool_calls = 2  # Die Gegenpruefung hat ihr Mindestbudget von vier.
+    settings.max_tool_calls = 2
     calls = [_tool_call("web_search", {"query": str(number)}, f"c{number}") for number in range(5)]
     monkeypatch.setattr(Agent, "_fresh_hits", lambda self, question: "")
     monkeypatch.setattr(
@@ -3165,9 +3162,9 @@ def test_every_call_is_counted(settings: Settings, toolbox: Toolbox, tmp_path: A
     assert summe["models"][0]["model"] == agent.active_model
 
 
-# ---------------------------------------------------------------------------
-# Pro-Modus: dieselbe Arbeitsweise, mehr Leistung
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_pro_mode_runs_on_the_strongest_model(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -3229,8 +3226,8 @@ def test_nvidia_gets_a_smaller_pro_squad(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     agent._apply_mode("pro")
     assert agent.agent_limit == PRO_SUBAGENTS_NVIDIA == 12
-    # Die beiden starken Agenten bleiben unangetastet -- nur die breite
-    # Masse wird kleiner, nicht die beste Recherche.
+
+
     assert agent.strong_count == 2
 
 
@@ -3296,14 +3293,14 @@ def test_the_pro_mode_writes_like_the_standard_mode(
 
     assert "Code-Modus" not in pro
     assert "sei ausfuehrlich" in pro, "der Antwortteil des Standardmodus"
-    # Der Pro-Teil kommt dazu, er ersetzt nichts: nimmt man ihn heraus,
-    # steht Zeichen fuer Zeichen der Standardmodus da.
+
+
     from aquaticy.agent import PRO_PROMPT
 
     zusatz = PRO_PROMPT % {"agents": agent.agent_limit}
     assert zusatz in pro
-    # Der Rest unterscheidet sich nur in der Zahl der Assistenten: zwoelf im
-    # Standardmodus, vierundzwanzig hier.
+
+
     ohne = pro.replace(zusatz, "", 1).replace("44 Rechercheassistenten", "12 Rechercheassistenten")
     assert ohne.replace("auf 44, ohne", "auf 12, ohne") == normal
 
@@ -3350,9 +3347,9 @@ def test_the_pro_mode_arrives_at_the_agents(
     assert gesehen["parallel"] >= 2
 
 
-# ---------------------------------------------------------------------------
-# Pro-Modus: die vier Pruefer
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_checkers_need_a_reason(settings: Settings, toolbox: Toolbox) -> None:
     """Zwei Wege zu den vier Pruefern -- und im Standardmodus keiner davon."""
     from aquaticy.agent import PRO_CHECKERS
@@ -3428,7 +3425,7 @@ def test_the_pro_mode_gives_every_agent_more_budget(
     agent._apply_mode("pro")
     assert agent.subagent_budget == PRO_BUDGET == 8
 
-    # Wer selbst mehr eingestellt hat, verliert es nicht.
+
     settings.subagent_budget = 12
     assert agent.subagent_budget == 12
 
@@ -3475,7 +3472,7 @@ def test_a_check_note_lands_next_to_its_finding() -> None:
     assert "Blickwinkel: Zahlen" in text
     assert "Gegenprobe: ABWEICHUNG" in text
     assert "Quellen der Gegenprobe: https://b.de/y" in text
-    # Und alles zur selben Teilfrage, in einem Block.
+
     assert text.count("###") == 1
 
 
@@ -3490,9 +3487,9 @@ def test_the_pro_prompt_says_what_a_check_note_means(
     assert "einer einzigen Quelle" in prompt
 
 
-# ---------------------------------------------------------------------------
-# Der Master im Pro-Modus
-# ---------------------------------------------------------------------------
+
+
+
 def _master_llm(monkeypatch: pytest.MonkeyPatch, plan: Any, review: Any, answer: str = "Fertig"):
     """Stellt Master (JSON), Agenten und Hauptmodell in einem."""
     import json as _json
@@ -3508,7 +3505,7 @@ def _master_llm(monkeypatch: pytest.MonkeyPatch, plan: Any, review: Any, answer:
             else:
                 daten = plan
             return _message(content=_json.dumps(daten, ensure_ascii=False))
-        if "response_format" in kwargs:  # die kleine Vorpruefung
+        if "response_format" in kwargs:
             return _message(content='{"recherche": true, "teilfragen": ["Teil"]}')
         return _message(content=answer)
 
@@ -3672,12 +3669,12 @@ def test_max_fills_the_crew_and_only_in_the_pro_mode(
     )
     agent = Agent(settings, cache=None, toolbox=toolbox)
     agent.ask("/max Frage", stream=False, mode="pro", structured=True)
-    # Der Master gab einen Auftrag her -- /max füllt auf die volle Zahl auf.
+
     assert len(gesehen[0]) == agent.agent_limit == 44
     assert gesehen[0][0].text == "Teil A"
 
-    # Im Standardmodus gibt es nichts zu erzwingen: der Befehl wird
-    # abgetrennt, die Frage läuft normal.
+
+
     agent.max_run = False
     agent.ask("/max Frage", stream=False, mode="normal", structured=False)
     assert agent.max_run is False
@@ -3701,15 +3698,15 @@ def test_the_strong_model_reaches_the_agents(
     agent._run_subagents(["a"])
     assert gesehen["strong_model"] == "mistral/mistral-large-latest"
 
-    # Ohne starkes Modell gibt es auch keine starken Agenten.
+
     monkeypatch.setattr("aquaticy.system.strongest_model", lambda _s, purpose="work": "")
     agent._code_model.clear()
     assert agent.strong_count == 0
 
 
-# ---------------------------------------------------------------------------
-# Die Auswahl der starken Modelle
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_three_strongest_are_offered(monkeypatch: pytest.MonkeyPatch) -> None:
     """Im Code- und im Pro-Modus soll man wählen können -- aber nur unter den
     stärksten. Ein schwaches Modell ist genau dort am teuersten."""
@@ -3726,10 +3723,10 @@ def test_the_three_strongest_are_offered(monkeypatch: pytest.MonkeyPatch) -> Non
     assert len(liste) == 3
     assert all(set(eintrag) == {"id", "label", "kind", "note", "source", "source_label"}
                for eintrag in liste)
-    # Die Cloud-Anbieter stehen vor dem lokalen Modell.
+
     assert liste[-1]["id"] == "ollama_chat/gross:70b"
     assert "GB" in liste[-1]["note"]
-    # Und das erste ist genau das, was `strongest_model` allein zurückgibt.
+
     assert strongest_model(settings) == liste[0]["id"]
 
 
@@ -3738,7 +3735,7 @@ def test_a_hand_picked_model_leads_the_list(monkeypatch: pytest.MonkeyPatch) -> 
     from aquaticy.system import strongest_models
 
     monkeypatch.setenv("NVIDIA_NIM_API_KEY", "nvapi-x")
-    # Das eingetragene Modell braucht seit 11.3.0 Luna einen Schluessel.
+
     monkeypatch.setenv("MISTRAL_API_KEY", "sk-mist-test")
     settings = Settings(model="ollama_chat/klein", code_model="mistral/codestral-latest")
     liste = strongest_models(settings, limit=3)
@@ -3758,9 +3755,9 @@ def test_nothing_reachable_is_an_empty_list(monkeypatch: pytest.MonkeyPatch) -> 
     assert strongest_model(settings) == ""
 
 
-# ---------------------------------------------------------------------------
-# Zwei Anbieter, drei Rollen je Anbieter
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_provider_tables_cover_the_same_two_providers() -> None:
     """Aquaticy ist auf NVIDIA NIM und Mistral spezialisiert -- überall gleich."""
     from aquaticy import system
@@ -3772,8 +3769,8 @@ def test_the_provider_tables_cover_the_same_two_providers() -> None:
     assert set(system.PROVIDER_KEYS) == beide
     assert set(system.PROVIDER_LIMITS) == beide
     assert set(system.CODING_ORDER) == beide
-    # Jedes Modell trägt das Präfix seines Anbieters -- sonst landet der
-    # Aufruf beim falschen Schlüssel.
+
+
     for tabelle in (system.PROVIDER_MODELS, system.FAST_MODELS, system.CODING_MODELS):
         for provider, model in tabelle.items():
             assert model.startswith(provider + "/"), model
@@ -3785,7 +3782,7 @@ def test_the_agents_run_on_the_small_model(monkeypatch: pytest.MonkeyPatch) -> N
     from aquaticy.config import Settings
     from aquaticy.system import fast_model
 
-    # Seit 12.2.3 Astra Nemotron: Llama 3.3 70B und 3.1 8B hat NVIDIA abgeschaltet.
+
     settings = Settings(model="nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5")
     assert fast_model(settings) == "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2"
     assert settings.effective_subagent_model == fast_model(settings)
@@ -3793,11 +3790,11 @@ def test_the_agents_run_on_the_small_model(monkeypatch: pytest.MonkeyPatch) -> N
     settings = Settings(model="mistral/mistral-large-latest")
     assert fast_model(settings) == "mistral/mistral-small-latest"
 
-    # Wer selbst eins einträgt, behält seins.
+
     settings = Settings(model="mistral/mistral-large-latest", subagent_model="fremd/winzig")
     assert settings.effective_subagent_model == "fremd/winzig"
 
-    # Und wo Aquaticy kein kleines Modell kennt, bleibt es beim Hauptmodell.
+
     settings = Settings(model="ollama_chat/gemma4:12b")
     assert fast_model(settings) == ""
     assert settings.effective_subagent_model == "ollama_chat/gemma4:12b"
@@ -3819,15 +3816,15 @@ def test_the_coding_models_are_offered_for_code(monkeypatch: pytest.MonkeyPatch)
                                    "nvidia_nim/qwen/qwen2.5-coder-32b-instruct"]
 
     fuer_die_recherche = [e["id"] for e in strongest_models(settings, purpose="work")]
-    # Seit 12.2.3 Astra Nemotron -- Llama 3.3 70B hat NVIDIA abgeschaltet.
+
     assert fuer_die_recherche == ["mistral/mistral-large-latest",
                                   "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"]
 
 
 
-# ---------------------------------------------------------------------------
-# Eingeschaltete Bildquellen muessen ein Bild liefern
-# ---------------------------------------------------------------------------
+
+
+
 def test_answer_urls_reads_addresses_out_of_a_text() -> None:
     text = "Schau auf https://a.example/cam. Oder [hier](https://b.example/live) --"
     assert agent_module.answer_urls(text) == [
@@ -3869,7 +3866,7 @@ def test_a_listed_webcam_without_a_picture_is_sent_back_once(
     result = agent.ask("Wie sieht es aus?", stream=False, visual_sources=True)
 
     assert result.visuals and result.visuals[0]["source_url"] == "https://cam.example/live"
-    # Der Nachfass-Text enthaelt die Adresse, die schon in der Antwort stand.
+
     nudge = [
         m
         for m in agent.messages
@@ -3952,9 +3949,9 @@ def test_a_pending_question_is_not_pushed_for_a_picture(
     assert not agent._should_force_visual()
 
 
-# ---------------------------------------------------------------------------
-# Der erste Satz an ein Modell, das erst geladen werden muss
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_wait_for_a_loading_model_is_announced(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, toolbox: Toolbox
 ) -> None:
@@ -4055,6 +4052,6 @@ def test_the_notice_also_covers_the_planning_call(
 
     assert events.count("model_loading") == 1
     assert events.count("model_ready") == 1
-    # Und zwar VOR der Planungszeile, nicht danach.
+
     assert events.index("model_loading") < events.index("planning")
     assert events.index("planning") < events.index("model_ready")

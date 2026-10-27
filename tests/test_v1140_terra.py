@@ -20,7 +20,7 @@ def einstellungen(tmp_path) -> Settings:
                     subagents_auto=False)
 
 
-# --- Der Nachfass fuer gezielte Angaben drueckt nicht mehr ueber eine Frage hinweg --
+
 
 def test_a_question_back_is_not_pushed_into_a_search(einstellungen, monkeypatch) -> None:
     """Seit 11.4.0 Luna: "Was laeuft im Kino?" ohne Stadt -- fragte das Modell nach
@@ -56,14 +56,14 @@ def test_own_words_drop_every_appendix() -> None:
     assert own_words(text) == "Wie wird das Wetter?"
 
 
-# --- Der Planer fragt, bevor die Agenten losrennen -----------------------------
+
 
 def test_the_planner_can_ask(monkeypatch, einstellungen) -> None:
     monkeypatch.setattr("litellm.completion", lambda **k: _reply(
         content='{"recherche": true, "teilfragen": ["Kinoprogramm heute"], '
                 '"rueckfrage": "In welcher Stadt? [x]", "optionen": ["Bremen", "Hamburg"]}'))
     plan = plan_request("Was läuft heute im Kino?", einstellungen)
-    assert plan == (True, ["Kinoprogramm heute"])            # wie bisher entpackbar
+    assert plan == (True, ["Kinoprogramm heute"])
     assert plan.rueckfrage == "In welcher Stadt? (x)" and plan.optionen == ("Bremen", "Hamburg")
     monkeypatch.setattr("litellm.completion", lambda **k: _reply(
         content='{"recherche": true, "teilfragen": ["A"]}'))
@@ -129,7 +129,7 @@ def test_pro_mode_asks_first_too(monkeypatch, einstellungen, toolbox) -> None:  
     assert gemeistert and "Welches Budget? → bis 500 €" in gemeistert[0]
 
 
-# --- 11.4.1 Luna -----------------------------------------------------------------
+
 
 def _offene_chats(anzahl: int, alter: float, gesehen: bool = False):
     from aquaticy import web
@@ -159,7 +159,7 @@ def test_old_unseen_answers_do_not_block_new_chats() -> None:
 def test_running_and_fresh_answers_still_hold_their_chat() -> None:
     from aquaticy.web import BadRequest
 
-    owner = _offene_chats(16, alter=60)            # eben fertig, noch nicht gesehen
+    owner = _offene_chats(16, alter=60)
     with pytest.raises(BadRequest, match="Zu viele offene Chats"):
         owner._new_chat_session()
     lauf = next(iter(owner._chat_sessions.values())).runs.latest()
@@ -172,7 +172,7 @@ def test_a_running_answer_is_never_dropped_from_the_book() -> None:
     from aquaticy.web import RunBook
 
     buch = RunBook()
-    erster = buch.start("erste Frage")          # laeuft noch
+    erster = buch.start("erste Frage")
     for nummer in range(RunBook.KEEP + 3):
         lauf = buch.start(f"Frage {nummer}")
         if nummer < RunBook.KEEP:

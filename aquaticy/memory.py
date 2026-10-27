@@ -42,45 +42,42 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Mehr als das darf der Speicher eines Nutzers nie belegen. Bewusst
-#: 400 Millionen Byte und nicht 400 MiB: die Anzeige soll dieselbe Zahl
-#: nennen, die hier steht.
 MAX_BYTES = 400_000_000
 
-#: Ab hier raeumt der Speicher von sich aus auf, statt bis zum Anschlag zu
-#: warten. Wer erst bei 100 Prozent handelt, steht schon davor.
+
+
 CLEANUP_AT = 0.9
 
-#: Laenge einer einzelnen Notiz. Ein Modell, das Romane ablegt, fuellt sonst
-#: den Speicher mit einer einzigen Eingabe.
+
+
 MAX_ENTRY_CHARS = 8_000
 
-#: So viele Treffer gibt der Speicher hoechstens zurueck.
+
 MAX_RECALL = 8
 
-#: So viele Notizen zieht die Suche hoechstens aus der Datenbank. Weil die
-#: Texte verschluesselt sind, kann SQL nicht filtern -- das passiert nach dem
-#: Entschluesseln in Python. Bei ein paar tausend Notizen kostet das
-#: Millisekunden; darueber hinaus soll es nicht wachsen.
+
+
+
+
 SEARCH_WINDOW = 5_000
 
-#: Name der Schluesseldatei im Datenverzeichnis.
+
 KEY_FILE = "memory.key"
 
-#: Wird der Schluessel aus einer Passphrase abgeleitet, braucht das ein Salz.
-#: Seit 9.5.15 eines je Installation, zufaellig, in dieser Datei neben dem
-#: Datenordner. Es liegt offen -- ein Salz ist kein Geheimnis. Es sorgt dafuer,
-#: dass dieselbe Passphrase auf zwei Installationen zwei verschiedene
-#: Schluessel ergibt und niemand eine Tabelle fuer alle vorberechnen kann.
+
+
+
+
+
 SALT_FILE = "memory.salt"
 
-#: Das feste Salz bis 9.5.14 -- fuer alle Installationen gleich. Genau das
-#: verhinderte das Vorberechnen NICHT (der alte Kommentar behauptete es).
-#: Es bleibt nur zum Lesen alter Daten; geschrieben wird damit nie mehr.
+
+
+
 LEGACY_KEY_SALT = b"aquaticy-ai-memory-v1"
 
-#: So beginnt jedes Fernet-Token (Version 0x80, base64). Klartext aus der
-#: Zeit vor der Verschluesselung beginnt nie so.
+
+
 FERNET_PREFIX = "gAAAAA"
 
 
@@ -151,7 +148,7 @@ def load_secret_file(path: Path, factory: Callable[[], bytes], minimum_size: int
                 handle.write(value)
                 handle.flush()
                 os.fsync(handle.fileno())
-            # Unlike replace(), link() cannot overwrite a competing key.
+
             try:
                 with contextlib.suppress(FileExistsError):
                     os.link(temporary, path)
@@ -159,9 +156,9 @@ def load_secret_file(path: Path, factory: Callable[[], bytes], minimum_size: int
                 if (exc.errno not in {errno.ENOTSUP, errno.ENOSYS, errno.EPERM}
                         and getattr(exc, "winerror", None) not in {1, 50, 1314}):
                     raise
-                # FAT and other filesystems without hard links remain usable.
-                # SQLite's process lock serializes complete atomic publication;
-                # this sidecar contains no key material and is kept for reuse.
+
+
+
                 guard_path = path.parent / ".aquaticy-keylock.db"
                 with closing(sqlite3.connect(guard_path, timeout=15)) as guard:
                     secure_file(guard_path)
@@ -197,8 +194,8 @@ class Cipher:
         from cryptography.fernet import Fernet, MultiFernet
 
         if passphrase:
-            # Neu geschrieben wird mit dem Salz dieser Installation; gelesen
-            # wird auch, was noch mit dem alten, festen Salz verschluesselt ist.
+
+
             salz = _salt_for(key_path.parent)
             self._fernet = MultiFernet([
                 Fernet(_key_from_passphrase(passphrase, salz)),
@@ -229,7 +226,7 @@ class Cipher:
         if not token:
             return ""
         if not token.startswith(FERNET_PREFIX):
-            return token  # Klartext aus der Zeit vor der Verschluesselung
+            return token
         try:
             return self._fernet.decrypt(token.encode("ascii")).decode("utf-8")
         except (InvalidToken, UnicodeDecodeError, ValueError) as exc:
@@ -289,7 +286,7 @@ class Entry:
         return {"id": self.id, "topic": self.topic, "text": self.text, "when": self.created_at}
 
 
-#: Was an Stelle einer Notiz steht, die sich nicht entschluesseln laesst.
+
 UNREADABLE = "[nicht lesbar — falscher Schlüssel oder beschädigt]"
 
 
@@ -304,7 +301,7 @@ class Memory:
         self, db_path: Path | str, data_dir: Path | None = None, passphrase: str = ""
     ) -> None:
         self.db_path = Path(db_path)
-        #: Der Ordner, dessen Groesse mitzaehlt (Uploads liegen dort).
+
         self.data_dir = Path(data_dir) if data_dir else self.db_path.parent
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._cipher = Cipher(self.data_dir / KEY_FILE, passphrase)
@@ -326,7 +323,7 @@ class Memory:
                          self._cipher.rotate(str(zeile["text"] or "")), zeile["id"]),
                     )
                 except Exception:
-                    continue  # nicht lesbar (falsche Passphrase): so lassen, wie es ist
+                    continue
         marke.write_text("9.5.15\n", encoding="utf-8")
 
     def _connect(self) -> sqlite3.Connection:
@@ -346,10 +343,10 @@ class Memory:
                 )
                 """
             )
-            # Kein Index auf topic: das Feld ist verschluesselt, ein Index
-            # darauf wuerde nur Platz kosten und nie greifen.
 
-    # -- Groesse ----------------------------------------------------------
+
+
+
     def used_bytes(self) -> int:
         """Wie viel Platz das ganze Profil belegt -- Speicher, Verlauf,
         Zwischenspeicher, Uploads UND Bilder (aquaticy/budget.py, seit 9.5.15).
@@ -385,7 +382,7 @@ class Memory:
     def full(self) -> bool:
         return self.used_bytes() >= MAX_BYTES
 
-    # -- Schreiben --------------------------------------------------------
+
     def remember(self, text: str, topic: str = "") -> Entry:
         """Legt eine Notiz ab.
 
@@ -416,7 +413,7 @@ class Memory:
             row = conn.execute("SELECT * FROM memory WHERE id = ?", (new_id,)).fetchone()
         return self._read(row)
 
-    # -- Lesen ------------------------------------------------------------
+
     def recall(self, query: str = "", limit: int = MAX_RECALL) -> list[Entry]:
         """Sucht Notizen zu *query*; ohne Suchwort die juengsten.
 
@@ -437,8 +434,8 @@ class Memory:
 
         hits = [entry for entry in entries if needle in f"{entry.topic} {entry.text}".lower()]
         if not hits:
-            # Kein Volltreffer -- einzelne Woerter versuchen, damit
-            # "welches Cafe kennst du" auch die Notiz zu "Cafe" findet.
+
+
             words = [word for word in needle.split() if len(word) > 3][:4]
             hits = [
                 entry
@@ -472,7 +469,7 @@ class Memory:
         return Entry(id=int(row["id"]), text=text, topic=topic,
                      created_at=str(row["created_at"] or ""))
 
-    # -- Loeschen ---------------------------------------------------------
+
     def forget(self, entry_id: int) -> bool:
         with closing(self._connect()) as conn, conn:
             return conn.execute("DELETE FROM memory WHERE id = ?", (entry_id,)).rowcount > 0
@@ -515,8 +512,8 @@ class Memory:
         from aquaticy.budget import forget
         from aquaticy.budget import make_room as gemeinsam
 
-        # Erst das Ersetzbare im ganzen Profil (Zwischenspeicher, Bilder,
-        # Uploads), dann -- nur hier, beim Speicher selbst -- alte Notizen.
+
+
         freed = gemeinsam(self.data_dir)
         forget(self.data_dir)
         folder = self.data_dir / "uploads"
@@ -542,7 +539,7 @@ class Memory:
             with closing(self._connect()) as conn:
                 conn.execute("VACUUM")
         except sqlite3.Error:
-            pass  # VACUUM scheitert bei offener Transaktion -- nicht schlimm
+            pass
 
 
 def folder_bytes(folder: Path) -> int:

@@ -52,36 +52,36 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 REPO_API = "https://api.github.com/repos/ggml-org/llama.cpp"
-#: Wohin GitHub einen Download umleiten darf -- sonst nirgendwohin.
+
 DOWNLOAD_HOSTS = frozenset({
     "github.com",
     "objects.githubusercontent.com",
     "release-assets.githubusercontent.com",
     "github-releases.githubusercontent.com",
 })
-#: So heissen die Fassungen von llama.cpp: "b" und die Nummer des Builds.
+
 TAG_RE = re.compile(r"^b\d{1,7}$")
-#: So heissen die fertigen Ausgaben einer Veroeffentlichung.
+
 ASSET_RE = re.compile(
     r"^llama-(?P<tag>b\d{1,7})-bin-(?P<plattform>[a-z0-9][a-z0-9.\-]{1,60}?)"
     r"\.(?P<art>zip|tar\.gz)$")
-#: Ordnernamen einer Installation: <Fassung>-<Ausgabe>.
+
 FOLDER_RE = re.compile(r"^(?P<tag>b\d{1,7})-(?P<plattform>[a-z0-9][a-z0-9.\-]{1,60})$")
 
 MAX_API_BYTES = 8 * 1024 * 1024
-#: Die Ausgaben fuer Prozessor und Vulkan sind 20 bis 100 MB gross.
+
 MAX_ARCHIVE_BYTES = 600 * 1024 * 1024
 MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_FILES = 4000
-#: Eine Fassung fest vorgeben (sonst waehlt der Master).
+
 TAG_ENV = "AQUATICY_LLAMA_TAG"
-#: Ein Ordner mit einer mitgelieferten Fassung (Container-Abbild).
+
 DIR_ENV = "AQUATICY_LLAMA_DIR"
 SYSTEM_DIR = Path("/opt/aquaticy/llama.cpp")
 MARKER = "aquaticy-llama.json"
-#: Nach einem Fehler so lange warten -- erst eine Minute, dann laenger.
+
 RETRY_SECONDS = (60.0, 300.0, 900.0)
-#: Ausgaben, die eine Grafikkarte nutzen (Metal oder Vulkan).
+
 ACCELERATED = frozenset({
     "macos-arm64", "ubuntu-vulkan-x64", "ubuntu-vulkan-arm64", "win-vulkan-x64",
 })
@@ -112,9 +112,9 @@ class Install:
         return f"llama.cpp {self.tag} ({art})"
 
 
-# ---------------------------------------------------------------------------
-# Welche Ausgabe passt zu diesem Server?
-# ---------------------------------------------------------------------------
+
+
+
 def vulkan_loader() -> bool:
     """Ist der Vulkan-Lader da? Ohne ihn startet die Vulkan-Ausgabe nicht.
 
@@ -152,9 +152,9 @@ def platform_names(system: str = "", machine: str = "", *, gpu: bool = False,
     return []
 
 
-# ---------------------------------------------------------------------------
-# GitHub
-# ---------------------------------------------------------------------------
+
+
+
 def _headers() -> dict[str, str]:
     from aquaticy import __version__
 
@@ -264,7 +264,7 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
                 raise LlamaError(f"Der Download antwortet mit {antwort.status_code}.")
             if antwort.headers.get("content-encoding", "identity").strip().lower() not in (
                     "", "identity"):
-                # iter_bytes wuerde vor unserer Groessenpruefung unbegrenzt entpacken.
+
                 raise LlamaError("Die Datei kam in einem unerwarteten Format an.")
             pruefer = hashlib.sha256()
             geladen = 0
@@ -288,9 +288,9 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
     return ist
 
 
-# ---------------------------------------------------------------------------
-# Entpacken -- nur in den eigenen Ordner
-# ---------------------------------------------------------------------------
+
+
+
 def _safe_name(name: str) -> PurePosixPath | None:
     name = str(name or "").replace("\\", "/")
     if not name or "\x00" in name or name.startswith("/") or re.match(r"^[A-Za-z]:", name):
@@ -319,7 +319,7 @@ def _check_path(pfad: Path, wurzel: Path) -> None:
 def _link(pfad: Path, ziel_text: str, wurzel: Path) -> None:
     """Eine Verknuepfung aus dem Archiv -- nur, wenn sie im Ordner bleibt."""
     if os.name == "nt":
-        return  # die Windows-Ausgaben haben keine
+        return
     if (not ziel_text or ziel_text.startswith("/") or "\x00" in ziel_text
             or "\\" in ziel_text):
         raise LlamaError("Das Archiv enthält eine unsichere Verknüpfung.")
@@ -345,7 +345,7 @@ def unpack_zip(archiv: Path, ziel: Path) -> None:
         links: list[tuple[Path, str]] = []
         for eintrag in eintraege:
             if eintrag.is_dir() and not eintrag.filename.replace("\\", "/").strip("./"):
-                continue  # der Ordner selbst ("./")
+                continue
             name = _safe_name(eintrag.filename)
             if name is None:
                 raise LlamaError("Das Archiv enthält einen unsicheren Pfad.")
@@ -376,20 +376,20 @@ def unpack_zip(archiv: Path, ziel: Path) -> None:
             pfad.chmod(0o755 if modus & 0o111 else 0o644)
         for pfad, ziel_text in links:
             _link(pfad, ziel_text, wurzel)
-        # Spaeter angelegte Links koennen fruehere Ziele veraendern.
+
         for pfad, _ in links:
             _check_path(pfad, wurzel)
 
 
 def unpack_tar(archiv: Path, ziel: Path) -> None:
-    if not hasattr(tarfile, "data_filter"):  # Python vor 3.11.4
+    if not hasattr(tarfile, "data_filter"):
         raise LlamaError("Zum sicheren Entpacken braucht es Python 3.11.4 oder neuer.")
     with tarfile.open(archiv, "r:gz") as tf:
         mitglieder: list[tarfile.TarInfo] = []
         summe = 0
         for mitglied in tf:
             if mitglied.isdir() and not mitglied.name.strip("./"):
-                continue  # der Ordner selbst ("./")
+                continue
             mitglieder.append(mitglied)
             summe += max(0, mitglied.size)
             if len(mitglieder) > MAX_FILES:
@@ -399,8 +399,8 @@ def unpack_tar(archiv: Path, ziel: Path) -> None:
             if _safe_name(mitglied.name) is None:
                 raise LlamaError("Das Archiv enthält einen unsicheren Pfad.")
         try:
-            # "data": keine Pfade und Verknuepfungen nach draussen, keine
-            # Geraetedateien, keine Sonderrechte (setuid).
+
+
             tf.extractall(ziel, members=mitglieder, filter="data")
         except tarfile.FilterError as exc:
             raise LlamaError("Das Archiv enthält einen unsicheren Eintrag.") from exc
@@ -445,9 +445,9 @@ def _starts(programm: Path, plattform: str = "") -> tuple[bool, str]:
     return True, ""
 
 
-# ---------------------------------------------------------------------------
-# Was schon da ist
-# ---------------------------------------------------------------------------
+
+
+
 def _trusted(ordner: Path) -> bool:
     """Ein mitgelieferter Ordner zaehlt nur, wenn ihn kein Fremder veraendern kann."""
     if os.name == "nt":
@@ -499,9 +499,9 @@ def system_dirs() -> list[Path]:
     return ordner
 
 
-# ---------------------------------------------------------------------------
-# Installieren -- im Hintergrund, eine Installation zur Zeit
-# ---------------------------------------------------------------------------
+
+
+
 class Installer:
     """Haelt llama.cpp fuer diesen Server bereit.
 
@@ -517,19 +517,19 @@ class Installer:
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._namen: list[str] | None = None
-        #: Grafik-Ausgaben, die hier nicht starten -- dann die fuer den Prozessor.
+
         self._schlecht: set[str] = set()
-        #: Ausgaben, die es in einer Fassung nicht gibt.
+
         self._fehlend: dict[str, set[str]] = {}
         self._fehler = 0
         self._naechster = 0.0
         self._gewaehlt = ""
-        self.phase = "aus"       # aus, lädt, bereit, fehler
+        self.phase = "aus"
         self.message = ""
         self.progress = 0
         self.tag = ""
 
-    # -- Was passt, was ist da ---------------------------------------------
+
     def names(self) -> list[str]:
         """Die passenden Ausgaben fuer diesen Server (einmal ermittelt)."""
         with self._lock:
@@ -578,7 +578,7 @@ class Installer:
                         beste = treffer.group("tag")
         return beste
 
-    # -- Im Hintergrund ----------------------------------------------------
+
     def ensure(self, tag: str) -> Install | None:
         """Die Installation von *tag* -- oder None, solange sie noch geladen wird."""
         eintrag = self.installed(tag)
@@ -629,7 +629,7 @@ class Installer:
             self._fehler = 0
             if self.phase == "lädt":
                 self.phase, self.message = "aus", ""
-        except Exception as exc:  # jeder Fehler wird ein Satz, nicht ein toter Faden
+        except Exception as exc:
             meldung = str(exc) if isinstance(exc, LlamaError) else (
                 f"llama.cpp ließ sich nicht installieren ({type(exc).__name__}).")
             pause = RETRY_SECONDS[min(self._fehler, len(RETRY_SECONDS) - 1)]
@@ -674,8 +674,8 @@ class Installer:
                     letzter = str(exc)
                     if name not in ACCELERATED:
                         raise LlamaError(letzter) from exc
-                    # Die Grafik-Ausgabe startet hier nicht -- dann die fuer den
-                    # Prozessor (fehlender Treiber, zu alter Lader).
+
+
                     with self._lock:
                         self._schlecht.add(name)
             raise LlamaError(letzter or "Für dieses System gibt es in dieser Fassung keine "

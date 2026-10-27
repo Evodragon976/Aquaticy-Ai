@@ -359,7 +359,7 @@ def test_prepared_request_cannot_bypass_runtime_model_access(upgraded, monkeypat
     session._settings = Settings(model="ollama_chat/" + candidate, data_dir=directory)
     monkeypatch.setattr(web, "UPGRADE_DIR", directory)
     settings = session.settings()
-    # A previously prepared request can still refer to an old candidate.
+
     settings.model = "ollama_chat/" + candidate
     sent, cancelled = [], []
     monkeypatch.setattr("litellm.completion", lambda **kwargs: sent.append(kwargs))

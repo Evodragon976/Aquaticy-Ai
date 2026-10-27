@@ -24,7 +24,7 @@ def test_snapshot_path_only_returns_real_files(tmp_path: Path) -> None:
 
     media_id = save_snapshot(tmp_path, b"frame", "image/png")
     pfad = snapshot_path(tmp_path, media_id)
-    # Auf der Platte verschluesselt (9.5.32), lesbar nur ueber read_private.
+
     from aquaticy.privacy import read_private
 
     assert pfad is not None and pfad.read_bytes() != b"frame"
@@ -43,7 +43,7 @@ def test_a_kept_picture_survives_the_cleanup(tmp_path: Path) -> None:
 
     assert load_snapshot(tmp_path, fest) == (b"das-hochgeladene-foto", "image/jpeg")
     uebrig = list((tmp_path / "media").iterdir())
-    # Aufgeraeumt wurde trotzdem: die Grenze gilt fuer alles Uebrige.
+
     assert len(uebrig) == MAX_SNAPSHOTS + 1
 
 

@@ -17,7 +17,7 @@ from aquaticy import guardrails
 from aquaticy.aiguard import PATTERN_WINDOW, AiGuard, insult_level
 from aquaticy.guardrails import forget_verdicts, judge, parse_verdict
 from tests import aiguard_korpus as korpus
-from tests.test_guardrails import pruefer  # noqa: F401 -- Fixture
+from tests.test_guardrails import pruefer  # noqa: F401
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def guard(tmp_path: Path) -> AiGuard:
     return AiGuard(tmp_path / "accounts.sqlite3")
 
 
-# -- Genauigkeit ----------------------------------------------------------------
+
 @pytest.mark.parametrize(("text", "stufe"), korpus.UEBUNG_BELEIDIGUNGEN)
 def test_practice_insults_with_the_right_severity(text: str, stufe: int) -> None:
     assert insult_level(text) == stufe
@@ -51,7 +51,7 @@ def test_long_messages_stay_fast() -> None:
         assert time.monotonic() - start < 1.5
 
 
-# -- Verrechnung ------------------------------------------------------------------
+
 def test_an_unconfirmed_abuse_flag_on_a_refusal_does_not_count(
     pruefer, settings,  # noqa: F811
 ) -> None:
@@ -80,7 +80,7 @@ def test_a_model_insult_without_confirmation_only_locks_the_chat(guard: AiGuard)
                                       text="Ist Arschloch eigentlich strafbar?")
     assert massnahme.kind == "chat"
     assert guard.is_banned(user_id="u1") is None
-    # Bestaetigt die feste Erkennung sie, gilt die Schwere des Modells.
+
     assert guard.record_incident("u2", "beleidigung", 3, chat="c1",
                                  text="du Arschloch").kind == "ban"
 
@@ -93,7 +93,7 @@ def test_old_attack_indicators_no_longer_form_a_pattern(guard: AiGuard) -> None:
     assert guard.record_incident("u3", "angriff", 2, chat="c3").kind == "ban"
 
 
-# -- Pruefbefehl im Terminal ------------------------------------------------------
+
 def test_the_terminal_can_test_a_sentence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy import cli, config
 

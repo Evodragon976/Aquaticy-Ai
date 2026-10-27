@@ -338,7 +338,7 @@ def test_linux_failed_download_is_never_executed(monkeypatch, tmp_path):
     command = lm.install_command()
     curl = tmp_path / "curl"
     marker = tmp_path / "executed"
-    # curl hinterlaesst ein teilweise geladenes Skript und meldet einen Netzfehler.
+
     curl.write_text('#!/bin/sh\nfor last do :; done\n'
                     f'echo "touch {marker}" > "$last"\nexit 22\n')
     curl.chmod(0o700)

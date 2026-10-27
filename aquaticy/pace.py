@@ -39,9 +39,6 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-#: Wie lange ein Aufruf hoechstens auf seinen Platz wartet. Danach geht er
-#: trotzdem los: lieber ein 429, das der Wiederholungsversuch auffaengt, als
-#: eine Oberflaeche, die minutenlang steht.
 MAX_WAIT = 30.0
 
 
@@ -49,21 +46,21 @@ class Gate:
     """Ein Taktgeber je Anbieter: so viele pro Minute, so viele gleichzeitig."""
 
     def __init__(self, rpm: int = 0, parallel: int = 0) -> None:
-        #: 0 heisst: unbegrenzt.
+
         self.rpm = max(0, int(rpm))
         self.parallel = max(0, int(parallel))
         self.spacing = 60.0 / self.rpm if self.rpm else 0.0
         self._slots = threading.Semaphore(self.parallel) if self.parallel else None
         self._takt = threading.Lock()
         self._last = 0.0
-        #: Nur zum Nachsehen in Tests und in der Anzeige.
+
         self.waited = 0.0
 
     @contextmanager
     def slot(self) -> Iterator[None]:
         """Haelt einen Platz frei, solange der Aufruf laeuft."""
-        # Auch der Platz wartet hoechstens MAX_WAIT (seit 9.5.16 -- vorher ohne
-        # Grenze): haengt ein Aufruf, laufen die naechsten trotzdem los.
+
+
         belegt = self._slots.acquire(timeout=MAX_WAIT) if self._slots is not None else False
         if self._slots is not None and not belegt:
             self.waited += MAX_WAIT
@@ -81,13 +78,13 @@ class Gate:
                 self._slots.release()
 
 
-#: Ein Taktgeber je Anbieter, ueber den ganzen Prozess. Es hilft nichts, wenn
-#: jeder Agent fuer sich das Mass haelt -- die Grenze gilt fuer den Schluessel,
-#: nicht fuer den Faden.
+
+
+
 _gates: dict[str, Gate] = {}
 _lock = threading.Lock()
 
-#: Der Taktgeber fuer alles Ungebremste. Einer fuer alle, weil er nichts tut.
+
 FREE = Gate()
 
 
@@ -125,7 +122,7 @@ def gate_for(model: str, key: str = "") -> Gate:
 
     provider = provider_of(model or "")
     rpm, parallel = limits_for(provider)
-    # Ein eigener Schluessel bringt seine eigenen Grenzen mit (key_of, seit 9.5.16).
+
     eigen_rpm, eigen_parallel = _own_limits(key)
     if key.startswith("own:") and (eigen_rpm or eigen_parallel):
         rpm = eigen_rpm or rpm

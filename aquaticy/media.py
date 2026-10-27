@@ -17,20 +17,20 @@ MIME_EXTENSIONS = {
 MEDIA_ID = re.compile(r"^[0-9]{13}-[0-9a-f]{16}(?:-fest|-ki)?\.(?:jpg|png|webp|gif)$")
 MAX_SNAPSHOTS = 200
 
-#: KI-Bilder (seit 9.5.15): gehoeren zu einem Chat und gehen mit ihm. Bis
-#: 9.5.14 wurden sie "fest" abgelegt -- fuer immer, auch nach dem Loeschen
-#: des Chats. Mehr als so viele bleiben nicht; die aeltesten gehen zuerst.
+
+
+
 AI_MARK = "-ki"
 MAX_AI_IMAGES = 300
 
-#: Festgehaltene Bilder (Auftraege) werden nie still geloescht -- dafuer gibt
-#: es eine Obergrenze. Wer mehr will, loescht erst alte Auftraege.
+
+
 MAX_KEPT = 200
 
-#: Marke im Dateinamen fuer Bilder, die bleiben muessen. Ein Schnappschuss aus
-#: einer Recherche ist eine Momentaufnahme und darf altern; das Foto, das
-#: jemand fuer einen Auftrag hochgeladen hat, ist die Frage selbst -- waere es
-#: nach zweihundert Webcam-Bildern weg, suchte der Auftrag nach nichts mehr.
+
+
+
+
 KEEP_MARK = "-fest"
 
 
@@ -72,8 +72,8 @@ def save_snapshot(
     media_id = f"{int(time.time() * 1000):013d}-{digest}{marke}{extension}"
     target = directory / media_id
     if not target.exists():
-        # Seit 9.5.32 verschluesselt (aquaticy/privacy.py) -- lesbar nur ueber
-        # load_snapshot/read_private mit dem Schluessel dieses Profils.
+
+
         from aquaticy.privacy import write_private
 
         write_private(target, content, data_dir)

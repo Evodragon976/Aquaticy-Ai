@@ -50,15 +50,15 @@ class Slot:
 
     name: str
     label: str
-    art: str  # "modell" oder "suche"
+    art: str
     form: str
     note: str
 
 
-#: Welche Schluessel es gibt -- und nur diese (seit 12.0.0 Luna zwei, beide
-#: ueber ihr Add-on). Claude, ChatGPT, Gemini, der allgemeine Platz
-#: und die Suchschluessel sind weg; was davon noch gespeichert ist, loescht
-#: :meth:`KeyVault._setup` beim naechsten Oeffnen.
+
+
+
+
 SLOTS: tuple[Slot, ...] = (
     Slot("NVIDIA_NIM_API_KEY", "NVIDIA NIM", "modell", "nvapi-…",
          "Für die NVIDIA-Modelle (nvidia_nim/…), zum Beispiel Nemotron."),
@@ -67,20 +67,20 @@ SLOTS: tuple[Slot, ...] = (
 )
 SLOT_BY_NAME: dict[str, Slot] = {slot.name: slot for slot in SLOTS}
 
-#: Geheimnisse, die ebenfalls verschluesselt am Konto liegen, aber keine
-#: API-Schluessel fuer Modell oder Suche sind -- sie tauchen weder in der
-#: Liste der Schluessel noch in den Einstellungen auf (seit 9.5.16; das
-#: GitHub-Token stand bis dahin im Klartext in der .env des Kontos).
-#: Seit 9.5.34 auch das Home-Assistant-Token und das Google-Client-Geheimnis
-#: -- sie standen bis dahin im Klartext in der .env des Kontos.
-#: HA_TOKEN_URL (9.6.9 Luna): die Adresse, fuer die der Home-Assistant-Token
-#: eingetragen wurde -- der Token geht nur dorthin.
+
+
+
+
+
+
+
+
 INTERNAL_SECRETS = frozenset({"AQUATICY_GITHUB_TOKEN", "HA_TOKEN", "HA_TOKEN_URL",
                               "GOOGLE_CLIENT_SECRET"})
 MODEL_KEY_NAMES = frozenset(s.name for s in SLOTS if s.art == "modell")
 SEARCH_KEY_NAMES = frozenset(s.name for s in SLOTS if s.art == "suche")
 
-#: Ein Schluessel: druckbare Zeichen ohne Leerzeichen, vernuenftig lang.
+
 KEY_RE = re.compile(r"[\x21-\x7e]{8,400}")
 
 _LOCKS: dict[str, threading.Lock] = {}
@@ -134,7 +134,7 @@ class KeyVault:
             raise ValueError("Ein Schlüsselbund braucht ein Konto.")
         self.db_path = Path(db_path)
         self.account_id = str(account_id)
-        # Ein Schluessel je Konto: HMAC(Servergeheimnis, Kontokennung).
+
         abgeleitet = hmac.new(secret, b"aquaticy-keyvault-v1:" + self.account_id.encode(),
                               hashlib.sha256).digest()
         from cryptography.fernet import Fernet
@@ -168,8 +168,8 @@ class KeyVault:
                 )
                 """
             )
-            # Was es nicht mehr gibt (12.0.0 Luna: Claude, ChatGPT, Gemini, der
-            # allgemeine Platz, Brave, Tavily), bleibt nicht liegen.
+
+
             bekannt = set(SLOT_BY_NAME) | INTERNAL_SECRETS
             for zeile in conn.execute("SELECT name FROM api_keys WHERE account_id = ?",
                                       (self.account_id,)).fetchall():
@@ -177,7 +177,7 @@ class KeyVault:
                     conn.execute("DELETE FROM api_keys WHERE account_id = ? AND name = ?",
                                  (self.account_id, zeile["name"]))
 
-    # -- Schreiben ------------------------------------------------------------
+
     def set(self, name: str, value: str) -> None:
         """Legt einen Schluessel ab (oder ersetzt ihn)."""
         wert = check_key(name, value)
@@ -236,7 +236,7 @@ class KeyVault:
             ).rowcount
         return bool(weg)
 
-    # -- Lesen ----------------------------------------------------------------
+
     def _rows(self) -> list[sqlite3.Row]:
         with self._lock, self._connect() as conn:
             return conn.execute(

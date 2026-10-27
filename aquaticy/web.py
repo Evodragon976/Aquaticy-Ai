@@ -66,8 +66,8 @@ from aquaticy.guardrails import rules_overview
 from aquaticy.legal import LEGAL_ROUTES, LEGAL_VERSION, legal_page
 
 UI_FILE = Path(__file__).with_name("webui.html")
-#: Feste Dateien neben der Oberflaeche (seit 9.6.0: das Logo). Nur diese
-#: Namen -- kein Pfad aus der Anfrage erreicht die Platte.
+
+
 STATIC_DIR = Path(__file__).with_name("static")
 STATIC_FILES: dict[str, str] = {
     "/favicon.ico": "favicon-32.png",
@@ -77,34 +77,34 @@ STATIC_FILES: dict[str, str] = {
     "/logo.png": "logo.png",
 }
 
-#: Standardport der Oberflaeche. Steht hier, weil auch die
-#: Google-Rueckleitadresse ihn braucht.
+
+
 DEFAULT_PORT = 8765
 
-#: So oft geht mindestens ein Byte raus, solange eine Anfrage laeuft.
-#: Kurz genug, dass keine Zwischenstation die stille Leitung kappt.
+
+
 HEARTBEAT_SECONDS = 10.0
 
-#: Wie viele Ereignisse ein Lauf hoechstens aufhebt. Eine lange Recherche
-#: kommt auf ein paar tausend; die Grenze ist gegen den Ausreisser, nicht
-#: gegen den Alltag.
+
+
+
 MAX_RUN_EVENTS = 20_000
 
-#: Was auch ueber die Grenze hinaus noch in den Lauf kommt. Ohne "done"
-#: bliebe die Oberflaeche nach einem Ausreisser fuer immer bei "laeuft noch"
-#: stehen, obwohl die Antwort laengst fertig ist. Es kommt einmal je Lauf --
-#: die Grenze bleibt also eine Grenze.
+
+
+
+
 PAST_THE_LIMIT = frozenset({"done"})
 
-#: So lange kann man einen fertigen Lauf noch abholen, den niemand zu Ende
-#: gesehen hat. Bis 11.3.2 waren es 15 Minuten: Wer die App verliess und nach
-#: zwei Stunden wiederkam, stand vor der leeren Startseite, obwohl die Antwort
-#: fertig war (11.4.0 Luna). Jetzt eine Woche -- die Oberflaeche oeffnet dann
-#: den Chat, in dem die Antwort steht.
+
+
+
+
+
 RESUME_WINDOW = 7 * 24 * 3600
-#: So lange haelt eine fertige, ungesehene Antwort ihren Chat im Speicher fest
-#: (11.4.1 Luna). Danach darf er Platz machen -- die Antwort steht im Verlauf, und
-#: mit der Woche aus RESUME_WINDOW waren nach 16 solchen Chats keine neuen mehr moeglich.
+
+
+
 PIN_WINDOW = 15 * 60
 
 
@@ -126,18 +126,18 @@ class Run:
     def __init__(self, run_id: str, question: str) -> None:
         self.id = run_id
         self.question = question
-        #: Der Chat, zu dem der Lauf gehoert -- die Oberflaeche oeffnet ihn beim
-        #: Zurueckkommen (11.4.0 Luna).
+
+
         self.chat = ""
         self.started = time.time()
         self.finished = 0.0
         self.events: list[dict[str, Any]] = []
         self.done = False
-        #: Hat jemand den Lauf bis zum Schluss gesehen? Wenn nicht, ist er
-        #: beim naechsten Laden noch abzuholen.
+
+
         self.delivered = False
         self._cond = threading.Condition()
-        #: Wurde schon gesagt, dass die Anzeige gekuerzt ist? Einmal reicht.
+
         self._clipped = False
 
     def add(self, event: dict[str, Any]) -> None:
@@ -145,8 +145,8 @@ class Run:
             if len(self.events) < MAX_RUN_EVENTS or event.get("type") in PAST_THE_LIMIT:
                 self.events.append(event)
             elif not self._clipped:
-                # Einmal sagen, warum die Anzeige hier aufhoert -- die ganze
-                # Antwort steht trotzdem im Verlauf.
+
+
                 self._clipped = True
                 self.events.append(
                     {
@@ -216,9 +216,9 @@ class RunBook:
     Oberflaeche nimmt genau den Lauf wieder auf, den ``/api/runstate`` nannte.
     """
 
-    #: So viele fertige Laeufe bleiben abrufbar.
+
     KEEP = 8
-    #: Und so viele hoechstens, auch wenn sie noch laufen (11.4.1 Luna).
+
     HARD = 32
 
     def __init__(self) -> None:
@@ -230,15 +230,15 @@ class RunBook:
         """Ein neuer Lauf -- atomar angelegt und unter seiner Kennung abgelegt."""
         with self._lock:
             if sum(not r.done for r in self._runs.values()) >= self.HARD:
-                # Nur das Buch zu kuerzen laesst die Arbeiter weiterlaufen. Dann
-                # waechst die Zahl wartender Threads trotz HARD ohne Grenze.
+
+
                 raise RunCapacityError("Zu viele Anfragen laufen in diesem Chat. Warte auf eine "
                                        "Antwort.")
             lauf = Run(secrets.token_hex(8), question)
             self._runs[lauf.id] = lauf
-            # Aelteste fertige zuerst. Ein laufender bleibt (11.4.1 Luna): bis dahin
-            # flog bei neun schnellen Fragen die erste heraus, obwohl sie noch lief.
-            # Hart begrenzt bleibt es trotzdem: mehr als HARD kann kein Chat halten.
+
+
+
             while len(self._runs) > self.KEEP:
                 alt = next((k for k, r in self._runs.items() if r.done), None)
                 if alt is None:
@@ -259,13 +259,13 @@ class RunBook:
 
 RUNS = RunBook()
 
-#: Wie lange die Liste der staerksten Modelle gilt. Sie fragt bei Ollama nach;
-#: bei jedem Aufruf der Kopfzeile waere das eine Abfrage zu viel.
+
+
 STRONG_TTL = 30.0
 
-#: Je Zweck eine eigene Liste: fuers Programmieren zaehlen andere Modelle als
-#: fuer eine Recherche. Codestral ist beim Code stark und bei der Suche
-#: nutzlos -- eine gemeinsame "Bestenliste" waere fuer beide Seiten falsch.
+
+
+
 _strong_cache: dict[str, dict[str, Any]] = {}
 
 
@@ -312,7 +312,7 @@ def forget_strong_models(data_dir: Path | None = None) -> None:
         if key.startswith(praefix):
             _strong_cache.pop(key, None)
 
-#: Alles, was sich auch in `aquaticy setup` einstellen laesst.
+
 SETTING_KEYS: tuple[str, ...] = (
     "AQUATICY_MODEL",
     "AQUATICY_VISION_MODEL",
@@ -356,74 +356,74 @@ SETTING_KEYS: tuple[str, ...] = (
     "AQUATICY_COUNCIL",
 )
 
-#: Zahlenfelder mit dem Bereich, in dem sie sinnvoll sind. Geprueft wird
-#: hier und nicht erst in `config.py`: dort faellt ein unsinniger Wert nur
-#: still auf den Standard zurueck -- das Formular meldet dann "gespeichert",
-#: und die Einstellung tut trotzdem nichts. Das ist schlimmer als eine
-#: Fehlermeldung, weil man es erst Tage spaeter merkt.
+
+
+
+
+
 NUMBERS: dict[str, tuple[int, int]] = {
-    # Wie im Formular und in queries.MAX_VARIANTS -- mehr als drei benutzt die
-    # Suche ohnehin nicht (bis 9.5.15 nahm der Server bis 10 an).
+
+
     "AQUATICY_SEARCH_VARIANTS": (1, 3),
     "AQUATICY_MAX_SUBAGENTS": (1, 12),
     "AQUATICY_SUBAGENT_BUDGET": (1, 40),
-    # 0 heisst "Aquaticy entscheidet" -- das ist der Standard und steht so
-    # auch im Formular. Mit 1 als Untergrenze liess sich ein frisches Konto
-    # gar nicht speichern.
+
+
+
     "AQUATICY_SUBAGENT_PARALLEL": (0, 12),
     "AQUATICY_RPM": (1, 100_000),
     "AQUATICY_PARALLEL_CALLS": (1, 64),
     "AQUATICY_MAX_TOOL_CALLS": (1, 200),
-    # Ab 256 (11.3.2 Sol): Der Regler geht bei sehr grossen Modellen unter 2000,
-    # wenn sonst die 5 GB nicht reichen -- der Wert wurde dann abgelehnt.
+
+
     "AQUATICY_CONTEXT_TOKENS": (256, 2_000_000),
     "AQUATICY_PLANNER_TIMEOUT": (1, 600),
 }
 
-#: Felder, die nur bestimmte Woerter annehmen.
+
 CHOICES: dict[str, tuple[str, ...]] = {
     "AQUATICY_STORAGE_ACCESS": ("off", "read", "write"),
     "AQUATICY_VM_SIZE": ("normal", "plus"),
 }
 
-#: Wie lang ein Formularwert hoechstens sein darf. Eine Adresse ist keine
-#: Textdatei; was laenger ist, ist ein Versehen oder ein Versuch.
+
+
 MAX_VALUE_CHARS = 2_000
 
-#: Dasselbe fuer das Home-Assistant-Token.
+
 HA_TOKEN_FIELD = "__HA_TOKEN__"
 
-#: Zugangsdaten der Google-Anwendung. Die ID darf zurueck in den Browser
-#: (sie steht ohnehin in jeder Zustimmungsadresse), das Secret nie.
+
+
 GOOGLE_ID_FIELD = "__GOOGLE_ID__"
 GOOGLE_SECRET_FIELD = "__GOOGLE_SECRET__"
 
-#: Groesse einer einzelnen hochgeladenen Datei. Passt zu der Grenze, die
-#: aquaticy auch fuer heruntergeladene PDFs zieht.
+
+
 MAX_UPLOAD_BYTES = 25_000_000
 
-#: So viele Dateien duerfen an einer Nachricht haengen.
+
 MAX_UPLOADS = 5
 
-#: Wie lang eine einzelne Frage sein darf. Alles darueber ist keine Frage
-#: mehr, sondern eine Datei -- und die gehoert an die Klammer, wo sie
-#: ausgelesen und gekuerzt wird, statt ungeprueft ins Kontextfenster zu
-#: laufen.
+
+
+
+
 MAX_MESSAGE_CHARS = 100_000
 
-#: Der ganze Anfragekoerper. Base64 blaeht um ein Drittel auf, dazu kommt der
-#: Rest der Nachricht -- ohne Grenze koennte ein einziger Aufruf den Arbeits-
-#: speicher fuellen.
-MAX_BODY_BYTES = MAX_UPLOAD_BYTES * MAX_UPLOADS * 4 // 3 + 1_000_000
-REQUEST_READ_TIMEOUT = 30.0  # maximale Inaktivitaet beim Lesen/Schreiben am Socket
 
-#: Endungen, die als Bild ans Vision-Modell gehen.
+
+
+MAX_BODY_BYTES = MAX_UPLOAD_BYTES * MAX_UPLOADS * 4 // 3 + 1_000_000
+REQUEST_READ_TIMEOUT = 30.0
+
+
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
-#: Server-Skripte werden nie angenommen (seit 9.5.18) -- auch nicht als
-#: "bild.php.png" oder in einer Schreibweise wie ".PhP5". Aquaticy fuehrt sie
-#: zwar nie aus, aber sie haben in einem Upload nichts verloren: landen sie
-#: spaeter auf einem Webserver, laufen sie dort.
+
+
+
+
 BLOCKED_UPLOAD_SUFFIXES = frozenset({
     ".php", ".php2", ".php3", ".php4", ".php5", ".php6", ".php7", ".php8", ".phtml",
     ".pht", ".phps", ".phar",
@@ -453,7 +453,7 @@ def blocked_upload(name: str) -> bool:
 _UPLOAD_TRENNER = re.compile(r"[.\s;:%$\x00-\x1f\x7f]+")
 
 
-#: Die ersten Bytes echter Bilddateien. Eine "Bild"-Datei ohne sie ist keine.
+
 _IMAGE_MAGIC = (
     (b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
     (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif"), (b"BM", "image/bmp"),
@@ -477,26 +477,26 @@ def looks_like_image(data: bytes) -> bool:
     return bool(image_mime(data))
 
 
-#: Endungen, deren Inhalt direkt als Text taugt.
+
 TEXT_TYPES = {".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml"}
 
-#: So viele hochgeladene Dateien bleiben liegen. Bilder muessen als Datei auf
-#: der Platte stehen, damit das Vision-Modell sie ansehen kann -- ohne Grenze
-#: waere der Ordner nach einem Jahr Nutzung voller alter Fotos.
+
+
+
 KEEP_UPLOADS = 50
 
-#: So viel Text uebernimmt aquaticy aus einer hochgeladenen Datei. Mehr wuerde
-#: das Kontextfenster sprengen, bevor die Recherche ueberhaupt anfaengt.
+
+
 MAX_FILE_CHARS = 20_000
 
-#: Zugangswort fuer den Netzbetrieb. Leer = kein Schutz (nur lokal sinnvoll).
-#: Wird von :func:`serve` gesetzt.
+
+
 TOKEN: str = ""
 
-#: Name des Cookies, in dem der Browser das Zugangswort behaelt.
+
 TOKEN_COOKIE = "aquaticy_token"
 
-#: Wird gezeigt, wenn jemand ohne gueltiges Zugangswort anklopft.
+
 DENIED_PAGE = """<!doctype html><html lang="de"><meta charset="utf-8">
 <title>Aquaticy AI</title>
 <link rel="icon" type="image/png" href="/favicon-32.png">
@@ -509,10 +509,10 @@ DENIED_PAGE = """<!doctype html><html lang="de"><meta charset="utf-8">
 Start im Terminal steht &mdash; die mit <code>?token=</code> am Ende.</p>
 </div></body></html>"""
 
-#: Was Nutzer bei einem technischen Fehler lesen (9.6.8 Sol) -- nie den Fehler selbst.
+
 GENERIC_ERROR = "Bei Aquaticy ist etwas schiefgelaufen. Versuch es gleich noch einmal."
-#: Woran ein technischer Fehlertext zu erkennen ist: Fehlernamen aus Python
-#: oder Bibliotheken, Statuscodes, Stapel, Systemfehlernummern.
+
+
 _TECHNISCH = re.compile(
     r"\b[A-Z][A-Za-z]*(?:Error|Exception|Warning)\b|Traceback|\bErrno\b|"
     r"\b(?:HTTP|Fehler|Status|status code|code|Antwort)\s*\(?\d{3}\b|\(\d{3}\)|"
@@ -532,7 +532,7 @@ def public_error(text: str) -> str:
     return wert
 
 
-#: Was Python und Bibliotheken als ValueError werfen -- englisch und technisch.
+
 _BIBLIOTHEK = re.compile(
     r"invalid literal|could not convert|codec can't|values to unpack|math domain|"
     r"substring not found|not in list|does not match format|unconverted data|"
@@ -594,74 +594,74 @@ a{{display:inline-block;background:var(--accent);color:#fff;text-decoration:none
 AUTH_COOKIE = "aquaticy_session"
 CONSENT_COOKIE = "aquaticy_consent"
 AUTH: AuthStore | None = None
-#: Ai-guard: erkennt Missbrauch über mehrere Chats und sperrt (9.5.16 Lion).
+
 AIGUARD: Any = None
-#: Der Server-Verbund (seit 9.6.1, aquaticy/cluster.py) -- None ohne Konten.
+
 CLUSTER: Any = None
-#: Der laufende HTTP-Server (fuer den Neustart nach dem Beitritt zu einem Verbund).
+
 SERVER: Any = None
-#: Serverlast aufteilen (10.2.0 Luna, aquaticy/sharding.py) -- None ohne Verbund.
+
 SHARDING: Any = None
-#: Die eigene Website (11.1.0): Domain, Zertifikat, Tunnel -- oder None.
+
 WEBSITE: Any = None
-#: Der Eingang fuer den Cloudflare-Tunnel (nur 127.0.0.1) -- oder None.
+
 PUBLIC_SERVER: Any = None
-#: Mit eigener Domain nimmt der normale Eingang nur Heimnetz, Tailscale und den
-#: Rechner selbst an (11.1) -- von aussen geht es ueber die Domain.
+
+
 LAN_ONLY = False
-#: Auto-Upgrading (10.0 Luna): Datenordner des Servers und Hintergrund-Faden.
-#: None ausserhalb von `aquaticy web` (Tests, Kommandozeile) -- dann ist es aus.
+
+
 UPGRADE_DIR: Path | None = None
 UPGRADER: Any = None
 _CLUSTER_RESTART = threading.Event()
-#: Diese Pfade bedient jeder Server selbst, auch im Verbund: Anmeldung,
-#: Zustimmung, Logo, Rechtstexte und die Verbund-Einstellungen dieses Servers.
+
+
 CLUSTER_LOCAL = frozenset({"/api/auth/status", "/api/auth/login", "/api/auth/register",
                            "/api/auth/logout", "/api/auth/challenge", "/api/consent",
                            "/api/cluster"})
 
-#: Was ein gesperrtes Konto noch schicken darf (9.5.26): abmelden, das Design
-#: aendern, einen Lauf anhalten und die eigenen Chats ansehen, umbenennen oder
-#: loeschen. Alles andere -- Chat, virtual machine, Add-ons, Auftraege, Befehle,
-#: Einstellungen -- ist waehrend der Sperre zu.
+
+
+
+
 POST_WHEN_BANNED = frozenset({
     "/api/auth/logout", "/api/auth/login", "/api/auth/register", "/api/consent",
     "/api/prefs", "/api/stop", "/api/clear", "/api/open", "/api/chat-edit",
-    # Das eigene Konto verwalten geht immer -- auch gesperrt (9.5.32).
+
     "/api/account/delete", "/api/account/wipe", "/api/account/password",
     "/api/account/logout-all", "/api/account/events-seen",
-    "/api/learning",  # withdrawal must remain available to suspended accounts
+    "/api/learning",
 })
-#: Konto verwalten (9.5.32): Daten loeschen, Konto loeschen, Passwort, Sitzungen.
+
 ACCOUNT_ROUTES = frozenset({
     "/api/account/delete", "/api/account/wipe", "/api/account/password",
     "/api/account/logout-all", "/api/account/events-seen",
 })
-#: Das Wort, das man zum Loeschen des Kontos eintippt.
+
 DELETE_WORD = "LÖSCHEN"
 AUTH_LIMIT = RateLimiter(attempts=8, window_seconds=60)
-#: Fehlversuche je Konto (seit 9.5.22). AUTH_LIMIT zaehlt je Adresse -- wer
-#: von vielen Adressen aus EIN Konto durchprobiert, faellt erst hier auf.
+
+
 LOGIN_FAILS = RateLimiter(attempts=10, window_seconds=15 * 60)
-#: Anmeldeschutz gegen Bots (12.0.0 Terra, aquaticy/botguard.py): Fehlversuche je
-#: Client (Adresse, Geraete-Kennung) und die Sperren nach "abgewiesen".
+
+
 BOT_FAILS = botguard.Failures()
 BOT_BANS = botguard.Bans()
-#: So gross darf eine Anmeldung, Registrierung oder Zustimmung hoechstens sein.
+
 AUTH_BODY_BYTES = 16_384
 REQUEST_LIMIT = RateLimiter(attempts=240, window_seconds=60)
-#: Obergrenze je Adresse ueber alle Konten (9.6.8 Sol). REQUEST_LIMIT zaehlt
-#: angemeldete Anfragen je KONTO -- sonst teilten sich alle Nutzer hinter
-#: einem Router (Familie, Buero, NAT) dieselben 240 und sperrten sich
-#: gegenseitig aus. Diese Grenze haelt trotzdem jede einzelne Adresse auf,
-#: die mit vielen Konten oder erfundenen Cookies flutet -- sie wird vor dem
-#: Nachschlagen der Sitzung geprueft und kostet nur einen Zaehler.
+
+
+
+
+
+
 ADDRESS_LIMIT = RateLimiter(attempts=1200, window_seconds=60)
-#: Schluessel testen, je Konto: genug, um einen neuen Schluessel ein paarmal zu
-#: probieren -- zu wenig, um den Server als Pruefstelle fuer fremde Schluessel
-#: zu missbrauchen (jeder Test ist eine Anfrage beim Anbieter).
+
+
+
 KEY_TEST_LIMIT = RateLimiter(attempts=10, window_seconds=60)
-#: Einladungen im Verbund kommen ohne Schluessel -- also knapp (9.6.1).
+
 CLUSTER_HELLO_LIMIT = RateLimiter(attempts=30, window_seconds=60)
 
 _STRING_SETTINGS = {
@@ -714,9 +714,9 @@ _INT_SETTINGS = {
 }
 
 
-#: So gross darf das Kontextfenster lokaler Modelle bei normalen Konten sein.
+
 NORMAL_CONTEXT_CAP = 32_768
-#: Wie ein Modellname aussehen darf, nach dem die Oberflaeche fragt.
+
 _MODELL_RE = re.compile(r"^[A-Za-z0-9_.:/@+-]{1,200}$")
 
 
@@ -771,14 +771,14 @@ def header_for(settings: Settings) -> dict[str, Any]:
         from aquaticy.system import model_usable
 
         modell = str(kopf.get("model") or "")
-        # Ein Wolkenmodell ohne Schluessel antwortet nicht (11.3.0 Luna) -- dann
-        # steht oben nicht das voreingestellte Mistral, sondern "Modell wählen".
-        # Lokale Modelle prueft die Auswahl beim Oeffnen; hier kein Netz.
+
+
+
         if modell and not local_name(modell) and not model_usable(settings, modell):
             auto = str(kopf.get("model_label") or "").startswith("Auto · ")
             kopf["model_label"] = ("Auto · " if auto else "") + "Modell wählen"
     if UPGRADE_DIR is not None:
-        # Auto-Upgrading: "gemma3:4b 1.1" statt "aquaticy-gemma3-4b:1.1".
+
         from aquaticy import upgrading
 
         with contextlib.suppress(Exception):
@@ -825,7 +825,7 @@ def system_gauges(data: dict[str, Any]) -> list[dict[str, Any]]:
     return anzeigen
 
 
-#: Wie die Rolle eines Servers im Verbund heisst (11.3.2 Sol).
+
 ROLE_LABELS = {"modelle": "Modelle und etwas Website", "website": "Nur Website"}
 
 
@@ -881,7 +881,7 @@ def usage_view(settings: Settings) -> dict[str, Any]:
                 "updated_at": jetzt, "updated_text": stand_um}
     try:
         stand = public(kontingent.status(jetzt))
-    except Exception:  # pragma: no cover - eine kaputte Datenbank ist kein 500
+    except Exception:  # pragma: no cover
         return {"limited": True, "error": "Der Verbrauch ließ sich nicht lesen.",
                 "summary": "nicht verfügbar", "updated_at": jetzt, "updated_text": stand_um}
     stand["updated_at"] = jetzt
@@ -924,9 +924,9 @@ def account_quota(profile: Path, account: Account | None = None) -> Any:
     return Quota(profile / "quota.sqlite3", getattr(account, "id", "") or profile.name, erstellt)
 
 
-#: Bilder, die ``/api/media?url=`` schon geholt hat: (Datenordner, Adresse) ->
-#: (Zeitpunkt, Bytes, Typ). Die Oberflaeche fragt dasselbe Bild beim
-#: Neuzeichnen und Wiederoeffnen eines Chats oft mehrmals an.
+
+
+
 _MEDIA_CACHE: OrderedDict[tuple[str, str], tuple[float, bytes, str]] = OrderedDict()
 _MEDIA_LOCK = threading.Lock()
 MEDIA_CACHE_TTL = 600.0
@@ -1030,8 +1030,8 @@ def client_ip(direkt: str, forwarded: str = "", real_ip: str = "") -> str:
     return direkt
 
 
-#: Was die laufende virtual machine festlegt -- aendert sich eines davon, wird sie
-#: neu aufgebaut (siehe ChatSession.reload).
+
+
 WORKSHOP_FIELDS: tuple[str, ...] = (
     "vm_size", "vm_image", "vm_idle_minutes", "vm_memory_mb", "vm_disk_gb", "vm_cpus",
     "vm_user_mode", "vm_internet", "vm_lan", "vm_desktop_image", "user_agent", "data_dir",
@@ -1086,8 +1086,8 @@ def _resume(agent: Any, session_id: str, entries: list[Any], untrusted: bool) ->
         if toolbox is not None and untrusted:
             with contextlib.suppress(Exception):
                 toolbox.untrusted_seen = True
-    # Was im Rueckfrage-Fenster geklaert wurde (Ort, Zeitraum ...), gilt nach dem
-    # Wiederoeffnen weiter (11.4.0 Luna).
+
+
     merken = getattr(agent, "remember_clarified", None)
     if callable(merken):
         for entry in entries:
@@ -1159,22 +1159,22 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         api_keys=dict(base.api_keys),
         search_keys=dict(base.search_keys),
     )
-    # Ohne ${VAR}-Ersetzung (config.read_env_file): sonst holte ein Wert wie
-    # "${MISTRAL_API_KEY}" einen Schluessel des Servers in dieses Konto.
+
+
     raw = read_env_file(settings.env_path)
-    # Home Assistant des Betreibers bekommt ein Konto nie (9.6.9 Luna): sonst
-    # schickte der Verbindungstest dessen Token an eine Adresse des Kontos.
+
+
     settings.ha_url = ""
     settings.ha_token = ""
-    # Die Leitplanken gelten fuer jedes Konto, bis es sie SELBST abschaltet
-    # (10.1.4): ein "aus" in der .env des Betreibers galt sonst fuer jedes
-    # Ultra-Konto mit, das nie etwas eingestellt hatte.
+
+
+
     settings.legal_guard = True
     for key, attr in _STRING_SETTINGS.items():
         if key in raw:
             setattr(settings, attr, raw[key].strip())
-    # The shared OAuth application remains usable, but an account's own
-    # client ID must never be paired with the operator's application secret.
+
+
     if settings.google_client_id != base.google_client_id:
         settings.google_client_secret = ""
     for key, attr in _BOOL_SETTINGS.items():
@@ -1185,11 +1185,11 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
             with contextlib.suppress(ValueError):
                 setattr(settings, attr, int(raw[key]))
     if "AQUATICY_LEGAL_GUARD" in raw:
-        # Nicht ueber _BOOL_SETTINGS: dort waere jeder Tippfehler "aus".
+
         settings.legal_guard = guard_on(raw["AQUATICY_LEGAL_GUARD"])
-    # Die eigenen API-Schluessel des Kontos (9.5.14 Seashell): aus seinem
-    # Schluesselbund, verschluesselt, an der Kennung des Kontos. Schluessel,
-    # die frueher in der .env des Profils standen, wandern einmal hinein.
+
+
+
     from aquaticy.keyvault import SEARCH_KEY_NAMES
 
     tresor = account_vault(profile, account)
@@ -1198,9 +1198,9 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
     for name, wert in eigene.items():
         (settings.search_keys if name in SEARCH_KEY_NAMES else settings.api_keys)[name] = wert
     settings.own_key_names = frozenset(eigene)
-    # Das GitHub-Token des Kontos liegt verschluesselt im Schluesselbund (seit
-    # 9.5.16) -- ein altes aus der .env wandert einmal hinein. Das Token des
-    # Betreibers bekommt ein Konto nie: es koennte dessen private Repos lesen.
+
+
+
     from aquaticy.addons import GITHUB_TOKEN_KEY
 
     settings.secret_vault = tresor
@@ -1215,8 +1215,8 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         settings.github_token = tresor.secret(GITHUB_TOKEN_KEY)
     except Exception:
         settings.github_token = ""
-    # Home-Assistant-Token und Google-Geheimnis ebenso (9.5.34): ein altes aus
-    # der .env wandert einmal in den Schluesselbund und verschwindet dort.
+
+
     for name, attr in (("HA_TOKEN", "ha_token"), ("GOOGLE_CLIENT_SECRET", "google_client_secret")):
         with contextlib.suppress(Exception):
             alt = raw.get(name, "").strip()
@@ -1229,24 +1229,24 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
             if gespeichert:
                 setattr(settings, attr, gespeichert)
     _bind_ha_token(settings, tresor)
-    # Den Such-Schluessel des Betreibers teilt ein normales Konto nur bei der
-    # Suchmaschine, die der Betreiber selbst gewaehlt hat (seit 9.5.16).
+
+
     settings.account_email = str(getattr(account, "email", "") or "")
     settings.operator_search_backends = (
         None if plan == "ultra" else frozenset({(base.search_backend or "").lower()}))
-    # Eine Modell-Adresse, die das Konto selbst eingetragen hat (nur Ultra, s.u.).
+
     eigene_adresse = raw.get("AQUATICY_API_BASE", "").strip()
     settings.own_api_base = (
         eigene_adresse if plan == "ultra" and eigene_adresse
         and eigene_adresse != (base.api_base or "") else ""
     )
-    # Die Adresse des Betreibers gilt fuer SEIN Modell, nicht fuer das, das
-    # dieses Konto waehlt (Settings.route).
+
+
     settings.api_base_for = base.model
     if plan != "ultra":
-        # Netz-Features (Heimnetz, Home Assistant, Lager, Desktop der virtual machine)
-        # gehören seit 9.5.17 nur noch zu Ultra -- Normal UND Pro sind hier
-        # gleich beschränkt. Der Unterschied ist das Kontingent (Pro hat mehr).
+
+
+
         settings.lan_enabled = False
         settings.ha_url = ""
         settings.ha_token = ""
@@ -1258,21 +1258,21 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         settings.vm_cpus = 1
         settings.vm_memory_mb = 1024
         settings.vm_disk_gb = 4
-        # Die Rechts-Leitplanken lassen sich nur mit Ultra abschalten (seit
-        # 9.5.17 auch Pro nicht mehr). Steht in der .env trotzdem "aus", gilt
-        # hier "an".
+
+
+
         settings.legal_guard = True
         settings.vm_user_mode = False
-        # Seit 9.6.0: Normal und Pro haben in der virtual machine GAR KEIN Netz --
-        # weder Internet noch das lokale Netz (9.5.34 war es "immer Internet").
-        # Netz in der virtual machine gibt es nur mit Ultra.
+
+
+
         settings.vm_internet = False
         settings.vm_lan = False
-        # 5-Stunden-Sitzung und Woche, am Konto gespeichert (aquaticy/quota.py).
-        # Pro bekommt über AUTH.quota() seine eigenen, höheren Grenzen.
+
+
         settings.quota = account_quota(profile, account)
-        # Wohin der Server Anfragen schickt, bestimmt der Betreiber -- eine
-        # eigene Modell- oder SearXNG-Adresse gibt es nur mit Ultra.
+
+
         settings.api_base = base.api_base
         settings.searxng_url = base.searxng_url
         obergrenze = max(int(base.context_tokens or 0), NORMAL_CONTEXT_CAP)
@@ -1282,7 +1282,7 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     return settings
 
-#: Dieselbe Uebersicht wie `/help` im Terminal, nur als Markdown.
+
 HELP_MARKDOWN = """### Befehle
 
 - `/location <ort>` — Ortsfilter fuer diese Sitzung (leer = aufheben)
@@ -1308,46 +1308,48 @@ Dauerhaft aendern lassen sich Modell, Suche und Ort oben unter **Einstellungen**
 class ChatSession:
     """Haelt einen Chat-Agenten und serialisiert die Anfragen dieses Chats."""
 
-    #: So lange wartet eine Rueckfrage auf eine Antwort. Laenger nicht: der
-    #: Agent haelt derweil die Sitzung besetzt, und wer den Tab zumacht, soll
-    #: sie nicht dauerhaft blockieren.
+
+
+
     ANSWER_TIMEOUT = 180.0
 
     def __init__(self, account: Account | None = None, profile: Path | None = None) -> None:
         self._lock = threading.Lock()
-        # Erstaufbau und Austausch des Agenten duerfen sich nicht ueberholen.
-        # Die Turn-Sperre ist hier ungeeignet: ask() haelt sie bereits.
+
+
         self._agent_lock = threading.RLock()
         self._agent: Any = None
         self._settings: Settings | None = None
         self.account = account
         self.profile = profile
         self.runs = RunBook()
-        #: Antworten auf Rueckfragen. Nur eine Anfrage laeuft gleichzeitig,
-        #: deshalb genuegt eine Schlange fuer die ganze Sitzung.
+
+
         self._answers: queue.Queue[str] = queue.Queue()
-        #: Wartet gerade eine Rueckfrage auf Antwort (12.4.5 Sol)? Nur dann zaehlt eine
-        #: Antwort -- und nur eine je Frage. Vorher landete jede Antwort waehrend eines
-        #: Laufs in der Schlange: ein doppelt geschicktes "ja" oder eine verspaetete
-        #: Antwort beantwortete still die naechste Frage derselben Reihe (1/3, 2/3 ...).
+
+
+
+
         self._frage_offen = False
         self._frage_lock = threading.Lock()
-        #: Eine Einstellung wurde im Gespraech geaendert -- nach dem Durchlauf
-        #: wird der Agent neu gebaut.
+
+
         self._reload_after = False
-        #: Beim verschobenen Neuaufbau (9.5.34): die virtual machine mit neu bauen?
+
         self._reload_workshop = False
-        #: ... und die Einstellungen von vor dem Speichern, zum Vergleich.
+
         self._reload_old: Settings | None = None
-        #: Der Chat, in den ein neu gebauter Agent zurueckkehren soll. Leer
-        #: heisst: neuer Chat.
+
+
         self._carry_over = ""
-        #: Hatte der abgebaute Agent schon fremden Text gelesen? (seit 9.5.16)
+
         self._carry_untrusted = False
-        # Jede Unterhaltung hat ihren eigenen Agenten, Lauf und Rueckfragen.
+
         self._owner = self
         self._chat_lock = threading.RLock()
         self._chat_sessions: dict[str, ChatSession] = {}
+        self._qr_lock = threading.Lock()
+        self._qr_login: tuple[str, str, float] = ("", "", 0.0)
         self._selected = self
 
     def chat_sessions(self) -> list[ChatSession]:
@@ -1382,7 +1384,7 @@ class ChatSession:
             for session in self.chat_sessions():
                 if session.chat_id() == chat_id:
                     return session
-            # Nur Verlaeufe dieses Kontos duerfen wieder geoeffnet werden.
+
             cache = Cache(self.settings().db_path, self.settings().cache_ttl_hours)
             entries = cache.chat_history(chat_id)
             if not entries:
@@ -1393,7 +1395,7 @@ class ChatSession:
                           ) -> ChatSession:
         owner = self._owner
         with owner._chat_lock:
-            # Begrenzter Speicher; laufende Agenten niemals abbauen.
+
             for key, session in list(owner._chat_sessions.items()):
                 if len(owner._chat_sessions) < 16:
                     break
@@ -1420,7 +1422,7 @@ class ChatSession:
             last = book.latest()
             if not owner._chat_sessions and not current.has_running_chat() and not (
                     last is not None and last.resumable):
-                # Bestehende Adapter und der erste Chat behalten ihren Agenten.
+
                 if chat_id:
                     data = current.open_chat(chat_id)
                 else:
@@ -1456,7 +1458,7 @@ class ChatSession:
             )
             self._upgrade_gen = -1
         if UPGRADE_DIR is not None:
-            # Also recheck time-based grace and consent changes without a release.
+
             from aquaticy import upgrading
 
             directory = UPGRADE_DIR
@@ -1472,8 +1474,8 @@ class ChatSession:
                 value = getattr(self._settings, field)
                 if value and (field == "model" or not upgrading.allowed(
                         directory, value, self.ultra)):
-                    # A missing model must not prevent opening settings to repair
-                    # its selection. The call-time check still denies its use.
+
+
                     with contextlib.suppress(upgrading.UpgradeError):
                         setattr(self._settings, field, upgrading.resolve(
                             directory, value, self.ultra,
@@ -1482,7 +1484,7 @@ class ChatSession:
 
     @property
     def plan(self) -> str:
-        # Ohne Konto (eigener Rechner) hat man vollen Zugriff -- wie Ultra.
+
         return self.account.plan if self.account is not None else "ultra"
 
     @property
@@ -1506,8 +1508,8 @@ class ChatSession:
                 from aquaticy.learning import Learning
 
                 agent.learning = Learning(settings.data_dir)
-                # Nach Modellwechsel denselben Chat samt Vertrauensgrenze
-                # wiederherstellen, bevor andere Anfragen den Agenten sehen.
+
+
                 if self._carry_over:
                     weiter, self._carry_over = self._carry_over, ""
                     vorher_fremd, self._carry_untrusted = self._carry_untrusted, False
@@ -1586,9 +1588,9 @@ class ChatSession:
                 if session is not self:
                     session.reload(workshop, _peers=False)
         if self.busy():
-            # Waehrend einer Antwort nicht auf ihr Ende warten (9.5.34: das
-            # Speichern hing sonst bis zu Minuten). Neu gebaut wird danach;
-            # gelesen werden die neuen Einstellungen schon jetzt.
+
+
+
             if self._reload_old is None:
                 self._reload_old = self._settings
             self._reload_workshop = self._reload_workshop or workshop
@@ -1603,8 +1605,8 @@ class ChatSession:
             self._reload_old, self._reload_workshop = None, False
             if self._agent is not None:
                 self._carry_over = str(getattr(self._agent, "session_id", ""))
-                # Was der alte Agent schon gelesen hat, gilt fuer den neuen
-                # weiter (seit 9.5.16 -- vorher ging es beim Neuaufbau verloren).
+
+
                 self._carry_untrusted = bool(getattr(
                     getattr(self._agent, "toolbox", None), "untrusted_seen", False))
                 with contextlib.suppress(Exception):
@@ -1613,17 +1615,17 @@ class ChatSession:
             self._settings = None
             if self.profile is None:
                 reset_settings_cache()
-            # Die virtual machine nur neu aufbauen, wenn sich an IHR etwas geaendert
-            # hat (seit 9.5.16). Bis dahin loeschte jede gespeicherte
-            # Einstellung -- schon ein anderes Modell in der Auswahl -- die
-            # laufende virtual machine samt allem, was unter /work lag.
+
+
+
+
             with contextlib.suppress(Exception):
                 from aquaticy.sandbox import forget_shared
 
                 if (workshop or old_settings is None
                         or workshop_changed(old_settings, self.settings())):
                     forget_shared(old_settings)
-            # Frisch gelesen wird erst beim naechsten Gebrauch -- wie bisher.
+
             self._settings = None
 
     def _settings_dirty(self) -> None:
@@ -1677,8 +1679,8 @@ class ChatSession:
         Das abschliessende "done" kommt vom Agenten selbst -- hier noch eines
         zu senden wuerde die Oberflaeche zweimal abschliessen lassen.
         """
-        # Im Netzbetrieb sitzen mehrere Geraete an derselben Sitzung. Wer
-        # wartet, soll das sehen und nicht vor einem stummen Fenster sitzen.
+
+
         reload_after = False
         if self.busy():
             emit(
@@ -1700,8 +1702,8 @@ class ChatSession:
                 previous_agent_limit = getattr(agent, "_agent_limit_override", None)
                 try:
                     def melden(name: str, payload: dict[str, Any]) -> None:
-                        # Die Frage gilt als offen, BEVOR der Browser sie sieht -- sonst
-                        # koennte eine sehr schnelle Antwort zu frueh kommen.
+
+
                         if name == "ask":
                             with self._frage_lock:
                                 self._frage_offen = True
@@ -1709,14 +1711,14 @@ class ChatSession:
 
                     agent.on_event = melden
                     agent.toolbox.on_event = agent.on_event
-                    # Aendert Aquaticy im Gespraech eine Einstellung, muss der Agent
-                    # danach neu gebaut werden -- sonst arbeitet die naechste Frage
-                    # noch mit den alten Werten weiter.
+
+
+
                     agent.toolbox.on_settings_changed = self._settings_dirty
                     agent.set_ask_handler(self._ask_browser)
                     agent._agent_limit_override = agents
-                    # Plugins im Chat (11.0.0 Luna): "/code-review ...", "/github ..."
-                    # gilt fuer genau diese Nachricht (aquaticy/plugins.py).
+
+
                     plugin = None
                     plugin_prompt = ""
                     if message.startswith("/") and not message.startswith("/image"):
@@ -1726,7 +1728,7 @@ class ChatSession:
                     if plugin is not None:
                         mode = plugin.mode or mode
                         structured, recheck = False, False
-                        # Ein Plugin beobachtet keine Webcams.
+
                         visual_sources = False
                         if plugin.online is not None:
                             online = plugin.online
@@ -1750,7 +1752,7 @@ class ChatSession:
                         plugin_prompt = plugin_mod.prompt(
                             plugin, "\n\n".join(t for t in (context, auftrag) if t),
                             self.settings(), self.ultra)
-                        # Die Rechtspruefung sieht wie sonst auch den Anhang.
+
                         message = f"{context}\n\n{message}" if context else message
                     elif message.startswith("/image"):
                         message = self._image_question(agent, message)
@@ -1760,15 +1762,15 @@ class ChatSession:
                                 agent, mode, sandbox
                             )
                         )
-                        # Abgegrenzt und gesaeubert (9.5.22): ein Anhang spricht
-                        # nicht mit der Stimme des Nutzers.
+
+
                         if context:
                             from aquaticy.injection import wrap_attachment
 
                             context = wrap_attachment(context)
                         message = f"{context}\n\n{message}" if context else message
-                        # Ein Anhang ist fremder Text wie eine Webseite (seit
-                        # 9.5.16): ein PDF aus dem Netz kann Anweisungen tragen.
+
+
                         if context and getattr(agent, "toolbox", None) is not None:
                             agent.toolbox.untrusted_seen = True
                     ask_options = {
@@ -1776,15 +1778,15 @@ class ChatSession:
                         "recheck": recheck, "effort": effort, "online": online,
                         "sandbox": sandbox,
                     }
-                    # Testadapter und ältere Erweiterungen kennen den neuen
-                    # Schalter noch nicht. Der eingebaute Agent bekommt ihn
-                    # ausdrücklich; fremde Agenten behalten ihre Signatur.
+
+
+
                     from aquaticy.agent import Agent as BuiltinAgent
                     if isinstance(agent, BuiltinAgent):
                         ask_options["visual_sources"] = visual_sources
                         if plugin_prompt:
                             ask_options["plugin_prompt"] = plugin_prompt
-                        # Sprache aus dem Design-Fenster (9.5.25).
+
                         with contextlib.suppress(Exception):
                             from aquaticy.uistate import UIState
 
@@ -1799,12 +1801,12 @@ class ChatSession:
                     if self._reload_after:
                         self._reload_after = False
                         reload_after = True
-                    # Der Handler bleibt bestehen -- das Werkzeug soll auch in der
-                    # naechsten Runde angeboten werden.
+
+
         finally:
-            # `reload()` nimmt dieselbe Sperre. Es darf daher erst laufen, nachdem
-            # der Turn sie freigegeben hat -- auch wenn der Agent mit einem Fehler
-            # endet.
+
+
+
             if reload_after or self._reload_after:
                 self._reload_after = False
                 self.reload()
@@ -1840,7 +1842,7 @@ class ChatSession:
         except queue.Empty:
             return ""
         finally:
-            # Beantwortet oder aufgegeben: eine spaetere Antwort gehoert zu keiner Frage.
+
             with self._frage_lock:
                 self._frage_offen = False
 
@@ -1903,10 +1905,10 @@ class ChatSession:
                 continue
             emit("upload", {"name": name, "bytes": len(data)})
             block = self._one_attachment(agent, name, data)
-            # Ist die virtual machine an, landet die Datei zusaetzlich unveraendert
-            # darin. Sonst koennte das Modell ueber ein Bild reden, es aber
-            # nicht oeffnen -- und ein Zip oder eine CSV waere gar nicht erst
-            # angekommen.
+
+
+
+
             gelegt = self._into_workshop(name, data) if workshop else ""
             if gelegt:
                 block += f"\n[Liegt in der virtual machine unter {gelegt}]"
@@ -1924,7 +1926,7 @@ class ChatSession:
 
         if len(data) > MAX_FILE_BYTES:
             return ""
-        # Die virtual machine nimmt nur ASCII-Pfade; "Übung.txt" waere sonst raus.
+
         schlicht = "".join(
             zeichen if zeichen.isascii() and (zeichen.isalnum() or zeichen in "-_.") else "_"
             for zeichen in name
@@ -1933,7 +1935,7 @@ class ChatSession:
         from aquaticy import sandbox as werkstatt
 
         try:
-            # Serverarbeit zaehlt ins Kontingent -- auch mit eigenem Schluessel.
+
             metering.check_work(self.settings(), "datei")
             antwort = werkstatt.shared(self.settings()).put_bytes(f"eingang/{schlicht}", data)
             if isinstance(antwort, dict) and antwort.get("written"):
@@ -1942,8 +1944,8 @@ class ChatSession:
         except metering.QuotaExceeded:
             return ""
         except Exception:
-            # Ohne virtual machine geht die Datei trotzdem an das Modell -- aber
-            # nicht still: das Protokoll sagt, warum sie dort nicht liegt.
+
+
             logging.getLogger("aquaticy.web").warning(
                 "Anhang nicht in die virtual machine gelegt", exc_info=True)
         return ""
@@ -1951,16 +1953,16 @@ class ChatSession:
     def _one_attachment(self, agent: Any, name: str, data: bytes) -> str:
         """Liest eine einzelne Datei aus -- je nach Art auf ihrem eigenen Weg."""
         suffix = Path(name).suffix.lower()
-        # Eine angehaengte Datei haengt am Nachrichtentext und wird deshalb
-        # beim Kuerzen als letztes angetastet. Umso wichtiger, dass sie von
-        # vornherein nicht mehr Platz nimmt, als das Fenster hergibt.
+
+
+
         limit = min(MAX_FILE_CHARS, agent.blob_limit()) if hasattr(agent, "blob_limit") else (
             MAX_FILE_CHARS
         )
 
         if suffix in IMAGE_TYPES:
             if not looks_like_image(data):
-                # Eine Datei, die sich nur als Bild ausgibt (z. B. Skript mit .png).
+
                 return f"[Bild {name}: keine gültige Bilddatei – nicht angenommen]"
             try:
                 path = self._store(name, data)
@@ -1998,10 +2000,10 @@ class ChatSession:
 
         folder = self.settings().data_dir / "uploads"
         folder.mkdir(parents=True, exist_ok=True)
-        # Uploads zaehlen zum gemeinsamen 400-MB-Deckel (aquaticy/budget.py).
+
         ensure_room(self.settings().data_dir, len(data))
         target = folder / f"{int(time.time() * 1000)}-{name}"
-        # Seit 9.5.32 verschluesselt -- das Vision-Modell liest ueber read_private.
+
         from aquaticy.privacy import write_private
 
         write_private(target, data, self.settings().data_dir)
@@ -2018,10 +2020,10 @@ class ChatSession:
             raise ValueError("Nutzung: /image pfad/zum/bild.jpg (oder ein Ordner)")
         target = Path(argument)
         if self.account is not None:
-            # Mit Konten sitzt am Browser nicht der Betreiber. Bis 9.5.12 las
-            # `/image` jede Datei, die der Server lesen kann -- auch die
-            # hochgeladenen Bilder anderer Konten -- und schickte sie ans
-            # Vision-Modell. Jetzt gilt nur der eigene Upload-Ordner.
+
+
+
+
             uploads = (self.settings().data_dir / "uploads").resolve()
             target = (uploads / target).resolve()
             if not target.is_relative_to(uploads):
@@ -2033,7 +2035,7 @@ class ChatSession:
             target = target.expanduser()
         image = resolve_image(target)
         if image.suffix.lower() not in IMAGE_SUFFIXES:
-            # Auch lokal: eine .env ist kein Bild und geht nicht ans Modell.
+
             raise ValueError(
                 f"{image.name} ist kein Bild ({', '.join(IMAGE_SUFFIXES)})."
             )
@@ -2058,8 +2060,8 @@ class ChatSession:
         with self._lock:
             if command == "help":
                 return {"text": HELP_MARKDOWN + self._plugin_help()}
-            # Ein Plugin ohne Text dahinter (11.0.0 Luna): wie es geht. Mit Text
-            # laeuft es ueber den Chat-Weg (ask), nicht hier.
+
+
             from aquaticy import plugins as plugin_mod
 
             plugin = plugin_mod.match(line, self.settings(), self.ultra)
@@ -2067,9 +2069,9 @@ class ChatSession:
                 return {"text": plugin_mod.usage(plugin.addon)}
 
             if command == "max":
-                # Allein getippt ist es keine Recherche, sondern eine Frage
-                # danach, was der Befehl tut. Mit Frage dahinter kommt er hier
-                # gar nicht erst an -- der laeuft ueber den Chat-Weg.
+
+
+
                 return {
                     "text": (
                         "**/max** stellt im **Pro-Modus** die volle Mannschaft auf: "
@@ -2235,7 +2237,7 @@ class ChatSession:
         if not files:
             return "Es liegt nichts Hochgeladenes herum."
         lines = "\n".join(
-            # Der Zeitstempel vorne im Dateinamen interessiert niemanden.
+
             f"- {item.name.split('-', 1)[-1]} ({human_size(item.stat().st_size)})"
             for item in files[-30:]
         )
@@ -2336,7 +2338,7 @@ class SessionRegistry:
         with self._lock:
             session = self._sessions.get(account.id)
             if session is None:
-                if AUTH is None:  # pragma: no cover - nur bei kaputtem Serverstart
+                if AUTH is None:  # pragma: no cover
                     return DEFAULT_SESSION
                 session = ChatSession(account, AUTH.profile_dir(account.id))
                 self._sessions[account.id] = session
@@ -2349,15 +2351,15 @@ class SessionRegistry:
 
 
 SESSIONS = SessionRegistry()
-#: Die Taktgeber der Coworker je Konto (11.0.0 Luna, aquaticy/coworker.py).
+
 USER_COWORKERS: dict[str, Any] = {}
-#: Die Hintergrundlaeufe der Messenger-Bruecke je Konto (12.6.6 Luna, aquaticy/bridge.py).
+
 USER_BRIDGES: dict[str, Any] = {}
-#: Die Bruecke ohne Konto (eigener Rechner).
+
 BRIDGE_RUNNER: Any = None
-#: Zwei Anmeldungen desselben Kontos koennen zeitgleich hereinkommen. Ohne
-#: Schloss startet dann jede ihren eigenen Taktgeber -- und jeder Auftrag
-#: liefe doppelt.
+
+
+
 _SCHEDULER_LOCK = threading.Lock()
 
 
@@ -2393,7 +2395,7 @@ def previous_user_message(session: Any) -> str:
         if isinstance(eintrag, dict) and eintrag.get("role") == "user":
             if not isinstance(eintrag.get("content"), str):
                 return ""
-            # Nachfass-Texte von Aquaticy selbst sind nicht "die vorige Frage".
+
             inhalt = own_words(eintrag.get("content"))
             if inhalt:
                 return inhalt[:2000]
@@ -2434,20 +2436,20 @@ def start_user_scheduler(account: Account) -> None:
     from aquaticy import coworker as coworker_mod
 
     with _SCHEDULER_LOCK:
-        # Das Kontingent steckt in den Einstellungen des Kontos (settings.quota).
-        # Waehrend einer Ai-guard-Sperre bleiben die Auftraege liegen (9.5.24).
+
+
         konto_id = account.id
 
         def ruht() -> bool:
-            # Im Verbund laeuft ein Auftrag nur auf dem Heimserver (9.6.1) --
-            # sonst liefe er auf jedem Server einmal.
+
+
             return (AIGUARD is not None
                     and AIGUARD.is_banned(user_id=konto_id) is not None) or (
                 CLUSTER is not None and not CLUSTER.is_home(konto_id))
 
         if account.id not in USER_COWORKERS:
-            # Coworker (11.0.0 Luna): nur mit Pro und Ultra -- die Stufe wird bei
-            # jedem Takt neu gelesen.
+
+
             kollegen = coworker_mod.Scheduler(
                 SESSIONS.get(account).settings,
                 plan=lambda: _plan_of(konto_id, account),
@@ -2482,9 +2484,9 @@ def _build_bridge_runner(get_session: Callable[[], Any], account: Any) -> Any:
         return get_session().settings()
 
     def ruht() -> bool:
-        # Die Bruecke gehoert zu Ultra -- die Stufe wird bei jedem Durchgang neu gelesen.
-        # Sie wartet, solange im Konto ein Chat laeuft (die virtual machine ist geteilt),
-        # waehrend einer Ai-guard-Sperre und im Verbund, wenn dies nicht der Heimserver ist.
+
+
+
         if account is not None:
             if _plan_of(account.id, account) != "ultra":
                 return True
@@ -2492,7 +2494,10 @@ def _build_bridge_runner(get_session: Callable[[], Any], account: Any) -> Any:
                 return True
             if CLUSTER is not None and not CLUSTER.is_home(account.id):
                 return True
-        return bool(get_session().has_running_chat())
+        session = get_session()
+        owner = getattr(session, "_owner", session)
+        return bool(workshop_busy(session)
+                    or getattr(owner, "_qr_login", ("", "", 0.0))[2] > time.monotonic())
 
     def treiber(messenger: str) -> Any:
         settings = einstellungen()
@@ -2618,8 +2623,8 @@ def forget_account_runtime(account: Account) -> None:
     if bruecke is not None:
         _stop_bridge(bruecke)
     sitzung = SESSIONS.drop(account.id)
-    # Die virtual machines seiner Coworker gehen mit (11.0.0 Luna) -- ohne die
-    # Einstellungen neu zu bauen, das legte Ordner wieder an.
+
+
     with contextlib.suppress(Exception):
         from aquaticy import coworker as coworker_mod
 
@@ -2629,8 +2634,8 @@ def forget_account_runtime(account: Account) -> None:
         if ordner is not None:
             coworker_mod.stop_boxes(ordner)
     if sitzung is not None:
-        # Einen laufenden Chat erst anhalten und sein Ende abwarten (9.5.34):
-        # sonst schrieb er nach dem Loeschen den Verlauf wieder auf die Platte.
+
+
         chats = sitzung.chat_sessions()
         for chat in chats:
             with contextlib.suppress(Exception):
@@ -2653,13 +2658,13 @@ def ui_state() -> Any:
 
     return UIState(SESSION.settings().db_path)
 
-#: Der Taktgeber fuer die Auftraege. Wird beim Start gesetzt; im Test laeuft
-#: kein Server und damit auch keiner.
-#: Coworker ohne Konto (eigener Rechner) -- wie Ultra.
+
+
+
 COWORKER_SCHEDULER: Any = None
 
 
-#: Die Modellfelder mit ihrem Namen fuer "Eigene Modelle" (9.5.17).
+
 OWN_MODEL_FIELDS = (
     ("AQUATICY_MODEL", "model", "Hauptmodell"),
     ("AQUATICY_VISION_MODEL", "vision_model", "Bilder"),
@@ -2679,7 +2684,7 @@ def own_models(settings: Any) -> list[dict[str, str]]:
         return []
     try:
         basis = get_settings()
-    except Exception:  # pragma: no cover - ohne Grundeinstellung nichts vergleichen
+    except Exception:  # pragma: no cover
         return []
     eigene = []
     for feld, attr, name in OWN_MODEL_FIELDS:
@@ -2709,9 +2714,9 @@ def current_values() -> dict[str, str]:
         "AQUATICY_MAX_SUBAGENTS": str(settings.max_subagents),
         "AQUATICY_SUBAGENT_BUDGET": str(settings.subagent_budget),
         "AQUATICY_SUBAGENT_PARALLEL": str(settings.subagent_parallel),
-        # Leer heisst: was der Anbieter im Freikontingent vertraegt. Der
-        # eingetragene Wert gilt dagegen fuer alle Anbieter -- deshalb steht
-        # er hier so, wie er in der .env steht, und nicht als Vorgabewert.
+
+
+
         "AQUATICY_RPM": str(settings.rpm) if settings.rpm else "",
         "AQUATICY_PARALLEL_CALLS": str(settings.parallel_calls) if settings.parallel_calls else "",
         "AQUATICY_MAX_TOOL_CALLS": str(settings.max_tool_calls),
@@ -2791,7 +2796,7 @@ def google_state(settings: Settings) -> dict[str, Any]:
     return {
         "enabled": settings.google_enabled,
         "write": settings.google_write,
-        # Hat Google das Aendern wirklich erlaubt (12.5.6 Sol)? None = unbekannt.
+
         "write_granted": None if erlaubt is None else all(erlaubt),
         "has_id": bool(settings.google_client_id),
         "has_secret": bool(settings.google_client_secret),
@@ -2800,15 +2805,15 @@ def google_state(settings: Settings) -> dict[str, Any]:
     }
 
 
-#: Offene Google-Anmeldungen (seit 9.5.15): state -> (Konto, Ablauf). Jeder
-#: state gilt einmal, zehn Minuten lang, und nur fuer das Konto, das die
-#: Anmeldung begonnen hat. Ohne ihn konnte jemand einem angemeldeten Opfer
-#: seinen eigenen Google-Code unterschieben (Login-CSRF): dann laese Aquaticy
-#: im Konto des Opfers die Mails des Angreifers -- oder umgekehrt.
+
+
+
+
+
 _GOOGLE_STATES: dict[str, tuple[str, float, str]] = {}
-#: Bindet eine Google-Anmeldung an den Browser, der sie begonnen hat (9.6.9 Luna).
-#: SameSite=Lax, weil das Sitzungscookie (Strict) beim Ruecksprung von Google
-#: nicht mitkommt; nur fuer /google, nur zehn Minuten, nur einmal.
+
+
+
 GOOGLE_FLOW_COOKIE = "aquaticy_google_flow"
 _GOOGLE_STATES_LOCK = threading.Lock()
 GOOGLE_STATE_SECONDS = 600.0
@@ -2956,8 +2961,8 @@ def save_values(payload: dict[str, Any]) -> Path:
         raise ValueError(
             "Der User mode (virtual machine mit Desktop und Internet) braucht ein Ultra-Konto."
         )
-    # Internet fuer die virtual machine gibt es seit 9.6.0 nur mit Ultra -- Normal
-    # und Pro sind dort ganz ohne Netz (_profile_settings setzt es ohnehin zurueck).
+
+
     netz_on = "AQUATICY_VM_INTERNET" in payload and str(
         payload.get("AQUATICY_VM_INTERNET", "")
     ).strip().lower() in {"1", "true", "yes", "on", "ja"}
@@ -2968,15 +2973,15 @@ def save_values(payload: dict[str, Any]) -> Path:
         payload.get("AQUATICY_VM_LAN", "")
     ).strip().lower() in {"1", "true", "yes", "on", "ja"}
     if lan_on and not session.ultra:
-        # Seit 9.5.34: das lokale Netz fuer die virtual machine nur mit Ultra.
+
         raise ValueError("Das lokale Netz für die virtual machine gibt es nur mit einem "
                          "Ultra-Konto.")
     values = {
         key: str(payload.get(key, "")).strip() for key in SETTING_KEYS if key in payload
     }
     if "AQUATICY_LEGAL_GUARD" in values:
-        # Eindeutig speichern -- ein "an" in der Datei liest sonst jeder
-        # andere Leser anders.
+
+
         values["AQUATICY_LEGAL_GUARD"] = "false" if guard_off else "true"
     beanstandung = check_values(values)
     if beanstandung:
@@ -2989,15 +2994,15 @@ def save_values(payload: dict[str, Any]) -> Path:
     ):
         if values.get(key):
             values[key] = fix_model_id(values[key])
-            # Seit 12.0.0 Luna: Mistral, NVIDIA NIM oder auf dem Server -- sonst nichts.
+
             from aquaticy.config import MODEL_RULE_TEXT, model_allowed
 
             basis = values.get("AQUATICY_API_BASE", session.settings().api_base) or ""
             if not model_allowed(values[key], basis):
                 raise ValueError(MODEL_RULE_TEXT)
     if UPGRADE_DIR is not None:
-        # Auto-Upgrading (10.0 Luna): aeltere Fassungen und Kandidaten nur fuer
-        # die, die sie sehen duerfen -- und eine bewusste Wahl bleibt stehen.
+
+
         from aquaticy import upgrading
 
         for key in ("AQUATICY_MODEL", "AQUATICY_VISION_MODEL",
@@ -3005,11 +3010,11 @@ def save_values(payload: dict[str, Any]) -> Path:
             if values.get(key) and not upgrading.allowed(UPGRADE_DIR, values[key], session.ultra):
                 raise ValueError("Diese Modellversion steht dir nicht mehr zur Wahl.")
     ha_token = str(payload.get(HA_TOKEN_FIELD, "")).strip()
-    #: Geheimnisse, die bei einem Konto in den Schluesselbund gehoeren (9.5.34).
+
     geheim: dict[str, str] = {}
     if ha_token:
         geheim["HA_TOKEN"] = ha_token
-        # Gebunden an die Adresse, fuer die er eingetragen wird (9.6.9 Luna).
+
         from aquaticy.homeassistant import normalize_url
 
         ziel = normalize_url(str(values.get("AQUATICY_HA_URL")
@@ -3017,8 +3022,8 @@ def save_values(payload: dict[str, Any]) -> Path:
                                  or session.settings().ha_url))
         if ziel:
             geheim["HA_TOKEN_URL"] = ziel
-    # API-Schluessel kommen seit 12.0.0 Luna nur noch ueber Add-ons (NVIDIA NIM,
-    # Mistral) -- das Formular nimmt keinen mehr an.
+
+
     google_id = str(payload.get(GOOGLE_ID_FIELD, "")).strip()
     if google_id:
         values["GOOGLE_CLIENT_ID"] = google_id
@@ -3026,7 +3031,7 @@ def save_values(payload: dict[str, Any]) -> Path:
     if google_secret:
         geheim["GOOGLE_CLIENT_SECRET"] = google_secret
     if geheim and session.profile is None:
-        # Lokal ohne Konten bleibt es bei der .env des Betreibers.
+
         geheim.pop("HA_TOKEN_URL", None)
         values.update(geheim)
         geheim = {}
@@ -3045,10 +3050,10 @@ def save_values(payload: dict[str, Any]) -> Path:
                 tresor.set_secret(name, wert)
             except VaultError as exc:
                 raise ValueError(str(exc)) from exc
-    # In einem laufenden Prozess gewinnen bereits gesetzte Umgebungsvariablen
-    # ueber die .env. Ohne override laege die neue Einstellung zwar in der
-    # Datei, waere aber erst nach einem Neustart aktiv -- die Oberflaeche
-    # meldet aber "sofort aktiv", und das soll auch stimmen.
+
+
+
+
     if session.profile is None:
         load_env(written, override=True)
     else:
@@ -3075,8 +3080,8 @@ def scrub_payload(wert: Any, geheim: list[str]) -> Any:
     return wert
 
 
-#: Was wie ein Schluessel in einem Fehlertext aussieht, auch wenn er nicht
-#: hinterlegt ist ("Authorization: Bearer ...", "?api_key=...", 9.6.0).
+
+
 _SCHLUESSEL_MUSTER = re.compile(
     r"(?i)((?:bearer|token|authorization:?)\s+)[A-Za-z0-9._~+/=-]{12,}|"
     r"((?:api[_-]?key|(?:access|refresh|id)[_-]?token|token|code|secret|password|passwort)"
@@ -3116,7 +3121,7 @@ def linked_view(session: Any) -> dict[str, Any]:
             "provider": provider, "label": d["label"], "company": d["company"],
             "get_key": d["get_key"], "form": d["form"], "linked": verknuepft,
             "installed": addons.installed(settings, provider),
-            # Ein Schluessel des Betreibers gilt fuer alle -- solange keiner eigen ist.
+
             "provided": (not verknuepft and session.profile is not None
                          and bool(os.environ.get(d["key"], "").strip())),
             "sign_in": [{"id": art, "label": linked.SIGN_IN_LABELS[art]}
@@ -3221,8 +3226,8 @@ def addons_view(session: Any) -> dict[str, Any]:
     from aquaticy import addons, linked
 
     settings = session.settings()
-    # Ein Schluessel von vor 12.0.0 (damals in den Einstellungen) steht jetzt beim
-    # Add-on -- das ist dafuer einmal als installiert eingetragen.
+
+
     for provider in linked.linked_providers(settings):
         addons.mark_installed(settings, provider)
     view = addons.public_view(settings, session.ultra)
@@ -3233,19 +3238,19 @@ def addons_view(session: Any) -> dict[str, Any]:
         if eintrag["id"] in konten:
             eintrag["konto"] = konten[eintrag["id"]]
         if eintrag["id"] in bridge.MESSENGERS:
-            # Die Messenger-Bruecke (12.6.6 Luna): Einstellung, Stand, Grund ohne Geheimnis.
+
             eintrag["bruecke"] = bridge.public_view(settings, eintrag["id"], session.ultra)
     return view
 
 
-#: Was es im Add-on-Fenster zu tun gibt.
+
 ADDON_ACTIONS = frozenset({
     "install", "uninstall", "enable", "disable", "token", "login", "login_done", "logout",
     "feeds", "rights", "bridge",
 })
 
-#: Aktionen, bei denen die laufende virtual machine neu aufgebaut werden muss --
-#: sie haelt die Datentraeger der Add-ons fest.
+
+
 _RESTARTS_WORKSHOP = frozenset({"uninstall", "enable", "disable", "logout"})
 
 
@@ -3306,9 +3311,9 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
             hinweis = "Wird installiert …" if addon.programm else "Installiert und eingeschaltet."
         elif action == "uninstall":
             if addon.programm:
-                session.reload(workshop=True)   # die virtual machine laesst den Datentraeger los
+                session.reload(workshop=True)
             if addon.id in addons.MODEL_ADDONS:
-                # Modell-Add-on: der Schluessel geht mit (12.0.0 Luna).
+
                 _forget_model_key(session, addon.id)
                 forget_strong_models(session.settings().data_dir)
             addons.uninstall(session.settings(), addon.id)
@@ -3324,13 +3329,20 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
             if addon.login != "token":
                 raise addons.AddOnError(f"{addon.name} meldet sich nicht mit einem Token an.")
             ergebnis = addons.github_login(settings, str(payload.get("token") or ""))
-            session.reload()  # GitHub laeuft nicht in der virtual machine
+            session.reload()
             hinweis = f"Angemeldet als {ergebnis['who']}." + (
                 f" {ergebnis['warning']}" if ergebnis["warning"] else "")
         elif action == "login":
             hinweis = _addon_login(session, addon)
         elif action == "login_done":
+            if payload.get("token"):
+                name, token, until = session._owner._qr_login
+                if (not session.ultra or name != addon.id or until <= time.monotonic()
+                        or not same_secret(str(payload["token"]), token)):
+                    raise addons.AddOnError("Die Anmeldung ist abgelaufen. Öffne sie erneut.")
             addons.mark_login(settings, addon.id, "angemeldet")
+            if session._owner._qr_login[0] == addon.id:
+                session._owner._qr_login = ("", "", 0.0)
             hinweis = "Gemerkt: angemeldet."
         elif action == "logout":
             if addon.programm:
@@ -3341,19 +3353,19 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                 " Entferne die virtual machine auf dem Handy auch unter „Verknüpfte Geräte“."
                 if addon.login == "qr" else "")
         elif action == "rights":
-            # Wirkt sofort: Werkzeuge und Desktop lesen die Rechte bei jedem
-            # Aufruf, der Systemtext wird vor der naechsten Frage erneuert.
-            # Kein Neuaufbau -- die virtual machine laeuft weiter.
+
+
+
             neu = addons.set_rights(settings, addon.id, payload.get("rechte"))
             hinweis = "Gespeichert: " + addons.rights_text(addon.id, neu) + "."
         elif action == "bridge":
             hinweis = _bridge_action(session, settings, addon.id, payload.get("bruecke"))
-        else:  # feeds
+        else:
             feeds = addons.set_feeds(settings, payload.get("feeds") or [])
-            session.reload()  # Feeds laufen nicht in der virtual machine
+            session.reload()
             hinweis = f"{len(feeds)} Feeds gespeichert."
         if action in ("uninstall", "disable", "logout"):
-            # Ohne Add-on oder Anmeldung gibt es nichts zu lesen: die Bruecke geht aus.
+
             from aquaticy import bridge as bridge_mod
 
             if addon.id in bridge_mod.MESSENGERS:
@@ -3362,12 +3374,15 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         return {"ok": False, "error": str(exc)}, 400
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500
-    return {"ok": True, "message": hinweis, **addons_view(session)}, 200
+    antwort = {"ok": True, "message": hinweis, **addons_view(session)}
+    if action == "login":
+        antwort["qr_token"] = session._owner._qr_login[1]
+    return antwort, 200
 
 
-# ---------------------------------------------------------------------------
-# Coworker (11.0.0 Luna, aquaticy/coworker.py)
-# ---------------------------------------------------------------------------
+
+
+
 COWORKER_ACTIONS = frozenset({
     "create", "message", "approve", "reject", "pause", "resume", "wake", "rules", "edit",
     "delete", "seen", "reset_notes", "preferences",
@@ -3460,8 +3475,8 @@ def coworker_image(payload: dict[str, Any], settings: Settings) -> tuple[str, st
             f"{MAX_UPLOAD_BYTES // 1_000_000} MB)."
         )
     try:
-        # `keep`: darauf beruft sich der Auftrag bei jedem Lauf. Ohne das
-        # waere das Foto nach zweihundert Schnappschuessen weg.
+
+
         return save_snapshot(settings.data_dir, data, image_mime(data), keep=True), ""
     except (OSError, ValueError):
         return "", "Dieses Bildformat wird nicht unterstützt (JPEG, PNG, WebP, GIF)."
@@ -3502,7 +3517,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 raise coworker_mod.CoworkerError("Der Zeitplan muss ein Objekt sein.")
             if not timing and session.plan not in coworker_mod.MAX_COWORKERS:
                 return {"ok": False, "error": "Dauerhafte Coworker gibt es mit Pro und Ultra."}, 403
-            # Niemals vom Client gelieferte Bild-Kennungen oder Bildnotizen uebernehmen.
+
             timing = {k: v for k, v in timing.items() if k not in ("image_id", "image_note")}
             image_id, saved = "", False
             try:
@@ -3519,7 +3534,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 kollege: Any = store.add(name, aufgabe, avatar=str(payload.get("avatar") or ""),
                                          plan=session.plan, chat=chat, schedule=timing)
                 saved = True
-                # Kontextfreigaben vor dem ersten Schritt setzen, ohne erhoehte Aktionsrechte.
+
                 store.set_preferences(kollege.id, {k: payload[k] for k in (
                     "sharing_chats", "sharing_coworkers", "notes_limit") if k in payload})
                 kollege = store.get(kollege.id)
@@ -3533,7 +3548,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
 
                     with contextlib.suppress(OSError, ValueError):
                         delete_snapshot(settings.data_dir, image_id)
-            # Der Chat des Coworkers: hier erscheinen seine Meldungen.
+
             with contextlib.suppress(Exception):
                 Cache(settings.db_path, settings.cache_ttl_hours).add_history(
                     chat, coworker_mod.chat_title(kollege),
@@ -3583,7 +3598,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                             else:
                                 ok, ergebnis = coworker_mod.run_action(
                                     store, entschieden, session.settings(), fresh_plan == "ultra")
-                        except Exception as exc:  # die Anfrage darf nie haengen bleiben
+                        except Exception as exc:
                             ok, ergebnis = False, f"Fehler: {type(exc).__name__}"
                         try:
                             store.finish_action(entschieden["id"], ok, ergebnis)
@@ -3642,7 +3657,7 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
                 delete_coworker(store, kollege.id, settings)
                 coworker_mod.stop_boxes(settings.data_dir, kollege.id)
                 hinweis = f"{kollege.name} ist gelöscht. Sein Chat bleibt."
-            else:  # seen
+            else:
                 store.mark_seen(kollege.id)
     except (ValueError, TypeError, OverflowError) as exc:
         return {"ok": False, "error": str(exc)}, 400
@@ -3652,6 +3667,11 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
     if takt is not None and action in ("create", "message", "wake", "resume"):
         takt.wake()
     return {"ok": True, "message": hinweis, **coworkers_view(session)}, 200
+
+
+def workshop_busy(session: Any) -> bool:
+    sessions = session.chat_sessions() if hasattr(session, "chat_sessions") else [session]
+    return any(chat.has_running_chat() for chat in sessions)
 
 
 def _addon_login(session: Any, addon: Any) -> str:
@@ -3668,26 +3688,91 @@ def _addon_login(session: Any, addon: Any) -> str:
     if not addons.active(settings, addon.id, session.ultra):
         raise addons.AddOnError(f"{addon.name} ist nicht installiert oder ausgeschaltet.")
     box = werkstatt.shared(settings)
-    fertig = box.desktop("open", addons.APP_OF[addon.id], timeout=90)
+    if workshop_busy(session):
+        raise addons.AddOnError("Ein Chat läuft gerade. Warte, bis er fertig ist.")
+    with session._owner._qr_lock:
+        session._owner._qr_login = (addon.id, secrets.token_urlsafe(24), time.monotonic() + 600)
+        try:
+            fertig = box.desktop("open", addons.APP_OF[addon.id], timeout=90)
+        except Exception:
+            session._owner._qr_login = ("", "", 0.0)
+            raise
     if fertig.returncode != 0:
+        session._owner._qr_login = ("", "", 0.0)
         raise addons.AddOnError(
             f"{addon.name} ließ sich nicht öffnen: "
             + (fertig.stderr.decode("utf-8", "replace").strip() or "keine Meldung")[:300]
         )
     return (
-        f"{addon.name} ist in der virtual machine offen. Scanne den QR-Code unten mit deinem Handy "
+        f"{addon.name} ist offen. Scanne den QR-Code im Anmeldefenster mit deinem Handy "
         "und drück dann „Ich bin angemeldet“."
     )
 
 
-#: Tasten, die man im virtual-machine-Bildschirm selbst druecken kann.
+def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """Kurzlebige, kontogebundene QR-Anmeldung. Gibt nie ein ganzes Bildschirmfoto heraus."""
+    from aquaticy import addons
+    from aquaticy import sandbox as werkstatt
+    from aquaticy.messenger_login import qr_image
+
+    if not session.ultra:
+        return {"error": "Das gibt es nur mit einem Ultra-Konto."}, 403
+    owner = session._owner
+    if not owner._qr_lock.acquire(blocking=False):
+        return {"error": "Einen Moment …"}, 409
+    try:
+        name, token, until = owner._qr_login
+        if (not token or until <= time.monotonic() or payload.get("id") != name
+                or not same_secret(str(payload.get("token") or ""), token)):
+            return {"error": "Die Anmeldung ist abgelaufen. Öffne sie erneut."}, 409
+        if payload.get("close") is True:
+            owner._qr_login = ("", "", 0.0)
+            return {"ok": True}, 200
+        settings = session.settings()
+        if name not in ("whatsapp", "signal") or not addons.active(settings, name, session.ultra):
+            return {"error": "Das Add-on ist nicht eingeschaltet."}, 403
+        if workshop_busy(session):
+            return {"error": "Ein Chat läuft gerade. Warte, bis er fertig ist."}, 409
+        box = werkstatt.shared(settings)
+        if not box.alive or not box.user_mode:
+            return {"error": "Die virtual machine läuft gerade nicht."}, 409
+
+        def windows() -> dict[str, Any]:
+            result = box.desktop("windows", start=False, timeout=10)
+            return json.loads(result.stdout) if result.returncode == 0 else {}
+
+        info = windows()
+        window = next((w for w in info.get("fenster", []) if isinstance(w, dict)
+                       and addons.messenger_of(str(w.get("klasse") or ""), "") == name), None)
+        if window is None:
+            return {"ok": True, "image": None}, 200
+        wid = str(window.get("id") or "")
+        if not re.fullmatch(r"0x[0-9a-fA-F]{1,10}", wid):
+            return {"ok": True, "image": None}, 200
+        if box.desktop("focus", wid, start=False, timeout=10).returncode != 0:
+            return {"ok": True, "image": None}, 200
+        shot = box.screenshot(start=False)
+        after = windows()
+        if (not window.get("titel") or after.get("aktiv") != window["titel"]
+                or str(after.get("aktiv_klasse") or "").casefold()
+                != str(window.get("klasse") or "").casefold() or workshop_busy(session)):
+            return {"ok": True, "image": None}, 200
+        return {"ok": True, "image": qr_image(shot, name)}, 200
+    except Exception:
+
+        return {"error": "Der QR-Code lässt sich gerade nicht lesen. Versuch es erneut."}, 502
+    finally:
+        owner._qr_lock.release()
+
+
+
 INPUT_KEYS = frozenset({
     "Return", "Tab", "BackSpace", "Escape", "Delete", "Up", "Down", "Left", "Right",
     "Home", "End", "Page_Up", "Page_Down", "ctrl+a", "ctrl+c", "ctrl+v", "ctrl+l", "shift+Tab",
     "F5",
 })
 
-#: So viel tippt man auf einmal selbst.
+
 MAX_INPUT_CHARS = 1000
 
 
@@ -3705,7 +3790,7 @@ def workshop_input(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
 
     session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
     if not session.ultra:
-        # Seit 9.5.17 gehoert der User mode zu Ultra -- auch Pro kommt nicht dran.
+
         return {"ok": False, "error": "Der User mode gehört zu Ultra."}, 403
     settings = session.settings()
     if not getattr(settings, "vm_user_mode", False):
@@ -3713,8 +3798,8 @@ def workshop_input(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     box = werkstatt.shared(settings)
     art = str(payload.get("art") or "").strip().lower()
     if art == "open":
-        # Der einzige Weg, der eine virtual machine starten darf: der Nutzer will
-        # sich selbst irgendwo anmelden und oeffnet dafuer eine Adresse.
+
+
         from aquaticy.desktop import URL_RE
 
         adresse = str(payload.get("url") or "").strip()
@@ -3828,7 +3913,7 @@ def _design_style(design: dict[str, Any]) -> str:
     return ";".join(teile)
 
 
-#: (Stempel der Datei, Inhalt) -- als ein Eintrag, damit beides immer zusammenpasst.
+
 _UI_CACHE: dict[str, Any] = {"entry": None}
 _STATIC_CACHE: dict[str, bytes] = {}
 _CACHE_LOCK = threading.Lock()
@@ -3890,14 +3975,14 @@ def with_state(html: str, *, nonce: str = "") -> str:
     from aquaticy.uistate import defaults
 
     if AUTH is not None and getattr(SESSION.current(), "account", None) is None:
-        # Vor der Anmeldung gibt es noch kein Konto -- dann die Grundeinstellung,
-        # nicht der Zustand des Server-Profils (bis 9.5.15 sah jeder Fremde
-        # dessen Farben, Modus und Mitlesen).
+
+
+
         stand = defaults()
     else:
         try:
             stand = ui_state().read()
-        except Exception:  # pragma: no cover - eine Seite ohne Zustand ist besser als keine
+        except Exception:  # pragma: no cover
             stand = defaults()
 
     attrs = ""
@@ -3905,21 +3990,21 @@ def with_state(html: str, *, nonce: str = "") -> str:
         attrs += f' data-theme="{stand["theme"]}"'
     if stand.get("palette"):
         attrs += f' data-palette="{stand["palette"]}"'
-    # Beim eigenen Design gleich die Grundfarben ans <html> schreiben, damit
-    # die Seite schon in den richtigen Farben ankommt und nicht kurz aufblitzt.
+
+
     if stand.get("palette") == "custom":
         stil = _design_style(stand.get("design") or {})
         if stil:
             attrs += f' style="{stil}"'
-    # Sprache (9.5.25): das lang-Attribut stimmt schon beim ersten Anzeigen --
-    # die Uebersetzung der Texte erledigt das Skript sofort beim Laden.
-    # Schriftgroesse (9.5.32): steht gleich am <html>, damit nichts springt.
+
+
+
     if stand.get("fontsize") in ("small", "large"):
         attrs += f' data-fontsize="{stand["fontsize"]}"'
     sprache = "en" if stand.get("lang") == "en" else "de"
     html = html.replace('<html lang="de">', f'<html lang="{sprache}"{attrs}>', 1)
 
-    # Die Klassen am Koerper stehen sonst erst, wenn das Skript durch ist.
+
     koerper = ["start"]
     if stand.get("mode") == "code":
         koerper.append("code-mode")
@@ -3931,18 +4016,18 @@ def with_state(html: str, *, nonce: str = "") -> str:
         koerper.append("denken")
     html = html.replace('<body class="start">', f'<body class="{" ".join(koerper)}">', 1)
 
-    # `json.dumps` sorgt fuer gueltiges JSON; `</` wird zerlegt, damit ein
-    # Wert das Skript nicht vorzeitig beenden kann. Die Werte kommen zwar
-    # alle aus einer Weissliste -- aber genau das ist der Punkt: man baut
-    # die Absicherung ein, bevor jemand die Liste erweitert.
+
+
+
+
     roh = json.dumps(stand, ensure_ascii=False).replace("</", "<\\/")
     texte = json.dumps(webview.start_texts(), ensure_ascii=False).replace("</", "<\\/")
     boot = (
         f"window.__AQUATICY_STATE__ = {roh};"
         f"window.__AQUATICY_VERSION__ = {json.dumps(VERSION_LABEL)};"
-        # Interne/Test-Fassung (9.6.0): gelber Hinweis unten im Chat.
+
         f"window.__AQUATICY_INTERNAL__ = {json.dumps(INTERNAL)};"
-        # Vorschlaege, Begruessungen, Beschriftungen -- vom Server (9.5.14).
+
         f"window.__AQUATICY_TEXTS__ = {texte};"
     )
     marke = f' nonce="{nonce}"' if nonce else ""
@@ -3956,7 +4041,7 @@ def safe_name(name: str) -> str:
     Der Name kommt vom Browser und damit von aussen: "../../.ssh/authorized_keys"
     waere sonst ein gueltiger Ablageort.
     """
-    name = Path(name.replace("\\", "/")).name  # Pfadanteile abschneiden
+    name = Path(name.replace("\\", "/")).name
     cleaned = "".join(
         character if character.isalnum() or character in "-_. " else "_" for character in name
     ).strip(". ")
@@ -3981,7 +4066,7 @@ class Handler(BaseHTTPRequestHandler):
 
     server_version = "Aquaticy"
     sys_version = ""
-    #: Sekunden fuer ``Retry-After`` bei 429 (11.4.0 Luna) -- 0 heisst: keine Angabe.
+
     _retry_after: int = 0
 
     def setup(self) -> None:
@@ -3992,8 +4077,8 @@ class Handler(BaseHTTPRequestHandler):
         if not super().parse_request():
             return False
         try:
-            urlsplit(self.path)  # Malformed absolute request targets must fail before routing.
-            # Eindeutige Grenzen auch bei Routen, die keinen JSON-Koerper lesen.
+            urlsplit(self.path)
+
             self._body_length(MAX_BODY_BYTES * 2)
         except (BadRequest, TooLarge) as exc:
             self._reject_body(exc)
@@ -4004,11 +4089,11 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        return  # keine Zugriffsprotokolle in der Konsole
+        return
 
     def send_response(self, code: int, message: str | None = None) -> None:
-        # Merken, dass die Antwort laeuft -- danach kann kein Fehlerblatt mehr
-        # hinterhergeschickt werden (siehe _guarded).
+
+
         self.responded = True
         super().send_response(code, message)
 
@@ -4026,12 +4111,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
-        # Das Mikrofon nur fuer die eigene Seite (12.0.0 Luna, Spracheingabe) -- nie fuer
-        # eingebettete fremde Seiten; Kamera und Standort bleiben ganz gesperrt.
+
+
         self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         if self._https():
-            # Einmal verschluesselt, immer verschluesselt (9.5.22).
+
             self.send_header("Strict-Transport-Security", "max-age=31536000")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header(
@@ -4052,21 +4137,21 @@ class Handler(BaseHTTPRequestHandler):
         """
         self.responded = False
         self.__dict__.pop("_pending_headers", None)
-        # Je Anfrage neu (12.0.0 Terra): bei Keep-Alive lebt der Handler weiter, und
-        # ein spaeteres 429 trug sonst das Retry-After einer frueheren Anfrage.
+
+
         self._retry_after = 0
         route = self._route()
         client = self._client_ip()
         weitergereicht = bool(getattr(self, "_cluster_user", ""))
-        # Das Logo zaehlt nicht mit (9.6.0): jede Seite laedt es mehrfach, und es
-        # ist eine feste, kleine Datei -- sonst frass es das Anfragen-Limit auf.
-        # Im Verbund weitergereichte Anfragen hat der Eingang schon gezaehlt.
+
+
+
         gezaehlt = route not in STATIC_FILES and not weitergereicht
         if gezaehlt and not ADDRESS_LIMIT.allow(client):
             self._zu_viele(ADDRESS_LIMIT.retry_after(client))
             return
         account = self._account()
-        # Je Konto, wenn angemeldet; sonst je Adresse (9.6.8 Sol).
+
         schluessel = f"konto:{account.id}" if account is not None else f"ip:{client}"
         if gezaehlt and not REQUEST_LIMIT.allow(schluessel):
             self._zu_viele(REQUEST_LIMIT.retry_after(schluessel))
@@ -4078,10 +4163,10 @@ class Handler(BaseHTTPRequestHandler):
             "/api/consent",
             "/api/auth/register",
             "/api/auth/login",
-            # Die Rechenaufgabe fuer den Anmeldeschutz (12.0.0 Terra) -- vor der Anmeldung.
+
             "/api/auth/challenge",
-            # Abmelden geht auch mit abgelaufener Sitzung -- der Cookie soll weg
-            # (9.5.34; vorher 401, und der alte Cookie blieb stehen).
+
+
             "/api/auth/logout",
         }
         if AUTH is not None and route.startswith("/api/") and not public and account is None:
@@ -4089,9 +4174,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if (self.command == "POST" and AIGUARD is not None and account is not None
                 and route not in POST_WHEN_BANNED):
-            # Ai-guard (9.5.26): Ein gesperrtes Konto kann lesen, aber nichts
-            # mehr tun. Bis 9.5.25 galt die Sperre nur fuer /api/chat -- virtual machine,
-            # Add-ons, Auftraege, Befehle und Rueckfrage-Antworten gingen weiter.
+
+
+
             sperre = AIGUARD.is_banned(user_id=account.id, ip=client)
             if sperre is not None:
                 from aquaticy.aiguard import BANNED_MESSAGE, ban_info
@@ -4113,7 +4198,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.headers.get("X-Aquaticy-Chat", "") if chat_route else "")
             handler()
         except (BrokenPipeError, ConnectionResetError):
-            pass  # Tab geschlossen -- kein Grund fuer eine Meldung
+            pass
         except TimeoutError:
             self.close_connection = True
             if not self.responded:
@@ -4128,8 +4213,8 @@ class Handler(BaseHTTPRequestHandler):
                 with contextlib.suppress(OSError):
                     self._json({"error": str(exc)}, 400)
         except Exception as exc:
-            # Request URLs can contain access tokens; exception messages can
-            # contain passwords, private input or provider credentials.
+
+
             print(f"  [Fehler] {self.command}: {type(exc).__name__}")
             if not self.responded:
                 with contextlib.suppress(OSError):
@@ -4141,7 +4226,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 _REQUEST.session = previous
 
-    # -- Server-Verbund (9.6.1) ----------------------------------------------
+
     def _cluster_dispatch(self, route: str, account: Account, weitergereicht: bool) -> bool:
         """Reicht die Anfrage an den Heimserver des Kontos weiter.
 
@@ -4155,7 +4240,7 @@ class Handler(BaseHTTPRequestHandler):
             if verbund.is_home(account.id):
                 start_user_scheduler(account)
                 return False
-            # Das Konto ist inzwischen woanders zuhause -- der Eingang fragt neu.
+
             body = b'{"error": "Bitte gleich noch einmal."}'
             self.send_response(409)
             self.send_header(cluster.MOVED_HEADER, "moved")
@@ -4167,8 +4252,8 @@ class Handler(BaseHTTPRequestHandler):
         if (route in CLUSTER_LOCAL or route in STATIC_FILES or route in LEGAL_ROUTES
                 or route.startswith("/cluster/")):
             return False
-        # Der Heimserver vertraut der Pruefung am Eingang. Das optionale
-        # Server-Zugangswort muss deshalb VOR der Weiterleitung stimmen.
+
+
         if not self._authorized():
             self._deny()
             return True
@@ -4177,14 +4262,14 @@ class Handler(BaseHTTPRequestHandler):
         except (BadRequest, TooLarge, TimeoutError) as exc:
             self._reject_body(exc)
             return True
-        # Die Adresse des Menschen, nicht die des Proxys oder Tunnels (11.1).
+
         direkt = self._client_ip()
         try:
             if verbund.forward(self, account.id, body, self._https(), direkt):
                 return True
             if not verbund.is_home(account.id):
                 raise cluster.ClusterError("Dieses Konto hat einen anderen Heimserver.")
-        except Exception as exc:  # pragma: no cover - der Verbund darf nie den Server kosten
+        except Exception as exc:  # pragma: no cover
             print(f"  [Verbund] Weiterleitung: {type(exc).__name__}: {exc}")
             if self.responded:
                 self.close_connection = True
@@ -4195,7 +4280,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "Der Heimserver ist gerade nicht erreichbar. "
                                  "Bitte versuche es später erneut."}, 503)
             return True
-        # Selbst bedienen -- der Koerper ist schon gelesen, also neu bereitstellen.
+
         self.rfile = io.BytesIO(body)
         return False
 
@@ -4232,7 +4317,7 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/cluster/proxy":
                 self._cluster_proxy(verbund, daten, direkt)
             elif route in ("/cluster/hello", "/cluster/hello-status", "/cluster/hello-join"):
-                # Ohne Verbundschluessel erreichbar -- darum knapp begrenzt.
+
                 if not CLUSTER_HELLO_LIMIT.allow(direkt):
                     self._json({"error": "Zu viele Anfragen."}, 429)
                     return
@@ -4315,7 +4400,7 @@ class Handler(BaseHTTPRequestHandler):
         self.client_address = (str(anfrage.get("ip", "")), 0)
         self._cluster_user = str(anfrage["u"])
         self._cluster_https = bool(anfrage.get("https"))
-        # Ein RawIOBase reicht: Der Handler schreibt nur hinein.
+
         self.wfile = cast(Any, strom)
         try:
             if ausfuehren is None:
@@ -4329,7 +4414,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile = roh
             self.close_connection = True
 
-    # -- Hilfen -----------------------------------------------------------
+
     def _queue_header(self, name: str, wert: str) -> None:
         """Eine Kopfzeile fuer die naechste Antwort (etwa ein Cookie, 9.6.9 Luna)."""
         if not isinstance(self.__dict__.get("_pending_headers"), list):
@@ -4370,14 +4455,14 @@ class Handler(BaseHTTPRequestHandler):
         mensch = payload.get("human")
         mensch_ok = (isinstance(mensch, dict) and botguard.check(mensch, ("human",))
                      and botguard.human_track(mensch.get("track")))
-        # Ein bestandener Nachweis ersetzt den aus dem Hintergrund -- der ist beim
-        # ersten Versuch schon verbraucht.
+
+
         beweis_ok = mensch_ok or botguard.check(payload.get("proof"), ("visit",))
         skript = bool(botguard.fingerprint(self.headers, beweis_ok,
                                            payload.get("webdriver") is True,
                                            self._fetch_metadata_expected()))
-        # Gesperrt ist das Geraet -- die Adresse nur fuer Skripte: hinter derselben
-        # Adresse (Familie, Buero) kann ein Mensch sitzen, der nichts dafuer kann.
+
+
         gesperrt = BOT_BANS.remaining(*schluessel[1:])
         if skript:
             gesperrt = max(gesperrt, BOT_BANS.remaining(schluessel[0]))
@@ -4428,11 +4513,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, payload: dict[str, Any], status: int = 200) -> None:
         if isinstance(payload, dict) and isinstance(payload.get("error"), str):
-            # Fehlertexte gehen seit 9.6.0 immer durch den Schluessel-Filter --
-            # vorher nur die Ereignisse eines Laufs, nicht die 500er der Routen.
+
+
             payload = {**payload, "error": scrub_error(payload["error"])}
-            # Seit 9.6.8 Sol: Serverfehler (5xx) nur allgemein, und was in
-            # anderen Antworten technisch aussieht, ebenso.
+
+
             payload["error"] = (GENERIC_ERROR if status >= 500
                                 else public_error(payload["error"]))
         self._send(status, json.dumps(payload, ensure_ascii=False).encode(), "application/json")
@@ -4466,9 +4551,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-        # Zusaetzliche Cookies (Geraete-Kennung, 9.5.31) zuerst, die Sitzung
-        # zuletzt: einfache Clients, die nur ein Set-Cookie behalten, behalten
-        # so die Anmeldung.
+
+
+
         for extra_name, extra_value, extra_age in extra:
             self._set_cookie(extra_name, extra_value, extra_age)
         self._set_cookie(name, value, max_age)
@@ -4515,8 +4600,8 @@ class Handler(BaseHTTPRequestHandler):
         if AUTH is None:
             return None
         if getattr(self, "_cluster_user", ""):
-            # Weitergereicht aus dem Verbund: der Eingang hat die Anmeldung
-            # geprueft, die Nachricht ist mit dem Verbundschluessel gesichert.
+
+
             return AUTH.account(self._cluster_user)
         return AUTH.session_account(self._cookie(AUTH_COOKIE), self._device(),
                                     self._client_ip())
@@ -4534,9 +4619,9 @@ class Handler(BaseHTTPRequestHandler):
             return {"banned": False}
 
     def _origin_ok(self) -> bool:
-        # Moderne Browser sagen selbst, woher eine Anfrage kommt (seit 9.5.22
-        # ausgewertet): von einer fremden Seite -- auch einer Nachbar-Subdomain
-        # -- kommt kein schreibender Aufruf durch.
+
+
+
         herkunft = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
         if herkunft in {"cross-site", "same-site"}:
             return False
@@ -4570,8 +4655,8 @@ class Handler(BaseHTTPRequestHandler):
         return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
 
     def _set_cookie(self, name: str, value: str, max_age: int) -> None:
-        # "Secure" auch hinter einem HTTPS-Proxy (9.5.22) -- bis dahin nur bei
-        # direktem TLS, und hinter nginx/Caddy ging das Anmelde-Cookie ohne raus.
+
+
         secure = "; Secure" if self._https() else ""
         self.send_header(
             "Set-Cookie",
@@ -4639,15 +4724,15 @@ class Handler(BaseHTTPRequestHandler):
         except (JsonDepthError, RecursionError) as exc:
             raise BadRequest("Die Anfrage ist zu stark verschachtelt.") from exc
         except (json.JSONDecodeError, ValueError):
-            return {}  # kaputtes JSON ist eine leere Anfrage, kein Absturz
-        # Gueltiges JSON ist noch kein Formular: `[]`, `"text"` und `0` sind
-        # alle drei erlaubt und haben kein `.get`. Jede Route, die den Koerper
-        # als Feld-Sammlung liest, bekam damit einen Serverfehler statt einer
-        # Absage. Was kein Objekt ist, gilt hier als leere Anfrage.
+            return {}
+
+
+
+
         return gelesen if isinstance(gelesen, dict) else {}
 
-    # -- Routen -----------------------------------------------------------
-    # Namen von BaseHTTPRequestHandler vorgegeben.
+
+
     def _nur_heimnetz(self) -> bool:
         """Mit eigener Domain (11.1) gilt dieser Eingang nur fuer Heimnetz, Tailscale
         und den Rechner selbst. Von aussen geht es ueber die Domain -- verschluesselt.
@@ -4732,8 +4817,8 @@ class Handler(BaseHTTPRequestHandler):
             if not eintrag:
                 self._json({"forgotten": store.clear()})
                 return
-            # Eine Kennung, die keine Zahl ist, ist ein Tippfehler und
-            # kein Serverfehler -- also 400 statt 500.
+
+
             try:
                 nummer = int(eintrag)
             except ValueError:
@@ -4760,13 +4845,13 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self._json({"error": str(exc)}, 400)
             return
-        except Exception as exc:  # pragma: no cover - Laufzeit meldet Unerwartetes
+        except Exception as exc:  # pragma: no cover
             self._json({"error": f"Die virtual machine antwortet nicht: {exc}"}, 502)
             return
         name = safe_name(wanted.rsplit("/", 1)[-1] or "datei")
         self.send_response(200)
-        # Immer als Anhang: sonst koennte eine HTML-Datei aus der virtual machine
-        # im Browser laufen -- und zwar unter der Adresse von Aquaticy.
+
+
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Disposition", f'attachment; filename="{name}"')
         self.send_header("Content-Length", str(len(data)))
@@ -4786,8 +4871,8 @@ class Handler(BaseHTTPRequestHandler):
         box = werkstatt.shared(SESSION.settings())
         if not box.alive or not box.user_mode:
             if "leise=1" in self.path:
-                # Das Login-Fenster fragt alle anderthalb Sekunden -- "nichts
-                # da" ist dort der Normalfall, kein Fehler fuer die Konsole.
+
+
                 self.send_response(204)
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
@@ -4796,7 +4881,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             data = box.screenshot(start=False)
-        except Exception as exc:  # pragma: no cover - Laufzeit meldet Unerwartetes
+        except Exception as exc:  # pragma: no cover
             self._json({"error": f"Kein Bildschirmfoto bekommen: {exc}"}, 502)
             return
         self.send_response(200)
@@ -4823,14 +4908,14 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(daten)
 
     def _get(self) -> None:
-        # Das Logo (seit 9.6.0) ist oeffentlich: der Browser holt das Tab-Symbol
-        # auch ohne Zugangswort, und darin steht nichts Geheimes.
+
+
         if self._route() in STATIC_FILES:
             self._send_static(self._route())
             return
-        # Der Ruecksprung von Google (9.6.9 Luna): auch das Zugangswort-Cookie
-        # ist SameSite=Strict und fehlt dann. Das Ablauf-Cookie reicht hier --
-        # _google_return prueft es zusammen mit dem einmaligen state.
+
+
+
         ruecksprung = self._route() == "/google" and bool(self._cookie(GOOGLE_FLOW_COOKIE))
         if not ruecksprung and not self._authorized():
             self._deny()
@@ -4861,8 +4946,8 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/auth/challenge":
-            # Die Rechenaufgabe, die die Seite beim Besuch im Hintergrund loest
-            # (12.0.0 Terra, aquaticy/botguard.py). Sie verraet und speichert nichts.
+
+
             self._json(botguard.issue("visit"))
         elif route == "/api/learning":
             from aquaticy.learning import Learning
@@ -4895,8 +4980,8 @@ class Handler(BaseHTTPRequestHandler):
             if account is None:
                 self._json({"error": "Bitte melde dich an."}, 401)
                 return
-            # Seit 9.5.14: Prozent und Uhrzeiten, keine Tokenzahlen -- gerechnet
-            # hier auf dem Server (aquaticy/quota.py).
+
+
             self._json(
                 {
                     "email": account.email,
@@ -4906,9 +4991,9 @@ class Handler(BaseHTTPRequestHandler):
                     "ultra": account.ultra,
                     "plan_label": account.plan_label,
                     "usage": usage_view(SESSION.settings()),
-                    # Sperre (9.5.24): fuer das rote „Info“ unter der Versionsnummer.
+
                     "ban": self._ban_view(account),
-                    # Neue Anmeldungen von unbekannten Geraeten (9.5.32).
+
                     "security_notices": [
                         e for e in (AUTH.events(account.id, unseen_only=True)
                                     if AUTH is not None else [])
@@ -4916,8 +5001,8 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/account/security":
-            # Nur das eigene Konto sieht seine Geraete und seine Adresse
-            # (entschluesselt) -- der Betreiber in `aquaticy list` nicht (9.5.32).
+
+
             account = self._account()
             if account is None or AUTH is None:
                 self._json({"error": "Bitte melde dich an."}, 401)
@@ -4941,8 +5026,8 @@ class Handler(BaseHTTPRequestHandler):
                             "email": SESSION.account.email,
                             "username": SESSION.account.username,
                             "plan": SESSION.plan,
-                            # Seit 9.5.24: der Name des Tarifs kommt mit -- bis dahin
-                            # zeigte die Seite bei Ultra "Pro" (nur "pro" war gesetzt).
+
+
                             "plan_label": SESSION.account.plan_label,
                             "pro": SESSION.pro,
                             "ultra": SESSION.ultra,
@@ -4957,30 +5042,30 @@ class Handler(BaseHTTPRequestHandler):
                     "search_key_name": SEARCH_BACKEND_KEYS.get(settings.search_backend, ""),
                     "env_path": str(settings.env_path or DEFAULT_ENV_PATH),
                     "problems": settings.missing_requirements(),
-                    # Schluessel selbst gehen nie an den Browser -- nur, ob welche da sind.
+
                     "ha_connected": bool(settings.ha_url and settings.ha_token),
                     "search_key_set": bool(settings.search_api_key),
-                    # Im Code- und im Pro-Modus laeuft nicht das eingestellte
-                    # Modell, sondern das staerkste erreichbare. Frueher stand
-                    # oben trotzdem das alte -- man sah also nicht, womit
-                    # gerade gearbeitet wird.
+
+
+
+
                     "strong_model": (strong_models(1) or [{}])[0].get("id", ""),
-                    # Im Code-Modus ist "das staerkste" ein anderes: dort
-                    # zaehlt das Modell fuers Programmieren.
+
+
                     "strong_code_model": (
                         strong_models(1, purpose="code") or [{}]
                     )[0].get("id", ""),
                     "google": google_state(settings),
                     "legal_rules": rules_overview(),
-                    # Seit 9.5.14 fertig vom Server (aquaticy/webview.py):
+
                     "header": header_for(settings),
                     "providers": webview.provider_view(),
-                    # "Eigene Modelle" zeigt nur, was das Konto selbst eingetragen hat.
+
                     "own_models": own_models(settings),
                 }
             )
         elif route == "/api/header":
-            # Nur die Kopfzeile: welches Modell wirklich antwortet, was gilt.
+
             self._json(header_for(SESSION.settings()))
         elif route == "/api/run":
             self._run_stream()
@@ -4989,8 +5074,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/chats":
             settings = SESSION.settings()
             cache = Cache(settings.db_path, settings.cache_ttl_hours)
-            # Mit ?q= wird gesucht, ohne kommt die gewohnte Liste. Ein
-            # eigener Pfad waere dasselbe in zwei Routen.
+
+
             suche = (parse_qs(urlsplit(self.path).query).get("q") or [""])[0].strip()
             chats = cache.search_chats(suche, limit=40) if suche else cache.recent_chats(limit=40)
             for session in SESSION.chat_sessions():
@@ -5007,7 +5092,7 @@ class Handler(BaseHTTPRequestHandler):
                                          "turns": 0, "touched": run.started, "running": True})
             self._json(
                 {
-                    # Die Gruppe ("Heute", "Gestern" ...) rechnet der Server.
+
                     "chats": webview.with_groups(
                         chats
                     ),
@@ -5016,9 +5101,9 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/chatexport":
-            # Einen ganzen Chat als Markdown mitnehmen. Bewusst als eigener
-            # Weg und nicht ueber /api/open: den Chat exportieren heisst
-            # nicht, ihn zu oeffnen.
+
+
+
             settings = SESSION.settings()
             cache = Cache(settings.db_path, settings.cache_ttl_hours)
             wanted = (parse_qs(urlsplit(self.path).query).get("session_id") or [""])[0].strip()
@@ -5031,8 +5116,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"title": title, "markdown": chat_markdown(title, entries),
                         "filename": webview.export_filename(title)})
         elif route == "/api/werkstatt":
-            # Was in der virtual machine liegt. Ist keine da, ist das keine
-            # Stoerung -- dann liegt eben nichts da.
+
+
             from aquaticy import sandbox as werkstatt
 
             box = werkstatt.shared(SESSION.settings())
@@ -5054,7 +5139,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(addons_view(SESSION.current() if isinstance(SESSION, SessionProxy)
                                    else SESSION))
         elif route == "/api/context":
-            # Der Regler unter der Modellauswahl (11.3.0 Luna).
+
             einstellungen = SESSION.settings()
             gewuenscht = (parse_qs(urlsplit(self.path).query).get("model") or [""])[0].strip()
             modell = gewuenscht if _MODELL_RE.fullmatch(gewuenscht) else einstellungen.model
@@ -5063,9 +5148,9 @@ class Handler(BaseHTTPRequestHandler):
                           if konto is not None and not SESSION.ultra else 0)
             self._json(context_view(einstellungen, modell, obergrenze))
         elif route == "/api/vm":
-            # Fuer den Schalter unter "Code echt ausprobieren" (11.2.2 Sol): ob
-            # die virtual machine Internet hat, ob das Konto es aendern darf und ob
-            # es auf diesem Rechner ueberhaupt eine Abschottung gibt.
+
+
+
             from aquaticy import sandbox as werkstatt
 
             einstellungen = SESSION.settings()
@@ -5079,13 +5164,13 @@ class Handler(BaseHTTPRequestHandler):
                 "runtime": laufzeit is not None,
             })
         elif route == "/api/plugins":
-            # Die Befehle fuer die Liste beim Tippen von "/" (11.0.0 Luna).
+
             from aquaticy import plugins as plugin_mod
 
             self._json({"commands": plugin_mod.commands(SESSION.settings(), SESSION.ultra)})
         elif route == "/api/coworkers":
-            # Coworker (11.0.0 Luna): "?badge=1" nur fuer das Abzeichen -- leicht genug,
-            # um es jede Minute zu fragen.
+
+
             nur = (parse_qs(urlsplit(self.path).query).get("badge") or [""])[0] == "1"
             sitzung = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
             self._json(coworkers_view(sitzung, badge_only=nur))
@@ -5096,42 +5181,42 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/models":
             from aquaticy.system import available_models
 
-            # ?purpose=code liefert unter "strong" die Modelle fuers
-            # Programmieren, sonst die Arbeitspferde fuer die Recherche.
+
+
             frage = parse_qs(urlsplit(self.path).query)
             zweck = (frage.get("purpose") or [""])[0].strip()
             modus = (frage.get("mode") or [""])[0].strip()
             from aquaticy.linked import picker_models
 
             alle = available_models(SESSION.settings())
-            # Die Modelle der Add-ons NVIDIA NIM und Mistral stehen in jedem Modus zur Wahl.
+
             verknuepft = []
             with contextlib.suppress(Exception):
                 verknuepft = picker_models(SESSION.settings())
             gesehen = {m.get("id") for m in alle}
             alle = alle + [m for m in verknuepft if m["id"] not in gesehen]
             if SHARDING is not None and SHARDING.ready():
-                # Serverlast aufteilen (10.2.0 Luna): das verteilte Modell zuerst.
+
                 alle = [{"id": SPLIT_MODEL_ID, "label": SHARDING.label(), "kind": "Verbund",
                          "note": f"Verteilt auf {SHARDING.servers()} Server",
                          "source": "operator", "source_label": ""}] + [
                     m for m in alle if m.get("id") != SPLIT_MODEL_ID]
             if UPGRADE_DIR is not None:
-                # Auto-Upgrading: statt der rohen Ollama-Namen die Fassungen,
-                # die dieses Konto sehen darf (10.0 Luna).
+
+
                 from aquaticy import upgrading
 
                 current = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
                 alle = upgrading.picker_entries(UPGRADE_DIR, alle, bool(current.ultra))
             antwort: dict[str, Any] = {
                 "models": alle,
-                # Fuer den Code- und den Pro-Modus: nur die staerksten.
+
                 "strong": strong_models(3, purpose=zweck) + verknuepft,
             }
             if modus:
-                # Seit 9.5.14 entscheidet der Server, was die Auswahl zeigt: im
-                # Code- und Pro-Modus nur die drei staerksten (ein schwaches
-                # Modell ist dort am teuersten), und welches Feld die Wahl setzt.
+
+
+
                 antwort["picker"] = webview.picker_view(
                     modus, alle,
                     strong_models(3, purpose="code" if modus == "code" else "") + verknuepft,
@@ -5139,7 +5224,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             self._json(antwort)
         elif route == "/api/memory":
-            # Abgeschaltet heisst abgeschaltet: dann wird auch nichts gezeigt.
+
             if not SESSION.settings().memory_enabled:
                 self._json({"enabled": False, "entries": []})
             else:
@@ -5158,9 +5243,9 @@ class Handler(BaseHTTPRequestHandler):
             from aquaticy.usage import UsageLog, summary_view
 
             settings = SESSION.settings()
-            # Normale Konten sehen ihr Kontingent in Prozent; die Statistik in
-            # Token gibt es nur ohne Kontingent (Ultra, lokal). Aufbereitet wird
-            # hier -- der Browser zeigt nur noch an.
+
+
+
             self._json({
                 "limits": usage_view(settings),
                 "stats": (
@@ -5169,9 +5254,9 @@ class Handler(BaseHTTPRequestHandler):
                 ),
             })
         elif route == "/api/system":
-            # Seit 9.5.21 nur Ultra -- Normal und Pro sehen die Auslastung des
-            # Rechners nicht (sie verraet Prozessor, Speicher und Grafikkarte
-            # des Betreibers).
+
+
+
             if not SESSION.ultra:
                 self._json({"error": "Die Auslastungsanzeige gibt es nur mit Ultra."}, 403)
                 return
@@ -5179,13 +5264,13 @@ class Handler(BaseHTTPRequestHandler):
 
             settings = SESSION.settings()
             payload = snapshot(settings.data_dir)
-            # Nicht "memory" nennen -- das ist im Abbild schon der
-            # Arbeitsspeicher, der Schluessel wuerde ihn ueberschreiben.
+
+
             if settings.memory_enabled:
                 payload["storage"] = storage_view(SESSION.memory().usage())
             payload["gauges"] = system_gauges(payload)
             if CLUSTER is not None and CLUSTER.joined:
-                # Server-Verbund (11.3.2 Sol): jeder Rechner mit seiner Last und Rolle.
+
                 with contextlib.suppress(Exception):
                     payload["cluster"] = cluster_gauges(CLUSTER)
             self._json(payload)
@@ -5234,8 +5319,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "Zu viele Anmeldeversuche. Bitte warte eine Minute."}, 429)
                 return
             payload = self._read_json(limit=AUTH_BODY_BYTES)
-            # Geraet (9.5.31, aquaticy/devices.py): eine zufaellige Kennung im
-            # Cookie plus Hardware/Browser -- Anhaltspunkte gegen Mehrfachkonten.
+
+
             from aquaticy.devices import (
                 DEVICE_COOKIE,
                 DEVICE_COOKIE_AGE,
@@ -5252,9 +5337,9 @@ class Handler(BaseHTTPRequestHandler):
                 payload.get("device"),
                 user_agent=self.headers.get("User-Agent") or "",
                 accept_language=self.headers.get("Accept-Language") or "",
-                # Eine frisch erzeugte Kennung trifft nie ein anderes Konto -- sie
-                # wird trotzdem gleich mit gespeichert, damit das naechste Konto
-                # aus diesem Browser sie wiedererkennt.
+
+
+
                 cookie=geraete_kennung,
             )
             if route.endswith("register"):
@@ -5273,13 +5358,13 @@ class Handler(BaseHTTPRequestHandler):
                         400,
                     )
                     return
-                # Eine gesperrte Adresse legt gar nicht erst ein Konto an (9.5.22) --
-                # bis dahin entstand es und kam nur nicht herein.
+
+
                 if AIGUARD is not None:
                     from aquaticy.aiguard import BANNED_MESSAGE
 
-                    # Seit 9.5.32 auch ein gesperrtes Geraet: wer ein gesperrtes
-                    # Konto loescht, legt vom selben Geraet kein neues an.
+
+
                     if AIGUARD.is_banned(ip=self._client_ip(),
                                          device=geraet.cookie_hash) is not None:
                         self._json({"ok": False, "error": BANNED_MESSAGE, "code": "banned"},
@@ -5301,8 +5386,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": False, "error": str(exc)}, 400)
                     return
             else:
-                # Anmeldeschutz gegen Bots (12.0.0 Terra): erst die Risikozahl, dann --
-                # und nur dann -- das Passwort. Abgewiesen kostet keinen Hash.
+
+
                 if not self._bot_gate(payload, geraet, neue_kennung):
                     return
                 konto_schluessel = "login:" + str(payload.get("email", "")).strip().lower()
@@ -5319,16 +5404,16 @@ class Handler(BaseHTTPRequestHandler):
                     BOT_FAILS.add(*self._bot_keys(geraet, neue_kennung))
                     self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
                     return
-            # Eine gesperrte ADRESSE kommt nicht herein (9.5.16 Lion). Ein
-            # gesperrtes KONTO dagegen schon (seit 9.5.24): es soll unter „Info“
-            # sehen, warum und wie lange -- schreiben kann es nicht (/api/chat).
+
+
+
             if AIGUARD is not None:
                 from aquaticy.aiguard import BANNED_MESSAGE
 
                 if AIGUARD.is_banned(ip=self._client_ip()) is not None:
                     self._json({"ok": False, "error": BANNED_MESSAGE, "code": "banned"}, 403)
                     return
-            if account is None:  # pragma: no cover - beide Wege oben kehren dann zurueck
+            if account is None:  # pragma: no cover
                 self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
                 return
             try:
@@ -5337,17 +5422,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
                 return
             AUTH.note_seen(account.id, self._client_ip())
-            # Anmeldung von einem unbekannten Geraet (9.5.32): ein Hinweis fuer
-            # das Konto selbst -- wer sein Konto nicht selbst benutzt hat,
-            # sieht es beim naechsten Besuch und kann ueberall abmelden.
+
+
+
             if not route.endswith("register"):
                 with contextlib.suppress(Exception):
                     if not AUTH.is_known_device(account.id, geraet):
                         AUTH.add_event(account.id, "neues-geraet",
                                        f"Anmeldung mit {geraet.browser} auf "
                                        f"{geraet.hardware.split(' · ')[0]}")
-            # Das Geraet vermerken -- bei der Registrierung steht es schon da
-            # (dann nur "zuletzt gesehen"), bei einer Anmeldung kommt es dazu.
+
+
             with contextlib.suppress(Exception):
                 AUTH.note_device(account.id, geraet)
             with contextlib.suppress(Exception):
@@ -5413,7 +5498,7 @@ class Handler(BaseHTTPRequestHandler):
             if not wanted:
                 self._json({"ok": False, "error": "keine Chat-Kennung"}, 400)
                 return
-            # Geoeffnet ist gelesen: das Leuchten in der Liste hoert auf.
+
             with contextlib.suppress(Exception):
                 settings = SESSION.settings()
                 Cache(settings.db_path, settings.cache_ttl_hours).clear_unread(wanted)
@@ -5438,6 +5523,9 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/addons":
             antwort, status = addon_action(self._read_json())
             self._json(antwort, status)
+        elif route == "/api/addons/qr":
+            antwort, status = addon_qr(SESSION.current(), self._read_json(limit=AUTH_BODY_BYTES))
+            self._json(antwort, status)
         elif route == "/api/werkstatt/eingabe":
             antwort, status = workshop_input(self._read_json())
             self._json(antwort, status)
@@ -5447,21 +5535,21 @@ class Handler(BaseHTTPRequestHandler):
             antwort, status = coworker_action(self._read_json(), self._account())
             self._json(antwort, status)
         elif route == "/api/prefs":
-            # Der Browser schlaegt vor, der Server entscheidet -- zurueck
-            # kommt, was wirklich gilt, nicht was geschickt wurde.
+
+
             self._json(ui_state().write(self._read_json()))
         elif route == "/api/stop":
             self._json({"ok": SESSION.stop()})
         elif route == "/api/answer":
             text = str(self._read_json().get("text", "")).strip()[:MAX_MESSAGE_CHARS]
-            # Auch die Antwort auf eine Rueckfrage geht an Aquaticy -- bis 9.5.25
-            # an Chatsperre und Beleidigungserkennung vorbei (9.5.26).
+
+
             konto = self._account()
             aktueller = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
             if (AIGUARD is not None and konto is not None
                     and self._aiguard_text(konto, text, aktueller.chat_id(),
                                            previous_user_message(aktueller))):
-                # Der Lauf wartet sonst minutenlang auf eine Antwort, die nie kommt.
+
                 with contextlib.suppress(Exception):
                     SESSION.stop()
                 return
@@ -5479,18 +5567,18 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 written = save_values(self._read_json())
             except ValueError as exc:
-                # Ein unsinniger Wert ist ein Tippfehler, kein Serverfehler --
-                # und die Meldung soll sagen, welches Feld gemeint ist.
+
+
                 self._json({"ok": False, "error": str(exc)}, 400)
                 return
             except Exception as exc:
                 self._json({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500)
                 return
-            # Ein neues Modell oder ein neuer Schluessel kann die Rangfolge
-            # aendern -- also noch einmal nachsehen statt den alten Stand
-            # weiterzureichen.
+
+
+
             forget_strong_models(SESSION.settings().data_dir)
-            # Der Pfad auf dem Server geht niemanden im Browser etwas an (9.6.0).
+
             del written
             self._json({"ok": True})
         else:
@@ -5518,9 +5606,9 @@ class Handler(BaseHTTPRequestHandler):
         if not code:
             self._google_page(False, "Google hat keinen Code mitgeschickt.")
             return
-        # Nur fuer die angemeldete Sitzung, die die Anmeldung begonnen hat --
-        # und nur mit ihrem einmaligen state (9.5.15). Ohne Konto landeten
-        # die Schluessel sonst im Profil des Servers.
+
+
+
         konto = self._account()
         abgelaufen = ("Diese Rückmeldung von Google gehört zu keiner Anmeldung, die du "
                       "hier begonnen hast (oder sie ist abgelaufen). Bitte in den "
@@ -5530,15 +5618,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._google_page(False, abgelaufen)
                 return
         elif AUTH is None:
-            # Ohne Konten, aber das Zugangswort-Cookie fehlte: nur mit dem
-            # Ablauf-Cookie dieses Browsers.
+
+
             if google_state_take_browser(state, self._cookie(GOOGLE_FLOW_COOKIE)) is None:
                 self._google_page(False, abgelaufen)
                 return
         else:
-            # Von Google zurueck kommt das Sitzungscookie (SameSite=Strict) nicht
-            # mit (9.6.9 Luna). Dann gilt das Ablauf-Cookie: es ist an diesen
-            # Browser und an genau diesen state gebunden und nennt das Konto.
+
+
+
             kennung = google_state_take_browser(state, self._cookie(GOOGLE_FLOW_COOKIE))
             konto = AUTH.account(kennung) if kennung else None
             if konto is None:
@@ -5615,14 +5703,14 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             insult_level,
         )
 
-        # Chatsperre (9.5.24): nur DIESER Chat ist zu -- ein neuer geht.
+
         grund = AIGUARD.chat_locked(konto.id, chat)
         if grund:
             self._json({"error": chat_locked_message(grund), "code": "chat_locked"}, 403)
             return True
-        # Beleidigungen erkennt Ai-guard seit 9.5.25 auch ohne Modell -- das
-        # Modell uebersah kurze Beschimpfungen oft. Seit 9.5.28 auch den Auftrag,
-        # ANDERE herabzusetzen; ein Zitat allein zaehlt nicht.
+
+
+
         stufe, eigener_grund, detail = insult_level(text), "", "Beleidigung (erkannt)"
         if not stufe:
             stufe = demeaning_request(text, previous)
@@ -5651,21 +5739,21 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         settings = SESSION.settings()
         cache = Cache(settings.db_path, settings.cache_ttl_hours)
         if action == "rename":
-            # Ohne Titel: zurueck zur ersten Frage -- nicht der Name "None"
-            # (bis 9.5.15 wurde aus einem fehlenden Titel woertlich "None").
+
+
             titel = payload.get("title")
             return {"ok": True, "title": cache.rename_chat(
                 session_id, titel if isinstance(titel, str) else "")}
         if action == "delete":
             if any(s.chat_id() == session_id and s.has_running_chat()
                     for s in SESSION.chat_sessions()):
-                # Loeschen haette bis zum Ende der Antwort gewartet -- und die
-                # schriebe den Chat danach wieder hin (9.5.34).
+
+
                 return {"ok": False, "error": "Dieser Chat antwortet gerade. "
                         "Bitte erst stoppen, dann löschen.", "code": "busy"}
             removed = cache.delete_chat(session_id)
-            # Der geloeschte Chat war vielleicht der offene -- dann faengt der
-            # naechste Satz einen neuen an, statt in ein Nichts zu schreiben.
+
+
             SESSION.forget_chat(session_id)
             return {"ok": True, "removed": removed}
         return {"ok": False, "error": f"unbekannte Aktion '{action}'"}
@@ -5692,7 +5780,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
         if not normalize_url(url):
             return {"ok": False, "error": "Die Adresse ist ungültig."}
-        # Getestet wird immer lesend -- ein Verbindungstest soll nichts anlegen.
+
         client = Storage(url, access="read")
         try:
             info = client.info()
@@ -5725,16 +5813,16 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         redirect = google_redirect(self.headers.get("Host", ""))
 
         if action == "start":
-            # Wie viel Recht gefragt wird, entscheidet der Schalter im
-            # Formular -- nicht der gespeicherte Stand. Wer gerade "Aendern
-            # erlaubt" angehakt hat, soll nicht erst speichern muessen.
+
+
+
             darf_aendern = payload.get("write")
             if darf_aendern is None:
                 darf_aendern = settings.google_write
-            # Client-ID und Secret aus dem Formular gleich speichern (12.5.5 Terra):
-            # Bis dahin nahm der Start die ID aus dem Formular, das Einloesen danach
-            # aber nur gespeicherte Werte -- wer nicht erst unten gespeichert hatte,
-            # stimmte bei Google zu und bekam dann "Erst ... speichern".
+
+
+
+
             neu: dict[str, Any] = {}
             client_id = str(payload.get("client_id", "")).strip()
             if client_id and client_id != settings.google_client_id:
@@ -5743,8 +5831,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             if secret:
                 neu[GOOGLE_SECRET_FIELD] = secret
             if neu:
-                # Wer verbindet, will lesen lassen -- sonst saehe das Modell die
-                # Werkzeuge trotz Verbindung nicht.
+
+
                 neu["AQUATICY_GOOGLE"] = "true"
                 neu["AQUATICY_GOOGLE_WRITE"] = "true" if darf_aendern else "false"
                 try:
@@ -5778,8 +5866,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
         if action == "finish":
             eingefuegt = str(payload.get("code", ""))
-            # Der state steht in der eingefuegten Adresse -- sonst schickt ihn
-            # die Oberflaeche aus dem Start mit. Ohne passenden: kein Tausch.
+
+
             state = (parse_qs(urlsplit(eingefuegt.strip()).query).get("state") or [""])[0] \
                 if "state=" in eingefuegt else str(payload.get("state", ""))
             if not google_state_take(state, getattr(SESSION.account, "id", "") or ""):
@@ -5836,18 +5924,18 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         model = fix_model_id(str(payload.get("AQUATICY_MODEL", "")).strip()) or settings.model
         api_base = str(payload.get("AQUATICY_API_BASE", settings.api_base) or "").strip()
         if not SESSION.ultra:
-            # Normale und Pro-Konten testen gegen die Adressen des Betreibers --
-            # nicht gegen eine eingetippte (siehe _profile_settings).
+
+
             api_base = settings.api_base
         if api_base and not base_fits(api_base, model):
-            # Dieselbe Regel wie im Betrieb -- sonst testet man etwas anderes,
-            # als spaeter laeuft, und der Test luegt.
+
+
             api_base = ""
         des_betreibers = get_settings().api_base or ""
-        # So, wie es nach dem Speichern liefe: dasselbe Modell, dieselbe
-        # Adresse -- also dieselben Regeln fuer Schluessel und Rechnung
-        # (Settings.key_source und llm_kwargs_for). Sonst testet man
-        # etwas anderes, als spaeter laeuft.
+
+
+
+
         vorschau = replace(
             settings, model=model, api_base=api_base,
             own_api_base=(api_base if konto and SESSION.ultra and api_base
@@ -5859,41 +5947,41 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         api_base = str(weg.get("api_base") or "")
         if not konto and api_base and api_base not in {settings.api_base or "",
                                                        des_betreibers}:
-            # Ohne Konten ist man selbst der Betreiber -- trotzdem geht ein
-            # gespeicherter Schluessel nie an eine frisch eingetippte
-            # Adresse. Nicht bloss leer lassen: dann holte sich LiteLLM
-            # ihn selbst aus der Umgebung (bis 9.5.14 so passiert).
+
+
+
+
             api_key = NO_KEY
 
         backend = str(payload.get("AQUATICY_SEARCH_BACKEND", "")).strip() or settings.search_backend
-        # Wie im Betrieb (Settings.search_key_for): der des Betreibers nur, wenn
-        # er fuer dieses Konto gilt.
+
+
         search_key = settings.search_key_for(backend)
         engines = str(payload.get("AQUATICY_SEARCH_ENGINES", settings.search_engines) or "").strip()
         instance = str(payload.get("AQUATICY_SEARXNG_URL", settings.searxng_url) or "").strip()
         if not SESSION.ultra:
             instance = settings.searxng_url
 
-        # Mit eigenem Schluessel (getippt oder im Schluesselbund) zaehlt der
-        # Test nicht -- er laeuft auf Rechnung des Kontos beim Anbieter.
+
+
         kontingent = settings.quota if quelle != "own" else None
         try:
-            # Der Test laeuft mit dem Schluessel des Betreibers -- also zaehlt er
-            # wie jeder andere Aufruf ins Kontingent (seit 9.5.14).
+
+
             from aquaticy.pace import own_gate
             from aquaticy.probe import PROBE_QUESTION, PROBE_TOKENS
             from aquaticy.usage import tokens
 
-            # Atomar gebucht, bevor der Test laeuft (9.5.15).
-            # Die Buchung bleibt stehen: der Test hat den Anbieter gefragt.
+
+
             if kontingent is not None:
                 kontingent.reserve(tokens(PROBE_QUESTION) + PROBE_TOKENS, model)
             llm_ok, llm_msg = check_llm(model, api_key, api_base,
                                         pace_key=own_gate(api_key) if quelle == "own" else "")
-        except Exception as exc:  # QuotaExceeded: der Satz sagt, wann es weitergeht
+        except Exception as exc:
             llm_ok, llm_msg = False, str(exc)
         search_ok, search_msg = check_search(backend, search_key, engines, instance)
-        # Fehlermeldungen der Anbieter zitieren gern den Schluessel -- nie weitergeben.
+
         geheim = [api_key, search_key, *settings.secrets()]
         return {
             "ok": llm_ok and search_ok,
@@ -5925,9 +6013,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         token = eingetippt or settings.ha_token
         if (not eingetippt and settings.ha_token and settings.ha_url
                 and normalize_url(url) != normalize_url(settings.ha_url)):
-            # Wie bei den Modell-Schluesseln (_probe): der gespeicherte Token
-            # geht nur an die Adresse, fuer die er eingerichtet ist. Wer eine
-            # andere testet, fuegt den Token dafuer selbst ein.
+
+
+
             return {"ok": False, "error": (
                 "Für eine neue Adresse bitte den Token dazu eintragen — der "
                 "gespeicherte geht nur an die gespeicherte Adresse."
@@ -5945,9 +6033,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         gespeichert = False
         if payload.get("save") and (eingetippt or normalize_url(url)
                                     != normalize_url(settings.ha_url)):
-            # Klappt der Test, gilt die Verbindung gleich (12.5.5 Terra). Bis dahin
-            # stand "Zum Uebernehmen unten speichern" da -- und wer das uebersah,
-            # hatte im Chat kein Home Assistant, obwohl der Test "verbunden" sagte.
+
+
+
             neu = {"AQUATICY_HA_URL": client.url}
             if eingetippt:
                 neu[HA_TOKEN_FIELD] = eingetippt
@@ -5963,7 +6051,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             "entities": sum(counts.values()),
             "domains": counts,
             "saved": gespeichert,
-            # Schalten ist ein eigener Schalter -- die Oberflaeche sagt, wenn er aus ist.
+
             "control": bool(SESSION.settings().ha_control),
         }
 
@@ -5976,8 +6064,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         _warm_up_once()
         self._csp_nonce = secrets.token_urlsafe(18)
         body = with_state(ui_template(), nonce=self._csp_nonce).encode("utf-8")
-        # Gepackt (9.6.1): aus rund 370 kB werden etwa 80 kB -- spuerbar auf
-        # dem Handy und auf einem schwachen Server mit langsamer Leitung.
+
+
         gepackt = accepts_gzip(self.headers.get("Accept-Encoding") or "")
         if gepackt:
             body = gzip.compress(body, compresslevel=5)
@@ -6049,8 +6137,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             LOGIN_FAILS.allow(schluessel)
             self._json({"ok": False, "error": "Das Passwort stimmt nicht."}, 403)
             return
-        # authenticate kann einen alten Passwort-Hash migrieren. Die Freigabe
-        # muss an diesen aktuellen Stand gebunden sein, nicht an das Cookie-Abbild.
+
+
         konto = verified
         if route == "/api/account/delete" and (
                 str(payload.get("confirm") or "").strip().upper() != DELETE_WORD):
@@ -6064,22 +6152,22 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             except ValueError as exc:
                 self._json({"ok": False, "error": str(exc)}, 409)
                 return
-            # Das Konto bleibt -- also auch sein Taktgeber (9.5.34: vorher
-            # liefen neue Auftraege bis zur naechsten Anmeldung nie).
+
+
             with contextlib.suppress(Exception):
                 start_user_scheduler(konto)
             self._json({"ok": True})
             return
-        # Ein gesperrtes Konto darf sich loeschen (Recht auf Loeschung) -- die
-        # Sperre aber nicht mit: sie haengt danach nur noch am Hash der
-        # Geraete-Kennung, so lange wie vorher.
+
+
+
         if AIGUARD is not None:
             sperre = AIGUARD.is_banned(user_id=konto.id)
             if sperre is not None:
                 for keks in AUTH.device_cookie_hashes(konto.id):
                     AIGUARD.ban_device(keks, reason=sperre.reason, until=sperre.until)
-                # Auch die letzte Adresse (9.5.34): ohne Cookie liess sich sonst
-                # sofort ein neues Konto anlegen.
+
+
                 with contextlib.suppress(Exception):
                     adresse = AUTH.last_address(konto.id)
                     if adresse:
@@ -6095,9 +6183,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
     def _chat(self) -> None:
         """Fuehrt die Anfrage aus und streamt die Ereignisse als SSE."""
         kontingent = SESSION.settings().quota
-        # Laeuft das Hauptmodell mit dem eigenen Schluessel des Kontos, kostet
-        # es das Kontingent nichts (9.5.14 Seashell): dann darf der Chat auch am
-        # Limit starten -- Serverarbeit lehnen die Werkzeuge im Lauf selbst ab.
+
+
+
         eigenes_modell = SESSION.settings().key_source(SESSION.settings().model) == "own"
         if kontingent is not None and not eigenes_modell:
             from aquaticy.quota import QuotaExceeded
@@ -6105,8 +6193,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             try:
                 kontingent.check()
             except QuotaExceeded as exc:
-                # Der Satz nennt, welches Limit und wann es sich zuruecksetzt;
-                # "usage" ist derselbe Stand wie unter /api/account.
+
+
                 self._json(
                     {"error": str(exc), "code": "quota", "which": exc.which,
                      "usage": usage_view(SESSION.settings())},
@@ -6124,18 +6212,18 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         if any(blocked_upload(str(item.get("name") or "")) for item in attachments):
             self._json({"error": BLOCKED_UPLOAD_MESSAGE, "code": "blocked_upload"}, 400)
             return
-        # Arbeitsweise, Struktur und Denktiefe gehoeren zur einzelnen Frage,
-        # nicht zur Sitzung: dieselbe Person will mal eine ausfuehrliche
-        # Recherche und im naechsten Satz nur den Code.
-        #
-        # Was der Browser dazu schickt, ist ein Vorschlag. Geprueft wird er
-        # gegen dieselben Listen wie im Einstellungsfenster, und was gilt,
-        # wird gleich vermerkt -- damit der naechste Aufruf und das naechste
-        # Geraet denselben Stand vorfinden. Kommt nichts mit, gilt der
-        # gespeicherte Stand: der Server weiss ihn selbst.
-        #
-        # "thinking" ist der alte Name von "structured" -- eine Oberflaeche
-        # aus dem Cache soll deswegen nicht aufhoeren zu arbeiten.
+
+
+
+
+
+
+
+
+
+
+
+
         wunsch = {
             name: payload[name]
             for name in (
@@ -6146,14 +6234,14 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         }
         if "structured" not in wunsch and "thinking" in payload:
             wunsch["structured"] = payload["thinking"]
-        # Alte Clients duerfen den entfernten Modus nicht wieder aktivieren.
+
         if payload.get("image_mode") not in (None, False):
             self._json({"error": "Diesen Modus gibt es nicht mehr."}, 400)
             return
-        # Ein Schalter, den der gewaehlte Modus gar nicht zeigt, ist kein
-        # Wunsch: er darf den gespeicherten Stand nicht ueberschreiben. Sonst
-        # kaeme man aus dem Code-Modus zurueck und das abgeschaltete Web waere
-        # wieder an -- ohne dass jemand etwas angefasst haette.
+
+
+
+
         from aquaticy.uistate import clean as clean_state
 
         gewuenscht = str(clean_state(wunsch, base=ui_state().read())["mode"])
@@ -6170,18 +6258,18 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         agents = int(stand.get("agents", 12))
         visual_sources = bool(stand.get("visual_sources", False))
         agents = max(1, min(50 if mode == "pro" else 12, agents))
-        # Und was der Modus ausblendet, gilt auch nicht -- das entscheidet der
-        # Server, nicht der Browser: im Code-Modus wird immer nachgeschlagen.
-        # Das Gegenpruefen geht unveraendert durch; was es bedeutet,
-        # entscheidet der Agent am Modus (im Pro-Modus die vier Pruefer,
-        # sonst die zweite Runde).
+
+
+
+
+
         if mode == "code":
             online = True
             visual_sources = False
-        # Ai-guard (9.5.30): Normal- und Pro-Konten sollen die virtual machine nicht
-        # fuer Cybersecurity- oder Schadsoftware-Themen nutzen. Merken sie das im
-        # Code-Modus mit laufender virtual machine an, geht es zurueck in den
-        # Normal-Modus (ohne Maschine), mit kurzer Meldung im Chat. Ultra behaelt sie.
+
+
+
+
         vm_switch = False
         if mode == "code" and sandbox:
             konto_vorab = self._account()
@@ -6202,12 +6290,12 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             self._json({"error": "leere Nachricht"}, 400)
             return
         if not message:
-            # Nur Dateien, kein Text: das ist eine vollstaendige Bitte.
+
             message = "Sieh dir das Angehängte an und sag mir, worum es geht."
 
-        # Ai-guard (9.5.16 Lion): schon gesperrt? Dann gar nicht erst starten.
-        # Die zuletzt gesehene Adresse wird dabei festgehalten (für `aquaticy
-        # list` und für eine Adresssperre).
+
+
+
         konto = self._account()
         if konto is not None and AUTH is not None:
             AUTH.note_seen(konto.id, self._client_ip())
@@ -6224,8 +6312,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                                   previous_user_message(aktueller)):
                 return
 
-        # Der Lauf gehoert ab hier dem Server, nicht der Verbindung. Reisst
-        # sie ab, laeuft er weiter und kann spaeter zu Ende gesehen werden.
+
+
         session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
         session.chat_id()
         try:
@@ -6237,45 +6325,45 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             lauf.chat = session.chat_id()
             lauf.add({"type": "chat", "session_id": session.chat_id()})
         if vm_switch:
-            # Steht vor der Antwort: der Chat erklaert, warum in den Normal-Modus
-            # gewechselt wurde, und die Oberflaeche stellt die Schalter nach.
+
+
             from aquaticy.aiguard import VM_SWITCH_MESSAGE
 
             lauf.add({"type": "mode_switch", "mode": "normal", "text": VM_SWITCH_MESSAGE})
         if kontingent is not None:
-            # Die 5-Stunden-Sitzung beginnt mit der ersten Nachricht -- nicht
-            # erst mit dem ersten gezaehlten Token.
+
+
             kontingent.begin()
         seen_done = threading.Event()
-        # Kein Schluessel -- eigener oder gestellter -- verlaesst den Server in
-        # einer Meldung. Anbieter zitieren ihn gern in Fehlertexten.
+
+
         geheim = session.settings().secrets()
 
         def emit(name: str, payload: dict[str, Any]) -> None:
-            # Der Renderer im Terminal nennt den Text "text"; im Browser
-            # heisst das Ereignis "chunk", damit das Frontend es direkt
-            # anhaengen kann.
+
+
+
             kind = "chunk" if name == "answer_chunk" else name
             if geheim and kind not in ("chunk", "thought"):
                 payload = scrub_payload(payload, geheim)
             if kind == "error":
-                # 9.6.8 Sol: im Chat nie der technische Fehler, nur ein Satz fuer
-                # Menschen. Hinweise wie das erreichte Limit bleiben stehen.
+
+
                 technisch = str(payload.get("message", ""))
                 oeffentlich = public_error(technisch)
                 if oeffentlich != " ".join(technisch.split()):
-                    # 11.2.2 Terra: Der Betreiber sieht im Terminal, was wirklich
-                    # schiefging -- ohne Geheimnisse und gekuerzt. Vorher stand
-                    # der Grund nirgends, nur "etwas ist schiefgelaufen".
+
+
+
                     print(f"  [Fehler] {scrub_error(technisch, geheim)[:300]}", flush=True)
                 payload = {**payload, "message": oeffentlich}
             if AIGUARD is not None and konto is not None and kind == "abuse":
-                # Seit 9.5.24 entscheidet Ai-guard aus Art und Schwere (aus
-                # demselben Prüf-Aufruf des Rechtsrahmens): Chatsperre, Bann
-                # fuer Tage oder fuer immer. Eine blosse Ablehnung nach GG/BGB
-                # ohne Missbrauch zaehlt nicht mehr -- "bei Rot ueber die Ampel,
-                # ist das ok?" soll niemanden sperren. Ausfall oder unklare
-                # Pruefung erzeugen gar kein "abuse" (Fund 9.5.18).
+
+
+
+
+
+
                 with contextlib.suppress(Exception):
                     massnahme = AIGUARD.record_incident(
                         konto.id, str(payload.get("art") or ""),
@@ -6288,8 +6376,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                         lauf.add({"type": "chat_locked"})
             if kind == "done":
                 seen_done.set()
-                # Der Aufnahmezeitpunkt eines Bildes kommt als fertiger Text
-                # (9.5.14) -- der Browser rechnet keine Zeiten mehr um.
+
+
                 payload = {**payload, "visuals": [
                     {**v, "captured_text": webview.iso_moment_text(v.get("captured_at"))}
                     if isinstance(v, dict) and v.get("captured_at") else v
@@ -6301,10 +6389,10 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             previous = getattr(_REQUEST, "session", None)
             _REQUEST.session = session
             try:
-                # Läuft der Rechtsrahmen (normale Konten immer), reitet die
-                # Missbrauchserkennung auf dessen Prüf-Aufruf mit -- kein zweiter
-                # beim Modell. Nur wo er aus ist (Pro hat ihn abgeschaltet),
-                # fragt Ai-guard selbst.
+
+
+
+
                 if (AIGUARD is not None and konto is not None
                         and not session.settings().legal_guard):
                     from aquaticy.aiguard import check_message
@@ -6332,9 +6420,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     visual_sources=visual_sources,
                 )
             except Exception as exc:
-                # Absichtliche Hinweise (etwa "/image: das ist kein Bild") sind
-                # ValueError mit einem Satz fuer Menschen; sie gehen durch den
-                # Filter. Alles andere ist ein technischer Fehler (9.6.8 Sol).
+
+
+
                 meldung = user_hint(exc)
                 if meldung != GENERIC_ERROR:
                     meldung = public_error(scrub_error(meldung, geheim))
@@ -6342,8 +6430,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     print(f"  [Fehler] Chat: {type(exc).__name__}")
                 lauf.add({"type": "error", "message": meldung})
             finally:
-                # Ohne ein "done" bliebe im Browser der blinkende Cursor
-                # stehen -- die Oberflaeche waere scheinbar haengen.
+
+
                 if not seen_done.is_set():
                     lauf.add({"type": "done"})
                 lauf.finish()
@@ -6383,13 +6471,13 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Accel-Buffering", "no")
-        # Ohne das puffert manch ein Zwischenstueck die Antwort und nichts
-        # kommt an, bevor alles fertig ist.
+
+
         self.send_header("Connection", "close")
         self.end_headers()
 
-        # Sofort ein Lebenszeichen: erst damit steht die Verbindung fuer den
-        # Browser wirklich, und man sieht, dass etwas passiert.
+
+
         self._sse(": los\n\n")
 
         stand = since
@@ -6399,16 +6487,16 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 if not self._sse(f"data: {json.dumps(event, ensure_ascii=False)}\n\n"):
                     return
             if fertig and stand <= len(lauf.events):
-                # Bis zum Schluss gesehen -- der Lauf muss nicht noch einmal
-                # abgeholt werden.
+
+
                 lauf.delivered = True
                 return
-            # Ein Cloud-Modell schweigt zwischen zwei Schritten gern eine
-            # halbe Minute. Ohne ein Byte in der Leitung legt irgendwer in der
-            # Kette auf -- der Browser, das Handy-Funkmodul, ein Proxy -- und
-            # die Oberflaeche meldet "network error", obwohl die Recherche
-            # noch laeuft. Ein Doppelpunkt ist ein Kommentar im SSE-Format: er
-            # haelt die Leitung warm und wird nicht angezeigt.
+
+
+
+
+
+
             if not neue and not self._sse(": warte\n\n"):
                 return
 
@@ -6504,7 +6592,7 @@ def addresses_for(host: str, port: int, token: str = "") -> list[tuple[str, str]
     suffix = f"?token={token}" if token else ""
     found: list[tuple[str, str]] = []
     if is_public_host(host):
-        if host == "0.0.0.0":  # alle Netzwerkkarten -- per --lan gewaehlt
+        if host == "0.0.0.0":
             lan = lan_address()
             if lan:
                 found.append((lan, "im heimischen Netz"))
@@ -6527,7 +6615,7 @@ def urls_for(host: str, port: int, token: str = "") -> list[str]:
     return [url for url, _ in addresses_for(host, port, token)]
 
 
-#: Ob LiteLLM schon vorgeladen wird (11.2.1).
+
 _WARMED = threading.Event()
 
 
@@ -6562,7 +6650,7 @@ def _cluster_load() -> dict[str, Any]:
                 laeufe += sum(1 for lauf in buch._runs.values() if not lauf.done)
     last: dict[str, Any] = {"runs": laeufe, "sessions": len(sitzungen)}
     if SHARDING is not None:
-        # Serverlast aufteilen: ist der rpc-server dieses Servers bereit?
+
         with contextlib.suppress(Exception):
             last["split"] = SHARDING.worker_status()
     return last
@@ -6752,8 +6840,8 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
         elif aktion == "leave":
             CLUSTER.leave()
         elif aktion == "split":
-            # Serverlast aufteilen (10.2.0 Luna): nur der Master, nur Modelle,
-            # die er wirklich in Ollama hat.
+
+
             if not CLUSTER.is_master:
                 return {"error": "Die Serverlast teilt nur der Master auf."}, 403
             an = payload.get("on") is True
@@ -6782,9 +6870,9 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
     return _cluster_view_full(), 200
 
 
-#: Wie viele Ersatz-Ports nach dem eingestellten probiert werden (9.6.8 Sol).
+
 BACKUP_PORTS = 20
-_PORT_BELEGT = {98, 48, 10048, 13, 10013}  # EADDRINUSE / EACCES (Linux, macOS, Windows)
+_PORT_BELEGT = {98, 48, 10048, 13, 10013}
 
 
 def port_candidates(port: int) -> list[int]:
@@ -6803,7 +6891,7 @@ def port_candidates(port: int) -> list[int]:
         if kandidat != cluster.DISCOVERY_PORT:
             out.append(kandidat)
     if port < 1024 and DEFAULT_PORT not in out:
-        out.append(DEFAULT_PORT)  # ein privilegierter Port ist oft nur fuer root frei
+        out.append(DEFAULT_PORT)
     return out
 
 
@@ -6823,8 +6911,8 @@ def free_port(host: str, port: int) -> int:
     return port
 
 
-#: Abbrueche durch die Gegenseite: ein Handy schlaeft ein, das WLAN wechselt,
-#: Tailscale baut neu auf. Kein Fehler von Aquaticy -- nichts fuers Terminal.
+
+
 VERBINDUNG_WEG = (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError)
 
 
@@ -6836,13 +6924,13 @@ class AquaticyServer(ThreadingHTTPServer):
     ein Abbruch durch die Gegenseite still, alles andere steht als eine Zeile da.
     """
 
-    #: Warteschlange fuer neue Verbindungen (11.3.2 Sol). Die Standardbibliothek
-    #: nimmt 5 -- eine Seite oeffnet beim Laden aber zwoelf Anfragen auf einmal.
-    #: Lief die Schlange ueber, verwarf der Kernel den Verbindungsaufbau, und der
-    #: Browser wartete mit wachsenden Pausen: einzelne Anfragen hingen 30 s und mehr.
+
+
+
+
     request_queue_size = 128
-    #: Vor dem ersten HTTP-Header begrenzen, auch bei langsam lesenden Clients.
-    #: Genug Platz fuer parallele Chats, SSE und Oberflaechenabfragen.
+
+
     max_connections = 256
 
     def __init__(self, server_address: tuple[str, int], handler: Any,
@@ -6966,7 +7054,7 @@ class _TLSServer(AquaticyServer):
         super().__init__(address, handler)
 
     def _reject_overload(self, request: Any) -> None:
-        # Vor dem TLS-Handschlag keine unverschluesselte HTTP-Antwort senden.
+
         return
 
     def _serve_connection(self, request: Any, client_address: Any) -> None:
@@ -7039,7 +7127,7 @@ class DataDirLock:
     def __init__(self, data_dir: Path) -> None:
         data_dir.mkdir(parents=True, exist_ok=True)
         self.path = data_dir / "aquaticy.lock"
-        self._file: Any = open(self.path, "a+b")  # noqa: SIM115 - lebt bis release()
+        self._file: Any = open(self.path, "a+b")  # noqa: SIM115
         try:
             self._lock()
         except OSError as exc:
@@ -7094,13 +7182,13 @@ def serve(
     try:
         _serve(host, port, open_browser, token)
     except BaseException:
-        # Was vor dem Binden scheitert, darf keinen Planer zuruecklassen.
+
         _stop_schedulers()
         raise
     finally:
         sperre.release()
     if _CLUSTER_RESTART.is_set():
-        # Neustart erst, wenn Port UND Datenordner frei sind.
+
         import sys
 
         with contextlib.suppress(Exception):
@@ -7127,16 +7215,16 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     AIGUARD = guard_for(data_dir)
     print(f"  Pro-Code:   {code} (9 Zeichen, geheim halten)")
     print(f"  Ultra-Code: {ultra} (14 Zeichen, geheim halten)")
-    # Ein harter Abbruch kann eine virtual machine zurueckgelassen haben. Sie belegt
-    # Speicher und hat nichts mehr zu tun -- also weg damit, bevor es losgeht.
+
+
     try:
         from aquaticy.sandbox import sweep
 
         threading.Thread(target=sweep, daemon=True).start()
-    except Exception:  # pragma: no cover - Aufraeumen darf nie den Start kosten
+    except Exception:  # pragma: no cover
         pass
-    # Auftraege: was faellig ist, laeuft von selbst. Ein eigener Thread, der
-    # jede Minute nachsieht -- kostet nichts, solange nichts ansteht.
+
+
     try:
         global COWORKER_SCHEDULER
         from aquaticy import coworker as coworker_mod
@@ -7145,15 +7233,15 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         COWORKER_SCHEDULER.start()
         for account in AUTH.accounts():
             start_user_scheduler(account)
-        # Ohne Konten (eigener Rechner) laeuft die Bruecke mit den Einstellungen des Rechners.
+
         with contextlib.suppress(Exception):
             _bridge_runner(DEFAULT_SESSION).ensure_running()
-    except Exception:  # pragma: no cover - Auftraege duerfen den Start nie kosten
+    except Exception:  # pragma: no cover
         pass
     try:
         server = bind_server(host, port)
     except BaseException:
-        # Kein Port frei: auch dann darf kein Planer weiterlaufen.
+
         _stop_schedulers()
         raise
     if server.server_address[1] != port:
@@ -7164,18 +7252,18 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     global SERVER, CLUSTER, UPGRADE_DIR, UPGRADER, SHARDING
     research_stop: threading.Event | None = None
     research_worker: threading.Thread | None = None
-    # Alles nach dem Binden steht im try: scheitert der Start (etwa eine gesperrte
-    # Datenbank), wird der Port trotzdem frei und der Planer haelt an. Sonst nahm
-    # der Neustart den naechsten Port, und der alte nahm Verbindungen an, ohne je
-    # zu antworten (9.6.8 Ultra).
+
+
+
+
     try:
         from aquaticy.learning import Learning
         from aquaticy.research import start_cleanup
 
         research_stop, research_worker = start_cleanup(Learning(data_dir).research)
         SERVER = server
-        # Auto-Upgrading (10.0 Luna): trainiert im Hintergrund, wenn ein Ultra-
-        # Konto es eingeschaltet hat -- sonst schlaeft der Faden nur.
+
+
         from aquaticy import upgrading
         from aquaticy.local_model import installed_models
 
@@ -7187,7 +7275,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
             lambda: installed_models(OLLAMA_URL()),
             manifest=lambda: Learning(data_dir).upgrade_manifest())
         UPGRADER.start()
-        # Server-Verbund (9.6.1): laeuft nur, wenn er in den Dev settings an ist.
+
         try:
             frage = cluster.TerminalPrompt()
             CLUSTER = cluster.Cluster(data_dir, host=host, port=port, version=VERSION_LABEL,
@@ -7199,8 +7287,8 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
                                                           wants_models=_cluster_wants_models))
             frage.cluster = CLUSTER
             CLUSTER.start()
-            # Serverlast aufteilen (10.2.0 Luna): haelt rpc-server und llama-server
-            # passend zur Einstellung im Verbund -- ohne Verbund tut sie nichts.
+
+
             from aquaticy import sharding
 
             SHARDING = sharding.Manager(
@@ -7209,15 +7297,15 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
             if CLUSTER.joined:
                 rolle = "Master" if CLUSTER.is_master else "Mitglied"
                 print(f"  Verbund:    {rolle}, {len(CLUSTER.members())} Server")
-        except Exception as exc:  # pragma: no cover - der Verbund darf nie den Start kosten
+        except Exception as exc:  # pragma: no cover
             print(f"  [Verbund] nicht gestartet: {type(exc).__name__}: {exc}")
             CLUSTER = None
         global WEBSITE, PUBLIC_SERVER, LAN_ONLY
         WEBSITE, PUBLIC_SERVER = _start_website(data_dir)
         LAN_ONLY = WEBSITE is not None
         if open_browser:
-            # Bei Bindung an alle Schnittstellen steht die lokale Adresse zuletzt;
-            # sonst nur die tatsaechlich gebundene Schnittstelle oeffnen.
+
+
             local = urls_for(host, port, token)[-1]
             threading.Timer(0.6, lambda: webbrowser.open(local)).start()
         server.serve_forever()
@@ -7249,6 +7337,3 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         _stop_schedulers()
         TOKEN = ""
         AUTH = None
-    # Der Beitritt laeuft in einem Daemon-Thread. Dort kann der Prozess nach
-    # shutdown bereits enden, bevor execv erreicht wird. Neustart deshalb in
-    # serve(), solange der Hauptablauf noch lebt und Port und Sperre frei sind.

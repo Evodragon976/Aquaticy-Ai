@@ -79,8 +79,8 @@ def _verbinden(a: cluster.Cluster, b: cluster.Cluster, gefragt: list, neustarts:
         a.confirm(einladung.id, "000000" if einladung.code != "000000" else "111111")
     a.confirm(einladung.id, einladung.code)
     _warte(lambda: "b" in neustarts, 20.0)
-    # Im echten Betrieb startet B jetzt neu -- hier reicht es, den Schluessel-
-    # Zwischenspeicher zu leeren.
+
+
     from aquaticy import privacy
 
     privacy._masters.clear()
@@ -139,7 +139,7 @@ def test_safe_rel_blocks_escapes(tmp_path: Path) -> None:
 
 def test_lan_only() -> None:
     assert cluster.lan_ip_ok("192.168.1.5")
-    assert cluster.lan_ip_ok("100.101.1.2")  # Tailscale
+    assert cluster.lan_ip_ok("100.101.1.2")
     assert not cluster.lan_ip_ok("8.8.8.8")
     assert not cluster.lan_ip_ok("kaputt")
 
@@ -178,7 +178,7 @@ def test_shared_db_replicates_rows_both_ways(tmp_path: Path) -> None:
     for name in ("a.db", "b.db"):
         conn = sqlite3.connect(tmp_path / name)
         conn.execute("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT, pw BLOB, t REAL)")
-        conn.execute("CREATE TABLE ev (user_id TEXT, at REAL)")  # ohne Schluessel
+        conn.execute("CREATE TABLE ev (user_id TEXT, at REAL)")
         conn.commit()
         conn.close()
     a, b = cluster.SharedDb(tmp_path / "a.db"), cluster.SharedDb(tmp_path / "b.db")
@@ -197,7 +197,7 @@ def test_shared_db_replicates_rows_both_ways(tmp_path: Path) -> None:
     assert conn.execute("SELECT * FROM users").fetchall() == [("u1", "Anna B", b"\x00\xff", 1.5)]
     assert conn.execute("SELECT at FROM ev").fetchall() == [(3.5,)]
     conn.close()
-    # Eingespieltes landet nicht im eigenen Protokoll -- sonst liefe es im Kreis.
+
     assert b.changes(0)["entries"] == []
     assert b.cursor("A") == a.last_seq()
 
@@ -206,19 +206,19 @@ def test_join_sync_and_files(verbund: Any) -> None:
     a, b, store_a, alt_a, gefragt, neustarts = verbund
     _verbinden(a, b, gefragt, neustarts)
     assert a.is_master and b.joined and not b.is_master
-    # B hat die Daten des Masters -- und seine eigenen gesichert.
+
     store_b = _store(b.data_dir)
     assert {k.email for k in store_b.accounts()} == {"anna@example.org"}
     assert list((b.dir).glob("backup-*/accounts.sqlite3"))
     assert (b.data_dir / "auth.key").read_bytes() == (a.data_dir / "auth.key").read_bytes()
-    # Ein neues Konto auf B kommt bei A an, und umgekehrt.
+
     _konto(store_b, "clara@example.org")
     a.sync_once()
     assert "clara@example.org" in {k.email for k in store_a.accounts()}
     _konto(store_a, "dora@example.org")
     b.sync_once()
     assert "dora@example.org" in {k.email for k in store_b.accounts()}
-    # Anmeldung auf B gilt auch auf A (Sitzung repliziert), Abmelden ebenso.
+
     konto = store_b.authenticate("anna@example.org", "ein-sicheres-passwort")
     assert konto is not None
     token = store_b.create_session(konto, "geraet", "192.168.1.9")
@@ -227,7 +227,7 @@ def test_join_sync_and_files(verbund: Any) -> None:
     store_b.logout(token)
     a.sync_once()
     assert store_a.session_account(token, "geraet", "192.168.1.9") is None
-    # Profilordner: A ist zustaendig, B bekommt die Kopie -- auch Datenbanken.
+
     ordner = a.data_dir / "users" / alt_a.id
     ordner.mkdir(parents=True, exist_ok=True)
     (ordner / "notiz.txt").write_text("hallo", encoding="utf-8")
@@ -236,7 +236,7 @@ def test_join_sync_and_files(verbund: Any) -> None:
     db.execute("CREATE TABLE t (x)")
     db.execute("INSERT INTO t VALUES (42)")
     db.commit()
-    a._gens_cache = None  # der Stand ist 2 s zwischengespeichert
+    a._gens_cache = None
     b.sync_once(full=True)
     kopie = b.data_dir / "users" / alt_a.id
     assert (kopie / "notiz.txt").read_text(encoding="utf-8") == "hallo"
@@ -254,7 +254,7 @@ def test_assign_balances_and_remove_rekeys(verbund: Any) -> None:
     _verbinden(a, b, gefragt, neustarts)
     b.sync_once()
     a.sync_once()
-    # A traegt schon ein aktives Konto -- das naechste geht an B.
+
     a.homes["schon-da"] = a.node_id
     a._activity["schon-da"] = time.time()
     a.last_ok[b.node_id] = time.time()
@@ -318,7 +318,7 @@ def test_web_returns_503_instead_of_using_stale_profile(
             "User-Agent": "Test", "Cookie": f"{web.AUTH_COOKIE}={token}"})
         antwort = verbindung.getresponse()
         assert antwort.status == 503
-        # Seit 9.6.8 Sol: Serverfehler nur allgemein, ohne Interna des Verbunds.
+
         assert web.GENERIC_ERROR.encode() in antwort.read()
         verbindung.close()
     finally:
@@ -402,14 +402,14 @@ def test_proxy_serves_on_home_server(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert b"erika@example.org" in antwort
         assert b"Content-Security-Policy" in antwort, "die Kopfzeilen des Heimservers"
 
-        # Inzwischen woanders zuhause: der Heimserver sagt "moved", nichts geht raus.
+
         heim.homes[konto.id] = eingang.node_id
         heim.last_ok[eingang.node_id] = time.time()
         h = _Handler("/api/account")
         assert eingang._proxy_once(h, ziel, konto.id, b"", False, "192.168.1.20") == "moved"
         assert h.wfile.getvalue() == b""
 
-        # Ohne den Verbundschluessel kommt nichts durch.
+
         heim.homes[konto.id] = heim.node_id
         eingang.state["cluster"]["secret"] = cluster._b64(b"f" * 32)
         h = _Handler("/api/account")
@@ -427,7 +427,7 @@ def test_member_list_never_carries_the_secret(verbund: Any) -> None:
     antwort = a._dispatch(b.node_id, "ping", {})
     assert "secret" not in antwort["members"] and "previous" not in antwort["members"]
     assert "secret" not in a.public_info()
-    # Und trotzdem behaelt B seinen Schluessel, wenn die Liste ankommt.
+
     vorher = b.key
     b._take_members(a.public_info(), a.homes)
     assert b.key == vorher
@@ -456,7 +456,7 @@ def test_failover_moves_accounts_of_a_dead_server_and_it_releases_on_return(verb
     a.last_ok[b.node_id] = time.time()
     with pytest.raises(cluster.ClusterError, match="antwortet noch"):
         a.failover(b.node_id)
-    a.last_ok[b.node_id] = 0.0  # B ist weg -- und wirklich nicht erreichbar
+    a.last_ok[b.node_id] = 0.0
     netz = a._transport
 
     def weg(ziel, pfad, body, timeout):
@@ -468,7 +468,7 @@ def test_failover_moves_accounts_of_a_dead_server_and_it_releases_on_return(verb
     assert a.failover(b.node_id) == 1
     a._transport = netz
     assert a.homes["konto1"] == a.node_id and a.is_home("konto1")
-    # B kommt zurueck, bekommt die neue Zuteilung und gibt das Konto ab.
+
     abgegeben: list[str] = []
     b.hooks.release = lambda user: abgegeben.append(user) or True
     b._take_members(a.public_info(), a.homes)

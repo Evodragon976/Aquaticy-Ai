@@ -14,12 +14,10 @@ from typing import Any
 
 from aquaticy import botguard
 
-#: Ein Browser als User-Agent. Die Sitzung haengt an User-Agent und Sprache --
-#: wer sich so anmeldet, schickt beides auch danach.
 AGENT = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
          "Chrome/130.0.0.0 Safari/537.36")
 SPRACHE = "de-DE"
-#: Was ein Browser bei einem fetch() der eigenen Seite zusaetzlich mitschickt.
+
 FETCH: dict[str, str] = {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors"}
 BROWSER: dict[str, str] = {"User-Agent": AGENT, "Accept-Language": SPRACHE, **FETCH}
 

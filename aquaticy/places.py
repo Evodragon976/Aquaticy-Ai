@@ -37,50 +37,49 @@ from typing import Any
 
 import httpx
 
-#: Die beiden Dienste. Beide von der OSM Foundation, beide gespendet.
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-#: Overpass ist gespendete Rechenzeit und entsprechend oft ausgelastet -- ein
-#: Zeitlimit dort heisst nicht, dass es den Laden nicht gibt. Deshalb steht
-#: hinter dem Hauptserver ein zweiter, oeffentlich zum Ausweichen gedachter.
-#: Der Takt gilt weiter fuer beide zusammen: ausweichen ist kein Freibrief,
-#: doppelt so oft zu fragen.
+
+
+
+
+
 OVERPASS_MIRRORS = (
     OVERPASS_URL,
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter",
 )
 
-#: Wie lange ein einzelner Overpass-Server hoechstens brauchen darf. Bewusst
-#: knapp: der Hauptserver haengt oft, und wer dort fuenfundzwanzig Sekunden
-#: wartet, hat den Ausweichserver praktisch nie erreicht. Drei kurze Versuche
-#: kommen zusammen schneller zu einer Antwort als ein langer.
+
+
+
+
 OVERPASS_TRY_SECONDS = 11.0
 
-#: Und wie lange die Ortssuche selbst hoechstens dauern darf. Nominatim ist
-#: schnell, wenn es antwortet; antwortet es nicht, hilft Warten nicht.
+
+
 GEOCODE_TRY_SECONDS = 8.0
 
-#: Zweiter Anlauf bei der Ortssuche. Ein Zeitlimit ist dort meistens eine
-#: Laune des Netzes und keine Aussage ueber den Ort.
+
+
 GEOCODE_TRIES = 2
 
-#: Hoechstens ein Aufruf je Sekunde -- so steht es in der Nutzungsregel von
-#: Nominatim, und Overpass bittet um dasselbe Mass. Das Schloss ist
-#: modulweit: es hilft nichts, wenn jeder Agent fuer sich hoeflich ist.
+
+
+
 MIN_INTERVAL = 1.05
 _takt = threading.Lock()
 _zuletzt = 0.0
 
-#: Obergrenzen. Ein Umkreis, eine Kategorie, ueberschaubar viele Treffer.
+
 MAX_PLACES = 30
 MAX_RADIUS_M = 15000
 DEFAULT_RADIUS_M = 4000
 
-#: Was gesucht wird, in OSM-Sprache. Links das Wort, wie ein Mensch es sagt,
-#: rechts der Filter. Ein Wort, das hier nicht steht, wird ueber den Namen
-#: gesucht -- auch das findet den "Radladen Meier".
+
+
+
 CATEGORIES: dict[str, str] = {
     "cafe": 'nwr[amenity=cafe]',
     "café": 'nwr[amenity=cafe]',
@@ -171,8 +170,8 @@ def _warte() -> None:
 
 
 def _client(user_agent: str, timeout: float) -> httpx.Client:
-    # Feste, oeffentliche Dienste -- und trotzdem dieselbe Netzregel: auch eine
-    # Weiterleitung von dort fuehrt nie ins interne Netz (aquaticy/netguard.py).
+
+
     from aquaticy import netguard
 
     return netguard.guarded_client(
@@ -194,9 +193,9 @@ def geocode(place: str, user_agent: str, timeout: float = 15.0) -> tuple[float, 
     frist = min(timeout, GEOCODE_TRY_SECONDS)
     treffer: Any = None
     letzter: Exception | None = None
-    # Zweimal fragen: ein Zeitlimit ist hier fast immer eine Laune des Netzes.
-    # Dass es den Ort nicht gibt, erkennt man an einer leeren Antwort, nicht
-    # an einer ausbleibenden.
+
+
+
     for _ in range(GEOCODE_TRIES):
         _warte()
         try:
@@ -208,7 +207,7 @@ def geocode(place: str, user_agent: str, timeout: float = 15.0) -> tuple[float, 
                 antwort.raise_for_status()
                 treffer = antwort.json()
             break
-        except Exception as exc:  # httpx-Fehler, JSON-Fehler, alles dasselbe hier
+        except Exception as exc:
             letzter = exc
     if letzter is not None and treffer is None:
         raise PlacesError(
@@ -223,7 +222,7 @@ def geocode(place: str, user_agent: str, timeout: float = 15.0) -> tuple[float, 
         raise PlacesError("Die Ortssuche gab etwas Unerwartetes zurueck.") from exc
 
 
-#: Endungen, die ein Kategorienwort tragen darf ("Cafés", "Bäckerei", "Blumenladen").
+
 _ENDUNGEN = ("", "s", "e", "es", "n", "en", "er", "ern", "ei", "erei", "laden", "läden",
              "geschäft", "geschaeft", "shop", "shops", "handel", "handlung", "praxis")
 _UMLAUTE = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
@@ -257,8 +256,8 @@ def _filter_for(what: str) -> str:
     gefunden = _kategorie(text)
     if gefunden:
         return gefunden
-    # Nichts Bekanntes: ueber den Namen suchen. Findet den "Radladen Meier"
-    # auch dann, wenn er als etwas eingetragen ist, das hier nicht steht.
+
+
     sicher = "".join(zeichen for zeichen in text if zeichen.isalnum() or zeichen in " -äöüß")
     sicher = sicher.strip()[:40]
     if not sicher:
@@ -288,10 +287,10 @@ def find_places(
     lat, lon, gefunden = geocode(where, user_agent, timeout=min(timeout, 15.0))
 
     frist = min(timeout, OVERPASS_TRY_SECONDS)
-    # Das Zeitlimit IN der Abfrage sagt dem Server, wann er selbst aufgeben
-    # soll. Steht es hoeher als unser eigenes, rechnet er weiter, nachdem wir
-    # laengst aufgelegt haben -- verschenkte Rechenzeit auf einem Dienst, der
-    # gespendet ist.
+
+
+
+
     abfrage = (
         f"[out:json][timeout:{max(5, int(frist))}];"
         f"{_filter_for(what)}(around:{radius},{lat},{lon});"
@@ -308,9 +307,9 @@ def find_places(
                 geladen = antwort.json()
             fehler = _overpass_fehler(geladen)
             if fehler:
-                # Ueberlastet, Zeit um oder Speicher voll: der Server meldet das
-                # mit Status 200 und einer leeren Liste. Bis 11.0 galt das als
-                # "hier gibt es nichts" -- und blieb einen Tag gemerkt.
+
+
+
                 raise PlacesError(fehler)
             daten = geladen
             break
@@ -338,7 +337,7 @@ def find_places(
         tags = {str(k): str(v) for k, v in raw_tags.items()}
         name = tags.get("name", "").strip()
         if not name:
-            continue  # ohne Namen ist ein Punkt auf der Karte keine Auskunft
+            continue
         mitte = eintrag.get("center") or {}
         if not isinstance(mitte, dict):
             mitte = {}

@@ -55,7 +55,7 @@ def test_a_known_empty_or_unusable_catalog_does_not_offer_unconfirmed_defaults(
     settings = _settings(tmp_path)
     linked.save(tmp_path, "mistral", {"models": catalog})
     if catalog == [{"id": MODEL}]:
-        # Der Fehler kommt ueber den echten Buchungsweg, nicht ueber eine globale Sperre.
+
         from unittest.mock import patch
 
         with patch("aquaticy.llmcall.completion", side_effect=RuntimeError("410 Gone")), \
@@ -129,7 +129,7 @@ def test_council_calls_switch_once_and_preserve_access_and_quota_checks(
 def test_a_retired_model_switches_in_every_chat_mode(tmp_path, choice: str) -> None:
     settings = _settings(tmp_path, llm_retries=1)
     linked.save(tmp_path, "mistral", {"models": [{"id": MODEL}, {"id": NEXT}]})
-    # Die echte Wiederholungslogik mit einem nachgestellten Anbieter und ohne Netz.
+
     agent = Agent.__new__(Agent)
     agent.settings = settings
     agent.mode = choice if choice in {"pro", "code"} else "normal"
@@ -166,7 +166,7 @@ def test_a_parallel_retirement_does_not_mark_the_successor_as_retired(tmp_path) 
     def completion(messages: Any, *, stream: bool) -> dict[str, str]:
         called.append(agent.active_model)
         if len(called) == 1:
-            # Eine parallele Pruefung hat denselben Fehler bereits eingetragen.
+
             system.mark_retired(MODEL, settings)
             assert agent.active_model == MODEL, "Ein laufender Aufruf muss dasselbe Modell behalten"
             raise Exception("410 Gone")

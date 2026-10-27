@@ -25,9 +25,9 @@ def _patch_tags(monkeypatch: pytest.MonkeyPatch, payload: Any = TAGS, status: in
     monkeypatch.setattr(httpx, "get", fake_get)
 
 
-# ---------------------------------------------------------------------------
-# Modellauswahl
-# ---------------------------------------------------------------------------
+
+
+
 def test_all_models_use_the_tool_calling_prefix() -> None:
     """`ollama/` kann kein Tool-Calling -- es muss `ollama_chat/` sein."""
     assert lm.MODEL_PREFIX == "ollama_chat"
@@ -73,9 +73,9 @@ def test_env_model_id_resolves_in_litellm() -> None:
     assert resolve_model(lm.env_values(lm.LOCAL_MODELS[0])["AQUATICY_MODEL"]) == "ollama_chat"
 
 
-# ---------------------------------------------------------------------------
-# Server und Modelle
-# ---------------------------------------------------------------------------
+
+
+
 def test_server_running(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_tags(monkeypatch)
     assert lm.server_running() is True
@@ -115,9 +115,9 @@ def test_start_server_short_circuits_when_running(monkeypatch: pytest.MonkeyPatc
     assert lm.start_server() is True
 
 
-# ---------------------------------------------------------------------------
-# Installation
-# ---------------------------------------------------------------------------
+
+
+
 def test_install_command_is_shown_not_run_silently(monkeypatch: pytest.MonkeyPatch) -> None:
     """Der Installationsbefehl muss sichtbar sein -- nichts laeuft ungefragt."""
     monkeypatch.setattr(lm.platform, "system", lambda: "Linux")
@@ -169,9 +169,9 @@ def test_pull_streams_progress_and_detects_failure(monkeypatch: pytest.MonkeyPat
         list(lm.pull_model("qwen2.5:7b"))
 
 
-# ---------------------------------------------------------------------------
-# Tool-Calling-Pruefung -- der entscheidende Test
-# ---------------------------------------------------------------------------
+
+
+
 def _reply(content: str = "", tool_calls: Any = None) -> Any:
     from types import SimpleNamespace
 
@@ -194,7 +194,7 @@ def test_verify_accepts_a_model_that_calls_tools(monkeypatch: pytest.MonkeyPatch
     ok, detail = lm.verify_tool_calling("ollama_chat/qwen2.5:7b")
     assert ok
     assert "web_search" in detail
-    # Die Probe bietet tatsaechlich ein Werkzeug an.
+
     assert captured["tools"][0]["function"]["name"] == "web_search"
     assert captured["api_base"] == lm.DEFAULT_OLLAMA_URL
 
@@ -229,9 +229,9 @@ def test_verify_handles_dict_shaped_tool_calls(monkeypatch: pytest.MonkeyPatch) 
     assert ok and "web_search" in detail
 
 
-# ---------------------------------------------------------------------------
-# Vision-Modelle und Sehtest
-# ---------------------------------------------------------------------------
+
+
+
 def test_vision_models_use_the_right_prefix() -> None:
     for model in lm.VISION_MODELS:
         assert model.model_id.startswith("ollama_chat/")
@@ -243,9 +243,9 @@ def test_vision_recommendation_fits_the_memory() -> None:
     assert lm.recommend_vision_model(2).name == "moondream"
 
 
-# ---------------------------------------------------------------------------
-# Ein Modell fuer alles
-# ---------------------------------------------------------------------------
+
+
+
 def test_dual_models_can_do_both() -> None:
     for model in lm.DUAL_MODELS:
         assert model.tools and model.vision
@@ -344,7 +344,7 @@ def test_probe_image_is_a_valid_png() -> None:
     assert data.startswith(b"\x89PNG\r\n\x1a\n")
     width, height = struct.unpack(">II", data[16:24])
     assert width == height == 64
-    assert data[24] == 8 and data[25] == 2  # 8 Bit, Farbtyp RGB
+    assert data[24] == 8 and data[25] == 2
     assert data.endswith(b"IEND\xae\x42\x60\x82")
 
 
@@ -356,7 +356,7 @@ def test_probe_image_has_the_expected_colour() -> None:
     start = data.index(b"IDAT") + 4
     end = data.index(b"IEND") - 4
     pixels = zlib.decompress(data[start:end])
-    # Erste Zeile: Filterbyte, dann RGB-Tripel.
+
     assert pixels[0] == 0
     assert tuple(pixels[1:4]) == lm.PROBE_COLOR
     assert "rot" in lm.PROBE_COLOR_WORDS
@@ -373,7 +373,7 @@ def test_verify_vision_accepts_a_model_that_sees(monkeypatch: pytest.MonkeyPatch
     ok, detail = lm.verify_vision("ollama_chat/llava:7b")
     assert ok
     assert "erkannt" in detail
-    # Es wurde tatsaechlich ein Bild mitgeschickt.
+
     content = captured["messages"][0]["content"]
     assert content[1]["type"] == "image_url"
     assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
@@ -415,9 +415,9 @@ def test_colour_words_are_matched_loosely(
     assert ok, answer
 
 
-# ---------------------------------------------------------------------------
-# Windows
-# ---------------------------------------------------------------------------
+
+
+
 def test_windows_uses_winget_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lm.platform, "system", lambda: "Windows")
     monkeypatch.setattr(lm.shutil, "which", lambda name: "C:\\\\winget.exe")
@@ -448,7 +448,7 @@ def test_windows_server_start_uses_creationflags(monkeypatch: pytest.MonkeyPatch
 
     def fake_running(*args: Any, **kwargs: Any) -> bool:
         calls["n"] += 1
-        return calls["n"] > 1  # erst nach dem Start erreichbar
+        return calls["n"] > 1
 
     monkeypatch.setattr(lm, "server_running", fake_running)
     monkeypatch.setattr(
@@ -499,9 +499,9 @@ def test_windows_memory_failure_is_tolerated(monkeypatch: pytest.MonkeyPatch) ->
     assert lm.recommend_model(None) in lm.LOCAL_MODELS
 
 
-# ---------------------------------------------------------------------------
-# Speicher freigeben
-# ---------------------------------------------------------------------------
+
+
+
 def test_loaded_models(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_get(url, **kwargs):
         assert url.endswith("/api/ps")
@@ -545,9 +545,9 @@ def test_free_memory_survives_a_dead_server(monkeypatch: pytest.MonkeyPatch) -> 
     assert lm.free_memory() == []
 
 
-# ---------------------------------------------------------------------------
-# Speichermangel von Blindheit unterscheiden
-# ---------------------------------------------------------------------------
+
+
+
 @pytest.mark.parametrize(
     "detail",
     [
@@ -578,7 +578,7 @@ def test_crashed_runner_is_not_reported_as_blindness(monkeypatch: pytest.MonkeyP
     ok, detail = lm.verify_vision("ollama_chat/llava:7b")
     assert not ok
     assert "Speicher" in detail
-    assert "sehen kann" in detail  # sagt ausdruecklich, dass es kein Sehurteil ist
+    assert "sehen kann" in detail
 
 
 def test_crashed_runner_in_the_tool_test(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -591,9 +591,9 @@ def test_crashed_runner_in_the_tool_test(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "kleineres Modell" in detail
 
 
-# ---------------------------------------------------------------------------
-# Groessenpruefung bei ausdruecklich genannten Modellen
-# ---------------------------------------------------------------------------
+
+
+
 def test_known_model_lookup() -> None:
     assert lm.known_model("gemma4:12b") is not None
     assert lm.known_model("ollama_chat/gemma4:12b") is not None
@@ -621,9 +621,9 @@ def test_without_memory_info_no_warning(monkeypatch: pytest.MonkeyPatch) -> None
     assert lm.too_big("gemma4:26b") == ""
 
 
-# ---------------------------------------------------------------------------
-# Liegt das Modell schon im Speicher?
-# ---------------------------------------------------------------------------
+
+
+
 def test_only_local_models_have_something_to_load() -> None:
     """Ein Wolkenmodell laedt nichts -- dafuer gibt es auch keine Wartezeit."""
     from aquaticy.local_model import local_name
@@ -646,5 +646,5 @@ def test_the_latest_tag_is_the_same_model(monkeypatch: pytest.MonkeyPatch) -> No
     assert lm.model_is_loaded("ollama_chat/gemma3") is True
     assert lm.model_is_loaded("ollama_chat/gemma3:latest") is True
     assert lm.model_is_loaded("ollama_chat/llava:7b") is False
-    # Und fuer ein Wolkenmodell gibt es nichts zu melden.
+
     assert lm.model_is_loaded("mistral/mistral-large-latest") is None

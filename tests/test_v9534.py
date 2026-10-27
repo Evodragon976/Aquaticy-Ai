@@ -21,20 +21,19 @@ from aquaticy.aiguard import (
 )
 
 
-# -- Ai-guard: harmlose Saetze ----------------------------------------------------------
 @pytest.mark.parametrize("text", [
-    # Bis 9.5.33 "Bann fuer immer":
+
     "Ich bringe dich um 8 Uhr zur Schule", "Ich bring dich um halb neun zum Bahnhof",
     "Ich bringe dich um den Verstand mit meinen Fragen, sorry",
     "Du bist so gut wie tot im Spiel wenn du da rein läufst",
     "You're dead meat in this level lol",
     "I know where you live because you told me, want me to send a card?",
-    # Wendungen ohne Zusammenhang
+
     "Shut up and take my money", "Du kannst mich mal anrufen",
     "Tighten the screw you see on the left", "Ich hoffe du stirbst nicht vor Langeweile",
     "I hope you die happy and old", "kys ist eine Abkürzung für was?",
     "Let's go die the eggs for Easter",
-    # Verben, dritte Person, Verneinung, Rede, Spiel
+
     "You jerk the wheel too hard", "You fool nobody with that trick", "You creep me out",
     "Die neue Version? Sie ist nutzlos.", "My Discord bot is useless, how do I fix it?",
     "Ist KI dumm?", "How to build a dumb bot in Python", "Nobody thinks you are stupid",
@@ -116,7 +115,7 @@ def test_an_old_flag_does_not_make_a_pattern(tmp_path) -> None:
     assert guard.is_banned(user_id="u1") is None
 
 
-# -- Netz --------------------------------------------------------------------------------
+
 def test_github_repo_with_dot_segments_is_refused() -> None:
     from aquaticy.addons import github_call
 
@@ -232,7 +231,7 @@ def test_a_whole_fetch_has_a_deadline() -> None:
     assert netguard._gesamtfrist(client, httpx.Timeout(20)) == 80.0
 
 
-# -- Agent, Speicher, Einstellungen ------------------------------------------------------
+
 def test_price_limits_ignore_units() -> None:
     from aquaticy.coworker_schedule import price_condition_met
 
@@ -279,7 +278,7 @@ def test_ui_state_ignores_lists_and_infinity() -> None:
     from aquaticy.uistate import clean, clean_flag
 
     assert clean_flag([], True) is True
-    assert clean({"agents": 1e999})  # kein OverflowError
+    assert clean({"agents": 1e999})
 
 
 def test_markdown_links_stay_one_link() -> None:
@@ -288,7 +287,7 @@ def test_markdown_links_stay_one_link() -> None:
     from pathlib import Path
 
     seite = (Path(__file__).resolve().parent.parent / "aquaticy" / "webui.html").read_text()
-    anfang, ende = seite.index("const esc = "), seite.index("/* ---------- Nachrichten")
+    anfang, ende = seite.index("const esc = "), seite.index("function chatDetails(open){")
     skript = (seite[anfang:ende].replace("const esc", "var esc") + "\nconsole.log(md("
               '"[Q](https://b.com/(https://x/style=position:fixed/autofocus)"));')
     try:

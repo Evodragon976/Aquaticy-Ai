@@ -44,13 +44,13 @@ def _antwort(text: str = "ok") -> SimpleNamespace:
         message=SimpleNamespace(content=text, tool_calls=None))])
 
 
-# -- Kontingent: jeder Aufruf zaehlt, und es gilt mitten im Lauf ------------------------
+
 @pytest.fixture
 def knapp(tmp_path: Path) -> Settings:
     settings = Settings(model="mistral/mistral-large-latest", data_dir=tmp_path / "d",
                         subagents_auto=False, request_delay_seconds=0.0)
     settings.data_dir.mkdir(parents=True)
-    # Ein normales Konto (seit 9.5.14: 5-Stunden-Sitzung und Woche).
+
     settings.quota = Quota(tmp_path / "konten.sqlite3", "k", time.time() - 3600)
     return settings
 
@@ -84,8 +84,8 @@ def test_an_exhausted_quota_stops_the_call_before_it_costs(
     with pytest.raises(metering.QuotaExceeded, match="Kontingent"):
         metering.completion(knapp, model="mistral/m", messages=[])
     assert gerufen == []
-    # Der Rechtspruefer zaehlt mit, prueft aber nicht vorher -- er soll im
-    # Zweifel ablehnen, nicht ausfallen.
+
+
     metering.completion(knapp, enforce=False, model="mistral/m", messages=[])
     assert gerufen == [True]
 
@@ -103,22 +103,22 @@ def test_all_model_calls_go_through_the_meter() -> None:
     ruft niemand litellm.completion direkt."""
     import re
 
-    # Seit 11.3.2 Sol zaehlt auch llmcall.completion als direkter Aufruf: es ist nur
-    # der Ausweg fuer LiteLLM ohne `mcp` (aquaticy/llmcall.py), kein eigener Zaehler.
+
+
     aufruf = re.compile(r"(=|return)\s*(litellm|llmcall)\.completion\(")
     wurzel = Path(__file__).resolve().parent.parent / "aquaticy"
     for datei in wurzel.glob("*.py"):
         text = datei.read_text(encoding="utf-8")
-        # probe.py und local_model.py pruefen nur Erreichbarkeit (Einrichtung, lokal).
-        # llmcall.py reicht nur durch -- wer es ruft, wird hier mitgeprueft.
+
+
         if datei.name in ("metering.py", "agent.py", "probe.py", "local_model.py",
                           "llmcall.py"):
             continue
         assert not aufruf.search(text), f"{datei.name} ruft am Zaehler vorbei"
     agent = (wurzel / "agent.py").read_text(encoding="utf-8")
-    # Im Agenten nur die zwei Wege, die selbst zaehlen (_completion und _final_answer).
+
     assert len(aufruf.findall(agent)) == 2
-    # llmcall selbst hat keinen weiteren Ausgang als litellm.completion.
+
     durch = (wurzel / "llmcall.py").read_text(encoding="utf-8")
     assert "metering" not in durch and "import litellm" in durch
 
@@ -130,7 +130,7 @@ def test_the_main_agent_stops_mid_run(knapp: Settings, monkeypatch: pytest.Monke
 
     def llm(**kw: Any) -> Any:
         aufrufe.append(kw["model"])
-        # Jede Runde verbraucht mehr, als uebrig ist.
+
         _voll(knapp)
         tool = SimpleNamespace(id=f"c{len(aufrufe)}", type="function", function=SimpleNamespace(
             name="calculate", arguments=json.dumps({"expression": "1+1"})))
@@ -174,7 +174,7 @@ def test_removed_image_tool_cannot_consume_quota_or_create_files(
         box.close()
 
 
-# -- Konto-Einstellungen: normale Konten -----------------------------------------------
+
 def _profil(tmp_path: Path, env: str = "") -> Path:
     profil = tmp_path / "konto"
     profil.mkdir(exist_ok=True)
@@ -189,8 +189,8 @@ def test_normal_accounts_get_the_quota_and_the_operators_addresses(tmp_path: Pat
     assert normal.quota is not None, "ein normales Konto hat immer ein Kontingent"
     assert normal.api_base == web.get_settings().api_base
     assert normal.searxng_url == web.get_settings().searxng_url
-    # Pro ist beim Netz wie Normal (seit 9.5.17): Kontingent (doppelt), keine
-    # eigene Adresse. Nur Ultra bekommt die eigene Adresse und kein Limit.
+
+
     pro = web._profile_settings(profil, "pro")
     assert pro.quota is not None and pro.api_base == web.get_settings().api_base
     ultra = web._profile_settings(profil, "ultra")
@@ -222,8 +222,8 @@ def test_the_full_form_still_saves_for_normal_accounts(
 ) -> None:
     _sitzung(tmp_path, monkeypatch, "normal")
     werte = web.current_values()
-    # Die Oberflaeche schickt bei normalen Konten die Adressen des Betreibers
-    # unveraendert mit -- das muss durchgehen.
+
+
     web.save_values({key: werte[key] for key in (
         "AQUATICY_MODEL", "AQUATICY_API_BASE", "AQUATICY_SEARXNG_URL", "AQUATICY_LOCATION",
         "AQUATICY_SEARCH_BACKEND", "AQUATICY_AUTO_MODEL")})
@@ -249,12 +249,12 @@ def test_the_probe_never_hands_the_servers_key_to_a_typed_address(
                for _, key, base in gesehen), gesehen
     assert gesehen[0][2] != "https://fremd.example/v1", (
         "normal: die eingetippte Adresse zaehlt nicht")
-    # Eigene Adressen gibt es seit 9.5.17 nur mit Ultra -- auch Pro testet
-    # gegen die des Betreibers.
+
+
     assert gesehen[1][2] != "https://fremd.example/v1", "pro: die eingetippte Adresse zaehlt nicht"
-    # Seit 12.0.0 Luna nimmt der Test keinen eingetippten Schluessel mehr an (die gibt
-    # es nur ueber Add-ons) -- und der des Servers geht auch mit Ultra nicht an die
-    # eingetippte Adresse.
+
+
+
     _sitzung(tmp_path, monkeypatch, "ultra")
     handler._probe({"AQUATICY_MODEL": "mistral/mistral-large-latest",
                     "AQUATICY_API_BASE": "https://fremd.example/v1", "__API_KEY__": "eigener"})
@@ -281,7 +281,7 @@ def test_a_chat_setting_stays_in_the_account(tmp_path: Path,
     assert os.environ.get("AQUATICY_SEARCH_VARIANTS") != "2", "und die Umgebung des Servers auch"
 
 
-# -- Ueber echtes HTTP -----------------------------------------------------------------
+
 @pytest.fixture
 def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from aquaticy.auth import AuthStore
@@ -302,8 +302,8 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 def _anfrage(port: int, method: str, path: str, body: Any = None,
              cookie: str = "", browser: bool = False) -> tuple[int, dict[str, str], dict[str, Any]]:
     conn = HTTPConnection("127.0.0.1", port, timeout=10)
-    # Wie ein Browser (12.0.0 Terra): die Sitzung haengt an User-Agent und Sprache,
-    # und zum Anmelden kommen die Fetch-Metadaten dazu.
+
+
     headers = {"Content-Type": "application/json", "User-Agent": AGENT,
                "Accept-Language": SPRACHE}
     if browser:
@@ -441,13 +441,13 @@ def test_normal_accounts_cannot_blow_up_the_local_model(tmp_path: Path) -> None:
     profil = _profil(tmp_path, "AQUATICY_CONTEXT_TOKENS=2000000\n")
     assert web._profile_settings(profil, "normal").context_tokens <= max(
         web.get_settings().context_tokens, web.NORMAL_CONTEXT_CAP)
-    # Pro ist jetzt gedeckelt wie Normal (seit 9.5.17); nur Ultra darf hoch.
+
     assert web._profile_settings(profil, "pro").context_tokens <= max(
         web.get_settings().context_tokens, web.NORMAL_CONTEXT_CAP)
     assert web._profile_settings(profil, "ultra").context_tokens == 2_000_000
 
 
-# -- 9.5.22: Website-Pruefung ------------------------------------------------------
+
 def _mit_kopf(port: int, method: str, path: str, body: Any = None,
          headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], dict[str, Any]]:
     conn = HTTPConnection("127.0.0.1", port, timeout=10)
@@ -476,14 +476,14 @@ def test_one_account_cannot_be_brute_forced_from_many_addresses(
     server: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(web, "LOGIN_FAILS", web.RateLimiter(attempts=3, window_seconds=900))
-    _konto(server)  # legt die Zustimmung an; das Konto selbst ist egal
+    _konto(server)
     _, kopf, _ = _anfrage(server, "POST", "/api/consent", {"accepted": True})
     zustimmung = kopf["Set-Cookie"].split(";", 1)[0]
     _anfrage(server, "POST", "/api/auth/register", {
         "email": "ziel@example.org", "username": "Ziel", "password": "ein langes Passwort",
         "plan": "normal", "terms_accepted": True}, zustimmung)
-    # Jeder Versuch von einer anderen Adresse (12.0.0 Terra): sonst fragte schon der
-    # Anmeldeschutz je Adresse nach -- hier geht es um die Grenze je Konto.
+
+
     adresse = ["203.0.113.1"]
     monkeypatch.setattr(web.Handler, "_client_ip", lambda self: adresse[0])
     for nummer in range(3):

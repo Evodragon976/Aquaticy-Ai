@@ -12,9 +12,9 @@ def hit(url: str, title: str = "T", snippet: str = "S") -> SearchResult:
     return SearchResult(title=title, url=url, snippet=snippet)
 
 
-# ---------------------------------------------------------------------------
-# Stichwortfassung
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_question_becomes_keywords() -> None:
     """Ganze Fragesaetze verwaessern die Suche -- Stichwoerter treffen."""
     assert queries.keywords("Wie viel kostet ein gebrauchtes Lastenrad in Bremen?") == (
@@ -36,9 +36,9 @@ def test_keywords_survive_an_empty_query() -> None:
     assert queries.keywords("und der die das") == ""
 
 
-# ---------------------------------------------------------------------------
-# Varianten
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_original_query_always_comes_first() -> None:
     """Das Modell hat sich etwas dabei gedacht -- das steht nicht zur Debatte."""
     original = "Wie viel kostet ein Lastenrad in Bremen?"
@@ -80,9 +80,9 @@ def test_an_empty_query_yields_nothing() -> None:
     assert queries.variants("   ") == []
 
 
-# ---------------------------------------------------------------------------
-# Reciprocal Rank Fusion
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_hit_found_by_two_queries_wins() -> None:
     """Genau dafuer ist RRF da: Uebereinstimmung schlaegt einen ersten Platz."""
     first = [hit("https://a.de/1"), hit("https://b.de/1")]
@@ -135,9 +135,9 @@ def test_the_count_is_respected(count: int) -> None:
     assert len(queries.fuse(lists, count=count)) == count
 
 
-# ---------------------------------------------------------------------------
-# Der Ortsfilter in der Anfrage
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_place_is_the_name_not_the_address() -> None:
     from aquaticy.queries import place_of
 
@@ -152,10 +152,10 @@ def test_the_place_is_added_only_when_it_is_missing() -> None:
     from aquaticy.queries import with_place
 
     assert with_place("Gute Cafés mit WLAN", "Bremen") == "Gute Cafés mit WLAN Bremen"
-    # Steht er schon drin, wird nichts angehängt -- "Bremen Bremen" sucht schlechter.
+
     assert with_place("Cafés in Bremen", "Bremen") == "Cafés in Bremen"
     assert with_place("Cafés in Bremen Nord", "Bremen Nord") == "Cafés in Bremen Nord"
-    # Ohne Ortsfilter bleibt alles, wie es war.
+
     assert with_place("Python sortieren", "") == "Python sortieren"
     assert with_place("", "Bremen") == ""
 

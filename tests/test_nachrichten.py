@@ -139,7 +139,7 @@ def test_a_topic_still_goes_to_the_news_search(
     assert gefragt and gefragt[0].startswith("Tesla")
 
 
-# -- Der Agent sieht vorher nach ----------------------------------------------------------
+
 class _Modell:
     def __init__(self, antwort: str) -> None:
         self.antwort = antwort

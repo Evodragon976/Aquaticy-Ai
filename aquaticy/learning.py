@@ -23,14 +23,14 @@ from aquaticy.privacy import ServerSecrets, key_root
 
 MAX_FACTS = 2000
 MAX_CONTRIBUTIONS = 200
-#: Ab so vielen unabhaengigen Konten sehen auch andere einen Auszug (9.6.8 Sol).
-#: Wikipedia kann jeder bearbeiten: ein einzelner, kurz eingeschleuster Satz
-#: soll nicht 30 Tage lang allen Konten vorgelegt werden. Das beitragende
-#: Konto selbst sieht seine Auszuege sofort.
+
+
+
+
 MIN_CONFIRMATIONS = 2
 LIFETIME = 30 * 86400
-# Deliberately narrow: no biographies, user pages, medicine, weapons or news.
-# Expanding this policy requires reviewing both privacy and poisoning risks.
+
+
 TOPICS = frozenset(
     {
         "Wasser",
@@ -182,7 +182,7 @@ def safe_excerpt(text: str, private: set[str] | None = None) -> bool:
     normalized = unicodedata.normalize("NFKC", text)
     if suspicious(text) or _PERSONAL.search(normalized) or _INSTRUCTIONS.search(normalized):
         return False
-    # Conservatively reject likely full names, long identifiers and controls.
+
     if re.search(r"\b[A-ZÄÖÜ][a-zäöüß]+\s+[A-ZÄÖÜ][a-zäöüß]+\b", normalized):
         return False
     if re.search(r"\b[A-Za-z0-9_/-]{32,}\b", normalized):
@@ -277,14 +277,14 @@ class Learning:
 
     def _expire(self, conn) -> None:
         now = time.time()
-        # Normal reads need no writer reservation.
+
         if conn.execute("SELECT 1 FROM learning_facts WHERE expires<=? LIMIT 1",
                         (now,)).fetchone():
             conn.execute("BEGIN IMMEDIATE")
             self._prune(conn, now)
 
     def set_consent(self, enabled: object, version: str) -> dict:
-        # Nur ein echtes True oder False zaehlt -- "ja" oder 1 nicht.
+
         if type(enabled) is not bool or (enabled and version != LEGAL_VERSION):
             raise ValueError("Bitte bestätige die aktuelle Erklärung zum gemeinsamen Lernen.")
         with self.connect() as conn:
@@ -429,7 +429,7 @@ class Learning:
             ).fetchall()
         result = []
         for key, sealed, source in rows:
-            # Revalidate after decrypting, including rows replicated from peers.
+
             text = self.secrets.open(sealed, "learning-text:" + key)
             url = self.secrets.open(source, "learning-source:" + key)
             if (

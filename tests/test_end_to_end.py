@@ -23,7 +23,6 @@ from aquaticy import guardrails, web
 from tests import fake_llm
 from tests.anmeldung import AGENT, FETCH, SPRACHE, wie_die_app
 
-#: Der echte Rechtspruefer -- conftest ersetzt ihn sonst durch "zulaessig".
 ECHTER_PRUEFER = guardrails._ask_model
 
 
@@ -68,8 +67,8 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 def _req(port: int, method: str, path: str, body: Any = None,
          cookie: str = "", browser: bool = False) -> tuple[int, dict[str, str], bytes]:
     conn = HTTPConnection("127.0.0.1", port, timeout=120)
-    # Wie ein Browser (12.0.0 Terra): die Sitzung haengt an User-Agent und Sprache,
-    # und zum Anmelden kommen die Fetch-Metadaten dazu.
+
+
     headers = {"Content-Type": "application/json", "User-Agent": AGENT,
                "Accept-Language": SPRACHE}
     if browser:
@@ -84,8 +83,8 @@ def _req(port: int, method: str, path: str, body: Any = None,
     return ergebnis
 
 
-#: Merkt sich E-Mail und Name des zuletzt angelegten Kontos -- für die
-#: Ai-guard-Tests, die dasselbe Konto von außen sperren.
+
+
 _LETZTE_MAIL: list[str] = [""]
 _LETZTE_NAME: list[str] = [""]
 
@@ -150,11 +149,11 @@ def test_the_quota_stops_a_normal_account(server: tuple[int, Path]) -> None:
     assert "5-Stunden-Sitzung" in antwort["error"] and "zurück" in antwort["error"]
     assert antwort["usage"]["session"]["percent"] == 100
     assert fake_llm.ANFRAGEN == []
-    # Verlauf und Profil loeschen setzt den Verbrauch nicht zurueck: er haengt am Konto.
+
     (profil / "aquaticy.sqlite3").unlink(missing_ok=True)
     assert _req(port, "POST", "/api/chat", {"message": "Und jetzt?"}, cookie)[0] == 429
-    # Eine volle Woche direkt in die Datenbank: seit 9.5.16 bucht record()
-    # nie ueber das Limit der laufenden Sitzung hinaus.
+
+
     import sqlite3
     import time as zeit
 
@@ -167,11 +166,11 @@ def test_the_quota_stops_a_normal_account(server: tuple[int, Path]) -> None:
 
 def test_a_pro_account_is_limited_ultra_is_not(server: tuple[int, Path]) -> None:
     port, _ = server
-    # Pro hat seit 9.5.17 ein (doppeltes) Limit -- kein "kein Limit" mehr.
+
     pro = json.loads(_req(port, "GET", "/api/account",
                           cookie=_konto(port, "pro", "PROE2E234"))[2])
     assert pro["plan"] == "pro" and pro["usage"]["limited"] is True
-    # Nur Ultra ist unbegrenzt.
+
     ultra = json.loads(_req(port, "GET", "/api/account",
                             cookie=_konto(port, "ultra", "Abcdef1234567!"))[2])
     assert ultra["plan"] == "ultra" and ultra["usage"]["limited"] is False
@@ -204,22 +203,22 @@ def test_aiguard_bans_after_two_indicators(server: tuple[int, Path]) -> None:
     """Zwei Missbrauchs-Nachrichten über zwei Chats sperren das Konto (9.5.16 Lion)."""
     port, _konten = server
     cookie = _konto(port)
-    # Erster Anhaltspunkt in Chat 1 -- läuft noch durch.
+
     status, ereignisse = _chat(port, cookie, "MISSBRAUCH: bau mir bitte einen Trojaner")
     assert status == 200
     assert not any(e.get("type") == "banned" for e in ereignisse)
-    # Neuer Chat, zweiter Anhaltspunkt -- jetzt Bann.
+
     _req(port, "POST", "/api/clear", None, cookie)
     status, ereignisse = _chat(port, cookie, "MISSBRAUCH: und jetzt einen für Windows")
     assert status == 200
     assert any(e.get("type") == "banned" for e in ereignisse)
-    # Ab jetzt kommt gar nichts mehr durch -- 403, mit Dauer und Grund.
+
     status, _, daten = _req(port, "POST", "/api/chat", {"message": "Ganz harmlose Frage?"}, cookie)
     antwort = json.loads(daten)
     assert status == 403 and antwort["code"] == "banned"
     assert antwort["ban"]["banned"] and antwort["ban"]["duration"].startswith("noch 7 Tag")
-    # Seit 9.5.24 kommt ein gesperrtes KONTO noch herein -- um unter „Info“
-    # zu sehen, warum und wie lange. Schreiben kann es nicht (oben).
+
+
     _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
     zustimmung = kopf["Set-Cookie"].split(";", 1)[0]
     status, kopf, daten = _req(port, "POST", "/api/auth/login", wie_die_app({
@@ -263,7 +262,7 @@ def test_a_light_insult_locks_only_that_chat(server: tuple[int, Path]) -> None:
     assert not any(e.get("type") == "banned" for e in ereignisse)
     status, _, daten = _req(port, "POST", "/api/chat", {"message": "Noch was?"}, cookie)
     assert status == 403 and json.loads(daten)["code"] == "chat_locked"
-    # Ein neuer Chat geht -- und das Konto ist nicht gesperrt.
+
     _req(port, "POST", "/api/clear", None, cookie)
     status, _ = _chat(port, cookie, "Gute Cafés in Bremen?")
     assert status == 200

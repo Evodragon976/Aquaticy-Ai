@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Aquaticy eingeschlossen starten: die Oberflaeche in einer Kiste, und die
-# Werkstatt darin noch einmal in einer eigenen.
-#
-#   ./aquaticy-sandbox            starten (die Adresse steht danach da)
-#   ./aquaticy-sandbox --build    Image neu bauen, dann starten
-#   ./aquaticy-sandbox --stop     anhalten
-#   ./aquaticy-sandbox --logs     mitlesen
-#   ./aquaticy-sandbox --check    nur nachsehen, was offen steht
-#
-# Offen ist nur, was gebraucht wird -- was das genau ist, steht in
-# compose.sandbox.yaml, und `--check` zeigt es aus der Kiste heraus.
+
+
+
+
+
+
+
+
+
+
+
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -36,8 +36,8 @@ case "${1:-}" in
         exec "${COMPOSE[@]}" logs -f aquaticy-web
         ;;
     --check)
-        # Von innen nachsehen. Ein zweiter, kurzlebiger Container mit
-        # denselben Einstellungen -- er startet keine Oberflaeche.
+
+
         exec "${COMPOSE[@]}" run --rm --no-deps --entrypoint aquaticy \
             aquaticy-web sandbox
         ;;
@@ -48,7 +48,7 @@ case "${1:-}" in
     "")
         ;;
     *)
-        # Unbekanntes startete bis 9.5.16 stillschweigend -- jetzt die Hilfe.
+
         sed -n '4,9p' "$0" | sed 's/^# //' >&2
         exit 2
         ;;

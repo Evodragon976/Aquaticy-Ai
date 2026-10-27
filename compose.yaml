@@ -1,12 +1,12 @@
-# aquaticy im Container -- isoliert vom System, ohne Netzbeschraenkung.
-#
-#   docker compose run --rm aquaticy                    # Chat
-#   docker compose run --rm aquaticy "deine Frage"      # einmalig
-#   docker compose run --rm aquaticy search "test"      # nur Suche
-#
-# Mit eigener Suchmaschine (SearXNG, kein API-Key noetig):
-#   docker compose --profile searxng up -d searxng
-#   docker compose --profile searxng run --rm aquaticy
+
+
+
+
+
+
+
+
+
 
 services:
   aquaticy:
@@ -14,36 +14,36 @@ services:
       context: .
       target: ${AQUATICY_IMAGE_TARGET:-browser}
     image: aquaticy:local
-    # Laeuft unter der UID des Host-Nutzers, damit Exporte in ./exports
-    # dem richtigen Benutzer gehoeren. `aquaticy-box` setzt die Werte; ohne
-    # Wrapper gilt der eingebaute Benutzer (UID 1000).
+
+
+
     user: "${AQUATICY_UID:-1000}:${AQUATICY_GID:-1000}"
-    # Keys und Voreinstellungen kommen aus der .env im Projektverzeichnis.
+
     env_file:
       - path: .env
         required: false
     environment:
       AQUATICY_DATA_DIR: /data
-      # Wird nur benutzt, wenn AQUATICY_SEARCH_BACKEND=searxng gesetzt ist.
+
       AQUATICY_SEARXNG_URL: ${AQUATICY_SEARXNG_URL:-http://searxng:8080}
     volumes:
-      # Cache und Verlauf ueberleben den Container.
+
       - aquaticy-data:/data
-      # Exporte landen im Projektverzeichnis unter ./exports.
+
       - ./exports:/work
     stdin_open: true
     tty: true
     init: true
-    # Das normale Compose-Netz verbindet Aquaticy mit dem optionalen Dienst
-    # `searxng` unter dessen Namen und erlaubt zugleich Recherche nach außen.
-    # Für Zugriff auf das Heimnetz gibt es compose.host.yaml als gezielten
-    # Zusatz; dieser Dienst bleibt hier bewusst im Standardnetz.
+
+
+
+
     security_opt:
       - no-new-privileges:true
-    # Chromium legt seine Shared-Memory-Segmente hier ab.
+
     shm_size: 512m
 
-  # Optional: eigene Metasuchmaschine, damit auch die Suche im Haus bleibt.
+
   searxng:
     profiles: [searxng]
     image: searxng/searxng:latest
@@ -54,8 +54,8 @@ services:
       - ./docker/searxng:/etc/searxng:rw
     environment:
       SEARXNG_BASE_URL: http://localhost:8080/
-      # Ersetzt den Platzhalter in docker/searxng/settings.yml. ./aquaticy-box
-      # legt ihn beim ersten Start zufaellig in der .env an (seit 9.5.16).
+
+
       SEARXNG_SECRET: ${SEARXNG_SECRET:-}
     security_opt:
       - no-new-privileges:true

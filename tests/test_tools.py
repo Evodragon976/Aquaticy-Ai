@@ -290,7 +290,7 @@ def test_transient_fetch_failures_are_not_cached(
     box = Toolbox(settings, cache=cache, fetcher=_mock_fetcher(handler))
     first = box.fetch_page("https://langsam.example/")
     assert first["skipped_reason"] == "timeout"
-    # Zweiter Versuch trifft die Seite wirklich -- kein Cache-Treffer.
+
     second = box.fetch_page("https://langsam.example/")
     assert second["ok"] is True
 
@@ -314,9 +314,9 @@ def test_stable_failures_stay_cached(settings: Settings, tmp_path: Path) -> None
     assert attempts["n"] == 1
 
 
-# ---------------------------------------------------------------------------
-# News, Rechner, Merkzettel, Fallbacks
-# ---------------------------------------------------------------------------
+
+
+
 def test_search_news_carries_date_and_source(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -425,7 +425,7 @@ def test_remember_without_cache_reports_it(settings: Settings) -> None:
     assert "error" in box.remember("etwas")
 
 
-# -- Rueckfragen an den Nutzer -------------------------------------------
+
 def test_ask_user_without_anyone_to_ask(settings: Settings) -> None:
     """Ohne Gegenueber ist das kein Fehler -- das Modell soll weiterarbeiten."""
     box = Toolbox(settings)
@@ -442,7 +442,7 @@ def test_ask_user_passes_question_and_options(settings: Settings) -> None:
     box.ask_handler = lambda question, options: (seen.append((question, options)), "bis 1200")[1]
     result = box.ask_user("Welches Budget?", ["bis 800", "bis 1200", " ", "egal"])
     assert result == {"answered": True, "question": "Welches Budget?", "answer": "bis 1200"}
-    assert seen == [("Welches Budget?", ["bis 800", "bis 1200", "egal"])]  # Leeres fliegt raus
+    assert seen == [("Welches Budget?", ["bis 800", "bis 1200", "egal"])]
     assert box.stats.questions == 1
 
 
@@ -508,7 +508,7 @@ def test_ask_user_is_reachable_through_call(settings: Settings) -> None:
     assert result["answer"] == "Wo?|hier,dort"
 
 
-# -- Heimnetz -------------------------------------------------------------
+
 def test_lan_scan_can_be_switched_off(settings: Settings) -> None:
     settings.lan_enabled = False
     assert "abgeschaltet" in Toolbox(settings).lan_scan()["error"]
@@ -543,7 +543,7 @@ def test_lan_scan_reports_devices(settings: Settings, monkeypatch: pytest.Monkey
     result = box.lan_scan("192.168.1.0/24")
     assert result["count"] == 1
     assert result["devices"][0]["title"] == "Home Assistant"
-    assert "kein Beweis" in result["note"]  # ehrlich ueber die Grenzen
+    assert "kein Beweis" in result["note"]
     assert box.stats.lan_scans == 1
 
 
@@ -569,7 +569,7 @@ def test_lan_check_says_silent_not_absent(settings: Settings,
     assert "Ruhezustand" in result["note"]
 
 
-# -- Home Assistant -------------------------------------------------------
+
 def _ha_settings(settings: Settings, control: bool = False) -> Settings:
     settings.ha_url = "http://192.168.1.5:8123"
     settings.ha_token = "geheim"
@@ -666,7 +666,7 @@ def test_without_anyone_to_confirm_the_lock_stays_shut(settings: Settings,
         "aquaticy.homeassistant.HomeAssistant.call",
         lambda self, d, s, e="", data=None: called.append(1) or [],
     )
-    box = Toolbox(_ha_settings(settings, control=True))  # kein ask_handler
+    box = Toolbox(_ha_settings(settings, control=True))
     result = box.ha_call("alarm_control_panel", "alarm_disarm", "alarm_control_panel.haus")
     assert "bestaetigungspflichtig" in result["error"]
     assert not called
@@ -699,9 +699,9 @@ def test_the_home_tools_are_reachable_through_call(settings: Settings,
     assert "connect-ha" in box.call("ha_states", {})["error"]
 
 
-# ---------------------------------------------------------------------------
-# Auffaecherung der Suche
-# ---------------------------------------------------------------------------
+
+
+
 def test_one_call_searches_several_phrasings(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -825,9 +825,9 @@ def test_the_fan_out_survives_a_dead_phrasing(
     assert result["queries"] == ["Wie viel kostet ein gebrauchtes Lastenrad in Bremen?"]
 
 
-# ---------------------------------------------------------------------------
-# Gmail und Kalender
-# ---------------------------------------------------------------------------
+
+
+
 class FakeGoogle:
     """Steht fuer das verbundene Konto -- ohne Netz."""
 
@@ -932,9 +932,9 @@ def test_reading_mail_counts_against_the_budget(settings: Settings) -> None:
     assert box.stats.tool_calls == before + 1
 
 
-# ---------------------------------------------------------------------------
-# Lagerverwaltung
-# ---------------------------------------------------------------------------
+
+
+
 class FakeStorage:
     """Steht fuer die Lagerverwaltung -- ohne Netz."""
 
@@ -1072,9 +1072,9 @@ def test_the_storage_tools_are_dispatched(settings: Settings) -> None:
     ]
 
 
-# ---------------------------------------------------------------------------
-# Einstellungen aus dem Gespraech
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_appearance_is_changed_in_the_browser_not_in_a_file(
     settings: Settings, tmp_path: Path
 ) -> None:
@@ -1209,9 +1209,9 @@ def test_a_read_page_claims_its_domain_when_asked_to(settings: Settings) -> None
     assert "beispiel.de" in box.avoid_domains
 
 
-# ---------------------------------------------------------------------------
-# Bei Google etwas aendern -- nur mit Erlaubnis und nur nach Rueckfrage
-# ---------------------------------------------------------------------------
+
+
+
 class SchreibenderGoogle(FakeGoogle):
     """Merkt sich, was geschrieben werden sollte."""
 
@@ -1300,9 +1300,9 @@ def test_the_dispatch_knows_the_writing_tools(settings: Settings) -> None:
     assert [name for name, _ in fake.calls] == ["create_event", "update_event", "create_draft"]
 
 
-# ---------------------------------------------------------------------------
-# Der Ortsfilter kommt bei der Suche an
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_location_filter_reaches_the_search(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -1320,7 +1320,7 @@ def test_the_location_filter_reaches_the_search(
     box = Toolbox(settings, cache=None, fetcher=_mock_fetcher(_html_handler("<html></html>")))
     box.web_search("Cafés mit WLAN")
     assert any("Bremen" in anfrage for anfrage in gestellt), gestellt
-    # Die eigene Anfrage bleibt daneben stehen -- sie wird nicht ersetzt.
+
     assert any("Cafés mit WLAN" in anfrage for anfrage in gestellt)
 
 
@@ -1373,9 +1373,9 @@ def test_the_news_search_knows_the_place_too(
     assert gestellt == ["Baustellen Bremen"]
 
 
-# ---------------------------------------------------------------------------
-# Profile: was es zu einem Namen ausserhalb der eigenen Seite gibt
-# ---------------------------------------------------------------------------
+
+
+
 def test_profiles_are_searched_per_platform(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -1479,13 +1479,13 @@ def test_the_platform_list_stays_short() -> None:
 
     assert MAX_PROFILE_SITES == 8
     assert len(PROFILE_SITES) >= 10, "wählen kann man aus mehr"
-    # Instagram und LinkedIn stehen vorn -- danach fragt man zuerst.
+
     assert [label for label, _ in PROFILE_SITES][:2] == ["Instagram", "LinkedIn"]
 
 
-# ---------------------------------------------------------------------------
-# Werkzeuge der virtual machine: Zahlen, die zur Groesse passen
-# ---------------------------------------------------------------------------
+
+
+
 def test_vm_schemas_carry_the_real_numbers() -> None:
     from aquaticy.tools import vm_schemas_for
 

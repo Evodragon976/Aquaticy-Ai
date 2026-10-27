@@ -55,9 +55,9 @@ def box(monkeypatch: pytest.MonkeyPatch) -> tuple[werkstatt.Sandbox, FakeRun]:
     return sandkasten, fake
 
 
-# ---------------------------------------------------------------------------
-# Die Wand
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_container_is_locked_down(box: tuple[werkstatt.Sandbox, FakeRun]) -> None:
     """Jede dieser Zeilen hat einen Grund -- keine darf verschwinden."""
     sandkasten, fake = box
@@ -96,8 +96,8 @@ def test_nothing_of_the_computer_goes_in(box: tuple[werkstatt.Sandbox, FakeRun])
     erlaubt = {"HOME", "PATH", "LANG", "PYTHONDONTWRITEBYTECODE"}
     for eintrag in umgebung:
         name, wert = eintrag.split("=", 1)
-        # Seit 11.2.2 Sol werden die Proxys des Rechners ausdruecklich LEER gesetzt --
-        # sonst reichten Podman und Docker sie selbst hinein.
+
+
         if name in werkstatt.PROXY_VARS:
             assert wert == "", f"{name} darf nur leer in die virtual machine"
             continue
@@ -112,7 +112,7 @@ def test_the_strongest_runtime_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(werkstatt, "_works", lambda binary: binary in vorhanden)
     monkeypatch.setattr(werkstatt, "_has_gvisor", lambda binary: "gvisor" in vorhanden)
-    # Podman ohne Wurzelrechte (11.2.2 Sol fragt das wirklich ab; als root -> podman-root).
+
     monkeypatch.setattr(werkstatt, "_podman_rootless", lambda: True)
 
     assert werkstatt.find_runtime() is None, "ohne Laufzeit gibt es keine virtual machine"
@@ -140,9 +140,9 @@ def test_without_a_runtime_nothing_runs_on_the_computer(monkeypatch: pytest.Monk
     assert "fuehre ich nichts aus" in str(gescheitert.value)
 
 
-# ---------------------------------------------------------------------------
-# Arbeiten darin
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_command_never_touches_a_shell_of_this_computer(
     box: tuple[werkstatt.Sandbox, FakeRun]
 ) -> None:
@@ -225,9 +225,9 @@ def test_the_timeout_has_an_upper_bound(
     assert aufgezeichnet["timeout"] <= werkstatt.MAX_TIMEOUT + 5
 
 
-# ---------------------------------------------------------------------------
-# Und wieder weg
-# ---------------------------------------------------------------------------
+
+
+
 def test_stopping_removes_container_and_volume(box: tuple[werkstatt.Sandbox, FakeRun]) -> None:
     """"Nach zwanzig Minuten sind alle Spuren weg" ist genau das hier."""
     sandkasten, fake = box
@@ -280,9 +280,9 @@ def test_forgotten_workshops_are_swept(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not any("andere" in zeile for zeile in geloescht), "fremde Datentraeger bleiben"
 
 
-# ---------------------------------------------------------------------------
-# Dateien hinein und heraus
-# ---------------------------------------------------------------------------
+
+
+
 def _laufende(monkeypatch: pytest.MonkeyPatch) -> werkstatt.Sandbox:
     """Eine virtual machine, die sich fuer laufend haelt -- ohne echten Behaelter."""
     sandkasten = werkstatt.Sandbox(image="python:3.12-slim")
@@ -401,9 +401,9 @@ def test_blender_timeout_is_longer_than_a_normal_command() -> None:
     assert werkstatt.COMMAND_TIMEOUT < werkstatt.BLENDER_TIMEOUT <= werkstatt.MAX_TIMEOUT
 
 
-# ---------------------------------------------------------------------------
-# User mode: Desktop mit Internet -- aber mit Netzsperre fuers Heimnetz
-# ---------------------------------------------------------------------------
+
+
+
 _ALLE_REGELN = "\n".join(
     f"-A OUTPUT -d {bereich} -j REJECT --reject-with icmp-port-unreachable"
     for bereich in werkstatt.BLOCKED_RANGES
@@ -611,7 +611,7 @@ def test_a_restart_without_the_lock_takes_the_workshop_down(
     fake = UserModeRun()
     sandkasten = _user_box(monkeypatch, fake)
     sandkasten.ensure()
-    fake.regeln = "-P OUTPUT ACCEPT\n"  # nach dem Neustart fehlt die Sperre
+    fake.regeln = "-P OUTPUT ACCEPT\n"
     monkeypatch.setattr(werkstatt, "_runs_capped", _zu_lang(fake))
     sandkasten.run("sleep 999", timeout=1)
     assert not sandkasten.alive, "eine offene virtual machine ist schlimmer als keine"

@@ -29,7 +29,7 @@ def _an(settings: Any, *kennungen: str) -> None:
         addons.install(settings, kennung, True)
 
 
-# -- Katalog ---------------------------------------------------------------------------
+
 def test_the_two_review_plugins_are_in_the_catalog() -> None:
     for kennung in plugins.REVIEW_PLUGINS:
         addon = addons.CATALOG[kennung]
@@ -46,14 +46,14 @@ def test_the_addon_window_shows_the_command_and_what_is_checked(konto) -> None:
     assert any("Prompt-Injection" in punkt for punkt in eintrag["inhalt"])
 
 
-# -- Erkennen ---------------------------------------------------------------------------
+
 def test_only_switched_on_plugins_are_commands(konto) -> None:
     assert plugins.match("/code-review x = 1", konto, True) is None, "nicht installiert"
     _an(konto, "code-review", "nachrichten")
     turn = plugins.match("/code-review x = 1", konto, True)
     assert turn is not None and turn.addon == "code-review" and turn.argument == "x = 1"
     assert turn.mode == "code" and turn.review
-    # Andere Namen fuer dasselbe Add-on.
+
     assert plugins.match("/tagesschau Sport", konto, True).addon == "nachrichten"
     addons.set_enabled(konto, "code-review", False, True)
     assert plugins.match("/code-review x = 1", konto, True) is None, "ausgeschaltet"
@@ -76,7 +76,7 @@ def test_a_command_without_text_explains_itself(konto) -> None:
     assert "`/wetter Bremen`" in plugins.usage("wetter")
 
 
-# -- Was das Modell bekommt ------------------------------------------------------------------
+
 def test_the_code_review_checklist_knows_ai_code_mistakes(konto) -> None:
     _an(konto, "code-review")
     turn = plugins.match("/code-review", konto, True)
@@ -129,7 +129,7 @@ def test_the_command_list_for_the_chat(konto) -> None:
     assert "tagesschau" in liste["nachrichten"]["aliases"]
 
 
-# -- Im Chat ------------------------------------------------------------------------------------
+
 class Mitschrift(Agent):
     """Ein echter Agent, der nur aufschreibt, womit er gefragt wird."""
 
@@ -212,7 +212,9 @@ def test_the_ui_offers_commands_while_typing() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'id="slash-liste" role="listbox"' in html
     assert 'aria-autocomplete="list" aria-controls="slash-liste"' in html
-    assert 'api("/api/plugins")' in html and "pluginsLaden();   // ein- oder ausgeschaltet" in html
+    assert 'api("/api/plugins")' in html
+    action = html[html.index("async function addonTun("):html.index("function knopf(")]
+    assert "pluginsLaden();" in action
     assert "if (!rest && !pending.length && plugin.needs_text) return runCommand(eingabe);" in html
     assert '"Was geprüft wird": "What is checked"' in html
 

@@ -48,10 +48,10 @@ def test_taeglich_springt_auf_morgen_wenn_die_zeit_vorbei_ist() -> None:
 
 
 def test_woechentlich_trifft_den_gewuenschten_tag() -> None:
-    # 6.9.2026 ist ein Sonntag (weekday 6).
+
     jetzt = datetime(2026, 9, 6, 14, 0, 0).timestamp()
     naechster = datetime.fromtimestamp(next_time("weekly", 9, 30, 2, jetzt))
-    assert naechster.weekday() == 2  # Mittwoch
+    assert naechster.weekday() == 2
     assert (naechster.hour, naechster.minute) == (9, 30)
     assert naechster > datetime(2026, 9, 6, 14, 0, 0)
 
@@ -119,7 +119,7 @@ def test_die_liste_hat_eine_obergrenze(tmp_path: Path) -> None:
 def test_angehalten_heisst_nicht_faellig(tmp_path: Path) -> None:
     store = JobStore(tmp_path / "j.db")
     job = store.add("Frage")
-    # Faellig machen, indem der Termin in die Vergangenheit gelegt wird.
+
     with store._connect() as conn:
         conn.execute("UPDATE coworkers SET next_wake = 1 WHERE id = ?", (job.id,))
     assert len(store.due()) == 1
@@ -276,7 +276,7 @@ def test_der_taktgeber_fuehrt_faellige_auftraege_aus(
     takt = Scheduler(lambda: settings)
     assert takt.tick() == 1
     assert gelaufen == ["Frage"]
-    # Danach ist derselbe Auftrag nicht mehr faellig.
+
     assert takt.tick() == 0
 
 
@@ -353,9 +353,9 @@ def test_ohne_antwort_leuchtet_nichts(monkeypatch: pytest.MonkeyPatch) -> None:
     assert gemerkt == []
 
 
-# ---------------------------------------------------------------------------
-# Sehr kurze Takte
-# ---------------------------------------------------------------------------
+
+
+
 def test_every_minute_lands_on_the_next_minute() -> None:
     jetzt = time.time()
     wann = next_time("minutes1", 8, 0, 0, jetzt)
@@ -373,9 +373,9 @@ def test_the_tick_is_short_enough_for_the_shortest_rhythm() -> None:
     assert auftraege.TICK_SECONDS <= 30
 
 
-# ---------------------------------------------------------------------------
-# Bildauftrag: nach einem fotografierten Gegenstand suchen
-# ---------------------------------------------------------------------------
+
+
+
 def _bild_settings(tmp_path: Path) -> Any:
     return type(
         "S",
@@ -591,17 +591,17 @@ def test_a_broken_job_does_not_block_the_others(
 
     assert takt.tick() == 2
     assert gelaufen == ["Stolpert", "Laeuft"]
-    # Der Fehlschlag steht am Auftrag, und sein Termin liegt wieder vorn.
+
     notiert = {job.question: job for job in store.all_jobs()}
     assert notiert["Stolpert"].last_state.startswith("Fehler: RuntimeError")
     assert notiert["Stolpert"].next_run > time.time()
-    # Und im naechsten Takt ist nichts mehr faellig.
+
     assert takt.tick() == 0
 
 
-# ---------------------------------------------------------------------------
-# Die Angebotsadresse: die richtige, und nicht zu streng geprueft
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_read_news_page_cannot_stand_in_for_the_shop() -> None:
     """Geprueft wird die Angebotsadresse -- nicht irgendeine gelesene.
 
@@ -621,16 +621,16 @@ def test_a_read_news_page_cannot_stand_in_for_the_shop() -> None:
 
 
 @pytest.mark.parametrize("answer,source,accepted", [
-    # Shops leiten staendig zwischen www und nackter Domain um, und gespeichert
-    # wird die Adresse NACH der Umleitung.
+
+
     ("https://shop.example/p", "https://www.shop.example/p", True),
     ("https://www.shop.example/p", "https://shop.example/p", True),
-    # Herkunftsparameter sagen nichts darueber, was die Seite zeigt.
+
     ("https://shop.example/p", "https://shop.example/p?utm_source=google", True),
     ("https://shop.example/p?gclid=abc", "https://shop.example/p", True),
     ("https://shop.example/p?a=1&b=2", "https://shop.example/p?b=2&a=1", True),
     ("https://shop.example/Produkt", "https://shop.example/produkt", True),
-    # Echte Parameter bleiben ein Unterschied: zwei Produkte, nicht zwei Wege.
+
     ("https://shop.example/p?id=2", "https://shop.example/p?id=1", False),
     ("https://shop.example/p", "https://shop.example/q", False),
 ])
@@ -646,23 +646,23 @@ def test_an_answer_without_any_address_is_never_an_offer() -> None:
     assert auftraege.verified_offer_url("https://a.example/x", []) == ""
 
 
-# ---------------------------------------------------------------------------
-# Preisgrenzen und Preise: ein Trennzeichen, zwei Bedeutungen
-# ---------------------------------------------------------------------------
+
+
+
 @pytest.mark.parametrize("roh,erwartet", [
-    # Genau drei Ziffern hinter einem einzelnen Trenner sind eine
-    # Tausendergruppe. Preise haben nie drei Nachkommastellen.
+
+
     ("1.500", 1500.0),
     ("1.299", 1299.0),
     ("12.345", 12345.0),
     ("1,299", 1299.0),
-    # Alles andere sind Nachkommastellen.
+
     ("2.99", 2.99),
     ("1.5", 1.5),
     ("0,99", 0.99),
-    # Eine allein stehende fuehrende Null faengt keine Tausendergruppe an.
+
     ("0.500", 0.5),
-    # Beide Zeichen: das hintere trennt die Nachkommastellen.
+
     ("1.299,00", 1299.0),
     ("1,299.00", 1299.0),
     ("1.234.567,89", 1234567.89),

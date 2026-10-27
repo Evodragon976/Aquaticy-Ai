@@ -126,9 +126,9 @@ def test_history_is_empty_at_first() -> None:
     assert "Noch keine Recherchen" in runner.invoke(cli.app, ["history"]).output
 
 
-# ---------------------------------------------------------------------------
-# Chat
-# ---------------------------------------------------------------------------
+
+
+
 def _llm(*contents: str):
     responses = [
         SimpleNamespace(
@@ -231,9 +231,9 @@ def test_image_input_feeds_the_research(monkeypatch: pytest.MonkeyPatch, tmp_pat
     )
     assert result.exit_code == 0
     assert "Suchbegriffe" in result.output
-    # Das Vision-Modell bekam tatsaechlich ein Bild.
+
     assert seen[0][0]["content"][1]["type"] == "image_url"
-    # Die Beschreibung floss in die Recherche ein.
+
     assert "silbernes Notebook" in json.dumps(seen[1], ensure_ascii=False)
 
 
@@ -327,9 +327,9 @@ def test_help_is_not_rerouted(monkeypatch: pytest.MonkeyPatch) -> None:
     assert called[0] == ["aquaticy", "--help"]
 
 
-# ---------------------------------------------------------------------------
-# install-model
-# ---------------------------------------------------------------------------
+
+
+
 def _fake_ollama(monkeypatch: pytest.MonkeyPatch, *, tool_calling: bool = True) -> dict[str, Any]:
     """Stellt eine vollstaendig funktionierende Ollama-Umgebung nach."""
     from types import SimpleNamespace
@@ -337,7 +337,7 @@ def _fake_ollama(monkeypatch: pytest.MonkeyPatch, *, tool_calling: bool = True) 
     from aquaticy import local_model as lm
 
     state: dict[str, Any] = {"pulled": []}
-    # Dienstkonfiguration und Neustart werden separat in test_v1211_sol geprueft.
+
     monkeypatch.setattr(cli, "_configure_ollama_parallel", lambda **kwargs: True)
     monkeypatch.setattr(lm, "ollama_binary", lambda: "/usr/bin/ollama")
     monkeypatch.setattr(lm, "server_running", lambda *a, **k: True)
@@ -379,11 +379,11 @@ def test_install_model_writes_the_env(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert result.exit_code == 0, result.output
     assert state["pulled"] == ["qwen2.5:7b"]
     content = target.read_text(encoding="utf-8")
-    # Muss ollama_chat sein -- das nackte ollama kann kein Tool-Calling.
+
     assert "AQUATICY_MODEL=ollama_chat/qwen2.5:7b" in content
     assert "AQUATICY_API_BASE=http://localhost:11434" in content
     assert "Werkzeug aufgerufen" in result.output
-    # --yes laedt kein Vision-Modell ungefragt nach.
+
     assert "AQUATICY_VISION_MODEL" not in content
 
 
@@ -416,7 +416,7 @@ def test_install_model_aborts_without_ollama(
         input="n\n",
     )
     assert result.exit_code == 1
-    # Der Befehl wird gezeigt, bevor irgendetwas laeuft.
+
     assert "install.sh" in result.output
 
 
@@ -436,9 +436,9 @@ def test_install_model_skips_an_already_loaded_model(
     assert "bereits geladen" in result.output
 
 
-# ---------------------------------------------------------------------------
-# Unbekannte Unterbefehle
-# ---------------------------------------------------------------------------
+
+
+
 def _main_with(monkeypatch: pytest.MonkeyPatch, args: list[str]) -> list[list[str]]:
     """Ruft cli.main() mit *args* und faengt ab, womit die App gestartet wuerde."""
     import sys
@@ -463,7 +463,7 @@ def test_unknown_subcommand_is_not_sent_to_the_llm(
     assert excinfo.value.code == 2
     output = capsys.readouterr().out
     assert "Unbekannter Befehl" in output
-    assert "install-model" in output  # Vorschlag
+    assert "install-model" in output
     assert "Anführungszeichen" in output
 
 
@@ -556,7 +556,7 @@ def test_vision_only_leaves_the_text_model_alone(
     assert state["pulled"] == ["llava:7b"]
     content = target.read_text(encoding="utf-8")
     assert "AQUATICY_VISION_MODEL=ollama_chat/llava:7b" in content
-    # Das bestehende Hauptmodell bleibt unangetastet.
+
     assert "AQUATICY_MODEL=nvidia_nim/meta/llama-3.3-70b-instruct" in content
 
 
@@ -606,9 +606,9 @@ def test_no_vision_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None
     assert "AQUATICY_VISION_MODEL" not in target.read_text(encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Bild aus einem Ordner
-# ---------------------------------------------------------------------------
+
+
+
 def _png(path: Path) -> Path:
     from aquaticy.local_model import solid_png
 
@@ -670,7 +670,7 @@ def test_several_images_are_offered_newest_first(
     )
     assert result.exit_code == 0, result.output
     assert "2 Bilder" in result.output
-    # Das neuere steht oben und ist die Vorauswahl.
+
     position_new = result.output.index(new.name)
     position_old = result.output.index(old.name)
     assert position_new < position_old
@@ -779,9 +779,9 @@ def test_out_of_memory_offers_a_smaller_vision_model(
     assert "AQUATICY_VISION_MODEL=ollama_chat/moondream" in target.read_text(encoding="utf-8")
 
 
-# ---------------------------------------------------------------------------
-# Empfohlen oder genommen?
-# ---------------------------------------------------------------------------
+
+
+
 def test_without_yes_the_user_confirms_the_recommendation(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -791,14 +791,14 @@ def test_without_yes_the_user_confirms_the_recommendation(
     state = _fake_ollama(monkeypatch)
     monkeypatch.setattr(lm, "gpu_vram_gb", lambda: 12.0)
     target = tmp_path / ".env"
-    # Leere Eingabe = Vorauswahl uebernehmen, danach kein Vision-Modell.
+
     result = runner.invoke(
         cli.app, ["install-model", "--no-vision", "--no-subagents", "--env-file", str(target)],
         input="\n",
     )
     assert result.exit_code == 0, result.output
     assert "Auswahl" in result.output
-    # Fuer 12 GB ist das ein Modell, das auch Bilder kann.
+
     assert state["pulled"] == ["gemma4:12b"]
 
 
@@ -841,7 +841,7 @@ def test_a_chosen_model_that_is_too_big_is_only_flagged(
     assert result.exit_code == 0, result.output
     assert "Hinweis:" in result.output
     assert "braucht etwa 24 GB" in result.output
-    # Trotz Warnung wird geladen, ohne Rueckfrage.
+
     assert state["pulled"] == ["gemma4:26b"]
     assert "AQUATICY_MODEL=ollama_chat/gemma4:26b" in target.read_text(encoding="utf-8")
 
@@ -929,7 +929,7 @@ def test_web_command_stays_local_by_default(monkeypatch: pytest.MonkeyPatch) -> 
     result = runner.invoke(cli.app, ["web", "--no-open"])
     assert result.exit_code == 0
     assert seen["host"] == "127.0.0.1"
-    assert seen["token"] == ""  # lokal soll nichts im Weg stehen
+    assert seen["token"] == ""
     assert "127.0.0.1:8765" in result.output
 
 
@@ -981,9 +981,9 @@ def test_web_rejects_a_token_with_umlauts(monkeypatch: pytest.MonkeyPatch) -> No
     assert "gruen" in result.output
 
 
-# ---------------------------------------------------------------------------
-# Der Befehl heisst aquaticy
-# ---------------------------------------------------------------------------
+
+
+
 def test_there_is_exactly_one_command() -> None:
     """Ein Programm, ein Name."""
     import tomllib
@@ -994,8 +994,8 @@ def test_there_is_exactly_one_command() -> None:
     assert data["project"]["name"] == "aquaticy"
 
 
-#: Der frühere Name. Zusammengesetzt, damit dieser Test nicht selbst zu dem
-#: Fund wird, den er verhindern soll.
+
+
 FORMER_NAME = "sco" + "utr"
 
 
@@ -1019,7 +1019,7 @@ def test_the_former_name_appears_nowhere() -> None:
         try:
             text = path.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
-            continue  # Binaerdatei -- kein Text zum Pruefen
+            continue
         if FORMER_NAME in text.lower():
             found.append(str(path.relative_to(root)))
     assert found == [], f"alter Name noch enthalten in: {found}"
@@ -1035,7 +1035,7 @@ def test_every_subcommand_is_recognised_as_one() -> None:
         command.name or command.callback.__name__.replace("_", "-")
         for command in cli.app.registered_commands
     }
-    # Gruppen wie `aquaticy website` (11.1) zaehlen mit.
+
     registered |= {group.name for group in cli.app.registered_groups if group.name}
     assert registered == cli.COMMANDS
     assert "google" in cli.COMMANDS

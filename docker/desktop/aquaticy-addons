@@ -39,22 +39,22 @@ from pathlib import Path
 
 VERSION = "1"
 
-#: Nur diese Ordner duerfen Ziel sein: der Datentraeger eines Add-ons.
+
 ZIEL_RE = re.compile(r"^/addons/[a-z_]{2,20}$")
 
-#: Groesste Datei, die geladen wird -- Blender ist mit gut 350 MB die groesste.
+
 MAX_DOWNLOAD = 700 * 1024 * 1024
 
-#: So viel darf ausgepackt werden. Blender braucht ausgepackt gut 1 GB.
+
 MAX_ENTPACKT = 3 * 1024 * 1024 * 1024
 
-#: Hoechstens so lange je Anfrage ohne ein einziges Byte.
+
 TIMEOUT = 60
 
-#: Wer laedt -- ehrlich, wie ueberall bei Aquaticy.
+
 KENNUNG = "aquaticy-addons/" + VERSION + " (+https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai)"
 
-#: Woher die Programme kommen. Nichts anderes wird angesprochen.
+
 QUELLEN = {
     "firefox": {
         "start": "https://download.mozilla.org/?product=firefox-esr-latest-ssl&os=linux64&lang=de",
@@ -80,9 +80,9 @@ class Fehler(Exception):
     """Etwas, das der Nutzer lesen soll -- ohne Stacktrace."""
 
 
-# ---------------------------------------------------------------------------
-# Laden
-# ---------------------------------------------------------------------------
+
+
+
 def umlenken(url: str, quelle: str) -> str:
     """Im Test kommt alles von der Testquelle: gleicher Pfad, anderer Server."""
     if not quelle:
@@ -176,9 +176,9 @@ def versions_schluessel(version: str) -> tuple[int, ...]:
     return tuple(int(teil) for teil in re.findall(r"\d+", version)[:6])
 
 
-# ---------------------------------------------------------------------------
-# Auspacken
-# ---------------------------------------------------------------------------
+
+
+
 def tar_auspacken(archiv: Path, ziel: Path) -> None:
     """Packt aus -- nur in *ziel*, ohne Geraete, ohne Ausbrueche, mit Grenze."""
     gesamt = 0
@@ -189,8 +189,8 @@ def tar_auspacken(archiv: Path, ziel: Path) -> None:
             if gesamt > MAX_ENTPACKT:
                 raise Fehler("Ausgepackt waere es groesser als erlaubt -- abgebrochen.")
             mitglieder.append(eintrag)
-        # "data": keine absoluten Pfade, kein "..", keine Links nach draussen,
-        # keine Geraetedateien, keine Rechte fuer andere.
+
+
         tar.extractall(ziel, members=mitglieder, filter="data")
 
 
@@ -217,9 +217,9 @@ def ordner_groesse(ordner: Path) -> int:
     return gesamt
 
 
-# ---------------------------------------------------------------------------
-# Die drei Programme
-# ---------------------------------------------------------------------------
+
+
+
 FIREFOX_PFAD = re.compile(
     r"/pub/firefox/releases/(?P<version>[0-9][0-9.]*esr)/"
     r"(?P<datei>linux-x86_64/de/firefox-[0-9][0-9.]*esr\.tar\.(?:xz|bz2))$"
@@ -373,8 +373,8 @@ def cmd_install(args: list[str]) -> dict:
     arbeit.mkdir()
     try:
         info = PROGRAMME[programm](arbeit, quelle)
-        # Erst jetzt wird das Alte ersetzt: ein Abbruch vorher laesst eine
-        # funktionierende Installation stehen.
+
+
         shutil.rmtree(ziel / "app", ignore_errors=True)
         (arbeit / "neu").replace(ziel / "app")
     finally:
@@ -385,8 +385,8 @@ def cmd_install(args: list[str]) -> dict:
     return {"ok": True, **info}
 
 
-#: Grundeinstellungen fuer ein Web-App-Profil: kein Willkommen, keine
-#: Telemetrie, keine Updates (das Programm kommt von Aquaticy), Deutsch.
+
+
 FIREFOX_PREFS = {
     "browser.aboutwelcome.enabled": False,
     "browser.shell.checkDefaultBrowser": False,

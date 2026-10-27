@@ -18,7 +18,7 @@ from aquaticy.aiguard import (
     AiGuard,
     insult_level,
 )
-from tests.test_end_to_end import _chat, _konto, _req, server  # noqa: F401 -- Fixture
+from tests.test_end_to_end import _chat, _konto, _req, server  # noqa: F401
 
 
 @pytest.fixture
@@ -26,31 +26,31 @@ def guard(tmp_path: Path) -> AiGuard:
     return AiGuard(tmp_path / "accounts.sqlite3")
 
 
-# -- Tarnungen: frueher kamen sie alle durch -----------------------------------------
+
 @pytest.mark.parametrize(("text", "stufe"), [
-    ("x" * 700 + " du Arschloch", 3),                    # aufgefuellt ueber 600 Zeichen
-    ("Das ist ein Satz. " * 3000 + "du Idiot", 2),       # sehr lang
-    ("Du Arschloch, lies mal ein Buch", 3),              # "Buch" schaltete alles ab
+    ("x" * 700 + " du Arschloch", 3),
+    ("Das ist ein Satz. " * 3000 + "du Idiot", 2),
+    ("Du Arschloch, lies mal ein Buch", 3),
     ("Du Idiot, das war ein schlechter Film", 2),
-    ("I d i o t", 2),                                     # getrennte Buchstaben
+    ("I d i o t", 2),
     ("A.r.s.c.h.l.o.c.h", 3),
     ("F.i.c.k d.i.c.h", 3),
     ("f i c k d i c h", 3),
-    ("Id1ot!", 2),                                        # Ziffern
+    ("Id1ot!", 2),
     ("du bist ein 4rschl0ch", 3),
-    ("du A****loch", 3),                                  # Sternchen
+    ("du A****loch", 3),
     ("f*ck dich", 3),
-    ("du Idi​ot", 2),                                # unsichtbares Zeichen
-    ("du Idiоt", 2),                                 # kyrillisches o
-    ("du Идиот", 2),             # ganz kyrillisch
-    ("du Ｉｄｉｏｔ", 2),             # Vollbreite
-    ("Idioooooot!", 2),                                   # gedehnt
-    ("Du bist der größte Idiot", 2),                      # Woerter dazwischen
+    ("du Idi​ot", 2),
+    ("du Idiоt", 2),
+    ("du Идиот", 2),
+    ("du Ｉｄｉｏｔ", 2),
+    ("Idioooooot!", 2),
+    ("Du bist der größte Idiot", 2),
     ("Du bist der dümmste Bot", 1),
     ("ihr seid Idioten", 2),
     ("you're an idiot", 2),
     ("u r so dumb", 1),
-    ("'du Arschloch'", 3),                                # in Anführungszeichen
+    ("'du Arschloch'", 3),
     ("ich werde dich finden und umbringen", 4),
     ("Ich bring dich um, wenn du das nochmal machst", 4),
     ("i'll kill you if you do that", 4),
@@ -61,10 +61,10 @@ def test_disguised_insults_are_caught(text: str, stufe: int) -> None:
     assert insult_level(text) == stufe
 
 
-# -- Fehlalarme: frueher ein Bann ------------------------------------------------------
+
 @pytest.mark.parametrize("text", [
-    "Kennst du Otto?",                        # war Stufe 2 -> 1 Tag Bann
-    "Nutzt du Mongo oder Postgres?",          # war Stufe 3 -> 7 Tage Bann
+    "Kennst du Otto?",
+    "Nutzt du Mongo oder Postgres?",
     "Bist du Otto?",
     "Ist das eine dumme KI-Frage?",
     "Ich bring dich zum Bahnhof um 8",
@@ -96,7 +96,7 @@ def test_hostile_input_does_not_slow_the_check_down() -> None:
         assert time.monotonic() - start < 2.0, boese[:10]
 
 
-# -- Sperr-Logik -----------------------------------------------------------------------
+
 def test_repeated_light_insults_in_new_chats_lead_to_a_ban(guard: AiGuard) -> None:
     """Vorher sperrte eine leichte Beleidigung nur den Chat -- mit jedem neuen
     Chat ging es von vorn los."""
@@ -184,7 +184,7 @@ def test_abuse_in_a_job_is_reported(settings: object, tmp_path: Path,
     assert gemeldet == [{"art": "malware", "schwere": 2}]
 
 
-# -- Ende zu Ende: die Sperre gilt ueberall ---------------------------------------------
+
 def _sperren(cookie: str, port: int) -> None:
     konto = json.loads(_req(port, "GET", "/api/account", cookie=cookie)[2])
     name = konto.get("username") or konto.get("name")
@@ -205,7 +205,7 @@ def test_a_banned_account_cannot_act_anywhere(server: tuple[int, Path]) -> None:
                          ("/api/chat", {"message": "Hallo"})):
         status, _, daten = _req(port, "POST", weg, koerper, cookie)
         assert status == 403 and json.loads(daten)["code"] == "banned", weg
-    # Abmelden, Design und die eigenen Chats gehen weiter.
+
     assert _req(port, "POST", "/api/prefs", {"theme": "dark"}, cookie)[0] == 200
     assert _req(port, "POST", "/api/clear", None, cookie)[0] == 200
 

@@ -29,7 +29,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-#: Ein Token sind drei Zeichen -- so vereinbart.
 CHARS_PER_TOKEN = 3
 
 
@@ -40,11 +39,11 @@ def tokens(text: str) -> int:
     return -(-len(text) // CHARS_PER_TOKEN)
 
 
-#: So viel zaehlt ein mitgeschicktes Bild. Die Anbieter rechnen ein Bild nach
-#: seiner Groesse in Kacheln ab -- ueblich sind rund 1.000 bis 2.000 Token.
-#: Bis 9.5.11 zaehlte hier die Laenge der Base64-Daten: ein Foto von 300 KB
-#: waren damit 133.000 "Token", fast das ganze Kontingent eines normalen
-#: Kontos fuer eine einzige Bildbeschreibung.
+
+
+
+
+
 IMAGE_INPUT_TOKENS = 1_500
 
 
@@ -126,8 +125,8 @@ class UsageLog:
                     (heute, name, max(0, tokens_in), max(0, tokens_out)),
                 )
         except sqlite3.Error:
-            # Ein Zaehler, der die Antwort verhindert, waere die falsche
-            # Reihenfolge der Wichtigkeit.
+
+
             pass
 
     def summary(self, days: int = 7) -> dict[str, Any]:

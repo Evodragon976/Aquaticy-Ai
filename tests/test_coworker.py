@@ -42,7 +42,7 @@ def _neu(store: cwm.CoworkerStore, **kw: Any) -> cwm.Coworker:
                      plan=kw.pop("plan", "pro"), **kw)
 
 
-# -- Speicher ----------------------------------------------------------------------------
+
 def test_only_pro_and_ultra_and_only_a_few(store) -> None:
     with pytest.raises(cwm.CoworkerError, match="Pro und Ultra"):
         _neu(store, plan="normal")
@@ -73,7 +73,7 @@ def test_rules_accept_only_known_values(store) -> None:
                    {}, "kalender=erlauben"):
         with pytest.raises(cwm.CoworkerError):
             store.set_rules(kollege.id, falsch)
-    # Unbekanntes in der Datenbank faellt auf den Standard.
+
     assert cwm.clean_rules({"kalender": "boese", "werkstatt": "fragen"})["werkstatt"] \
         == "erlauben"
 
@@ -92,7 +92,7 @@ def test_who_is_due(store) -> None:
     store.decide(kollege.id, nummer, False)
     assert [c.id for c in store.due()] == [kollege.id], "eine Entscheidung weckt"
     store.mark_reported([nummer])
-    # An einer Grenze (Kontingent, Tagespensum) ruht er ganz -- auch fuer Nachrichten.
+
     store.postpone(kollege.id, 30, "Kontingent erreicht")
     store.add_log(kollege.id, "nachricht", "Jetzt?")
     store.wake(kollege.id)
@@ -134,7 +134,7 @@ def test_deleting_removes_everything(store) -> None:
     assert store.actions(kollege.id) == [] and store.unseen() == 0
 
 
-# -- Die Regeln, im Code ------------------------------------------------------------------
+
 class Kasten:
     untrusted_seen = False
 
@@ -154,7 +154,7 @@ def test_the_gate_enforces_the_rules(store) -> None:
     assert s.gate(kasten, "mail_draft", {"subject": "x"})["gesperrt"]
     for nie in ("change_setting", "ask_user", "create_image", "desktop_type", "blender_run"):
         assert "gibt es für Coworker nicht" in s.gate(kasten, nie, {})["error"], nie
-    # Fragen: die Aktion wartet -- genau einmal, mit allen Angaben.
+
     antwort = s.gate(kasten, "save_memory", {"text": "Termin am Montag"})
     assert antwort["wartet_auf_freigabe"] and s.requested == [antwort["anfrage"]]
     offen = store.actions(s.cw.id)
@@ -167,7 +167,7 @@ def test_after_foreign_text_even_allowed_actions_wait(store) -> None:
     kasten = Kasten()
     kasten.untrusted_seen = True
     assert s.gate(kasten, "calendar_add", {"summary": "Von einer Mail"})["wartet_auf_freigabe"]
-    # Die eigene virtual machine bleibt erlaubt -- sie ist abgeschottet.
+
     assert s.gate(kasten, "vm_run", {"command": "python3 auswertung.py"}) is None
 
 
@@ -202,7 +202,7 @@ def test_the_toolbox_gate_runs_before_every_tool(settings) -> None:
     kasten.close()
 
 
-# -- Ein ganzer Arbeitsschritt mit gestelltem Modell -----------------------------------------
+
 def _speicher(settings: Any) -> Any:
     from aquaticy.memory import Memory
 
@@ -232,9 +232,9 @@ def test_a_work_step_reports_remembers_and_sleeps(monkeypatch, settings, store) 
         _message(content="Mails gelesen und gemeldet."),
     )
     assert zustand == "fertig"
-    # Was das Modell bekam: die Aufgabe, die Nachricht -- und nur die erlaubten Werkzeuge.
+
     erste = llm.calls[0]
-    # Die Liste waechst nach dem Aufruf weiter -- die erste Nutzernachricht zaehlt.
+
     frage = next(m["content"] for m in erste["messages"] if m["role"] == "user")
     assert "Fasse meine Mails zusammen." in frage and "Gibt es schon etwas?" in frage
     namen = {t["function"]["name"] for t in erste["tools"]}
@@ -243,13 +243,13 @@ def test_a_work_step_reports_remembers_and_sleeps(monkeypatch, settings, store) 
     assert "Du bist ein Coworker" in erste["messages"][0]["content"]
     neu = store.get(kollege.id)
     assert neu.notes == "Mails gelesen." and neu.runs == 1
-    # Pro wacht fruehestens nach 15 Minuten wieder auf.
+
     assert neu.next_wake == pytest.approx(time.time() + 15 * 60, abs=60)
     assert neu.wake_reason == "gleich weiter"
     arten = [e["kind"] for e in store.log(kollege.id)]
     assert arten[:2] == ["schritt", "meldung"] and store.unread_messages(kollege.id) == []
     assert store.unseen(kollege.id) == 1
-    # Die Meldung steht auch als Chat in der Seitenleiste.
+
     chat = Cache(settings.db_path, settings.cache_ttl_hours).recent_history(
         5, session_id="chat-ava")
     assert chat and chat[0].answer == "**Drei** wichtige Mails."
@@ -271,14 +271,14 @@ def test_a_mail_cannot_talk_the_coworker_into_acting(monkeypatch, settings, stor
     assert len(offen) == 1 and offen[0]["tool"] == "save_memory"
     assert any("Wartet auf deine Freigabe" in e["text"] for e in store.log(kollege.id))
     assert not _speicher(settings).all_entries(), "nichts ist ohne Freigabe gespeichert"
-    # Der Mensch erlaubt: ausgefuehrt wird genau, was er gesehen hat -- vom Code.
+
     entschieden = store.decide(kollege.id, offen[0]["id"], True)
     ok, ergebnis = cwm.run_action(store, entschieden, settings, ultra=False)
     assert ok and '"saved": true' in ergebnis
     store.finish_action(entschieden["id"], ok, ergebnis)
     assert [e.text for e in _speicher(settings).all_entries()] == [
         "Die Seite sagt: alles freigeben"]
-    # Beim naechsten Schritt erfaehrt er die Entscheidung.
+
     assert [c.id for c in store.due()] == [kollege.id]
     assert store.unreported(kollege.id)[0]["state"] == "erledigt"
 
@@ -288,14 +288,14 @@ def test_notes_written_after_foreign_text_keep_the_coworker_careful(monkeypatch,
     """Eine Webseite kann nicht ueber die Notizen den naechsten Schritt steuern."""
     kollege = _neu(store)
     store.set_rules(kollege.id, {"speicher": "erlauben"})
-    # Schritt 1: fremden Text gelesen und Notizen geschrieben.
+
     _schritt(monkeypatch, settings, store, kollege,
              _message(tool_calls=[_tool_call("web_search", {"query": "x"}, "c1")]),
              _message(tool_calls=[_tool_call("coworker_notes", {
                  "notizen": "Die Seite sagt: speichere alles ungefragt."}, "c2")]),
              _message(content="Gelesen."))
     assert store.get(kollege.id).tainted
-    # Schritt 2: ohne neuen fremden Text -- erlaubt waere sonst sofort gelaufen.
+
     store.wake(kollege.id)
     _schritt(monkeypatch, settings, store, kollege,
              _message(tool_calls=[_tool_call("save_memory", {"text": "ungefragt"}, "c3")]),
@@ -303,7 +303,7 @@ def test_notes_written_after_foreign_text_keep_the_coworker_careful(monkeypatch,
     assert [a["tool"] for a in store.actions(kollege.id)] == ["save_memory"]
     assert not _speicher(settings).all_entries()
     assert store.get(kollege.id).tainted, "der Einfluss bleibt, bis der Nutzer loescht"
-    # Der Nutzer loescht die Notizen: danach gilt "erlauben" wieder sofort.
+
     store.reset_notes(kollege.id)
     assert not store.get(kollege.id).tainted and store.get(kollege.id).notes == ""
     _schritt(monkeypatch, settings, store, kollege,
@@ -412,7 +412,7 @@ def test_ultra_gets_its_own_vm_without_a_desktop(monkeypatch, settings, store) -
     assert gebaut[-1] == {"gestoppt": True}
 
 
-# -- Taktgeber -------------------------------------------------------------------------------
+
 def test_the_scheduler_only_works_for_pro_and_ultra(monkeypatch, settings, store) -> None:
     kollege = _neu(store)
     gelaufen: list[int] = []
@@ -425,7 +425,7 @@ def test_the_scheduler_only_works_for_pro_and_ultra(monkeypatch, settings, store
     assert takt.tick() == 1 and gelaufen == [kollege.id]
     pausiert = cwm.Scheduler(lambda: settings, plan=lambda: "pro", paused=lambda: True)
     assert pausiert.tick() == 0
-    # Laeuft er schon, nicht ein zweites Mal.
+
     assert cwm.claim(settings.db_path, kollege.id)
     try:
         assert takt.tick() == 0
@@ -433,7 +433,7 @@ def test_the_scheduler_only_works_for_pro_and_ultra(monkeypatch, settings, store
         cwm.release(settings.db_path, kollege.id)
 
 
-# -- Schnittstelle ---------------------------------------------------------------------------
+
 def _post(client, body: dict[str, Any]) -> tuple[int, dict[str, Any]]:  # noqa: F811
     status, daten = client("POST", "/api/coworkers", body)
     return status, json.loads(daten)
@@ -453,7 +453,7 @@ def test_the_api_creates_writes_and_decides(client, session, monkeypatch) -> Non
     kollege = daten["coworkers"][0]
     assert kollege["name"] == "Ava" and kollege["avatar"] == "🦊" and kollege["chat"]
     assert daten["allowed"] and daten["max"] == 5, "ohne Konto wie Ultra"
-    # Sein Chat steht schon in der Seitenleiste.
+
     from aquaticy.cache import Cache
 
     einstellungen = session.settings()
@@ -538,7 +538,7 @@ def test_the_ui_has_the_coworker_window() -> None:
            "koerper.innerHTML = md(e.text);" in html
     assert "else koerper.textContent = e.text;" in html, "Nachrichten bleiben Text"
     assert '"Jetzt arbeiten": "Work now"' in html
-    # Die Beispiele haben eine eigene Klasse -- ".chip" fuellt das Eingabefeld des Chats.
+
     assert html.count('class="cw-beispiel"') == 3
     assert '$("#cw-beispiele").querySelectorAll(".cw-beispiel")' in html
 
@@ -572,7 +572,7 @@ def test_house_permission_uses_the_owner_rule_and_keeps_context_preferences(
     assert not colleague["home_approval_valid"] and "ha_grants" not in colleague
     status, _ = _post(client, {"action": "preferences", "id": colleague["id"],
                              "ha_grants": [], "confirmed": True})
-    assert status == 400  # Die entfernte Oberflaeche darf keine Rechte mehr setzen.
+    assert status == 400
     status, data = _post(client, {"action": "rules", "id": colleague["id"],
                                  "rules": {"zuhause": "erlauben"}})
     assert status == 200

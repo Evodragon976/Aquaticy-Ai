@@ -15,7 +15,7 @@ def _ui() -> str:
 
 
 def test_version_label() -> None:
-    # Seit 10.0 nicht mehr 9.6.x -- geprueft wird die Form "Nummer Name".
+
     import re
 
     import aquaticy

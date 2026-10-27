@@ -68,7 +68,7 @@ def test_unknown_page_shows_an_error_page_in_the_browser(port: int) -> None:
     status, art, body = _get(port, "/gibt-es-nicht", "text/html,application/xhtml+xml")
     assert status == 404 and art.startswith("text/html")
     assert "Diese Seite gibt es nicht." in body.decode() and 'href="/"' in body.decode()
-    # Fuer die Oberflaeche (fetch, JSON) bleibt es JSON.
+
     status, art, _ = _get(port, "/gibt-es-nicht")
     assert status == 404 and art.startswith("application/json")
 
@@ -173,18 +173,18 @@ def test_browser_side_self_healing() -> None:
     html = _ui()
     assert 'id="errorbox"' in html and "function zeigeFehler(" in html
     assert 'id="offline-hinweis"' in html and 'addEventListener("offline", zeigeOffline)' in html
-    # Nur Lesen wird von selbst wiederholt -- nie Senden, Speichern, Loeschen.
+
     assert 'const lesen = !options.method || options.method.toUpperCase() === "GET";' in html
     assert "async function wiederAnhaengen(" in html
     assert "if (versuch >= 3) return false;" in html
-    # Technische Fehler kommen in der Oberflaeche nie an.
+
     assert "String(err)" not in html and "HTTP ${res.status}" not in html
 
 
 def test_chat_errors_stay_generic_but_hints_pass() -> None:
     quelle = Path(web.__file__).read_text(encoding="utf-8")
-    # Seit 11.2.2 Terra in zwei Schritten: der technische Text geht (ohne
-    # Schluessel) ins Terminal des Betreibers, in den Chat nur public_error().
+
+
     assert "oeffentlich = public_error(technisch)" in quelle
     assert 'payload = {**payload, "message": oeffentlich}' in quelle
     assert web.public_error("Bild.png ist kein Bild (.png, .jpg).") \

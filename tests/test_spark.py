@@ -28,8 +28,8 @@ def test_registration_is_atomic_across_store_instances(
     barrier = threading.Barrier(2)
 
     def create(store: AuthStore, number: int) -> str:
-        # Seit 9.5.31 sperrt nicht mehr dieselbe IP-Adresse, sondern etwa
-        # dasselbe Geraet (Anhaltspunkte, aquaticy/devices.py).
+
+
         from aquaticy.devices import clean_device
 
         geraet = clean_device({}, cookie="D" * 32) if conflict == "device" else None
@@ -93,7 +93,7 @@ def test_remove_terminal_command(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         store = AuthStore(tmp_path, "PRO123456")
         account = store.register("command@example.org", PASSWORD, "normal",
                                  username="DeleteMe", **TERMS)
-        # Ohne Bestaetigung (9.5.22) bleibt das Konto stehen.
+
         result = CliRunner().invoke(cli.app, ["remove", "DeleteMe"], input="n\n")
         assert result.exit_code == 1 and "command@example.org" in result.output
         assert store.account(account.id) is not None
@@ -189,7 +189,7 @@ def test_tool_cost_settles_the_existing_reservation(
 
 def test_help_lists_browser_commands_and_terminal_commands() -> None:
     text = ChatSession().command("/help")["text"]
-    # Seit 11.0.0 Luna folgen die Plugins des Kontos (aquaticy/plugins.py).
+
     assert text.startswith(HELP_MARKDOWN) and "Plugins" in text[len(HELP_MARKDOWN):]
     for command in ("location", "model", "max", "image", "export", "history", "notes",
                     "clear", "memory", "uploads", "forget", "help", "quit", "exit", "q"):

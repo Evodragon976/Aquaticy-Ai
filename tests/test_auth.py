@@ -44,7 +44,7 @@ def test_registration_keeps_the_chosen_username_and_needs_twelve_characters(
     )
     assert account.username == "Jonas"
     assert store.authenticate(account.email, "123456789012") == account
-    # Ein Konto aus der Zeit mit 7 Zeichen meldet sich weiter an.
+
     monkeypatch.setattr(auth_modul, "MIN_PASSWORD", 7)
     alt = store.register("alt@example.org", "1234567", "normal", username="Alt", **TERMS)
     monkeypatch.setattr(auth_modul, "MIN_PASSWORD", 12)

@@ -23,7 +23,6 @@ from aquaticy import sandbox as werkstatt
 from aquaticy.config import Settings
 from aquaticy.sandbox import Runtime, SandboxUnavailable
 
-#: Die Meldung von Podman, wie sie ein Nutzer gesehen hat.
 PODMAN_SHORT_NAME = (
     'Error: short-name "aquaticy-werkstatt-desktop:local" did not resolve to an alias and no '
     'unqualified-search registries are defined in "/etc/containers/registries.conf"'
@@ -73,7 +72,7 @@ def laufzeit(monkeypatch: pytest.MonkeyPatch):
     return stellen
 
 
-# -- Teil A: das Desktop-Abbild ------------------------------------------------------------
+
 def test_the_podman_message_is_recognised() -> None:
     assert werkstatt.short_name_problem(PODMAN_SHORT_NAME)
     assert not werkstatt.short_name_problem("Error: no such container")
@@ -92,7 +91,7 @@ def test_a_missing_desktop_image_is_built_from_a_small_folder(laufzeit) -> None:
     werkstatt.ensure_image(PODMAN, werkstatt.DESKTOP_IMAGE, build=True, progress=meldungen.append)
     bau = next(a for a in gestellt.aufrufe if a[1] == "build")
     assert bau[bau.index("-t") + 1] == werkstatt.DESKTOP_IMAGE
-    # Im Ordner lagen nur das Rezept und die drei Hilfsprogramme -- nicht das ganze Projekt.
+
     assert gestellt.kontext == {"rezept": True, "aquaticy-desktop": True, "aquaticy-netz": True,
                                 "aquaticy-addons": True, "nur_das": True}
     assert meldungen and "Desktop-Abbild" in meldungen[0]
@@ -177,7 +176,7 @@ def test_the_recipe_and_helpers_are_found_in_the_project() -> None:
         werkstatt.DESKTOP_HELPERS)
 
 
-# -- Die Installation eines Add-ons baut das Abbild ------------------------------------------
+
 @pytest.fixture
 def konto(tmp_path: Path) -> Settings:
     ordner = tmp_path / "konto"
@@ -231,7 +230,7 @@ def test_a_failed_image_shows_up_as_the_add_on_status(
     assert "short-name" not in eintrag["message"]
 
 
-# -- Teil B: Telegram Web ist kein Add-on mehr --------------------------------------------
+
 def test_telegram_is_gone_from_the_catalogue_the_ui_and_the_helper() -> None:
     wurzel = Path(werkstatt.__file__).resolve().parent.parent
     assert "telegram" not in addons.CATALOG

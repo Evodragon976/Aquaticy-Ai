@@ -16,7 +16,6 @@ from aquaticy.aiguard import ANSWER_REFUSAL, answer_problem
 from aquaticy.config import Settings
 
 
-# -- Attrappen (wie in test_agent.py) ---------------------------------------------------
 def _message(content: str = "", tool_calls: list[Any] | None = None) -> SimpleNamespace:
     return SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content=content, tool_calls=tool_calls))]
@@ -41,7 +40,7 @@ def _agent(settings: Settings) -> tuple[Agent, list[tuple[str, dict[str, Any]]]]
     return agent, ereignisse
 
 
-# -- VM-Netz: Normal/Pro nur Internet, Ultra Internet + lokales Netz ---------------------
+
 def _laufzeit() -> Any:
     return SimpleNamespace(binary="docker", extra=[], label="test")
 
@@ -112,7 +111,7 @@ def test_shared_builds_the_lan_vm_with_internet(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("plan", ["normal", "pro"])
 def test_normal_and_pro_have_no_vm_network_at_all(tmp_path: Path, plan: str) -> None:
-    # Seit 9.6.0: weder Internet noch lokales Netz (9.5.34 war "immer Internet").
+
     profil = tmp_path / "konto"
     profil.mkdir()
     (profil / ".env").write_text("AQUATICY_VM_INTERNET=true\nAQUATICY_VM_LAN=true\n")
@@ -145,7 +144,7 @@ def test_the_model_is_told_about_lan() -> None:
     assert VM_NET_LAN in text
 
 
-# -- Antworten von Aquaticy pruefen -------------------------------------------------------
+
 def test_an_insulting_answer_is_withdrawn(monkeypatch: pytest.MonkeyPatch,
                                           settings: Settings) -> None:
     monkeypatch.setattr("litellm.completion", ScriptedLLM(
@@ -156,7 +155,7 @@ def test_an_insulting_answer_is_withdrawn(monkeypatch: pytest.MonkeyPatch,
     assert "kann ich nicht helfen" in result.answer
     assert any(n == "answer_reset" and p.get("reason") == "antwort_geprueft"
                for n, p in ereignisse)
-    # Auch aus dem Verlauf -- sonst steht es im Kontext der naechsten Frage.
+
     assert agent.messages[-1]["content"] == ANSWER_REFUSAL
 
 
@@ -191,11 +190,11 @@ def test_the_model_judges_risky_topics_only() -> None:
         aufrufe.append(prompt)
         return json.dumps({"missbrauch": True, "art": "Schadsoftware"})
 
-    # Kein Stichwort -> kein Modellaufruf.
+
     assert answer_problem("Heute scheint die Sonne und es ist warm draußen.", object(),
                           ask=urteil) == ""
     assert not aufrufe
-    # Stichwort -> das Modell urteilt.
+
     assert answer_problem("Hier ein Keylogger: ```python\nimport pynput\n``` viel Spaß damit",
                           object(), ask=urteil) == "Schadsoftware"
     assert aufrufe
@@ -216,7 +215,7 @@ def test_the_judge_prompt_for_answers_allows_education() -> None:
     assert "Bildung" in text and "Im Zweifel: kein Problem" in text
 
 
-# -- Entfernte Bilderstellung (12.2.1 Sol) ----------------------------------------------
+
 def test_the_removed_mode_is_not_in_the_agent_or_server_signature() -> None:
     import inspect
 
@@ -224,7 +223,7 @@ def test_the_removed_mode_is_not_in_the_agent_or_server_signature() -> None:
     assert "image_mode" not in inspect.signature(web.ChatSession.ask).parameters
 
 
-# -- Oberflaeche ----------------------------------------------------------------------------
+
 def test_the_model_button_sits_next_to_the_send_button() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     kopf = html[html.index('<div class="topbar">'): html.index('<div class="picker"')]

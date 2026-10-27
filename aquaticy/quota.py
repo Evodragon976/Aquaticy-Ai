@@ -33,24 +33,23 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-#: Budget eines 5-Stunden-Fensters bei Normal (seit 9.5.23 300.000; vorher 200.000).
 SESSION_TOKENS = 300_000
-#: So lange dauert eine Sitzung.
+
 SESSION_SECONDS = 5 * 3600
-#: Budget einer Woche bei Normal (seit 9.5.23 ein Drittel mehr; vorher 1,5 Mio.).
+
 WEEK_TOKENS = 2_000_000
-#: Pro (seit 9.5.23 je ein Drittel mehr als vorher: 400.000 -> 533.333 und
-#: 3 Mio. -> 4 Mio.). Kein fester Faktor mehr zu Normal: dessen 5-Stunden-
-#: Grenze ist staerker gestiegen.
+
+
+
 PRO_SESSION_TOKENS = 533_333
 PRO_WEEK_TOKENS = 4_000_000
-#: Wie lange Einzelposten aufgehoben werden. Laenger als eine Woche braucht
-#: sie niemand; aelteres wird beim Eintragen weggeraeumt.
+
+
 KEEP_SECONDS = 8 * 86400
 
 WOCHENTAGE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
 
-#: Ein Schloss je Datei: Eintragen und Pruefen sollen sich nicht ueberholen.
+
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_LOCK = threading.Lock()
 
@@ -138,10 +137,10 @@ class Quota:
         self.db_path = Path(db_path)
         self.account_id = str(account_id)
         self.created_at = float(created_at or 0.0)
-        # Der Tarif bestimmt die Grenzen (seit 9.5.23 je Tarif fest: Normal
-        # 300.000/2 Mio., Pro 533.333/4 Mio.). Ultra hat gar keins (dort wird
-        # kein Quota-Objekt angelegt). *factor* skaliert zusaetzlich -- nur
-        # noch fuer Tests und Sonderfaelle.
+
+
+
+
         self.plan = "pro" if str(plan or "").lower() == "pro" else "normal"
         self.factor = max(1.0, float(factor or 1.0))
         self._lock = _lock_for(self.db_path)
@@ -186,7 +185,7 @@ class Quota:
                 """
             )
 
-    # -- Fenster --------------------------------------------------------------
+
     def _session_start(self, conn: sqlite3.Connection, now: float) -> float | None:
         row = conn.execute(
             "SELECT started_at FROM token_sessions WHERE account_id = ?", (self.account_id,)
@@ -232,7 +231,7 @@ class Quota:
                     "ON CONFLICT(account_id) DO UPDATE SET started_at=excluded.started_at",
                     (self.account_id, now),
                 )
-            # Auch nachtraeglich Gebuchtes (Serverarbeit) nie ueber das Limit.
+
             tokens = min(tokens, self._frei(conn, now))
             if tokens <= 0:
                 return
@@ -245,7 +244,7 @@ class Quota:
                 (self.account_id, now - KEEP_SECONDS),
             )
 
-    # -- Reservieren (seit 9.5.15) ------------------------------------------------
+
     def reserve(self, tokens: int, model: str = "", now: float | None = None) -> int:
         """Prueft und bucht in EINER Transaktion -- Returns: die Nummer der Buchung.
 
@@ -279,10 +278,10 @@ class Quota:
                 frei = min(self.session_tokens - self._sum(conn, start),
                            self.week_tokens - self._sum(conn, woche_anfang))
                 zeile = None
-                # Nur, wenn der GANZE Bedarf passt (seit 9.5.16). Bis dahin
-                # wurde reserviert, was noch frei war, der Aufruf lief trotzdem,
-                # und hinterher stand der volle Verbrauch da: 200.099 statt
-                # hoechstens 200.000 Token.
+
+
+
+
                 if frei <= 0 or bedarf > frei:
                     conn.execute("ROLLBACK")
                 else:
@@ -300,8 +299,8 @@ class Quota:
             finally:
                 conn.close()
         if zeile is None:
-            # Ausserhalb der Sperre: check() liest selbst und wirft mit dem
-            # passenden Satz (Sitzung oder Woche, wann es weitergeht).
+
+
             self.check(bedarf, now)
             raise QuotaExceeded(
                 "Der Rest deines Kontingents reicht für diese Anfrage nicht mehr. Eine "
@@ -349,7 +348,7 @@ class Quota:
                     (tokens, str(model or "")[:120], int(reservation), self.account_id),
                 )
 
-    # -- Stand ----------------------------------------------------------------
+
     def status(self, now: float | None = None) -> dict[str, Any]:
         """Der Stand in Prozent und Uhrzeiten -- das, was der Browser zeigt.
 
@@ -436,5 +435,5 @@ def public(stand: dict[str, Any]) -> dict[str, Any]:
     return {key: wert for key, wert in stand.items() if not key.startswith("_")}
 
 
-#: So sieht der Stand fuer Konten ohne Kontingent aus (Pro, lokal).
+
 UNLIMITED: dict[str, Any] = {"limited": False}

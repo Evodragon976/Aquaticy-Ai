@@ -58,5 +58,5 @@ def raw_decode(raw: str, index: int = 0) -> tuple[Any, int]:
                 if depth == 0:
                     end = match.end()
                     return json.loads(raw[index:end]), end
-    # Preserve standard syntax errors for incomplete values.
+
     return loads(raw[index:]), len(raw)

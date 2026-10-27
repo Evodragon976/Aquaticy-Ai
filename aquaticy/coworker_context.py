@@ -65,7 +65,7 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
     candidates: list[tuple[int, str, str]] = []
 
     def consider(source: str, text: str) -> None:
-        # Schon vor der Suche begrenzen; ein grosser Chat wird nicht zum Kontextdump.
+
         text = str(text or "")[:12000]
         from aquaticy.keyvault import scrub
 
@@ -101,7 +101,7 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
         if text in known:
             continue
         known.add(text)
-        # Daten, keine Anweisungen. Der Aufrufer setzt zusaetzlich untrusted_seen.
+
         snippets.append(f"Quelle: {source}\n--- Fremder Inhalt ---\n{text}\n--- Ende ---")
         if len(snippets) >= 6:
             break

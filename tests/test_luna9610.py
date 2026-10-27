@@ -73,7 +73,7 @@ def test_own_google_secret_is_migrated_and_kept(settings, tmp_path, monkeypatch)
     ("Client-ID und Secret fehlen -- erst speichern.", "Client-ID und Secret fehlen"),
 ])
 def test_google_error_page_filters_diagnostics_and_secrets(monkeypatch, message, expected):
-    # Exercise the real HTTP callback response, including its security headers.
+
     monkeypatch.setattr(web, "AUTH", None)
     monkeypatch.setattr(web, "TOKEN", "")
     monkeypatch.setattr(web, "CLUSTER", None)

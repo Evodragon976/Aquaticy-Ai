@@ -74,7 +74,7 @@ def test_full_extraction_from_shop_fixture(fixture_html) -> None:
     assert product.rating == 4.6
     assert product.specs["Marke"] == "Lenovo"
     assert product.specs["GTIN"] == "0197532123456"
-    # Spec-Tabellen (hier: Definitionsliste) fuellen die Luecken auf.
+
     assert product.specs["Prozessor"] == "AMD Ryzen 7 8845HS"
     assert product.specs["Arbeitsspeicher"] == "32 GB LPDDR5x-6400"
 
@@ -87,7 +87,7 @@ def test_extraction_without_jsonld_uses_og_and_tables(fixture_html) -> None:
     assert product.name == "ThinkPad X1 Carbon Gen 12"
     assert product.image_url == "https://cdn.hersteller.de/img/x1c-g12.png"
     assert product.specs["CPU"] == "Intel Core Ultra 7 155H"
-    # Navigations-Zeilen fliegen raus.
+
     assert "Cookie-Einstellungen" not in product.specs
 
 
@@ -113,15 +113,15 @@ def test_empty_html_yields_no_product() -> None:
 
 
 @pytest.mark.parametrize("roh,erwartet", [
-    # Das Komma als Tausendertrenner gehoerte nicht in die Zahl: die Suche
-    # brach nach der ersten Ziffer ab und machte aus 1299 Dollar ein Euro
-    # neunundzwanzig -- ein Preisauftrag meldete das als Schnaeppchen.
+
+
+
     ("$1,299.00", "1,299.00"),
     ("1.099,00 €", "1.099,00"),
     ("EUR 1.499,00", "1.499,00"),
     ("1 299,00 €", "1 299,00"),
     ("1.234.567,89", "1.234.567,89"),
-    # Und die einfachen Formen bleiben, wie sie waren.
+
     ("249.99", "249.99"),
     ("USD 19.90", "19.90"),
     ("1299", "1299"),

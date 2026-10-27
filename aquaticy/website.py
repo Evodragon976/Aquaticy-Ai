@@ -43,7 +43,6 @@ from typing import Any
 
 import httpx
 
-#: Die Einstellungen in der ``.env``.
 DOMAIN_ENV = "AQUATICY_DOMAIN"
 TOKEN_ENV = "AQUATICY_CLOUDFLARE_TOKEN"
 EMAIL_ENV = "AQUATICY_ACME_EMAIL"
@@ -51,7 +50,7 @@ STAGING_ENV = "AQUATICY_ACME_STAGING"
 PUBLIC_PORT_ENV = "AQUATICY_PUBLIC_PORT"
 CLOUDFLARED_ENV = "AQUATICY_CLOUDFLARED"
 
-#: Der Eingang fuer den Tunnel. Nur auf 127.0.0.1.
+
 DEFAULT_PUBLIC_PORT = 8443
 
 CF_API = "https://api.cloudflare.com/client/v4"
@@ -60,34 +59,34 @@ ACME_STAGING = "https://acme-staging-v02.api.letsencrypt.org/directory"
 DOH_URL = "https://cloudflare-dns.com/dns-query"
 CLOUDFLARED_API = "https://api.github.com/repos/cloudflare/cloudflared"
 
-#: Ein Zertifikat wird erneuert, wenn es nur noch so lange gilt.
+
 RENEW_DAYS = 30
-#: So oft sieht Aquaticy nach dem Zertifikat.
+
 CHECK_SECONDS = 12 * 3600
-#: Nach einem Fehlschlag frühestens wieder -- Let's Encrypt zaehlt Fehlversuche.
+
 RETRY_SECONDS = 6 * 3600
-#: Neustarts von cloudflared, wenn es endet: erst schnell, dann geduldig.
+
 TUNNEL_BACKOFF = (5.0, 15.0, 60.0, 300.0)
-#: Wie lange Aquaticy hoechstens auf den DNS-Eintrag wartet.
+
 DNS_WAIT_SECONDS = 90.0
-#: Wie lange es hoechstens auf Let's Encrypt wartet (je Schritt).
+
 ACME_POLL_SECONDS = 180.0
-#: Groesste Antwort, die von Cloudflare oder Let's Encrypt gelesen wird.
+
 MAX_API_BYTES = 4 * 1024 * 1024
-#: cloudflared ist rund 40 MB gross.
+
 MAX_LOG_BYTES = 5 * 1024 * 1024
 
 DOMAIN_RE = re.compile(
     r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_.\-]{20,400}$")
-#: Tunnel-Tokens sind Base64 (JSON darin) -- mit "+", "/" und "=".
+
 TUNNEL_TOKEN_RE = re.compile(r"^[A-Za-z0-9+/=_.\-]{20,4000}$")
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 EMAIL_RE = re.compile(r"^[^@\s<>\"']{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,63}$")
 RELEASE_TAG_RE = re.compile(r"^\d{4}\.\d{1,2}\.\d{1,3}$")
 
-#: Welche Ausgabe von cloudflared zu welchem System passt.
+
 CLOUDFLARED_ASSETS: dict[tuple[str, str], str] = {
     ("linux", "x86_64"): "cloudflared-linux-amd64",
     ("linux", "amd64"): "cloudflared-linux-amd64",
@@ -100,10 +99,10 @@ CLOUDFLARED_ASSETS: dict[tuple[str, str], str] = {
     ("windows", "x86_64"): "cloudflared-windows-amd64.exe",
 }
 
-#: Wo ein mitgelieferter cloudflared liegt (Container-Abbild).
+
 SYSTEM_CLOUDFLARED = Path("/opt/aquaticy/cloudflared/cloudflared")
 
-#: Die Rechte, die das Cloudflare-Token braucht -- so steht es im Setup.
+
 TOKEN_RIGHTS = ("Zone → Zone → Lesen", "Zone → DNS → Bearbeiten",
                 "Konto → Cloudflare Tunnel → Bearbeiten")
 
@@ -112,9 +111,9 @@ class WebsiteError(RuntimeError):
     """Etwas an der Website klappt nicht -- mit einem Satz, den man versteht."""
 
 
-# ---------------------------------------------------------------------------
-# Eingaben
-# ---------------------------------------------------------------------------
+
+
+
 def clean_domain(roh: str) -> str:
     """Die Domain in der Form, die Cloudflare und Let's Encrypt erwarten.
 
@@ -186,9 +185,9 @@ class SiteConfig:
         return ("aquaticy-" + self.domain.replace(".", "-"))[:60]
 
 
-# ---------------------------------------------------------------------------
-# Was Aquaticy sich merkt (data_dir/website, nur fuer den eigenen Nutzer lesbar)
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass(slots=True)
 class SiteState:
     domain: str
@@ -251,9 +250,9 @@ def forget_state(data_dir: Path) -> None:
             (ordner / name).unlink()
 
 
-# ---------------------------------------------------------------------------
-# Cloudflare
-# ---------------------------------------------------------------------------
+
+
+
 def _guarded(timeout: float = 30.0, **headers: str) -> httpx.Client:
     from aquaticy import __version__, netguard
 
@@ -313,7 +312,7 @@ class Cloudflare:
             raise WebsiteError(f"Cloudflare sagt: {text or f'Fehler {status}'}")
         return daten.get("result")
 
-    # -- Zone ---------------------------------------------------------------
+
     def zone_for(self, domain: str) -> tuple[str, str]:
         """(Zonen-Kennung, Konto-Kennung) der Zone, zu der *domain* gehoert."""
         teile = domain.split(".")
@@ -334,7 +333,7 @@ class Cloudflare:
         raise WebsiteError(f"{domain} liegt nicht bei Cloudflare, oder das Token darf die "
                            "Zone nicht sehen.")
 
-    # -- Tunnel -------------------------------------------------------------
+
     def tunnel(self, konto: str, name: str) -> str:
         """Die Kennung des Tunnels *name* -- angelegt, wenn es ihn noch nicht gibt."""
         gefunden = self.call("GET", f"/accounts/{konto}/cfd_tunnel",
@@ -380,7 +379,7 @@ class Cloudflare:
             self.call("DELETE", f"/accounts/{konto}/cfd_tunnel/{tunnel_id}/connections")
         self.call("DELETE", f"/accounts/{konto}/cfd_tunnel/{tunnel_id}")
 
-    # -- DNS ----------------------------------------------------------------
+
     def records(self, zone: str, name: str) -> list[dict[str, Any]]:
         gefunden = self.call("GET", f"/zones/{zone}/dns_records", params={"name": name})
         return [r for r in gefunden or [] if isinstance(r, dict)]
@@ -449,9 +448,9 @@ def provision(config: SiteConfig, data_dir: Path, port: int, *,
     return zustand
 
 
-# ---------------------------------------------------------------------------
-# Let's Encrypt (ACME, RFC 8555) -- Pruefung per DNS-Eintrag
-# ---------------------------------------------------------------------------
+
+
+
 def _b64(daten: bytes) -> str:
     return base64.urlsafe_b64encode(daten).rstrip(b"=").decode("ascii")
 
@@ -497,7 +496,7 @@ class Acme:
             raise WebsiteError(f"Let's Encrypt ist nicht erreichbar ({type(exc).__name__}).") \
                 from exc
 
-    # -- Signieren ----------------------------------------------------------
+
     def jwk(self) -> dict[str, str]:
         zahlen = self._key.public_key().public_numbers()
         return {"crv": "P-256", "kty": "EC", "x": _b64(zahlen.x.to_bytes(32, "big")),
@@ -573,7 +572,7 @@ class Acme:
             raise WebsiteError("Let's Encrypt hat unerwartet geantwortet.")
         return daten
 
-    # -- Ablauf -------------------------------------------------------------
+
     def register(self, email: str = "") -> None:
         anfrage: dict[str, Any] = {"termsOfServiceAgreed": True}
         if email:
@@ -874,9 +873,9 @@ def load_certificate(kontext: ssl.SSLContext, data_dir: Path, domain: str) -> bo
     return False
 
 
-# ---------------------------------------------------------------------------
-# cloudflared
-# ---------------------------------------------------------------------------
+
+
+
 def cloudflared_asset(system: str = "", machine: str = "") -> str:
     system = (system or platform.system()).lower()
     machine = (machine or platform.machine()).lower()
@@ -989,8 +988,8 @@ def _starts(programm: Path) -> bool:
     return fertig.returncode == 0
 
 
-#: Was cloudflared aus der Umgebung bekommt. Die Schluessel von Aquaticy
-#: (Modell-Anbieter, Cloudflare-API) braucht es nicht -- also bekommt es sie nicht.
+
+
 TUNNEL_ENV_KEEP = (
     "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP", "TZ", "LANG",
     "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
@@ -1093,7 +1092,7 @@ class Tunnel:
                                     "Details: website/cloudflared.log")
             except (WebsiteError, OSError) as exc:
                 self._set("fehler", str(exc))
-            except Exception as exc:  # der Tunnel versucht es weiter, statt still zu sterben
+            except Exception as exc:
                 self._set("fehler", f"Unerwarteter Fehler ({type(exc).__name__}).")
             pause = TUNNEL_BACKOFF[min(versuch, len(TUNNEL_BACKOFF) - 1)]
             versuch += 1
@@ -1104,9 +1103,9 @@ class Tunnel:
         return {"phase": self.phase, "message": self.message}
 
 
-# ---------------------------------------------------------------------------
-# Alles zusammen
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass
 class Website:
     """Haelt Domain, Zertifikat und Tunnel in Ordnung, solange Aquaticy laeuft."""
@@ -1125,7 +1124,7 @@ class Website:
     _next_try: float = 0.0
     _ingress: tuple[int, bool] | None = None
     _lifecycle: Any = field(default_factory=threading.Lock, repr=False)
-    #: Wartet zwischen den Schritten bei Let's Encrypt (Tests setzen das auf nichts).
+
     pause: Callable[[float], None] = time.sleep
 
     def tls(self) -> ssl.SSLContext:
@@ -1169,10 +1168,10 @@ class Website:
             except WebsiteError as exc:
                 self.message = str(exc)
                 print(f"  [Website] {exc}", flush=True)
-                # Erst nach einer Minute, dann immer geduldiger -- ein falsches
-                # Token soll Cloudflare nicht minuetlich behelligen.
+
+
                 warten, pause = pause, min(pause * 2, 3600.0)
-            except Exception as exc:  # pragma: no cover - die Website darf nie den Server kosten
+            except Exception as exc:  # pragma: no cover
                 self.message = f"{type(exc).__name__}"
                 print(f"  [Website] {type(exc).__name__}: {exc}", flush=True)
                 warten, pause = pause, min(pause * 2, 3600.0)
@@ -1210,7 +1209,7 @@ class Website:
             return
         echt = load_certificate(self.tls(), self.data_dir, self.config.domain)
         if self._ingress != (self.port, echt):
-            # Der Tunnel muss wissen, wohin (Port) und wie streng er prueft.
+
             with self._cloudflare() as cf:
                 cf.set_ingress(self.state.account_id, self.state.tunnel_id, self.config.domain,
                                self.port, ca_pool=ca_pool_for(self.data_dir, self.config.domain))

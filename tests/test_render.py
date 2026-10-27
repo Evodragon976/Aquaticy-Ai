@@ -92,7 +92,7 @@ def test_comparison_table_aligns_spec_rows() -> None:
     console.print(comparison_table(products))
     lines = [line for line in console.export_text().splitlines() if "RAM" in line]
     assert lines, "RAM-Zeile fehlt"
-    # B hat kein RAM -> Platzhalter statt geratenem Wert.
+
     assert "–" in lines[0]
 
 
@@ -109,7 +109,7 @@ def test_shorten_cuts_at_word_boundaries() -> None:
     short = shorten(long, 40)
     assert len(short) <= 40
     assert short.endswith("…")
-    # Nicht mitten im Wort abgeschnitten.
+
     assert not short[:-1].endswith(" ")
     assert "Mönchengladbach" in short
 

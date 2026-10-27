@@ -47,7 +47,7 @@ def _fetcher(handler) -> Fetcher:
     return fetcher
 
 
-# -- Bot-Sperre ---------------------------------------------------------------------------
+
 def test_a_recaptcha_contact_form_is_not_a_bot_wall() -> None:
     html = _seite(
         f"<main><p>{ARTIKEL}</p><form><div class='g-recaptcha'></div></form></main>",
@@ -78,7 +78,7 @@ def test_a_datadome_block_page_is_a_bot_wall() -> None:
         "blocked_bot_wall"
 
 
-# -- Banner-Filter ------------------------------------------------------------------------
+
 def test_a_cookie_class_on_body_does_not_wipe_the_page() -> None:
     html = _seite(f"<div class='inhalt'><p>{ARTIKEL}</p></div>"
                   "<div class='cookie-notice'>Wir verwenden Cookies. Alle akzeptieren.</div>",
@@ -105,7 +105,7 @@ def test_a_modal_wrapper_around_everything_is_kept() -> None:
     assert "Lastenräder" in extract_text(html, "https://radwerk.example/")
 
 
-# -- Aussetzer werden nicht gemerkt -------------------------------------------------------
+
 def test_a_dns_dropout_is_reported_as_such_and_not_cached(
     monkeypatch: pytest.MonkeyPatch, settings: Settings, tmp_path: Path
 ) -> None:
@@ -183,7 +183,7 @@ def test_a_readable_page_keeps_the_normal_cache_time() -> None:
     assert page_cache_seconds(seite) is None
 
 
-# -- IPv6 ins Leere -----------------------------------------------------------------------
+
 def test_ipv6_and_ipv4_take_turns() -> None:
     assert netguard.interleave(["2a00::1", "2a00::2", "1.2.3.4"]) == \
         ["2a00::1", "1.2.3.4", "2a00::2"]
@@ -223,7 +223,7 @@ def test_the_last_address_gets_the_full_time(monkeypatch: pytest.MonkeyPatch) ->
     assert zeiten == [15.0]
 
 
-# -- Karte --------------------------------------------------------------------------------
+
 @pytest.fixture
 def _ohne_takt(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("aquaticy.places.MIN_INTERVAL", 0.0)

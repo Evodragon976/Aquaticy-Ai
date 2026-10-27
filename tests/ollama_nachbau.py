@@ -19,8 +19,8 @@ FAEHIGKEITEN = {
     "qwen3:8b": ["completion", "tools", "thinking"],
 }
 
-#: Der Aufbau, wie ihn das echte Ollama unter "model_info" meldet (11.3.0 Luna):
-#: daraus rechnet Aquaticy, wie viel Speicher das Kontextfenster belegt.
+
+
 MODELLINFO = {
     "qwen2.5-coder:14b": {"general.architecture": "qwen2", "qwen2.block_count": 48,
                           "qwen2.attention.head_count": 40,
@@ -42,12 +42,12 @@ class Ollama:
 
     def __init__(self, *, alt: bool = False, max_ctx: int = 0) -> None:
         self.alt = alt
-        #: Groesseres num_ctx passt "nicht in den Speicher" (0 = alles passt).
+
         self.max_ctx = max_ctx
         self.anfragen: list[dict[str, Any]] = []
-        #: Was ``/api/tags`` als installiert meldet -- im Test aenderbar (11.3.0 Luna).
+
         self.installiert: list[str] = list(FAEHIGKEITEN)
-        #: Je Chat-Anfrage: angebotene Werkzeuge und Systemtext.
+
         self.details: list[dict[str, Any]] = []
         nachbau = self
 

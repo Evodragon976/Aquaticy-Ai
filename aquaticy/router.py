@@ -21,7 +21,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-#: Die Schubladen -- mit dem Satz, der im Verlauf steht.
 KATEGORIEN: dict[str, str] = {
     "code": "Programmieren",
     "schnell": "kurze Unterhaltung",
@@ -95,8 +94,8 @@ class Wahl:
         return self.model.split("/", 1)[-1] if self.model else ""
 
 
-#: Die erreichbaren Modelle je Zweck, eine halbe Minute gemerkt -- die Liste
-#: fragt Ollama, und das soll nicht vor jeder Nachricht passieren.
+
+
 _CACHE_TTL = 30.0
 _cache: dict[str, tuple[float, str]] = {}
 _cache_lock = threading.Lock()

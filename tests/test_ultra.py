@@ -53,10 +53,10 @@ def test_intended_hints_still_reach_the_chat() -> None:
     assert web.user_hint(_fehler(ValueError, satz)) == satz
     assert web.user_hint(_fehler(FileNotFoundError, "Bild nicht gefunden: x.png")) \
         == "Bild nicht gefunden: x.png"
-    # Ein Hinweis darf mit einem Dateinamen anfangen ...
+
     assert web.user_hint(_fehler(ValueError, ".env ist kein Bild (.png).")) \
         == ".env ist kein Bild (.png)."
-    # ... und eigene Fehlerklassen von Aquaticy sind ebenfalls Hinweise.
+
     from aquaticy.calc import CalcError
 
     assert web.user_hint(_fehler(CalcError, "Durch null teilen geht nicht.")) \
@@ -84,7 +84,7 @@ def test_a_failed_start_frees_the_port_and_stops_the_planner(settings, monkeypat
     assert web.COWORKER_SCHEDULER is None and not web.USER_COWORKERS
     wieder = socket.socket()
     try:
-        wieder.bind(("127.0.0.1", port))  # der Port ist wieder frei
+        wieder.bind(("127.0.0.1", port))
     finally:
         wieder.close()
 
@@ -106,7 +106,7 @@ def test_a_refused_release_is_tried_again(verbund, monkeypatch) -> None:  # noqa
     b._take_members(a.public_info(), a.homes)
     _warte(lambda: len(versuche) >= 3)
     time.sleep(0.3)
-    assert len(versuche) == 3  # danach ist Ruhe
+    assert len(versuche) == 3
 
 
 def test_a_release_stops_when_the_account_comes_back(verbund, monkeypatch) -> None:  # noqa: F811
@@ -120,7 +120,7 @@ def test_a_release_stops_when_the_account_comes_back(verbund, monkeypatch) -> No
     b._take_members(a.public_info(), a.homes)
     _warte(lambda: versuche)
     with b._lock:
-        b.state["homes"]["konto1"] = b.node_id  # der Master legt es zurueck
+        b.state["homes"]["konto1"] = b.node_id
     time.sleep(0.4)
     anzahl = len(versuche)
     time.sleep(0.4)
@@ -130,5 +130,6 @@ def test_a_release_stops_when_the_account_comes_back(verbund, monkeypatch) -> No
 def test_offline_shows_the_banner_not_the_error_window() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "grund.gezeigt || grund.netz" in html
-    assert "if (!navigator.onLine) return;  // das zeigt schon der Offline-Hinweis" in html
+    rejection = html[html.index('window.addEventListener("unhandledrejection"'):]
+    assert rejection.index("if (!navigator.onLine) return;") < rejection.index("zeigeFehler();")
     assert 'err.netz = true; } catch {}\n        $("#offline-hinweis").hidden = false;' in html

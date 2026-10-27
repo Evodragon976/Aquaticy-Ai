@@ -1,4 +1,4 @@
-# Aquaticy AI 12.6.6 Terra
+# Aquaticy AI 12.6.6 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.6.6 Terra
+aquaticy --version            # 12.6.6 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -572,6 +572,12 @@ Aquaticy kennt keine Passwörter. Unter **Rechte** stellst du ein, was Aquaticy 
 Für WhatsApp, Signal und Blender baut Aquaticy den Desktop beim ersten Installieren.
 Die Bauvorlage und Hilfsprogramme sind auch im Python-Paket enthalten. Ein Git-Projektordner
 ist dafür nicht nötig. Docker oder Podman und eine Internetverbindung werden benötigt.
+
+Bei WhatsApp Web und Signal öffnet „Anmelden“ ein eigenes Fenster mit dem QR-Code.
+Scanne ihn mit der Handy-App und bestätige danach „Ich bin angemeldet“.
+Der Code wird lokal erkannt, nicht an ein KI-Modell geschickt und nicht im Chat gespeichert.
+Beim Schließen wird die Anzeige geleert. Die Anmeldung läuft nach zehn Minuten ab.
+Du musst die virtual machine dafür nicht selbst bedienen.
 
 ### KI-Modelle: NVIDIA NIM und Mistral
 

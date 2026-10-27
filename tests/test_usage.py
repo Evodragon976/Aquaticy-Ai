@@ -22,7 +22,7 @@ def test_drei_zeichen_sind_ein_token() -> None:
     assert CHARS_PER_TOKEN == 3
     assert tokens("") == 0
     assert tokens("abc") == 1
-    # Aufgerundet: ein angefangenes Token zaehlt ganz.
+
     assert tokens("abcd") == 2
     assert tokens("123456789") == 3
 
@@ -45,7 +45,7 @@ def test_nachrichten_zaehlen_auch_werkzeuge_und_bilder() -> None:
             ],
         },
     ]
-    # 1 + 2 + Bild pauschal + 1 (Name) + 3 (Argumente)
+
     assert message_tokens(messages) == 1 + 2 + IMAGE_INPUT_TOKENS + 1 + 3
 
 
@@ -116,5 +116,5 @@ def test_ein_kaputter_zaehler_kostet_keine_antwort(tmp_path: Path) -> None:
     log.db_path = tmp_path / "nicht" / "existiert" / "x" / "u.db"
     log.db_path.parent.mkdir(parents=True)
     log.db_path.write_text("kein sqlite")
-    log.record("a", 30, 3)  # darf nicht werfen
+    log.record("a", 30, 3)
     assert log.summary()["total"]["calls"] == 0

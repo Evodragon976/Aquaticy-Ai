@@ -19,49 +19,48 @@ from dotenv import load_dotenv
 
 from aquaticy import __version__
 
-#: Reihenfolge, in der nach einer `.env` gesucht wird (erste gewinnt).
 ENV_CANDIDATES: tuple[Path, ...] = (
     Path.cwd() / ".env",
     Path.home() / ".config" / "aquaticy" / ".env",
     Path.home() / ".aquaticy" / ".env",
 )
 
-#: Ort, an den `aquaticy setup` schreibt, wenn noch keine `.env` existiert.
+
 DEFAULT_ENV_PATH = Path.home() / ".config" / "aquaticy" / ".env"
 
 DEFAULT_MODEL = "mistral/mistral-large-latest"
 
-#: Welcher API-Key-Name gehoert zu welchem LiteLLM-Provider-Praefix?
-#:
-#: Aquaticy richtet sich auf zwei Anbieter ein -- Mistral und NVIDIA NIM --,
-#: weil sich fuer die beiden sagen laesst, welches Modell wofuer taugt und
-#: wie viele Anfragen pro Minute sie vertragen (siehe `aquaticy/system.py`).
-#: Alles andere bleibt trotzdem benutzbar: wer von Hand eine fremde
-#: Modell-ID eintraegt, hinterlegt den Key entweder unter
-#: :data:`GENERIC_KEY_NAME` oder unter dem Namen, den LiteLLM ohnehin
-#: selbst aus der Umgebung liest.
+
+
+
+
+
+
+
+
+
 PROVIDER_KEYS: dict[str, str] = {
     "mistral": "MISTRAL_API_KEY",
     "nvidia_nim": "NVIDIA_NIM_API_KEY",
-    "ollama": "",  # lokal, kein Key noetig
+    "ollama": "",
     "ollama_chat": "",
     "lm_studio": "",
 }
 
-#: Seit 12.0.0 Luna gibt es Modelle nur noch auf zwei Wegen:
-#:
-#: * **Mistral und NVIDIA NIM** in der Cloud -- mit einem Schluessel, der beim
-#:   Add-on des Anbieters verknuepft ist (aquaticy/linked.py).
-#: * **Auf dem Server selbst** oder im Netz dahinter: Ollama, LM Studio, vLLM,
-#:   llama.cpp/llamafile oder ein anderer Server, der die OpenAI-Schnittstelle
-#:   spricht -- aber nur unter einer lokalen Adresse (:func:`local_address`).
-#:
-#: Alles andere -- Claude, ChatGPT, Gemini, Groq, OpenRouter, Bedrock ... --
-#: ruft Aquaticy nicht auf. Geprueft wird beim Speichern, beim Wechseln und vor
-#: jedem Aufruf (aquaticy/llmcall.py).
+
+
+
+
+
+
+
+
+
+
+
 CLOUD_PROVIDERS: frozenset[str] = frozenset({"mistral", "nvidia_nim"})
-#: Die lokalen Wege -- mit der Adresse, die LiteLLM ohne eigene Angabe nimmt:
-#: (Umgebungsvariablen, Standard). Leer = ohne Adresse geht es in die Cloud.
+
+
 LOCAL_PROVIDERS: dict[str, tuple[tuple[str, ...], str]] = {
     "ollama": (("OLLAMA_API_BASE",), "http://localhost:11434"),
     "ollama_chat": (("OLLAMA_API_BASE",), "http://localhost:11434"),
@@ -71,13 +70,13 @@ LOCAL_PROVIDERS: dict[str, tuple[tuple[str, ...], str]] = {
     "openai": (("OPENAI_API_BASE", "OPENAI_BASE_URL"), ""),
     "text-completion-openai": (("OPENAI_API_BASE", "OPENAI_BASE_URL"), ""),
 }
-#: Ollama reicht Modelle mit "-cloud" an ollama.com weiter -- das ist nicht lokal.
+
 _OLLAMA_CLOUD = re.compile(r"[:-]cloud$", re.IGNORECASE)
 MODEL_RULE_TEXT = ("Aquaticy nutzt nur Mistral und NVIDIA NIM (unter Add-ons) oder Modelle auf "
                    "dem Server, zum Beispiel mit Ollama.")
-#: Namen, die immer zum Server gehoeren -- auch ohne Nachschlagen.
+
 _LOKALE_NAMEN = (".local", ".lan", ".internal", ".home.arpa", ".localhost")
-#: Nachgeschlagene Namen: (Zeitpunkt, lokal?) -- fuenf Minuten lang.
+
 _LOKAL_MERK: dict[str, tuple[float, bool]] = {}
 _LOKAL_DAUER = 300.0
 
@@ -143,9 +142,9 @@ def model_allowed(model: str, api_base: str = "") -> bool:
     if not modell:
         return True
     if modell == SPLIT_MODEL_ID:
-        return True     # llama-server des Server-Verbunds, nur ueber 127.0.0.1
+        return True
     if "/" not in modell:
-        return False    # "gpt-4o", "claude-…": LiteLLM schickte das in die Cloud
+        return False
     anbieter = provider_of(modell)
     if anbieter in CLOUD_PROVIDERS:
         return True
@@ -164,10 +163,10 @@ def check_allowed(model: str, api_base: str = "") -> None:
 
 
 SEARCH_BACKEND_KEYS: dict[str, str] = {
-    "duckduckgo": "",  # offene Metasuche, kein Key noetig
+    "duckduckgo": "",
     "ddg": "",
     "open": "",
-    "searxng": "",  # eigene Instanz, kein Key noetig
+    "searxng": "",
     "brave": "BRAVE_API_KEY",
     "tavily": "TAVILY_API_KEY",
 }
@@ -185,7 +184,7 @@ def load_env(path: Path | None = None, *, override: bool = False) -> Path | None
     """Laedt die `.env` in die Prozessumgebung und gibt den benutzten Pfad zurueck."""
     env_path = path or find_env_file()
     if env_path and env_path.is_file():
-        # Ohne ${VAR}-Ersetzung: ein Wert soll genau das sein, was dasteht.
+
         load_dotenv(env_path, override=override, interpolate=False)
         return env_path
     return None
@@ -212,7 +211,7 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw in {"1", "true", "yes", "on", "ja"}
 
 
-#: Die einzigen Werte, mit denen sich die Rechts-Leitplanken abschalten.
+
 _GUARD_OFF = frozenset({"0", "false", "no", "off", "nein", "aus"})
 
 
@@ -253,19 +252,19 @@ def selected_vision_model(settings: Settings) -> str:
     return main if any(marker in lowered for marker in VISION_MODEL_MARKERS) else ""
 
 
-#: Was statt eines Schluessels mitgeht, wenn keiner mitgehen darf: an eine
-#: Adresse, die ein Konto selbst eingetragen hat, geht nie ein Schluessel des
-#: Betreibers. Ohne ausdrueckliche Angabe holte LiteLLM ihn sich selbst aus der
-#: Umgebung. Lokale Server (LM Studio, Ollama) brauchen ohnehin keinen.
+
+
+
+
 NO_KEY = "kein-schluessel"
 
-#: Das Modell, das der Server-Verbund verteilt rechnet (aquaticy/sharding.py).
-#: Fuer LiteLLM ein OpenAI-kompatibler Server: llama-server auf dem Master.
+
+
 SPLIT_MODEL_ID = "hosted_vllm/aquaticy-verbund"
 
-#: Fuer Anbieter, die in PROVIDER_KEYS nicht stehen. LiteLLM kennt weit mehr
-#: Provider, als hier sinnvoll aufzuzaehlen sind -- damit laesst sich jeder
-#: davon nutzen, ohne dass aquaticy angepasst werden muss.
+
+
+
 GENERIC_KEY_NAME = "AQUATICY_API_KEY"
 
 
@@ -282,12 +281,12 @@ def api_key_name_for(model: str) -> str:
     return GENERIC_KEY_NAME if _env_str(GENERIC_KEY_NAME) else ""
 
 
-#: Anbieter, deren Praefix LiteLLM unveraendert als Anbieter nimmt (11.2.1).
-#: Fuer sie braucht :func:`resolve_model` LiteLLM nicht zu laden -- das kostet
-#: rund 190 MB und drei Sekunden. Ein Test gleicht die Liste mit LiteLLM ab.
-#: Darunter auch Anbieter, die Aquaticy seit 12.0.0 Luna nicht mehr aufruft --
-#: LiteLLM kennt sie trotzdem, und so sagt :func:`model_problem` "nicht erlaubt"
-#: statt "unbekannt".
+
+
+
+
+
+
 KNOWN_PREFIXES: frozenset[str] = frozenset({
     *PROVIDER_KEYS, "anthropic", "openai", "gemini",
     "azure", "bedrock", "cerebras", "cohere", "deepseek", "fireworks_ai",
@@ -296,8 +295,8 @@ KNOWN_PREFIXES: frozenset[str] = frozenset({
 })
 
 
-#: Oertliche Modelle, die nachdenken koennen -- wenn Ollama selbst es nicht sagt.
-#: qwen3-coder und die "instruct"-Fassungen von Qwen3 denken nicht.
+
+
 OLLAMA_THINKERS = re.compile(
     r"deepseek-r1|qwq|gpt-oss|magistral|cogito|reasoning|think|"
     r"qwen3(?!-coder)(?![^/]*instruct)")
@@ -352,8 +351,8 @@ def suggest_model(model: str) -> str:
     return ""
 
 
-#: Der Port, auf dem Ollama lauscht. Eine Adresse mit diesem Port gehoert zu
-#: Ollama -- und damit nie zu einem Anbieter in der Cloud.
+
+
 OLLAMA_PORT = 11434
 
 
@@ -415,178 +414,178 @@ class Settings:
     model: str = DEFAULT_MODEL
     vision_model: str = ""
     api_base: str = ""
-    #: Pro Benutzer hinterlegte Anbieter-Schluessel. Im Einzelplatzbetrieb
-    #: bleibt die bisherige Umgebungsvariable der Rueckfall.
+
+
     api_keys: dict[str, str] = field(default_factory=dict)
     search_keys: dict[str, str] = field(default_factory=dict)
     search_backend: str = "duckduckgo"
-    #: Komma-Liste offener Engines fuer die Metasuche (leer = alle).
+
     search_engines: str = ""
-    #: Basis-URL der eigenen SearXNG-Instanz.
+
     searxng_url: str = ""
     location: str = ""
     lang: str = "de"
     country: str = "de"
     max_tool_calls: int = 20
-    #: Wie oft ein LLM-Aufruf bei transienten Fehlern wiederholt wird.
+
     llm_retries: int = 3
-    #: Wie viele Zeichen ein einzelnes Werkzeug-Ergebnis im Verlauf belegt.
+
     max_tool_chars: int = 8000
-    #: So viele der juengsten Werkzeug-Ergebnisse bleiben ungekuerzt.
+
     keep_full_results: int = 4
-    #: Obergrenze fuer parallele Subagenten.
+
     max_subagents: int = 12
-    #: Zerlegt aquaticy jede Frage von sich aus in Teilaufgaben?
+
     subagents_auto: bool = True
-    #: Zeitlimit fuer die Chat-oder-Recherche-Vorpruefung in Sekunden.
+
     triage_timeout: float = 5.0
-    #: Zeitlimit fuer den Planungsschritt in Sekunden.
+
     planner_timeout: float = 20.0
-    #: Kontextfenster fuer lokale Ollama-Modelle in Token. Ollama nimmt sonst
-    #: seinen winzigen Default (2048-4096) und wirft bei Ueberlauf STILL den
-    #: Anfang des Verlaufs weg -- Systemprompt und fruehere Fragen zuerst.
-    #: Genau so fuehlt sich "er erinnert sich nicht an die letzte Frage" an.
-    #: 0 = Ollama-Default benutzen.
+
+
+
+
+
     context_tokens: int = 16384
-    #: Eigenes, leichtes Modell fuer die Subagenten. Leer = Hauptmodell.
+
     subagent_model: str = ""
-    #: Modell fuer den Code-Modus. Leer heisst: Aquaticy sucht sich das
-    #: staerkste erreichbare selbst aus.
+
+
     code_model: str = ""
-    #: Die virtual machine im Code-Modus: Abbild und Grenzen. Die Groesse waehlt
-    #: man in den Einstellungen ("normal" oder "plus", siehe VM_SIZES in
-    #: aquaticy/sandbox.py); die einzelnen Zahlen bleiben zusaetzlich per
-    #: .env ueberschreibbar, fuer wer genauer schrauben will.
+
+
+
+
     vm_size: str = "normal"
     vm_image: str = ""
     vm_idle_minutes: int = 20
     vm_memory_mb: int = 1024
     vm_disk_gb: int = 4
     vm_cpus: int = 1
-    #: User mode: die virtual machine ist ein kleiner Desktop mit Internet, den
-    #: Aquaticy bedient wie ein Mensch (siehe aquaticy/desktop.py). Aus, bis
-    #: es jemand in den Einstellungen einschaltet -- aus dem Chat heraus nie.
+
+
+
     vm_user_mode: bool = False
-    #: Internet fuer die virtual machine im Code-Modus (seit 9.5.31, nur Ultra).
-    #: Das Heimnetz bleibt gesperrt -- dieselbe Sperre wie im User mode.
+
+
     vm_internet: bool = False
-    #: Auch das lokale Netz (seit 9.5.34, nur Ultra): dann entfaellt die Sperre.
-    #: Normal und Pro haben in der virtual machine immer Internet -- aber nie
-    #: das lokale Netz.
+
+
+
     vm_lan: bool = False
-    #: Das Abbild dafuer (siehe docker/workshop-desktop.Dockerfile).
+
     vm_desktop_image: str = "aquaticy-werkstatt-desktop:local"
-    #: Werkzeug-Budget je Subagent.
+
     subagent_budget: int = 6
-    #: Wie viele Subagenten gleichzeitig laufen. Bei lokalen Modellen bringt
-    #: mehr als zwei wenig -- die GPU rechnet ohnehin nacheinander. Bei
-    #: Cloud-Modellen ist mehr fast geschenkt.
+
+
+
     subagent_parallel: int = 0
-    #: Anfragen je Minute und gleichzeitige Anfragen an den Anbieter (0 = das
-    #: Freikontingent, aquaticy/pace.py). Bei Konten gilt der eigene Wert fuer
-    #: die EIGENEN Schluessel -- der Takt fuer gestellte Modelle ist Sache des
-    #: Betreibers (seit 9.5.16; vorher wurde der Wert gespeichert, aber nie
-    #: gelesen).
+
+
+
+
+
     rpm: int = 0
     parallel_calls: int = 0
-    #: Adresse der eigenen Home-Assistant-Instanz, z.B. http://192.168.1.5:8123
+
     ha_url: str = ""
-    #: Langlebiges Zugriffstoken aus dem Home-Assistant-Profil.
+
     ha_token: str = ""
-    #: GitHub-Token fuer das Add-on "GitHub" (nur lesend, siehe aquaticy/addons.py).
+
     github_token: str = ""
-    #: Darf aquaticy im Haus auch SCHALTEN, oder nur nachsehen? Aus gutem Grund
-    #: standardmaessig aus: eine missverstandene Nebenbemerkung soll nicht das
-    #: Licht ausmachen.
+
+
+
     ha_control: bool = False
-    #: Darf Aquaticy auf Befehl (Chat) oder Aufgabe (Coworker) Licht, Steckdosen, Ventilatoren
-    #: und Mediaplayer OHNE Rueckfrage schalten (12.5.5 Sol)? Setzt ha_control voraus.
-    #: Schloesser, Alarm, Tore, Heizung, Skripte und Szenen fragen weiter jedes Mal.
+
+
+
     ha_direct: bool = False
-    #: Darf Aquaticy bei Google auf Befehl (Chat) oder Aufgabe (Coworker) Termine eintragen,
-    #: aendern und Mail-Entwuerfe anlegen OHNE Rueckfrage (12.5.6 Sol)? Setzt google_write
-    #: voraus. Nach dem Lesen von Mails oder Webseiten fragt es trotzdem.
+
+
+
     google_direct: bool = False
-    #: Darf Aquaticy AI sich ueber Gespraeche hinweg Dinge merken?
+
     memory_enabled: bool = True
-    #: Passphrase fuer den Speicher. Leer = Schluesseldatei im Datenordner.
-    #: Gesetzt = der Schluessel wird bei jedem Start neu abgeleitet und liegt
-    #: nirgends auf der Platte.
+
+
+
     memory_key: str = ""
-    #: Darf Aquaticy AI Gmail und den Google Kalender lesen? Aus, bis es jemand
-    #: einschaltet -- mit Leserechten als Standard (siehe aquaticy/google.py).
+
+
     google_enabled: bool = False
-    #: Darf Aquaticy AI bei Google auch etwas aendern? Aus, bis es jemand
-    #: einschaltet -- und selbst dann nur Termine anlegen/aendern und
-    #: Mail-ENTWUERFE schreiben. Verschickt wird nie etwas, geloescht auch
-    #: nicht: die festen API-Pfade bieten nur Termine und Entwuerfe an.
+
+
+
+
     google_write: bool = False
-    #: Zugangsdaten der eigenen Google-Cloud-Anwendung (Typ "Desktop").
+
     google_client_id: str = ""
     google_client_secret: str = ""
-    #: Adresse der Lagerverwaltung im eigenen Netz (leer = keine).
+
     storage_url: str = ""
-    #: Was Aquaticy dort darf: "off", "read" oder "write". Geloescht wird in
-    #: keiner Stufe -- siehe aquaticy/storage.py.
+
+
     storage_access: str = "read"
-    #: Darf aquaticy das eigene Netz durchsuchen?
+
     lan_enabled: bool = True
-    #: Leitplanken nach Grundgesetz und BGB (siehe aquaticy/guardrails.py).
-    #: Immer an -- abschalten kann sie nur ein Ultra-Konto in den Einstellungen,
-    #: nie ein Satz im Chat. Bei Normal und Pro setzt der Server sie
-    #: zwangsweise wieder auf an, egal was in deren `.env` steht.
+
+
+
+
     legal_guard: bool = True
-    #: Das Hauptmodell je Nachricht automatisch waehlen (Dev settings, fuer jedes
-    #: Konto; siehe aquaticy/router.py). Die Agenten bleiben dabei unveraendert.
-    #: Ai-guard prueft auch die Antworten von Aquaticy (seit 9.5.34). Nur der
-    #: Betreiber stellt das ab, nie ein Konto und nie das Modell.
+
+
+
+
     answer_check: bool = True
     auto_model: bool = False
-    #: AI Council (seit 9.6.1, aquaticy/linked.py): die verknuepften Modelle
-    #: arbeiten und pruefen, das Hauptmodell richtet. Ohne Agenten.
+
+
     council: bool = False
-    #: Das Kontingent des Kontos (aquaticy/quota.py: 5-Stunden-Sitzung und
-    #: Woche) -- nur normale Konten haben eins. Gesetzt vom Webserver, nie aus
-    #: der .env. None = unbegrenzt. Siehe aquaticy/metering.py.
+
+
+
     quota: Any = None
-    #: Welche Schluessel in ``api_keys``/``search_keys`` dem Konto selbst
-    #: gehoeren (sein Schluesselbund, aquaticy/keyvault.py). Alles andere ist
-    #: gestellt: vom Betreiber (Umgebung des Servers) oder lokal (Ollama).
+
+
+
     own_key_names: frozenset[str] = frozenset()
-    #: Bei welchen Suchmaschinen ein normales Konto den Schluessel des
-    #: Betreibers mitbenutzen darf: nur bei der, die der Betreiber selbst
-    #: gewaehlt hat (seit 9.5.16). ``None`` = keine Einschraenkung (Kommando-
-    #: zeile, Pro, ohne Konten). Bis 9.5.15 konnte ein Konto "brave" waehlen
-    #: und suchte dann still mit dem bezahlten Schluessel des Betreibers.
+
+
+
+
+
     operator_search_backends: frozenset[str] | None = None
-    #: Die E-Mail-Adresse des angemeldeten Kontos -- nur fuer den Abfluss-
-    #: Schutz (aquaticy/injection.py): sie geht nach fremdem Inhalt nicht
-    #: unbemerkt in eine Adresse oder Eingabe (seit 9.5.22).
+
+
+
     account_email: str = ""
-    #: Der Schluesselbund des Kontos fuer interne Geheimnisse (GitHub-Token,
-    #: seit 9.5.16). ``None`` = ohne Konten: dann die .env des Betreibers.
+
+
     secret_vault: Any = None
-    #: Eine Modell-Adresse, die das Konto SELBST eingetragen hat (nur Ultra).
-    #: Nur dorthin darf ein eigener Schluessel neben dem Anbieter selbst gehen
-    #: -- nie an eine Adresse des Betreibers.
+
+
+
     own_api_base: str = ""
-    #: Fuer welches Modell der Betreiber ``api_base`` eingetragen hat. Ein
-    #: Konto waehlt vielleicht ein anderes Hauptmodell -- die Adresse des
-    #: Betreibers gilt trotzdem nur fuer dessen Anbieter. Leer (lokal, ohne
-    #: Konten): das Hauptmodell selbst.
+
+
+
+
     api_base_for: str = ""
-    #: Netz, das dabei durchsucht wird. Leer = das eigene automatisch erkennen.
+
     lan_subnet: str = ""
     fetch_timeout: float = 15.0
     cache_ttl_hours: int = 24
     max_results_default: int = 8
-    #: Wie viele Formulierungen derselben Frage hoechstens rausgehen. Eine
-    #: einzige findet nur, was zufaellig genau so im Netz steht; zwei bis drei
-    #: decken deutlich mehr ab. Ab der vierten wird es beliebig. 1 = aus.
+
+
+
     search_variants: int = 3
-    #: Womit sich Aquaticy bei Webseiten meldet. Ehrlich und mit Kontaktweg --
-    #: die Version kommt aus dem Paket, damit hier nicht jahrelang eine
-    #: falsche Nummer steht.
+
+
+
     user_agent: str = field(
         default_factory=lambda: (
             f"aquaticy/{__version__} (+https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai; "
@@ -598,12 +597,12 @@ class Settings:
     download_images: bool = False
     data_dir: Path = field(default_factory=lambda: Path.home() / ".aquaticy")
     env_path: Path | None = None
-    #: Server-side access check for all model calls, including automatic helpers.
+
     model_access: Callable[[str], None] | None = field(default=None, repr=False, compare=False)
-    #: Live knowledge for a derived local model; never persisted in chat history.
+
     model_context: Callable[[str], str] | None = field(default=None, repr=False, compare=False)
 
-    # -- Ableitungen ------------------------------------------------------
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "aquaticy.sqlite3"
@@ -624,9 +623,9 @@ class Settings:
         an Wartezeit statt gar nichts.
         """
         limit = max(1, int(limit or 1))
-        # Was der Anbieter vertraegt, ist die harte Grenze -- daran aendert
-        # auch ein Wunsch nichts. Vierundvierzig gleichzeitige Anfragen an
-        # NVIDIA bringen keine Antwort schneller; sie bringen 429er.
+
+
+
         from aquaticy.pace import limits_for
 
         _, erlaubt = limits_for(provider_of(self.effective_subagent_model))
@@ -637,10 +636,10 @@ class Settings:
         local = provider_of(self.effective_subagent_model) in ("ollama", "ollama_chat")
         if local:
             return 2
-        # In der Cloud laufen die Aufrufe wirklich nebeneinander. Ein Deckel
-        # von vier hiesse bei zwoelf Teilfragen: drei Wellen hintereinander,
-        # also dreimal warten statt einmal -- gemessen 6,2s statt 3,7s.
-        # Eine Ratenbegrenzung faengt der Wiederholungsversuch ab.
+
+
+
+
         return limit
 
     @property
@@ -715,9 +714,9 @@ class Settings:
         if not self.api_base:
             return "", False
         des_kontos = self.api_base == self.own_api_base
-        # Die Adresse des Betreibers gehoert zu SEINEM Modell -- nicht zu dem,
-        # das ein Konto gerade gewaehlt hat (bis 9.5.14 landete so zum
-        # Beispiel ein Mistral-Modell beim LM Studio des Betreibers).
+
+
+
         bezug = self.model if des_kontos or not self.api_base_for else self.api_base_for
         if provider_of(model) != provider_of(bezug) or not base_fits(self.api_base, model):
             return "", False
@@ -735,7 +734,7 @@ class Settings:
         nicht, oder der Aufruf ginge an den falschen Rechner.
         """
         if model == SPLIT_MODEL_ID:
-            # Laeuft auf den Servern des Betreibers -- zaehlt immer ins Kontingent.
+
             return "operator"
         name = self.key_name_for(model)
         if not (name and name in self.own_key_names and self.api_keys.get(name)):
@@ -824,9 +823,9 @@ class Settings:
         if self.model_access is not None:
             self.model_access(model)
         if model == SPLIT_MODEL_ID:
-            # Serverlast aufteilen (10.2.0 Luna): llama-server auf dem Master,
-            # nur ueber 127.0.0.1 und mit seinem eigenen, zufaelligen Schluessel.
-            # Nie ein Schluessel eines Anbieters -- auch keiner des Kontos.
+
+
+
             from aquaticy.sharding import endpoint
 
             adresse, schluessel = endpoint()
@@ -836,26 +835,26 @@ class Settings:
             return {"api_base": adresse, "api_key": schluessel or NO_KEY}
         kwargs: dict[str, object] = {}
         gleich = provider_of(model) == provider_of(self.api_base_for or self.model)
-        # Die eingetragene Adresse -- und ob das KONTO sie eingetragen hat
-        # (nur Ultra). Dann ist sie fremd fuer alles, was dem Betreiber gehoert.
+
+
         adresse, adresse_des_kontos = self.route(model)
         if self.key_source(model) == "own":
-            # Ein eigener Schluessel des Kontos (9.5.14 Seashell): fuer JEDES
-            # Modell dieses Anbieters, nicht nur fuers Hauptmodell -- sonst
-            # holte sich LiteLLM fuer Agenten und Bildmodell den Schluessel
-            # des Betreibers aus der Umgebung. Er geht nur an den Anbieter
-            # selbst oder an eine Adresse, die das Konto selbst eingetragen
-            # hat -- nie an eine des Betreibers (dann ist das Modell gestellt,
-            # siehe key_source).
+
+
+
+
+
+
+
             kwargs["api_key"] = self.key_for(model)
             if adresse_des_kontos:
                 kwargs["api_base"] = adresse
         elif adresse_des_kontos:
-            # Umgekehrt: an eine Adresse, die ein Konto selbst eingetragen hat,
-            # geht NIE ein Schluessel des Betreibers -- auch nicht ueber die
-            # Umgebung, aus der LiteLLM ihn sich sonst selbst holen wuerde.
-            # Bis 9.5.14 konnte ein Pro-Konto so die Schluessel des Servers an
-            # einen eigenen Rechner umleiten.
+
+
+
+
+
             kwargs["api_base"] = adresse
             kwargs["api_key"] = NO_KEY
         elif gleich:
@@ -910,17 +909,17 @@ class Settings:
         """
         name = (model or "").lower()
         if provider_of(model) in ("ollama", "ollama_chat"):
-            # Nur Modelle, die Ollama als "thinking" fuehrt (11.2.2 Terra). Ein
-            # `think: true` an qwen2.5-coder, gemma & Co. lehnt Ollama mit einem
-            # Fehler ab -- bis 11.2.2 brach daran jede Antwort ab, sobald die
-            # Agenten fertig waren.
+
+
+
+
             from aquaticy.local_model import can
 
             kann = can(model, "thinking", self.ollama_base(model))
             if kann is not None:
                 return kann
-            # Ollama sagt es nicht (aelter oder nicht erreichbar): nach dem Namen.
-            # Liegt der daneben, lernt der Agent aus der Ablehnung (note_missing).
+
+
             return OLLAMA_THINKERS.search(name) is not None
         return any(
             wort in name
@@ -940,16 +939,16 @@ class Settings:
             kwargs["num_ctx"] = 2048
             kwargs["reasoning_effort"] = "disable"
             return kwargs
-        # In der Cloud dasselbe Problem, nur teurer: ein Denk-Modell ueberlegt
-        # sekundenlang, bevor drei Stichworte kommen -- und diese Sekunden
-        # liegen vor JEDER Anfrage. Modelle, die gar nicht denken koennen,
-        # bekommen den Wunsch erst gar nicht: er wuerde nichts bewirken und
-        # im schlechten Fall einen Fehler samt Wiederholung kosten.
+
+
+
+
+
         if self.thinks(model):
             kwargs["reasoning_effort"] = "low"
         kwargs["drop_params"] = True
-        # Kein Zeitlimit von hier: die Aufrufer setzen ihr eigenes (Planer,
-        # Master), und zwei Angaben desselben Arguments sind ein TypeError.
+
+
         return kwargs
 
     def missing_requirements(self) -> list[str]:
@@ -975,7 +974,7 @@ def get_settings() -> Settings:
     from aquaticy.sandbox import VM_SIZES
 
     env_path = load_env()
-    # "~/daten" meint den Heimordner, nicht einen Ordner "~" hier (9.5.34).
+
     data_dir = Path(_env_str("AQUATICY_DATA_DIR") or str(Path.home() / ".aquaticy")).expanduser()
     vm_size = _env_str("AQUATICY_VM_SIZE", "normal").strip().lower()
     if vm_size not in VM_SIZES:
@@ -1005,8 +1004,8 @@ def get_settings() -> Settings:
         vm_size=vm_size,
         vm_image=_env_str("AQUATICY_VM_IMAGE"),
         vm_idle_minutes=_env_int("AQUATICY_VM_IDLE_MINUTES", 20),
-        # Die einzelnen Zahlen ergeben sich aus der Groesse -- ausser jemand
-        # traegt von Hand eine eigene ein, die gewinnt dann.
+
+
         vm_memory_mb=_env_int("AQUATICY_VM_MEMORY_MB", 0) or vm_preset["memory_mb"],
         vm_disk_gb=_env_int("AQUATICY_VM_DISK_GB", 0) or vm_preset["disk_gb"],
         vm_cpus=_env_int("AQUATICY_VM_CPUS", 0) or vm_preset["cpus"],
@@ -1056,15 +1055,15 @@ def reset_settings_cache() -> None:
     get_settings.cache_clear()
 
 
-#: Ein Name in der .env: Grossbuchstaben, Ziffern, Unterstrich.
+
 ENV_KEY_RE = re.compile(r"[A-Z_][A-Z0-9_]{0,99}")
-#: Zeichen, die in einem Wert nichts verloren haben: Zeilenumbrueche jeder Art
-#: und Steuerzeichen. Ein "\n" im Wert haette bis 9.5.14 eine zweite Zeile --
-#: also eine zweite Einstellung -- in die .env geschrieben.
+
+
+
 _ENV_BAD_CHARS = re.compile(r"[\x00-\x1f\x7f\x85\u2028\u2029]")
-#: Werte, die ohne Anfuehrungszeichen stehen duerfen.
+
 _ENV_PLAIN = re.compile(r"[A-Za-z0-9_./:@,+\-]*")
-#: Laenger ist keine Einstellung -- und keine .env soll durch einen Wert platzen.
+
 ENV_VALUE_MAX = 4000
 
 
@@ -1123,7 +1122,7 @@ def write_env_file(values: dict[str, str], path: Path | None = None) -> Path:
         ValueError: Ein Name oder Wert, der die Datei verbiegen wuerde. Dann
             wird gar nichts geschrieben.
     """
-    # Erst alles pruefen, dann schreiben -- halb geschrieben waere schlimmer.
+
     zeilen = {key: env_line(key, value) for key, value in values.items()}
     target = path or find_env_file() or DEFAULT_ENV_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1143,8 +1142,8 @@ def write_env_file(values: dict[str, str], path: Path | None = None) -> Path:
             remaining.pop(key)
             out.append(zeilen[key])
         elif key in zeilen:
-            # Eine doppelte Zeile weiter unten gewinnt beim Lesen -- sie faellt
-            # weg, sonst waere "Gespeichert" ohne Wirkung (9.5.34).
+
+
             continue
         else:
             out.append(line)
@@ -1154,7 +1153,7 @@ def write_env_file(values: dict[str, str], path: Path | None = None) -> Path:
         out.extend(zeilen[key] for key in remaining)
 
     target.write_text("\n".join(out).rstrip("\n") + "\n", encoding="utf-8")
-    # Exotische Dateisysteme koennen chmod verweigern -- kein Grund abzubrechen.
+
     with contextlib.suppress(OSError):
         target.chmod(0o600)
     return target

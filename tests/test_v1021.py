@@ -182,8 +182,8 @@ def test_lan_title_keeps_supported_compression_and_negotiates_it(monkeypatch, en
         payload = zlib.compress(payload)
 
     def response(*args, **kwargs):
-        # A server preferring another optional codec (e.g. Brotli) must be told
-        # which encodings the bounded reader actually supports.
+
+
         assert kwargs["headers"]["Accept-Encoding"] == "gzip, deflate"
         return compressed_response(payload, encoding)
 
@@ -221,7 +221,7 @@ def test_rejected_tunnel_closes_its_reader(monkeypatch):
                               tunnel_request=lambda _: (b"body", b"m" * 16, b"k" * 32))
     tunnel = sharding.Tunnel(cluster, "node")
     monkeypatch.setattr(socket, "create_connection", lambda *a, **kw: network)
-    # SimpleNamespace is not hashable; real sockets and this double must be.
+
     class Network:
         sendall = staticmethod(network.sendall)
         makefile = staticmethod(network.makefile)
@@ -400,7 +400,7 @@ def test_baseline_irrelevant_denial_does_not_skip_later_tool_checks(settings):
 
 
 def test_tool_check_windows_overlap(settings):
-    # JSON starts with {"text": " (10 characters); marker straddles offset 3500.
+
     marker = "TEST_GESPERRT"
     seen = []
 

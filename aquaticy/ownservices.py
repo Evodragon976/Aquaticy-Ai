@@ -15,16 +15,15 @@ from __future__ import annotations
 
 import re
 
-#: Die vier Dienste -- in dieser Reihenfolge, wenn eine Frage mehrere nennt.
 SOURCES = ("home", "storage", "calendar", "mail")
 
 _BESITZ = r"(?:mein|meine|meinen|meinem|meiner|meines|my|unser|unsere|unseren|unserem|our)"
-#: Bis zu drei Woerter dazwischen: "meine drei neusten ungelesenen Mails".
+
 _LUECKE = r"(?:[\w'-]+\s+){0,3}"
 _ICH_HABE = (r"(?:hab(?:e)?\s+ich|habe\s+ich|hast\s+du\s+(?:f(?:ü|ue)r\s+mich)|"
              r"do\s+i\s+have|have\s+i\s+(?:got|received)|did\s+i\s+(?:get|receive)|"
              r"gibt\s+es|is\s+there|are\s+there|any)")
-#: "Welche Termine habe ich morgen?" -- das Wort vor "habe ich".
+
 _DAVOR_ICH = r"\s+(?:hab(?:e)?\s+ich|hast\s+du\s+f(?:ü|ue)r\s+mich|do\s+i\s+have)\b"
 
 _MAIL_WORT = r"(?:e-?mails?|mails?|posteingang|postfach|inbox|gmail)"
@@ -57,7 +56,7 @@ _GERAET = (r"(?:licht\w*|lampe\w*|leuchte\w*|lights?|lamps?|steckdose\w*|plugs?|
            r"jalousie\w*|blinds?|shutters?|ventilator\w*|fans?|klima\w*|"
            r"fernseher\w*|tv|staubsauger\w*|vacuum)")
 _HAUS = re.compile(
-    # Ein Befehl am Satzanfang: "Schalte das Licht im Flur an", "Turn off the lights".
+
     rf"^\s*(?:bitte\s+|please\s+|hey\s+aquaticy,?\s+)?(?:schalt\w*|mach\w*|dimm\w*|"
     rf"stell\w*|dreh\w*|turn|switch|dim|set)\s+(?:[\w'-]+\s+){{0,6}}?{_GERAET}\b"
     rf"|\b{_BESITZ}\s+{_LUECKE}{_GERAET}\b"
@@ -66,7 +65,7 @@ _HAUS = re.compile(
     r"|\b(?:(?:ü|ue)ber|via|mit|with|in)\s+home\s*assistant\b",
     re.IGNORECASE,
 )
-#: "Wie schalte ich in Blender ein Licht an" ist keine Bitte an das eigene Haus.
+
 _HAUS_NICHT = re.compile(r"\b(?:blender|unity|unreal|minecraft|photoshop|szene\s+in)\b",
                          re.IGNORECASE)
 
@@ -80,7 +79,7 @@ _LAGER = re.compile(
 
 _MUSTER = {"home": _HAUS, "storage": _LAGER, "calendar": _KALENDER, "mail": _MAIL}
 
-#: Werkzeuge, die jeden Dienst lesen (zum Vorab-Abruf) -- und die alle, die ihn nutzen.
+
 READ_TOOL = {"home": "ha_states", "storage": "storage_browse", "calendar": "calendar_events",
              "mail": "mail_search"}
 TOOLS = {
@@ -90,7 +89,7 @@ TOOLS = {
     "mail": frozenset({"mail_search", "mail_read", "mail_draft"}),
 }
 
-#: Der Name je Dienst -- fuer Hinweise im Chat.
+
 NAMES = {
     "de": {"home": "Home Assistant", "storage": "die Lagerverwaltung",
            "calendar": "dein Kalender", "mail": "dein Postfach"},
@@ -98,7 +97,7 @@ NAMES = {
            "calendar": "your calendar", "mail": "your mailbox"},
 }
 
-#: Wo der Nutzer den Dienst einschaltet.
+
 WHERE = {
     "de": {"home": "Zuhause & Netz", "storage": "Zuhause & Netz",
            "calendar": "Gmail & Kalender", "mail": "Gmail & Kalender"},

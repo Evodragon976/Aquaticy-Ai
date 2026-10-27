@@ -52,7 +52,7 @@ def test_mistral_reads_chat_models_and_tokens() -> None:
     assert info["models"][0]["label"] == "Mistral Large"
     assert info["tokens"] == {"limit": 500000, "remaining": 499990, "per": "Minute",
                               "reset": ""}
-    # Die Probe nimmt das kleine Modell und genau einen Token.
+
     assert b'"max_tokens":1' in gesehen[0].content.replace(b" ", b"")
     assert b"mistral-small-latest" in gesehen[0].content
     assert gesehen[0].headers["authorization"] == f"Bearer {MISTRAL_KEY}"
@@ -84,8 +84,8 @@ def test_nvidia_checks_the_key_with_one_token_and_keeps_only_chat_models() -> No
             {"id": "black-forest-labs/flux.1-schnell"}, {"id": "meta/llama-guard-4-12b"}]})})
     info = linked.inspect("nvidia_nim", "nvapi-test-123456", client)
     ids = [m["id"] for m in info["models"]]
-    # Seit 12.2.3 Astra: das Nemotron-Arbeitspferd und das kleine zuerst, dann die
-    # uebrigen Nemotron-Modelle, dann der Rest.
+
+
     assert ids[:3] == ["nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
                        "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2",
                        "nvidia_nim/nvidia/nemotron-mini-4b"], "das Arbeitspferd zuerst"
@@ -123,7 +123,7 @@ def test_picker_and_roles_only_for_own_linked_keys(tmp_path: Path) -> None:
         {"id": "mistral/mistral-small-latest"}]})
     linked.save(tmp_path, "nvidia_nim", {"models": [
         {"id": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"}]})
-    # NVIDIA ist ausgelesen, aber der Schluessel gehoert nicht dem Konto.
+
     s = _settings(tmp_path, {"MISTRAL_API_KEY": "k1"})
     assert {m["id"] for m in linked.picker_models(s)} == {
         "mistral/mistral-large-latest", "mistral/mistral-small-latest"}
@@ -237,7 +237,7 @@ def test_web_link_needs_the_addon_and_stores_the_key_only_when_accepted(
     gespeichert: dict[str, str] = {}
     _sitzung(tmp_path, gespeichert, monkeypatch)
     monkeypatch.setattr(linked, "inspect", lambda provider, key: pytest.fail("gefragt"))
-    # Erst installieren -- vorher nimmt Aquaticy keinen Schluessel an.
+
     antwort, status = web.linked_action({"action": "link", "provider": "mistral",
                                          "key": MISTRAL_KEY})
     assert status == 400 and "Installiere zuerst" in antwort["error"] and not gespeichert
@@ -259,7 +259,7 @@ def test_web_link_needs_the_addon_and_stores_the_key_only_when_accepted(
     karte = next(k for k in antwort["accounts"] if k["provider"] == "mistral")
     assert karte["linked"] and karte["installed"] and karte["models"] == ["Large"]
     assert MISTRAL_KEY not in str(antwort), "der Schluessel geht nie zurueck an den Browser"
-    # Ein NVIDIA-Schluessel gehoert nicht ins Mistral-Add-on.
+
     antwort, status = web.linked_action({"action": "link", "provider": "mistral",
                                          "key": "nvapi-falscher-ort-1"})
     assert status == 400 and "NVIDIA NIM" in antwort["error"]
@@ -275,7 +275,7 @@ def test_uninstalling_the_addon_deletes_the_key(tmp_path: Path,
     web.SESSION.busy = lambda: False
     web.SESSION.reload = lambda **k: None
     linked.save(tmp_path, "nvidia_nim", {"models": [{"id": "nvidia_nim/meta/x"}]})
-    # Ein Schluessel von vor 12.0.0: das Add-on gilt dafuer als installiert.
+
     karten = {a["id"]: a for a in web.addons_view(web.SESSION)["addons"]}
     assert karten["nvidia_nim"]["installed"] and karten["nvidia_nim"]["konto"]["linked"]
     assert karten["nvidia_nim"]["command"] == "", "kein Befehl im Chat"

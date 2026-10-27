@@ -29,7 +29,7 @@ class Ollama:
 
     def __init__(self, base_kennt: int = 0) -> None:
         self.modelle: dict[str, str] = {BASE: ""}
-        #: So viele Antworten kennt das Ausgangsmodell schon von sich aus.
+
         self.base_kennt = base_kennt
         self.geloescht: list[str] = []
 
@@ -79,7 +79,7 @@ def test_only_local_models_get_a_track_and_own_builds_are_skipped(ordner: Path) 
 
 
 def test_a_gain_from_5_percent_makes_a_minor_version(ordner: Path) -> None:
-    ollama = Ollama(base_kennt=18)          # vorher 18/20, danach 20/20: +11 %
+    ollama = Ollama(base_kennt=18)
     assert up.train_all(ordner, FAKTEN, ollama) == 1
     stand = up.view(ordner)["tracks"][0]
     assert stand["candidate"]["label"] == "gemma3:4b 1.1"
@@ -89,25 +89,25 @@ def test_a_gain_from_5_percent_makes_a_minor_version(ordner: Path) -> None:
 
 
 def test_a_gain_from_30_percent_jumps_a_whole_version(ordner: Path) -> None:
-    ollama = Ollama(base_kennt=10)          # 10/20 -> 20/20: +100 %
+    ollama = Ollama(base_kennt=10)
     up.train_all(ordner, FAKTEN, ollama)
     kandidat = up.view(ordner)["tracks"][0]["candidate"]
     assert kandidat["label"] == "gemma3:4b 2" and kandidat["major"]
     up.upgrade(ordner, BASE)
-    # Danach: unter 30 % -> 2.1
+
     track = up.load(ordner)["tracks"][BASE]
     assert up.next_version(track, 6.0) == [2, 1]
     assert up.next_version(track, 31.0) == [3, 0]
 
 
 def test_below_5_percent_upgrading_stays_grey_but_ultra_can_use_it(ordner: Path) -> None:
-    ollama = Ollama(base_kennt=19)          # 19/20 und ein halber Treffer: knapp unter 5 %
+    ollama = Ollama(base_kennt=19)
     up.train_all(ordner, FAKTEN, ollama)
     kandidat = up.view(ordner)["tracks"][0]["candidate"]
     assert 0 < kandidat["gain"] < up.MINOR_GAIN and not kandidat["can_upgrade"]
     with pytest.raises(up.UpgradeError, match="ab 5"):
         up.upgrade(ordner, BASE)
-    # Ultra sieht und nutzt den Kandidaten sofort, alle anderen nicht.
+
     ultra = [w.kind for w in up.choices(ordner, True)[BASE]]
     normal = [w.kind for w in up.choices(ordner, False)[BASE]]
     assert "candidate" in ultra and "candidate" not in normal
@@ -126,22 +126,22 @@ def test_upgrade_launch_notice_and_the_four_day_rule(ordner: Path) -> None:
     jetzt = 1_000_000.0
     start = up.upgrade(ordner, BASE, now=jetzt)
     neu = "ollama_chat/aquaticy-gemma3-4b-6dac22b9d540:1.1"
-    # Das Modell geht hoch -- fuer jedes Konto, das auf dem Strang steht.
+
     assert up.resolve(ordner, f"ollama_chat/{BASE}", False, "konto-a", now=jetzt) == neu
-    # Startmeldung: einmal je Konto.
+
     meldung = up.launch_notice(ordner, "konto-a", now=jetzt + 10)
     assert meldung and meldung["model"] == neu and "stärker" in meldung["text"]
     up.mark_seen(ordner, "konto-a", start["id"])
     assert up.launch_notice(ordner, "konto-a", now=jetzt + 20) is None
     assert up.launch_notice(ordner, "konto-b", now=jetzt + 20)
-    # Beide Fassungen sind vier Tage fuer alle waehlbar ...
+
     normal = {w.model for w in up.choices(ordner, False, now=jetzt + 3 * 86400)[BASE]}
     assert normal == {BASE, "aquaticy-gemma3-4b-6dac22b9d540:1.1"}
-    # ... und wer die alte bewusst waehlt, bleibt dabei.
+
     up.choose(ordner, f"ollama_chat/{BASE}", False, "konto-b")
     assert up.resolve(ordner, f"ollama_chat/{BASE}", False, "konto-b",
                       now=jetzt + 3 * 86400) == f"ollama_chat/{BASE}"
-    # Nach vier Tagen sieht nur noch Ultra die alte.
+
     spaeter = jetzt + 5 * 86400
     assert {w.model for w in up.choices(ordner, False, now=spaeter)[BASE]} == {
         "aquaticy-gemma3-4b-6dac22b9d540:1.1"}
@@ -155,12 +155,12 @@ def test_everyone_goes_up_with_the_next_release_ultra_too(ordner: Path) -> None:
     ollama = Ollama(base_kennt=18)
     up.train_all(ordner, FAKTEN, ollama)
     kandidat = "ollama_chat/" + up.load(ordner)["tracks"][BASE]["candidate"]["model"]
-    # Ultra probiert den Kandidaten aus -- und bleibt dabei, solange er Kandidat ist.
+
     up.choose(ordner, kandidat, True, "ultra")
     assert up.resolve(ordner, kandidat, True, "ultra") == kandidat
     up.upgrade(ordner, BASE)
-    assert up.resolve(ordner, kandidat, True, "ultra") == kandidat   # jetzt die neueste
-    # Naechste Freigabe: auch Ultra geht mit hoch.
+    assert up.resolve(ordner, kandidat, True, "ultra") == kandidat
+
     ollama.modelle["aquaticy-gemma3-4b-6dac22b9d540:1.1"] = ""
     ollama.base_kennt = 0
     up.train_all(ordner, FAKTEN[:10], ollama, force=True)
@@ -203,7 +203,7 @@ def test_rollback_and_skip(ordner: Path) -> None:
     assert up.generation(ordner) == stand + 1
     assert up.resolve(ordner, "ollama_chat/" + up.model_name(BASE, [1, 1]), False) == (
         f"ollama_chat/{BASE}")
-    # Neuer Kandidat -- die naechste freie Nummer, keine doppelte 1.1.
+
     up.train_all(ordner, FAKTEN, ollama, force=True)
     kandidat = up.load(ordner)["tracks"][BASE]["candidate"]
     assert kandidat["version"] == [1, 2]
@@ -251,7 +251,7 @@ def test_confirmed_facts_need_two_accounts_and_carry_no_account(learners) -> Non
     assert fakten == [{"text": FACT, "source": "https://de.wikipedia.org/wiki/Photosynthese"}]
 
 
-# -- Web: wer darf was -------------------------------------------------------------------
+
 class Sitzung:
     def __init__(self, ultra: bool, kennung: str = "k1") -> None:
         self.ultra = ultra
@@ -274,7 +274,7 @@ def test_only_ultra_steers_auto_upgrading(server_ordner: Path) -> None:
     antwort, status = web.upgrades_action(Sitzung(True), {"action": "enable", "on": True})
     assert status == 200 and antwort["ultra"]["enabled"]
     assert antwort["ultra"]["tracks"][0]["base"] == BASE
-    # Upgraden ohne Kandidaten: ein Hinweis, kein Absturz.
+
     antwort, status = web.upgrades_action(Sitzung(True), {"action": "upgrade", "base": BASE})
     assert status == 400 and "keine neue Version" in antwort["error"]
     assert "ultra" not in web.upgrades_view(Sitzung(False))

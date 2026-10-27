@@ -17,7 +17,7 @@ def store(tmp_path: Path) -> Memory:
     return Memory(tmp_path / "aquaticy.sqlite3", tmp_path)
 
 
-# -- Ablegen und Wiederfinden ---------------------------------------------
+
 def test_a_note_comes_back(store: Memory) -> None:
     store.remember("Der Nutzer wohnt in Bremen.", topic="Wohnort")
     found = store.recall("Bremen")
@@ -60,7 +60,7 @@ def test_deleting_one_and_all(store: Memory) -> None:
     assert store.count() == 0
 
 
-# -- Verschluesselung -----------------------------------------------------
+
 def test_the_database_holds_no_plain_text(store: Memory, tmp_path: Path) -> None:
     """Wer die Datei kopiert, soll nichts lesen koennen."""
     secret = "Der Nutzer wohnt in der Musterstrasse 5."
@@ -77,7 +77,7 @@ def test_a_stolen_database_stays_unreadable(store: Memory, tmp_path: Path) -> No
     thief_dir = tmp_path / "dieb"
     thief_dir.mkdir()
     (thief_dir / "aquaticy.sqlite3").write_bytes((tmp_path / "aquaticy.sqlite3").read_bytes())
-    thief = Memory(thief_dir / "aquaticy.sqlite3", thief_dir)  # eigener Schluessel
+    thief = Memory(thief_dir / "aquaticy.sqlite3", thief_dir)
     assert secret not in thief.all_entries()[0].text
 
 
@@ -146,7 +146,7 @@ def test_plain_text_from_older_versions_still_reads(store: Memory, tmp_path: Pat
     assert store.all_entries()[0].text == "Klartext"
 
 
-# -- Die Grenze -----------------------------------------------------------
+
 def test_the_limit_is_four_hundred_megabytes() -> None:
     assert mem.MAX_BYTES == 400_000_000
 
@@ -176,7 +176,7 @@ def test_clearing_uploads_frees_the_space(store: Memory, tmp_path: Path) -> None
 
 
 def test_a_full_store_refuses_more(store: Memory, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(mem, "MAX_BYTES", 1)  # alles ist ueber der Grenze
+    monkeypatch.setattr(mem, "MAX_BYTES", 1)
     with pytest.raises(MemoryFull):
         store.remember("passt nicht mehr")
 
@@ -194,7 +194,7 @@ def test_making_room_drops_uploads_before_notes(store: Memory, tmp_path: Path,
     assert store.count() == 1
 
 
-# -- Anzeige --------------------------------------------------------------
+
 def test_sizes_read_like_a_human_wrote_them() -> None:
     assert human_size(512) == "512 B"
     assert human_size(20_000) == "20 KB"

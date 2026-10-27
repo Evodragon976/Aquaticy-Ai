@@ -11,7 +11,6 @@ import json
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-#: Was angefragt wurde -- zum Nachsehen im Test.
 ANFRAGEN: list[str] = []
 
 
@@ -34,7 +33,7 @@ class H(BaseHTTPRequestHandler):
                         for t in body.get("tools") or []
                     ),
                     "auth": self.headers.get("Authorization", "")[:12],
-                    # Welcher Server gefragt wurde -- Betreiber oder "Anbieter".
+
                     "port": self.server.server_address[1],
                 }
             )
@@ -42,8 +41,8 @@ class H(BaseHTTPRequestHandler):
         )
         schluessel = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if "leak" in schluessel:
-            # Wie ein echter Anbieter: ein falscher Schluessel wird in der
-            # Fehlermeldung zitiert. Aquaticy darf ihn nie weitergeben.
+
+
             fehler = json.dumps({"error": {
                 "message": f"Incorrect API key provided: {schluessel}",
                 "type": "invalid_request_error", "code": "invalid_api_key"}}).encode()
@@ -59,8 +58,8 @@ class H(BaseHTTPRequestHandler):
         tool_done = any(m.get("role") == "tool" for m in msgs[letzte + 1 :])
         tool_calls = None
         if rf == "urteil" and "PRUEFAUSFALL" in user:
-            # Der Anbieter faellt fuer die Pruefung aus (9.5.18: das darf nie ein
-            # Ai-guard-Anhaltspunkt sein).
+
+
             fehler = json.dumps({"error": {"message": "overloaded", "type": "server_error"}})
             fehler_bytes = fehler.encode()
             self.send_response(503)
@@ -75,12 +74,12 @@ class H(BaseHTTPRequestHandler):
                     "zulaessig": "VERBOTEN" not in user,
                     "regel": "persoenlichkeitsrecht",
                     "grund": "Testurteil",
-                    # Ai-guard reitet auf demselben Aufruf mit (9.5.16 Lion).
+
                     "missbrauch": ("MISSBRAUCH" in user or "MALWARE" in user
                                    or "BELEIDIGUNG" in user),
-                    # 9.5.24: Art und Schwere -- "MISSBRAUCH" ist Angriffshilfe
-                    # (sperrt erst beim zweiten Mal), "MALWARE" Schadsoftware
-                    # (sperrt sofort, mindestens 4 Tage).
+
+
+
                     "missbrauch_art": ("malware" if "MALWARE" in user
                                        else "beleidigung" if "BELEIDIGUNG" in user
                                        else "angriff"),

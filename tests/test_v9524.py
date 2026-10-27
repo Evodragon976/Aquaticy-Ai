@@ -19,21 +19,21 @@ def guard(tmp_path: Path) -> AiGuard:
     return AiGuard(tmp_path / "accounts.sqlite3")
 
 
-# -- Entscheidung -----------------------------------------------------------------
+
 
 
 @pytest.mark.parametrize(("art", "schwere", "vorher", "art_massnahme", "tage"), [
-    # Beleidigung: leicht -> nur der Chat; sonst Bann, der mit der Schwere waechst.
+
     ("beleidigung", 1, 0, "chat", 0),
     ("beleidigung", 2, 0, "ban", 1),
     ("beleidigung", 3, 0, "ban", 7),
     ("beleidigung", 4, 0, "ban", 0),
-    # Schadsoftware haerter: schon beim ersten klaren Fall, 4 Tage bis fuer immer.
+
     ("malware", 1, 0, "ban", 4),
     ("malware", 2, 0, "ban", 14),
     ("malware", 3, 0, "ban", 30),
     ("malware", 4, 0, "ban", 0),
-    # Angriff, Rechtsbruch, Jailbreak: erst beim zweiten Anhaltspunkt.
+
     ("angriff", 4, 0, "none", 0),
     ("angriff", 3, 1, "ban", 7),
     ("rechtsbruch", 2, 0, "none", 0),
@@ -68,7 +68,7 @@ def test_categories_are_recognised(eingabe: str, art: str) -> None:
     assert normalize_category(eingabe) == art
 
 
-# -- Umsetzung ---------------------------------------------------------------------
+
 
 
 def test_a_light_insult_locks_only_that_chat(guard: AiGuard) -> None:
@@ -101,10 +101,10 @@ def test_permanent_bans_have_no_end(guard: AiGuard) -> None:
 
 def test_a_pattern_needs_two_separate_chats(guard: AiGuard) -> None:
     assert guard.record_incident("u5", "rechtsbruch", 3, chat="a").kind == "none"
-    # Dieselbe Nachricht im selben Chat noch einmal -- kein Muster.
+
     assert guard.record_incident("u5", "rechtsbruch", 3, chat="a").kind == "none"
     assert guard.is_banned(user_id="u5") is None
-    # Ein zweiter, getrennter Anlass sperrt.
+
     assert guard.record_incident("u5", "rechtsbruch", 3, chat="b").kind == "ban"
     assert guard.is_banned(user_id="u5") is not None
 
@@ -162,7 +162,7 @@ def test_old_databases_get_the_new_columns(tmp_path: Path) -> None:
     assert waechter.is_banned(user_id="neu") is not None
 
 
-# -- Rechtspruefer liefert Art und Schwere -----------------------------------------
+
 
 
 def test_the_judge_reads_kind_and_severity() -> None:
@@ -171,11 +171,11 @@ def test_the_judge_reads_kind_and_severity() -> None:
     urteil = parse_verdict('{"zulaessig": true, "regel": "", "grund": "x", "missbrauch": true, '
                            '"missbrauch_art": "beleidigung", "missbrauch_schwere": 3}')
     assert urteil is not None and urteil.abuse and urteil.abuse_severity == 3
-    # Aeltere Antwort ohne Schwere: ein klarer Missbrauch gilt als mittel (2).
+
     alt = parse_verdict('{"zulaessig": false, "regel": "", "grund": "x", "missbrauch": true, '
                         '"missbrauch_art": "angriff"}')
     assert alt is not None and alt.abuse_severity == 2
-    # Kein Missbrauch -> keine Schwere, auch wenn das Modell eine nennt.
+
     nichts = parse_verdict('{"zulaessig": true, "regel": "", "grund": "x", "missbrauch": false, '
                            '"missbrauch_schwere": 4}')
     assert nichts is not None and nichts.abuse_severity == 0
@@ -188,7 +188,7 @@ def test_a_trifle_is_named_harmless_in_the_prompt() -> None:
     assert "Ampel" in text and "Bagatellen" in text and "missbrauch_schwere" in text
 
 
-# -- virtual-machine-Waechter -----------------------------------------------------------
+
 
 
 @pytest.fixture

@@ -16,7 +16,6 @@ from aquaticy import preferences
 from aquaticy.config import Settings, read_env_file, write_env_file
 
 
-# -- .env-Injection ---------------------------------------------------------------------
 @pytest.mark.parametrize("boese", [
     "Köln\nAQUATICY_HA_CONTROL=true",
     "Köln\rAQUATICY_LEGAL_GUARD=false",
@@ -46,7 +45,7 @@ def test_odd_values_come_back_exactly_and_are_never_expanded(
     write_env_file({"AQUATICY_LOCATION": seltsam}, ziel)
     assert read_env_file(ziel) == {"AQUATICY_LOCATION": seltsam}
     assert "server-geheim" not in str(read_env_file(ziel))
-    # Ein offenes Anführungszeichen verschluckt keine folgenden Zeilen.
+
     write_env_file({"AQUATICY_LOCATION": '"', "AQUATICY_HA_CONTROL": "false"}, ziel)
     assert read_env_file(ziel)["AQUATICY_HA_CONTROL"] == "false"
     with pytest.raises(ValueError):
@@ -65,7 +64,7 @@ def test_a_profile_never_expands_server_variables(
     try:
         profil = tmp_path / "profil"
         profil.mkdir()
-        # So stand es in einer .env, die ein aelteres Aquaticy geschrieben hat.
+
         (profil / ".env").write_text("AQUATICY_LOCATION=${NVIDIA_NIM_API_KEY}\n")
         settings = web._profile_settings(profil, "normal")
         assert settings.location == "${NVIDIA_NIM_API_KEY}"
@@ -89,7 +88,7 @@ def test_the_chat_cannot_smuggle_a_protected_setting(
     assert os.environ.get("AQUATICY_HA_CONTROL", "") != "true"
 
 
-# -- SSRF: eine Netzregel fuer alle Abrufe (aquaticy/netguard.py) ------------------------
+
 import threading  # noqa: E402
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
 
@@ -121,7 +120,7 @@ def test_public_names_are_allowed_but_not_if_they_point_inside(
 ) -> None:
     assert netguard.url_allowed("https://shop.example/produkt")
     netguard.forget()
-    # Ein Name, der (auch nur teilweise) nach innen zeigt, ist gesperrt.
+
     monkeypatch.setattr(netguard, "resolve", lambda host, port: ["93.184.216.34", "10.0.0.7"])
     assert "nicht öffentliche" in netguard.url_problem("https://shop.example/")
 
@@ -178,7 +177,7 @@ def test_a_huge_answer_is_cut_off_while_reading() -> None:
     def riesig():
         for _ in range(10_000):
             gelesen["stuecke"] += 1
-            yield b"%" * 65_536   # zusammen 655 MB -- wenn man alles laese
+            yield b"%" * 65_536
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/robots.txt":
@@ -193,7 +192,7 @@ def test_a_huge_answer_is_cut_off_while_reading() -> None:
 def test_the_connection_itself_refuses_a_name_that_turns_internal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # DNS-Rebinding: beim Pruefen oeffentlich, beim Verbinden intern.
+
     monkeypatch.setattr(netguard, "resolve", lambda host, port: ["127.0.0.1"])
     with pytest.raises(httpcore.ConnectError):
         netguard._GuardedBackend().connect_tcp("umspringer.example", 80, timeout=2)
@@ -289,7 +288,7 @@ def test_feeds_are_cut_off_while_reading() -> None:
     assert gelesen["stuecke"] < 200
 
 
-# -- Google-Anmeldung: state einmalig und an das Konto gebunden ------------------------------
+
 def test_a_google_state_works_once_for_its_account_only(monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy import web
 
@@ -323,7 +322,7 @@ def test_the_google_return_needs_the_session_that_started_it(
     monkeypatch.setattr("aquaticy.google.Google.account", lambda self: "opfer@example.com")
     port = server["port"]
     anna, bernd = _konto(port), _konto(port)
-    # Anna beginnt eine Anmeldung -- der state gehoert ihr.
+
     import json as _json
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "id-1.apps.googleusercontent.com")
@@ -331,24 +330,24 @@ def test_the_google_return_needs_the_session_that_started_it(
     web.SESSIONS = web.SessionRegistry()
     start = _json.loads(_req(port, "POST", "/api/google", {"action": "start"}, anna)[1])
     state = start["state"]
-    # Ohne Anmeldung: nichts.
+
     _, seite = _req(port, "GET", f"/google?code=abc&state={state}")
     assert b"melde dich zuerst" in seite and getauscht == []
-    # Bernd mit Annas state: nichts (und Annas state ist damit verbraucht).
+
     _, seite = _req(port, "GET", f"/google?code=abc&state={state}", cookie=bernd)
     assert b"keiner Anmeldung" in seite and getauscht == []
-    # Ohne state: nichts.
+
     antwort = _json.loads(_req(port, "POST", "/api/google",
                                {"action": "finish", "code": "abc"}, anna)[1])
     assert antwort["ok"] is False and "keiner Anmeldung" in antwort["error"]
     assert getauscht == []
-    # Mit eigenem, frischem state: klappt.
+
     state = _json.loads(_req(port, "POST", "/api/google", {"action": "start"}, anna)[1])["state"]
     _, seite = _req(port, "GET", f"/google?code=abc&state={state}", cookie=anna)
     assert b"opfer@example.com" in seite and getauscht == ["x"]
 
 
-# -- Kontingent: atomar reservieren, fail-closed, echte Zahlen -----------------------------
+
 import time as _time  # noqa: E402
 from concurrent.futures import ThreadPoolExecutor  # noqa: E402
 
@@ -363,7 +362,7 @@ def test_parallel_agents_cannot_overdraw_the_quota(tmp_path: Path) -> None:
     abgelehnt: list[str] = []
 
     def agent(_: int) -> None:
-        # Jeder "Agent" in eigener Verbindung, wie in echt (eigene Threads).
+
         eigenes = Quota(tmp_path / "konten.sqlite3", "k", konto.created_at)
         try:
             gebucht.append(eigenes.reserve(10_000, "agent"))
@@ -384,8 +383,8 @@ def test_a_reservation_is_settled_with_the_real_numbers(tmp_path: Path) -> None:
     assert konto.status()["_used"]["session"] == 1_234
     konto.settle(konto.reserve(5_000, "m"), 0, "m")
     assert konto.status()["_used"]["session"] == 1_234, "freigegeben"
-    # Seit 9.5.16 (P2): ein Bedarf, der groesser ist als der Rest, wird gar
-    # nicht erst reserviert -- sonst lief der Aufruf und ueberzog das Limit.
+
+
     konto.record(SESSION_TOKENS - 1_234 - 10, "x")
     with pytest.raises(QuotaExceeded):
         konto.reserve(50_000, "m")
@@ -431,8 +430,8 @@ def test_errors_while_counting_are_logged_not_swallowed(
 
 def test_the_providers_numbers_count_including_reasoning() -> None:
     class Usage:
-        prompt_tokens = 1_000          # enthaelt 800 Cache-Token
-        completion_tokens = 300        # enthaelt 250 Reasoning-Token
+        prompt_tokens = 1_000
+        completion_tokens = 300
         total_tokens = 1_300
 
     assert metering.usage_of(Usage()) == (1_000, 300)
@@ -460,13 +459,13 @@ def test_streamed_answers_are_counted_with_the_providers_numbers(
     assert status == 200
     anfragen = [_json.loads(z) for z in fake_llm.ANFRAGEN]
     konto = web.AUTH.quota(web.AUTH.account(profil.name))
-    # Der Testserver meldet je Aufruf 100 + 20 Token -- genau das zaehlt,
-    # auch beim Streamen (bis 9.5.14: eigene Schaetzung aus dem Text).
+
+
     assert konto.status()["_used"]["session"] == 120 * len(anfragen)
     assert any(a["stream"] for a in anfragen)
 
 
-# -- Speicher: ein gemeinsamer Deckel von 400 MB -------------------------------------------
+
 from aquaticy import budget, media  # noqa: E402
 from aquaticy.cache import Cache  # noqa: E402
 
@@ -486,7 +485,7 @@ def test_everything_in_the_profile_counts(tmp_path: Path) -> None:
     (tmp_path / "uploads").mkdir()
     (tmp_path / "uploads" / "x.pdf").write_bytes(b"%" * 10_000)
     cache.set("k", "v" * 50_000)
-    # Bilder, Uploads und Zwischenspeicher -- alles im selben Deckel.
+
     assert budget.used_bytes(tmp_path, fresh=True) >= 30_000 + 50_000
     assert budget.used_bytes(tmp_path, fresh=True) > leer
 
@@ -497,10 +496,10 @@ def test_cache_history_and_media_stop_at_the_limit(
     cache = Cache(tmp_path / "aquaticy.sqlite3")
     cache.add_history("chat", "Frage", "Antwort")
     _klein(monkeypatch, budget.used_bytes(tmp_path, fresh=True) + 5_000)
-    # Zwischenspeicher: wird einfach nicht angelegt.
+
     cache.set("gross", "x" * 50_000)
     assert cache.get("gross") is None
-    # Verlauf und Bilder: klar abgelehnt, nichts still geloescht.
+
     with pytest.raises(budget.StorageFull):
         cache.add_history("chat", "Noch eine", "y" * 50_000)
     with pytest.raises(budget.StorageFull):
@@ -516,7 +515,7 @@ def test_making_room_drops_replaceable_things_first(
     cache.set("alt", "c" * 200_000)
     fest = media.save_snapshot(tmp_path, PNG + b"f" * 50_000, "image/png", keep=True)
     moment = media.save_snapshot(tmp_path, PNG + b"m" * 50_000, "image/png")
-    # So knapp, dass das Leeren des Zwischenspeichers allein nicht reicht.
+
     _klein(monkeypatch, 130_000)
     budget.make_room(tmp_path)
     assert cache.get("alt") is None, "Zwischenspeicher zuerst"
@@ -531,7 +530,7 @@ def test_expired_cache_entries_are_purged_without_being_read(tmp_path: Path) -> 
     cache = Cache(tmp_path / "aquaticy.sqlite3")
     cache.set("weg", "x", ttl=0)
     cache_modul._LAST_PURGE.clear()
-    Cache(tmp_path / "aquaticy.sqlite3")  # beim naechsten Oeffnen wird aufgeraeumt
+    Cache(tmp_path / "aquaticy.sqlite3")
     import sqlite3 as _sqlite3
 
     with _sqlite3.connect(tmp_path / "aquaticy.sqlite3") as conn:
@@ -549,7 +548,7 @@ def test_ai_images_leave_with_their_chat_and_are_capped(
     cache.delete_chat("chat")
     assert media.snapshot_path(tmp_path, ki) is None, "das KI-Bild geht mit dem Chat"
     assert media.snapshot_path(tmp_path, fest) is not None, "das Auftragsbild nicht"
-    # KI-Bilder sind begrenzt -- die aeltesten gehen zuerst.
+
     monkeypatch.setattr(media, "MAX_AI_IMAGES", 3)
     ids = []
     for nummer in range(5):
@@ -558,13 +557,13 @@ def test_ai_images_leave_with_their_chat_and_are_capped(
         _time.sleep(0.01)
     uebrig = [i for i in ids if media.snapshot_path(tmp_path, i) is not None]
     assert uebrig == ids[-3:]
-    # Festgehaltene Bilder: nie still geloescht, aber begrenzt.
+
     monkeypatch.setattr(media, "MAX_KEPT", 1)
     with pytest.raises(ValueError, match="Aufträge"):
         media.save_snapshot(tmp_path, PNG + b"n", "image/png", keep=True)
 
 
-# -- Verschluesselung: Salz je Installation, nichts still durchreichen ----------------------
+
 from aquaticy.memory import (  # noqa: E402
     LEGACY_KEY_SALT,
     UNREADABLE,
@@ -593,7 +592,7 @@ def test_a_wrong_key_is_an_error_not_plaintext(tmp_path: Path) -> None:
     with pytest.raises(CipherError):
         falsch.decrypt(token)
     with pytest.raises(CipherError):
-        richtig.decrypt(token[:-4] + "AAAA")          # beschaedigt
+        richtig.decrypt(token[:-4] + "AAAA")
     assert richtig.decrypt("alte Notiz im Klartext") == "alte Notiz im Klartext"
 
 
@@ -601,7 +600,7 @@ def test_old_data_with_the_fixed_salt_still_reads_and_is_moved_over(tmp_path: Pa
     from cryptography.fernet import Fernet
 
     alt = Fernet(_key_from_passphrase("pass", LEGACY_KEY_SALT)).encrypt(b"von frueher").decode()
-    speicher = Memory(tmp_path / "aquaticy.sqlite3", tmp_path)   # ohne Passphrase anlegen
+    speicher = Memory(tmp_path / "aquaticy.sqlite3", tmp_path)
     import sqlite3 as _sqlite3
 
     with _sqlite3.connect(tmp_path / "aquaticy.sqlite3") as conn:
@@ -617,12 +616,12 @@ def test_old_data_with_the_fixed_salt_still_reads_and_is_moved_over(tmp_path: Pa
     alt_nur = Fernet(_key_from_passphrase("pass", LEGACY_KEY_SALT))
     with pytest.raises(InvalidToken):
         alt_nur.decrypt(neu.encode())
-    # Mit falscher Passphrase: offen "nicht lesbar", nie der Chiffretext.
+
     falsch = Memory(tmp_path / "aquaticy.sqlite3", tmp_path, passphrase="falsch")
     assert falsch.all_entries()[0].text == UNREADABLE
 
 
-# -- Sitzungen, Rate-Limiter, Laeufe ---------------------------------------------------------
+
 def test_a_session_only_counts_from_its_own_network(tmp_path: Path) -> None:
     from aquaticy.auth import AuthStore
 
@@ -663,8 +662,8 @@ def test_every_run_is_found_by_its_id() -> None:
         buch.start(f"Frage {nummer}").finish()
     assert buch.get(erster.id) is None, "alte fertige Laeufe werden nicht ewig aufgehoben"
     assert len(buch._runs) == buch.KEEP
-    # 12.1.1 Terra: nicht bloss Kennungen entfernen, waehrend Threads weiter
-    # warten. Volle Chats lehnen neue Arbeit ab und behalten alle aktiven Laeufe.
+
+
     laufende = [buch.start(f"laeuft {nummer}") for nummer in range(buch.HARD)]
     for _ in range(10):
         with pytest.raises(web.RunCapacityError):
@@ -673,7 +672,7 @@ def test_every_run_is_found_by_its_id() -> None:
     assert all(buch.get(lauf.id) is lauf for lauf in laufende)
 
 
-# -- virtual machine: harte Platzgrenze auch ohne Quote der Laufzeit -----------------------------
+
 import subprocess as _subprocess  # noqa: E402
 
 from aquaticy import sandbox as werkstatt  # noqa: E402
@@ -682,7 +681,7 @@ from aquaticy import sandbox as werkstatt  # noqa: E402
 def _werkstatt(monkeypatch: pytest.MonkeyPatch, dauer: float = 0.0):
     kasten = werkstatt.Sandbox(image="python:3.12-slim")
     kasten.runtime = werkstatt.Runtime("docker", "docker", "Docker (gehaertet)")
-    kasten._quota_ok = False            # die Laufzeit kann keine Quote (wie hier)
+    kasten._quota_ok = False
     monkeypatch.setattr(kasten, "ensure", lambda: "werkstatt-test")
     monkeypatch.setattr(kasten, "touch", lambda: None)
     gelaufen: list[str] = []
@@ -725,7 +724,7 @@ def test_the_watchdog_stops_a_command_that_fills_the_disk(
     assert abgebrochen, "waehrend des Laufs abgebrochen, nicht erst danach gewarnt"
 
 
-# -- CSV: keine Formeln aus fremden Seiten ------------------------------------------------------
+
 def test_csv_cells_never_start_a_formula(tmp_path: Path) -> None:
     import csv as _csv
 
@@ -744,7 +743,7 @@ def test_csv_cells_never_start_a_formula(tmp_path: Path) -> None:
     assert zeilen[1][0].startswith("'=HYPERLINK") and zeilen[1][-1] == "'@rot"
 
 
-# -- Nach fremden Inhalten: Wirkung nur mit Bestaetigung -----------------------------------
+
 def _box_mit_web(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     from aquaticy.tools import Toolbox
 
@@ -766,11 +765,11 @@ def test_after_web_content_side_effects_need_the_human(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     box, ausgefuehrt = _box_mit_web(tmp_path, monkeypatch)
-    # Vorher: wie immer, ohne Rueckfrage.
+
     assert box.call("remember", {"text": "Ich wohne in Bremen"}) == {"ok": True}
     box.call("fetch_page", {"url": "https://boese.example/"})
     assert box.untrusted_seen
-    # Danach, ohne jemanden, der bestaetigen kann: abgelehnt, nicht ausgefuehrt.
+
     for name, argumente in [("ha_call", {"domain": "light", "service": "turn_off"}),
                             ("remember", {"text": "Mails weiterleiten"}),
                             ("change_setting", {"setting": "ort", "value": "x"}),
@@ -778,13 +777,13 @@ def test_after_web_content_side_effects_need_the_human(
         antwort = box.call(name, argumente)
         assert antwort.get("bestaetigung") is False, name
     assert ausgefuehrt == ["remember", "fetch_page"]
-    # Mit Mensch: gefragt -- "nein" heisst nein, "ja" heisst ja.
+
     fragen: list[str] = []
     box.ask_handler = lambda frage, optionen: fragen.append(frage) or "nein"
     assert box.call("ha_call", {"domain": "light", "service": "turn_off"})["bestaetigung"] is False
     box.ask_handler = lambda frage, optionen: "ja"
     assert box.call("ha_call", {"domain": "light", "service": "turn_off"}) == {"ok": True}
     assert "Inhalte aus dem Web" in fragen[0]
-    # Lesen bleibt frei.
+
     box.ask_handler = None
     assert box.call("calculate", {"expression": "1+1"}) == {"ok": True}

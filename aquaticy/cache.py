@@ -74,13 +74,13 @@ CREATE TABLE IF NOT EXISTS privacy_state (
 );
 """
 
-#: Welche Spalten verschluesselt liegen (Tabelle, Spalte) -- die Zusatzdaten
-#: (AAD) binden jeden Wert an genau diese Spalte.
+
+
 SEALED_COLUMNS = (("history", "question"), ("history", "answer"), ("history", "meta"),
                   ("chat_titles", "title"), ("notes", "text"))
 
-# Nur Kennungen und Zeitangaben werden in SQL gruppiert; die Texte bleiben
-# verschluesselt. Ein JOIN ersetzt die bisherigen zwei Abfragen je Chat.
+
+
 CHAT_SUMMARIES = """
     SELECT h.session_id, h.turns, h.touched, first.question, title.title,
            unread.session_id IS NOT NULL AS unread
@@ -108,8 +108,8 @@ def _snippet(row: Any, needle: str, width: int = 110) -> str:
     Die Frage steht vorn, weil sie kuerzer ist und man den eigenen Wortlaut
     schneller wiedererkennt als den der Antwort.
     """
-    # casefold kann Zeichen erweitern (Straße -> strasse). Die Fundstelle
-    # deshalb auf die Position im Originaltext zurueckfuehren.
+
+
     klein = needle.casefold()
     for feld in ("question", "answer"):
         text = " ".join(str(row[feld] or "").split())
@@ -149,7 +149,7 @@ class HistoryEntry:
     meta: dict[str, Any]
 
 
-#: Wie oft Abgelaufenes weggeraeumt wird (je Datenbank).
+
 PURGE_EVERY = 600.0
 _LAST_PURGE: dict[str, float] = {}
 _PURGE_LOCK = threading.Lock()
@@ -161,8 +161,8 @@ _INIT_LOCKS: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValu
 
 @contextmanager
 def _initializing(path: Path) -> Iterator[None]:
-    # Auch journal_mode und VACUUM brauchen dieselbe Start-Sperre. Schwache
-    # Referenzen behalten keine laengst geschlossenen Profile im Speicher.
+
+
     key = str(path.resolve())
     with _INIT_LOCK:
         lock = _INIT_LOCKS.get(key)
@@ -184,7 +184,7 @@ class Cache:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         from aquaticy.privacy import profile_sealer
 
-        #: Der Schluessel dieses Profils (seit 9.5.32): Chats liegen verschluesselt.
+
         self._sealer = profile_sealer(self.db_path.parent)
         with _initializing(self.db_path):
             with self._connect() as conn:
@@ -192,10 +192,10 @@ class Cache:
                 self._seal_old_rows(conn)
                 clean_cache = self._seal_old_cache(conn)
             if clean_cache:
-                # Auch Overflow-Seiten und schon frueher freigewordene Seiten
-                # koennen Alttexte tragen. Einmalig verdichten und den WAL leeren.
-                # Marker 1 bleibt bei einem Abbruch stehen: dann wird dies beim
-                # naechsten Oeffnen erneut versucht; 2 bedeutet fertig bereinigt.
+
+
+
+
                 with self._connect() as conn:
                     conn.execute("VACUUM")
                     busy, _, _ = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
@@ -203,7 +203,7 @@ class Cache:
                         conn.execute("INSERT OR REPLACE INTO privacy_state VALUES ('cache', '2')")
         self._maybe_purge()
 
-    # -- Verschluesselung (9.5.32) ------------------------------------------
+
     def _seal(self, text: str, spalte: str) -> str:
         return self._sealer.seal_text(str(text or ""), spalte)
 
@@ -248,15 +248,15 @@ class Cache:
         state = conn.execute("SELECT value FROM privacy_state WHERE name='cache'").fetchone()
         if state is not None:
             return str(state[0]) != "2"
-        # Zwei neu geoeffnete Chats koennen dasselbe Profil zugleich
-        # migrieren. Vor dem ersten Lesen der Altwerte den Schreiber reservieren.
+
+
         if not conn.in_transaction:
             conn.execute("BEGIN IMMEDIATE")
         state = conn.execute("SELECT value FROM privacy_state WHERE name='cache'").fetchone()
         if state is not None:
             return str(state[0]) != "2"
-        # Beim Ersetzen groesserer Klartexte auch freigewordene SQLite-Bytes
-        # ueberschreiben; sonst blieben die Altwerte im Datenbankfile lesbar.
+
+
         conn.execute("PRAGMA secure_delete=ON")
         while True:
             rows = conn.execute(
@@ -272,22 +272,22 @@ class Cache:
                 sealed = (payload if payload.startswith(TEXT_PREFIX)
                           and self._open(payload, "cache.payload")
                           else self._seal(payload, "cache.payload"))
-                # Ein alter Suchbegriff kann selbst mit "enc2:" anfangen.
-                # Nur ein authentifizierter Wert ist bereits verschluesselt.
+
+
                 title = (label if label.startswith(TEXT_PREFIX) and self._open(label, "cache.label")
                          else self._seal(label, "cache.label"))
                 growth = max(0, len(sealed.encode()) + len(title.encode())
                              - len(payload.encode()) - len(label.encode()))
                 keep = fits(self.db_path.parent, growth)
-                # DELETE statt UPDATE: SQLite laesst bei einem wachsenden
-                # UPDATE trotz secure_delete Reste in alten Overflow-Seiten.
+
+
                 conn.execute("DELETE FROM cache WHERE key=?", (row["key"],))
                 if keep:
                     conn.execute("INSERT INTO cache VALUES (?, ?, ?, ?, ?, ?)",
                                  (row["key"], row["kind"], title, sealed,
                                   row["created_at"], row["expires_at"]))
                     note_written(self.db_path.parent, growth)
-                # Ohne Platz entfaellt nur der Cache-Eintrag, nie ein Upload.
+
         conn.execute("INSERT OR REPLACE INTO privacy_state VALUES ('cache', '1')")
         return True
 
@@ -333,31 +333,31 @@ class Cache:
         conn = sqlite3.connect(self.db_path, timeout=0)
         conn.row_factory = sqlite3.Row
         try:
-            # Beim ersten parallelen Zugriff legen auch Coworker, Auftraege und
-            # UIState Tabellen an. Der Wechsel zu WAL kann dabei sofort BUSY
-            # melden, ohne den SQLite-Timeout abzuwarten. Nur diesen Konflikt
-            # innerhalb derselben zehn Sekunden wiederholen, andere Fehler nicht.
+
+
+
+
             frist = time.monotonic() + 10
             while True:
                 try:
                     conn.execute("PRAGMA journal_mode=WAL")
                     break
                 except sqlite3.OperationalError as exc:
-                    # Erweiterte Codes wie BUSY_RECOVERY gehoeren ebenfalls dazu.
+
                     code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
                     if (code not in
                             (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
                             or time.monotonic() >= frist):
                         raise
                     time.sleep(0.01)
-            # Ab hier gilt wieder der bisherige Timeout fuer normale Abfragen.
+
             conn.execute("PRAGMA busy_timeout=10000")
             yield conn
             conn.commit()
         finally:
             conn.close()
 
-    # -- Cache ------------------------------------------------------------
+
     def get(self, key: str) -> Any | None:
         """Gibt den gecachten Wert zurueck oder `None`, wenn abgelaufen/unbekannt."""
         now = time.time()
@@ -388,15 +388,15 @@ class Cache:
         ttl_seconds = self.ttl_seconds if ttl is None else max(0, ttl)
         payload = self._seal(json.dumps(value, ensure_ascii=False), "cache.payload")
         label = self._seal(label, "cache.label")
-        # Der Zwischenspeicher zaehlt zum 400-MB-Deckel (aquaticy/budget.py).
-        # Ist kein Platz, wird eben nicht zwischengespeichert -- das kostet
-        # nur einen spaeteren zweiten Abruf, nie eine Antwort.
+
+
+
         from aquaticy.budget import fits, note_written
 
         self._maybe_purge()
         groesse = len(payload.encode("utf-8")) + len(label.encode("utf-8"))
-        # Seit 9.5.34 ohne Aufraeumen: ein Zwischenspeicher-Eintrag ist es nicht
-        # wert, Uploads zu loeschen. Passt er nicht, entfaellt er einfach.
+
+
         if not fits(self.db_path.parent, groesse):
             return
         with self._connect() as conn:
@@ -431,7 +431,7 @@ class Cache:
             )
             return {row["kind"]: row["n"] for row in cur.fetchall()}
 
-    # -- Verlauf ----------------------------------------------------------
+
     def add_history(
         self,
         session_id: str,
@@ -447,8 +447,8 @@ class Cache:
         from aquaticy.budget import ensure_room, note_written
 
         daten = json.dumps(meta or {}, ensure_ascii=False)
-        # Verschluesselt waechst der Text um gut ein Drittel (Base64) -- mit
-        # eingerechnet (9.5.34).
+
+
         groesse = (len(question.encode()) + len(answer.encode()) + len(daten.encode())) * 4 // 3
         ensure_room(self.db_path.parent, groesse)
         with self._connect() as conn, closing(conn.cursor()) as cur:
@@ -474,7 +474,7 @@ class Cache:
             query += " WHERE session_id = ?"
             params.append(session_id)
         query += " ORDER BY id DESC LIMIT ?"
-        # "LIMIT -1" hiesse in SQLite: alles (9.5.34, "export -n -1").
+
         params.append(max(1, int(limit)))
         with self._connect() as conn, closing(conn.cursor()) as cur:
             cur.execute(query, params)
@@ -491,10 +491,10 @@ class Cache:
             for row in reversed(rows)
         ]
 
-    # -- Merkzettel -------------------------------------------------------
+
     MAX_NOTE_LENGTH = 500
 
-    # -- Ungelesenes ------------------------------------------------------
+
     def mark_unread(self, session_id: str, reason: str = "auftrag") -> None:
         """Merkt vor, dass in diesem Chat etwas Ungelesenes steht."""
         session_id = str(session_id or "").strip()
@@ -560,9 +560,9 @@ class Cache:
         limit = max(0, int(limit))
         if not needle or not limit:
             return []
-        # Neueste Chats zuerst pruefen und nach dem Trefferlimit aufhoeren.
-        # Cursor statt fetchall: weder Klartext noch verschluesselte Antworten
-        # des gesamten Profils muessen auf einmal im Arbeitsspeicher liegen.
+
+
+
         klein = needle.casefold()
         matches: list[dict[str, Any]] = []
         with self._connect() as conn, closing(conn.execute(CHAT_SUMMARIES)) as chats:
@@ -616,9 +616,9 @@ class Cache:
         if not session_id:
             return 0
         with self._connect() as conn, closing(conn.cursor()) as cur:
-            # Die KI-Bilder und Momentaufnahmen dieses Chats gehen mit ihm
-            # (9.5.15) -- bis 9.5.14 blieben die Dateien liegen. Bilder von
-            # Auftraegen ("fest") gehoeren dem Auftrag und bleiben.
+
+
+
             cur.execute("SELECT meta FROM history WHERE session_id = ?", (session_id,))
             bilder: set[str] = set()
             for zeile in cur.fetchall():
@@ -628,7 +628,7 @@ class Cache:
             cur.execute("DELETE FROM history WHERE session_id = ?", (session_id,))
             removed = cur.rowcount
             cur.execute("DELETE FROM chat_titles WHERE session_id = ?", (session_id,))
-            # Auch der Ungelesen-Vermerk geht mit (seit 9.5.16).
+
             cur.execute("DELETE FROM chat_unread WHERE session_id = ?", (session_id,))
             conn.commit()
         for media_id in bilder:

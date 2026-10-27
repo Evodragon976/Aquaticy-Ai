@@ -34,7 +34,7 @@ def _ts(*teile: int) -> float:
     return datetime(*teile).timestamp()
 
 
-#: Ein Dienstag, 14:32 -- als Zeitangabe, gerechnet wird erst im Test (in Berliner Zeit).
+
 ERSTELLT = (2026, 9, 22, 14, 32)
 
 
@@ -44,18 +44,18 @@ def konto(tmp_path: Path) -> Quota:
 
 
 def test_the_limits_are_the_agreed_ones() -> None:
-    assert SESSION_TOKENS == 300_000  # seit 9.5.23 (vorher 200.000)
+    assert SESSION_TOKENS == 300_000
     assert SESSION_SECONDS == 5 * 3600
-    assert WEEK_TOKENS == 2_000_000  # seit 9.5.23 (vorher 1,5 Mio.)
+    assert WEEK_TOKENS == 2_000_000
 
 
-# -- Die Woche beginnt zur Uhrzeit der Kontoerstellung ------------------------------
+
 @pytest.mark.parametrize("jetzt,anfang,ende", [
     ((2026, 9, 22, 15, 0), (2026, 9, 22, 14, 32), (2026, 9, 29, 14, 32)),
     ((2026, 9, 29, 14, 31), (2026, 9, 22, 14, 32), (2026, 9, 29, 14, 32)),
     ((2026, 9, 29, 14, 32), (2026, 9, 29, 14, 32), (2026, 10, 6, 14, 32)),
     ((2026, 10, 3, 8, 0), (2026, 9, 29, 14, 32), (2026, 10, 6, 14, 32)),
-    # Ueber die Zeitumstellung (25.10.2026): trotzdem Dienstag 14:32 Ortszeit.
+
     ((2026, 10, 28, 9, 0), (2026, 10, 27, 14, 32), (2026, 11, 3, 14, 32)),
 ])
 def test_the_week_starts_at_the_time_the_account_was_made(
@@ -88,10 +88,10 @@ def test_last_weeks_usage_does_not_count(konto: Quota) -> None:
     assert "in 32 Min. (um 14:32)" in str(fehler.value)
     stand = konto.status(now=_ts(2026, 9, 25, 9, 0))
     assert stand["week"]["resets_text"] == "Dienstag, 29.09. um 14:32"
-    konto.check(now=_ts(2026, 9, 29, 14, 33))  # neue Woche, neues Budget
+    konto.check(now=_ts(2026, 9, 29, 14, 33))
 
 
-# -- Die Sitzung: 5 Stunden ab der ersten Nachricht ---------------------------------
+
 def test_no_session_before_the_first_message(konto: Quota) -> None:
     stand = konto.status(now=_ts(2026, 9, 24, 10, 0))
     assert stand["session"]["active"] is False
@@ -124,14 +124,14 @@ def test_a_full_session_stops_and_says_when_it_resets(konto: Quota) -> None:
     assert fehler.value.which == "session"
     assert "um 15:00" in str(fehler.value)
     assert "_used" not in fehler.value.status, "keine Tokenzahlen nach draussen"
-    konto.check(now=start + SESSION_SECONDS + 1)  # neue Sitzung
+    konto.check(now=start + SESSION_SECONDS + 1)
 
 
 def test_tokens_after_the_session_start_a_new_one(konto: Quota) -> None:
     start = _ts(2026, 9, 24, 10, 0)
     konto.begin(now=start)
     konto.record(285_000, "m", now=start + 10)
-    konto.record(15_000, "m", now=start + SESSION_SECONDS + 5)  # Lauf ueber das Ende hinaus
+    konto.record(15_000, "m", now=start + SESSION_SECONDS + 5)
     stand = konto.status(now=start + SESSION_SECONDS + 10)
     assert stand["session"]["active"] and stand["session"]["started_at"] == (
         start + SESSION_SECONDS + 5)
@@ -161,7 +161,7 @@ def test_percent_is_rounded_up_and_capped(konto: Quota) -> None:
     assert konto.status(now=start + 3)["session"]["percent"] == 100
 
 
-# -- Am Konto, nicht im Profil --------------------------------------------------------
+
 def test_usage_belongs_to_the_account(tmp_path: Path) -> None:
     datenbank = tmp_path / "accounts.sqlite3"
     eins = Quota(datenbank, "eins", _ts(*ERSTELLT))
@@ -170,7 +170,7 @@ def test_usage_belongs_to_the_account(tmp_path: Path) -> None:
     eins.record(150_000, "m", now=jetzt)
     assert eins.status(now=jetzt)["session"]["percent"] == 50
     assert zwei.status(now=jetzt)["session"]["percent"] == 0
-    # Ein neues Objekt fuer dasselbe Konto sieht denselben Stand.
+
     assert Quota(datenbank, "eins", _ts(*ERSTELLT)).status(now=jetzt)["session"]["percent"] == 50
 
 
@@ -194,7 +194,7 @@ def test_the_account_store_hands_out_the_quota(tmp_path: Path) -> None:
     assert store.account("gibtsnicht") is None
 
 
-# -- metering: jeder Aufruf zaehlt ins Kontingent -------------------------------------
+
 def test_metering_records_into_statistics_and_quota(tmp_path: Path,
                                                     monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy.usage import UsageLog
@@ -208,7 +208,7 @@ def test_metering_records_into_statistics_and_quota(tmp_path: Path,
     assert UsageLog(settings.db_path).total_tokens() == 60_000
     assert kontingent.status()["session"]["percent"] == 20
     metering.record(settings, "mistral/m", 0, 5000)
-    assert kontingent.status()["session"]["percent"] == 22  # 65.000 von 300.000
+    assert kontingent.status()["session"]["percent"] == 22
 
 
 def test_without_a_quota_nothing_is_limited(tmp_path: Path) -> None:
@@ -218,7 +218,7 @@ def test_without_a_quota_nothing_is_limited(tmp_path: Path) -> None:
 
 
 def test_a_work_share_is_said_in_percent() -> None:
-    assert metering.share_of_session(5000) == "1,7 %"  # 5.000 von 300.000
+    assert metering.share_of_session(5000) == "1,7 %"
 
 
 def test_timezone_is_restored() -> None:

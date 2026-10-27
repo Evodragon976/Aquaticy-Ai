@@ -35,23 +35,22 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
 
-#: Ab so viel Prozent besser wird aus dem Kandidaten eine Unterversion.
 MINOR_GAIN = 5.0
-#: Ab so viel Prozent besser eine ganze Hauptversion.
+
 MAJOR_GAIN = 30.0
-#: So lange sehen alle Konten nach einer Freigabe noch die vorherige Fassung.
+
 KEEP_PREVIOUS = 4 * 86400
-#: Hoechstens so oft wird trainiert (und nur, wenn es neues Wissen gibt).
+
 TRAIN_EVERY = 6 * 3600
-#: So oft sieht der Hintergrund-Faden nach.
+
 CHECK_EVERY = 600
-#: So viel bestaetigtes Wissen kommt hoechstens in ein Modell.
+
 MAX_FACTS = 60
-#: So viele Fragen hat ein Wissenstest hoechstens.
+
 MAX_QUESTIONS = 24
-#: Eine Startmeldung zeigt sich hoechstens so lange nach der Freigabe.
+
 LAUNCH_NOTICE = 14 * 86400
-#: Modelle, die Aquaticy selbst gebaut hat, beginnen so.
+
 PREFIX = "aquaticy-"
 
 STATE_NAME = "upgrading.json"
@@ -64,9 +63,9 @@ class UpgradeError(ValueError):
     """Ein Hinweis fuer Menschen (geht als solcher in die Oberflaeche)."""
 
 
-# ---------------------------------------------------------------------------
-# Versionen
-# ---------------------------------------------------------------------------
+
+
+
 def version_text(version: list[int] | tuple[int, int]) -> str:
     major, minor = int(version[0]), int(version[1])
     return f"{major}" if minor == 0 else f"{major}.{minor}"
@@ -130,9 +129,9 @@ def model_name(base: str, version: list[int] | tuple[int, int]) -> str:
     return f"{PREFIX}{slug(base)}:{int(version[0])}.{int(version[1])}"
 
 
-# ---------------------------------------------------------------------------
-# Zustand (eine Datei im Datenordner des Servers)
-# ---------------------------------------------------------------------------
+
+
+
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
@@ -267,15 +266,15 @@ def _owner(account_id: str) -> str:
     return hashlib.sha256(f"aquaticy-upgrade:{account_id or 'lokal'}".encode()).hexdigest()[:32]
 
 
-# ---------------------------------------------------------------------------
-# Was ein Konto sieht und nutzt
-# ---------------------------------------------------------------------------
+
+
+
 @dataclass
 class Choice:
-    model: str          # Ollama-Name
+    model: str
     label: str
     note: str
-    kind: str           # current | previous | older | candidate
+    kind: str
 
 
 def _local(model_id: str) -> str:
@@ -360,8 +359,8 @@ def picker_entries(data_dir: Path, models: list[dict[str, Any]], ultra: bool,
     rest = [m for m in models
             if _model_key(_local(str(m.get("id", "")))) not in eigene
             and not _model_key(_local(str(m.get("id", "")))).startswith(PREFIX)]
-    # Nur Fassungen, die Ollama auch hat (11.3.0 Luna): eine geloeschte stand
-    # sonst weiter zur Wahl und scheiterte erst beim Anklicken.
+
+
     da = {_model_key(_local(str(m.get("id", "")))) for m in models
           if _local(str(m.get("id", "")))}
     neu: list[dict[str, Any]] = []
@@ -433,7 +432,7 @@ def resolve(data_dir: Path, model_id: str, ultra: bool, account_id: str = "",
             return f"ollama_chat/{sichtbar[key]}"
         return f"ollama_chat/{aktuell}"
     if key.startswith(PREFIX):
-        # Ein selbst gebautes Modell, das es nicht mehr gibt (uebersprungen).
+
         raise UpgradeError("Diese Modellversion ist nicht mehr verfügbar.")
     return model_id
 
@@ -460,9 +459,9 @@ def choose(data_dir: Path, model_id: str, ultra: bool, account_id: str = "") -> 
                 return
 
 
-# ---------------------------------------------------------------------------
-# Startmeldung
-# ---------------------------------------------------------------------------
+
+
+
 def launch_notice(data_dir: Path, account_id: str, now: float | None = None
                   ) -> dict[str, Any] | None:
     """Die neueste Freigabe, die dieses Konto noch nicht gesehen hat."""
@@ -478,8 +477,8 @@ def launch_notice(data_dir: Path, account_id: str, now: float | None = None
         for start in track.get("launches", []):
             if start["id"] in gesehen or now - float(start["at"]) > LAUNCH_NOTICE:
                 continue
-            # Zurueckgezogen (10.0.1): eine Version, die nicht mehr die neueste
-            # ist, wird nicht mehr angekuendigt -- "Ausprobieren" ginge ins Leere.
+
+
             if start.get("to_model") != aktuell:
                 continue
             if beste is None or float(start["at"]) > float(beste["at"]):
@@ -527,9 +526,9 @@ def forget_account(data_dir: Path, account_id: str) -> None:
             save(data_dir, state)
 
 
-# ---------------------------------------------------------------------------
-# Ultra: Schalter, Freigabe, Ueberspringen, Zuruecksetzen
-# ---------------------------------------------------------------------------
+
+
+
 def _add_tracks(state: dict[str, Any], local_models: list[str]) -> None:
     known = {_model_key(name) for name in state["tracks"]}
     for name in local_models:
@@ -606,8 +605,8 @@ def upgrade(data_dir: Path, base: str, now: float | None = None) -> dict[str, An
                  "to_label": label(base, eintrag["version"]), "to_model": eintrag["model"]}
         track.setdefault("launches", []).append(start)
         del track["launches"][:-20]
-        # Eine neue Freigabe nimmt alle mit: wer vorher etwas festgelegt hatte,
-        # landet auch auf der neuen Version (danach waehlt er wieder frei).
+
+
         state["pins"] = {}
         state["generation"] = int(state.get("generation", 0)) + 1
         return start
@@ -642,7 +641,7 @@ def rollback(data_dir: Path, base: str, version: str, now: float | None = None) 
             raise UpgradeError("Das ist schon die neueste Version.")
         track["previous"] = {"version": track["current"], "until": now + KEEP_PREVIOUS}
         track["current"] = version_text(ziel["version"])
-        # Ein Kandidat wurde gegen den alten Stand gemessen -- er gilt nicht mehr.
+
         candidate = track.get("candidate")
         if candidate:
             track.setdefault("retired_models", []).append(candidate["model"])
@@ -650,7 +649,7 @@ def rollback(data_dir: Path, base: str, version: str, now: float | None = None) 
             if candidate["model"] not in pending:
                 pending.append(candidate["model"])
         track["candidate"] = None
-        # Der Wissenstest wurde gegen eine andere laufende Fassung gemessen.
+
         track["trained_hash"] = ""
         state["pins"] = {}
         state["generation"] = int(state.get("generation", 0)) + 1
@@ -696,9 +695,9 @@ def view(data_dir: Path, now: float | None = None) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Training und Wissenstest
-# ---------------------------------------------------------------------------
+
+
+
 class Backend(Protocol):
     def create(self, name: str, base: str, system: str) -> None: ...
     def ask(self, model: str, prompt: str) -> str: ...
@@ -728,7 +727,7 @@ class OllamaBackend:
                           trust_env=False, follow_redirects=False,
                           headers={"Accept-Encoding": netguard.ACCEPT_ENCODING}) as antwort:
             if methode == "DELETE" and antwort.status_code == 404:
-                return {}  # An already absent model needs no further deletion retries.
+                return {}
             if antwort.status_code >= 300:
                 raise RuntimeError(f"Ollama {pfad}: {antwort.status_code}")
             try:
@@ -917,8 +916,8 @@ def _train_track(data_dir: Path, base: str, facts: list[dict[str, str]],
         if stopped() or not valid_knowledge():
             return None
         if gain <= 0:
-            # Ein abgeschlossener Test ohne Gewinn ist ebenfalls ein Ergebnis.
-            # Fehler, Widerruf und konkurrierende Aenderungen bleiben uncached.
+
+
             with _edit(data_dir) as state:
                 if state["enabled"] and int(state["generation"]) == revision:
                     _track(state, base)["trained_hash"] = facts_hash(facts)
@@ -926,14 +925,14 @@ def _train_track(data_dir: Path, base: str, facts: list[dict[str, str]],
         with _edit(data_dir) as state:
             track = _track(state, base)
             if not state["enabled"] or int(state["generation"]) != revision:
-                return None   # waehrenddessen zurueckgesetzt oder freigegeben
+                return None
             alt = track.get("candidate")
             if alt and float(alt["gain"]) > gain and alt.get("based_on") == track["current"]:
                 track["trained_hash"] = facts_hash(facts)
-                return None   # der vorhandene Kandidat ist besser
+                return None
             version = next_version(track, gain)
             name = model_name(base, version)
-            # Reserve once. Slow Ollama operations never hold the state lock.
+
             track.setdefault("issued", []).append(version)
         backend.copy(tmp, name)
         if stopped() or not valid_knowledge():
@@ -1054,7 +1053,7 @@ class Trainer:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        # Ein harter Abbruch mitten im Training laesst "running" stehen.
+
         with contextlib.suppress(Exception), _edit(self.data_dir) as state:
             state["running"] = False
             state["managed_knowledge"] = self.manifest is not None
@@ -1089,7 +1088,7 @@ class Trainer:
                       cancelled=self.stop_event.is_set, manifest=self.manifest)
 
     def _loop(self) -> None:
-        # Reconcile legacy models immediately, including when training is off.
+
         with contextlib.suppress(Exception):
             self._once()
         while not self.stop_event.is_set():
@@ -1097,8 +1096,8 @@ class Trainer:
             self.wake_event.clear()
             if self.stop_event.is_set():
                 break
-            # Kein Fehler darf den Takt beenden (11.2.1) -- auch kein kaputter
-            # Zeitstempel in der Zustandsdatei.
+
+
             with contextlib.suppress(Exception):
                 state = load(self.data_dir)
                 due = force or time.time() - float(state["last_train"]) >= TRAIN_EVERY

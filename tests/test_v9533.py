@@ -12,7 +12,6 @@ import pytest
 from aquaticy.aiguard import decide, insult_level, normalize_category
 
 
-# -- Neue Woerter ---------------------------------------------------------------------
 @pytest.mark.parametrize(("text", "stufe"), [
     ("du bist hässlich", 1), ("du bist so widerlich", 1), ("du Stümper", 1),
     ("du bist echt erbärmlich", 1), ("du Faulpelz", 1), ("you are so annoying", 1),
@@ -27,16 +26,16 @@ def test_new_words(text: str, stufe: int) -> None:
     assert insult_level(text) == stufe, text
 
 
-# -- Ketten ---------------------------------------------------------------------------
+
 @pytest.mark.parametrize(("text", "stufe"), [
-    ("Idiot Trottel Depp Vollidiot", 3),       # nur Schimpfwoerter, ohne Kommas
-    ("Idiot, Trottel", 2),                      # zwei -- keine Steigerung
-    ("Idiot, Trottel, Vollpfosten!", 3),        # drei -- eine Stufe mehr
+    ("Idiot Trottel Depp Vollidiot", 3),
+    ("Idiot, Trottel", 2),
+    ("Idiot, Trottel, Vollpfosten!", 3),
     ("you stupid useless idiot", 3),
     ("du Idiot du Trottel du Depp", 3),
-    ("du bist dumm, hässlich und nutzlos", 2),  # drei leichte -> Stufe 2
+    ("du bist dumm, hässlich und nutzlos", 2),
     ("du dummer hässlicher nutzloser Bot", 2),
-    ("Hurensohn, Wichser, Arschloch", 3),       # hoechstens Stufe 3
+    ("Hurensohn, Wichser, Arschloch", 3),
     ("du bist dumm", 1),
 ])
 def test_chains_are_stronger(text: str, stufe: int) -> None:
@@ -63,7 +62,7 @@ def test_a_chain_bans_longer() -> None:
     assert decide("beleidigung", insult_level("du bist dumm, hässlich und nutzlos")).kind == "ban"
 
 
-# -- Drohungen ------------------------------------------------------------------------
+
 @pytest.mark.parametrize(("text", "stufe"), [
     ("ich weiß, wo du wohnst", 3), ("I know where you live", 3),
     ("ich polier dir die Fresse", 4), ("ich hau dir eine rein", 4),
@@ -84,7 +83,7 @@ def test_no_threats(text: str) -> None:
     assert insult_level(text) == 0, text
 
 
-# -- Funde der Gesamtpruefung: harmlose Woerter ---------------------------------------
+
 @pytest.mark.parametrize("text", [
     "you are so deep", "Du bist so deep, echt", "you are deeper than I thought",
     "bist du in Asien?", "Warst du schon mal in Asien", "how would you rate this",
@@ -104,7 +103,7 @@ def test_stretched_and_misspelled_still_count(text: str) -> None:
     assert insult_level(text) >= 1, text
 
 
-# -- Straftaten -----------------------------------------------------------------------
+
 @pytest.mark.parametrize(("art", "kategorie"), [
     ("Verleumdung", "rechtsbruch"), ("üble Nachrede", "rechtsbruch"),
     ("Drogenhandel", "rechtsbruch"), ("Morddrohung", "rechtsbruch"),
@@ -127,7 +126,7 @@ def test_unknown_stays_unknown(art: str) -> None:
     assert normalize_category(art) == ""
 
 
-# -- Quelltext ohne unsichtbare Steuerzeichen ("Trojan Source") -------------------------
+
 def test_no_invisible_control_characters_in_the_source() -> None:
     """Bidi- und Nullbreitenzeichen stehen als \\u-Escapes, nie roh im Code (9.5.33)."""
     import unicodedata

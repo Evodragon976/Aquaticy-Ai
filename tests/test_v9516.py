@@ -40,7 +40,7 @@ def _ha_transport(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return pfade
 
 
-# -- 36: Home Assistant -- Dienst und Ziel muessen zum Bereich passen ----------
+
 @pytest.mark.parametrize("service", [
     "../lock/unlock", "..%2flock%2funlock", "turn_on/../../lock/unlock", "unlock?x=1",
     "turn on", "",
@@ -49,7 +49,7 @@ def test_a_light_service_can_never_become_a_lock(settings: Settings,
                                                  monkeypatch: pytest.MonkeyPatch,
                                                  service: str) -> None:
     pfade = _ha_transport(monkeypatch)
-    box = Toolbox(_ha_settings(settings))  # ohne ask_handler, wie in Auftraegen
+    box = Toolbox(_ha_settings(settings))
     result = box.ha_call("light", service, "light.kueche")
     assert result.get("done") is not True
     assert "error" in result
@@ -93,7 +93,7 @@ def test_the_client_itself_checks_too(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not pfade
 
 
-# -- 37: Skripte, Szenen und Knoepfe fragen nach ------------------------------
+
 @pytest.mark.parametrize("domain,service,entity", [
     ("script", "turn_on", "script.tuer_auf"),
     ("scene", "turn_on", "scene.abwesend"),
@@ -108,12 +108,12 @@ def test_indirect_switches_need_a_confirmation(settings: Settings,
     box.ask_handler = lambda frage, optionen: "nein"
     assert box.ha_call(domain, service, entity)["done"] is False
     assert not pfade
-    box.ask_handler = lambda frage, optionen: "klar"  # 18: "klar" gilt als ja
+    box.ask_handler = lambda frage, optionen: "klar"
     assert box.ha_call(domain, service, entity)["done"] is True
     assert pfade == [f"/api/services/{domain}/{service}"]
 
 
-# -- P1: der Browser loest keine Namen mehr selbst auf ------------------------
+
 import socket  # noqa: E402
 import threading  # noqa: E402
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
@@ -181,7 +181,7 @@ def test_the_proxy_resolves_only_once(monkeypatch: pytest.MonkeyPatch,
     assert _Intern.treffer == []
 
 
-#: Wo die Pruefumgebung ihr Chromium hat, wenn Playwright ein anderes erwartet.
+
 CHROMIUM = "/opt/pw-browsers/chromium"
 
 
@@ -230,7 +230,7 @@ def test_p1_the_browser_never_reaches_an_internal_server_after_rebinding(
     umleitung = "--host-resolver-rules=MAP umspringer.example 127.0.0.1"
     adresse = f"http://umspringer.example:{intern_server}/geheim"
 
-    # Gegenprobe: so, wie es bis 9.5.15 lief (nur Vorabpruefung), kommt er durch.
+
     _umspringer(monkeypatch)
     umgebung_blockiert = False
     with sync_playwright() as pw:
@@ -247,7 +247,7 @@ def test_p1_the_browser_never_reaches_an_internal_server_after_rebinding(
         pytest.skip("Cloud-Proxy blockiert bereits die ungeschuetzte Kontrollanfrage")
     assert "/geheim" in _Intern.treffer, "Gegenprobe: ohne Proxy erreichbar"
 
-    # Seit 9.5.16: derselbe Ablauf, aber Chromium laedt ueber den Proxy.
+
     _Intern.treffer.clear()
     _umspringer(monkeypatch)
     with sync_playwright() as pw:
@@ -255,7 +255,7 @@ def test_p1_the_browser_never_reaches_an_internal_server_after_rebinding(
         context = browser.new_context()
         guard_context(context)
         page = context.new_page()
-        with pytest.raises(Exception):  # noqa: B017 -- ERR_TUNNEL/403
+        with pytest.raises(Exception):  # noqa: B017
             antwort = page.goto(adresse, timeout=10_000)
             assert antwort is not None and antwort.status != 200
             raise RuntimeError("abgewiesen")
@@ -263,7 +263,7 @@ def test_p1_the_browser_never_reaches_an_internal_server_after_rebinding(
     assert _Intern.treffer == []
 
 
-# -- 1 und 29: die Oberflaeche -------------------------------------------------
+
 import json  # noqa: E402
 import re  # noqa: E402
 import subprocess  # noqa: E402
@@ -277,7 +277,7 @@ NODE = shutil.which("node") or ("/opt/node22/bin/node" if Path("/opt/node22/bin/
 def _md(text: str) -> str:
     quelle = WEBUI.read_text(encoding="utf-8")
     anfang = quelle.index("const esc = (t)")
-    ende = quelle.index("/* ---------- Nachrichten ---------- */")
+    ende = quelle.index("function chatDetails(open){")
     skript = quelle[anfang:ende] + f"\nprocess.stdout.write(md({json.dumps(text)}));\n"
     return subprocess.run([NODE, "-e", skript], capture_output=True, text=True, check=True,
                           timeout=30).stdout
@@ -318,7 +318,7 @@ def test_the_web_ui_shows_ai_images() -> None:
         assert bool(js.match(name)) == bool(MEDIA_ID.match(name)), name
 
 
-# -- 40/41: eigene Such-Schluessel ------------------------------------------
+
 def test_own_search_key_is_used_for_searches(settings: Settings,
                                              monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy import tools
@@ -350,15 +350,15 @@ def test_a_normal_account_never_borrows_the_operators_paid_search_key(
     assert settings.search_key_for("brave") == ""
     with pytest.raises(SearchError):
         _search_brave("x", SearchOptions(api_key=""))
-    # Hat der Betreiber selbst Brave gewaehlt, teilt er den Schluessel.
+
     settings.operator_search_backends = frozenset({"brave"})
     assert settings.search_key_for("brave") == "betreiber-schluessel"
-    # Kommandozeile/Pro: keine Einschraenkung.
+
     settings.operator_search_backends = None
     assert settings.search_key_for("brave") == "betreiber-schluessel"
 
 
-# -- 43/44: fremde Strukturdaten ---------------------------------------------
+
 def test_odd_json_ld_never_costs_the_page() -> None:
     from aquaticy.extract import extract_product
 
@@ -389,7 +389,7 @@ def test_a_crashing_extractor_keeps_the_page_text(monkeypatch: pytest.MonkeyPatc
     assert ergebnis.ok and "Inhalt" in ergebnis.text
 
 
-# -- 14/15/16: fremder Text im Gespraech ------------------------------------
+
 def test_auto_research_marks_foreign_text(settings: Settings,
                                           monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy.agent import Agent
@@ -434,7 +434,7 @@ def test_chat_history_remembers_foreign_text() -> None:
     assert not _chat_untrusted([SimpleNamespace(meta={"sources": []})])
 
 
-# -- 38: das Heimnetz ist genau das zugesagte -------------------------------
+
 @pytest.mark.parametrize("netz", ["127.0.0.0/24", "169.254.169.0/24", "192.0.2.0/24",
                                   "198.18.0.0/24", "0.0.0.0/24", "224.0.0.0/24"])
 def test_lan_refuses_what_is_not_a_home_network(netz: str) -> None:
@@ -452,7 +452,7 @@ def test_lan_accepts_home_networks(netz: str) -> None:
     assert str(lan.parse_subnet(netz)) == netz
 
 
-# -- 35: Mail-Entwurf ohne eingeschleuste Kopfzeilen --------------------------
+
 @pytest.mark.parametrize("to", ["a@b.de\r\nBcc: fremd@x.de", "a@b.de\nBcc: fremd@x.de",
                                 "keine-adresse", "a@b.de, <javascript:x>"])
 def test_mail_recipients_cannot_smuggle_headers(to: str) -> None:
@@ -469,7 +469,7 @@ def test_mail_recipients_are_rewritten_cleanly() -> None:
         "Anna <anna@example.com>, bob@example.org"
 
 
-# -- 22/23: robots.txt ------------------------------------------------------
+
 def _fetcher_mit(handler: Any) -> Any:
     from aquaticy import fetch
 
@@ -516,7 +516,7 @@ def test_a_slow_robots_txt_does_not_hold_up_other_sites() -> None:
     faden.join()
 
 
-# -- 24: /api/media zaehlt und merkt sich ------------------------------------
+
 class _Kontingent:
     def __init__(self) -> None:
         self.gebucht: list[tuple[int, str]] = []
@@ -566,7 +566,7 @@ def test_the_media_fetcher_never_starts_a_browser(settings: Settings) -> None:
     assert web._media_fetcher(settings).enable_browser is False
 
 
-# -- 34: das GitHub-Token eines Kontos liegt verschluesselt ------------------
+
 def test_account_github_token_goes_into_the_vault(settings: Settings, tmp_path: Path) -> None:
     from aquaticy import addons
     from aquaticy.keyvault import KeyVault
@@ -580,13 +580,13 @@ def test_account_github_token_goes_into_the_vault(settings: Settings, tmp_path: 
     assert settings.github_token == token
     assert not settings.env_path.exists() or token not in settings.env_path.read_text()
     assert token not in (tmp_path / "keys.sqlite3").read_bytes().decode("latin-1")
-    assert addons.GITHUB_TOKEN_KEY not in tresor.keys()  # noqa: SIM118 -- keys() ist eine Methode
+    assert addons.GITHUB_TOKEN_KEY not in tresor.keys()  # noqa: SIM118
     assert all(e["name"] != addons.GITHUB_TOKEN_KEY for e in tresor.public())
     addons.forget_github_token(settings)
     assert tresor.secret(addons.GITHUB_TOKEN_KEY) == ""
 
 
-# -- 46: fremder Text ist in der Kommandozeile kein Markup --------------------
+
 def test_product_names_are_not_rich_markup() -> None:
     import io
 
@@ -610,7 +610,7 @@ def test_product_names_are_not_rich_markup() -> None:
     assert "kaputt [/] hier" in ausgabe
 
 
-# -- P2: das Kontingent wird nie ueberschritten ------------------------------
+
 def _quota(tmp_path: Path) -> Any:
     import time as zeit
 
@@ -627,7 +627,7 @@ def test_p2_a_reservation_larger_than_the_rest_is_refused(tmp_path: Path) -> Non
     with pytest.raises(QuotaExceeded):
         quota.reserve(5_000, "modell")
     nummer = quota.reserve(900, "modell")
-    # Der echte Verbrauch lag hoeher als geschaetzt -- gebucht wird bis zum Limit.
+
     quota.settle(nummer, 1_099, "modell")
     assert quota.status()["_used"]["session"] == SESSION_TOKENS
     quota.record(500, "server:seite")
@@ -655,7 +655,7 @@ def test_p2_the_answer_is_shortened_to_fit(settings: Settings, tmp_path: Path) -
 
     quota = _quota(tmp_path)
     settings.quota = quota
-    nachrichten = [{"role": "user", "content": "x" * 3_000}]  # ~1.000 Token
+    nachrichten = [{"role": "user", "content": "x" * 3_000}]
     assert metering.output_cap(settings, "mistral/mistral-small-latest", nachrichten) is None
     quota.record(SESSION_TOKENS - 3_000)
     deckel = metering.output_cap(settings, "mistral/mistral-small-latest", nachrichten)
@@ -665,7 +665,7 @@ def test_p2_the_answer_is_shortened_to_fit(settings: Settings, tmp_path: Path) -
         metering.output_cap(settings, "mistral/mistral-small-latest", nachrichten)
 
 
-# -- 4/28: Chats umbenennen und loeschen --------------------------------------
+
 def test_a_chat_without_title_is_not_called_none(settings: Settings) -> None:
     from aquaticy.cache import Cache
 
@@ -691,7 +691,7 @@ def test_deleting_a_chat_removes_its_unread_mark(settings: Settings) -> None:
                           ).fetchone()[0] == 0
 
 
-# -- 27: Merkzettel im Browser aufraeumen -------------------------------------
+
 def test_notes_can_be_deleted_from_the_web(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
                                            settings: Settings) -> None:
     from aquaticy import web
@@ -711,7 +711,7 @@ def test_notes_can_be_deleted_from_the_web(tmp_path: Path, monkeypatch: pytest.M
     assert cache.list_notes() == []
 
 
-# -- 2: Anfragen je Minute des Kontos gelten fuer seine eigenen Schluessel ----
+
 def test_own_key_limits_come_from_the_account(settings: Settings,
                                               monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy import pace
@@ -726,7 +726,7 @@ def test_own_key_limits_come_from_the_account(settings: Settings,
     assert schluessel.startswith("own:") and "|rpm=600" in schluessel
     gate = pace.gate_for(settings.model, schluessel)
     assert (gate.rpm, gate.parallel) == (600, 12)
-    # Der gestellte Schluessel des Betreibers bleibt beim Freikontingent.
+
     assert (pace.gate_for(settings.model, "").rpm) == 240
 
 
@@ -739,14 +739,14 @@ def test_a_full_gate_waits_at_most_max_wait(monkeypatch: pytest.MonkeyPatch) -> 
     gate = pace.Gate(rpm=0, parallel=1)
     with gate.slot():
         start = zeit.monotonic()
-        with gate.slot():  # der Platz ist belegt -- trotzdem geht es weiter
+        with gate.slot():
             pass
         assert zeit.monotonic() - start < 2.0
-    with gate.slot():  # und danach ist der Platz wieder frei
+    with gate.slot():
         pass
 
 
-# -- 10/30/31: Auftraege -------------------------------------------------------
+
 def test_research_jobs_run_at_most_hourly(settings: Settings) -> None:
     from aquaticy.coworker_schedule import JobStore
 
@@ -778,7 +778,7 @@ def test_job_view_names_every_rhythm(rhythm: str, text: str) -> None:
     assert ansicht["when_text"].startswith(text)
 
 
-# -- 32: Einstellungen speichern loescht die virtual machine nicht mehr -------------
+
 def test_saving_an_unrelated_setting_keeps_the_workshop(settings: Settings,
                                                         monkeypatch: pytest.MonkeyPatch) -> None:
     from dataclasses import replace
@@ -803,7 +803,7 @@ def test_saving_an_unrelated_setting_keeps_the_workshop(settings: Settings,
     assert len(gestoppt) == 2
 
 
-# -- 25: Notizen verschwinden nie still -----------------------------------
+
 def test_notes_are_never_deleted_silently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy import memory as mem
     from aquaticy.memory import Memory, MemoryFull
@@ -812,7 +812,7 @@ def test_notes_are_never_deleted_silently(tmp_path: Path, monkeypatch: pytest.Mo
     for i in range(5):
         store.remember(f"Notiz {i}")
     groesse = store.used_bytes()
-    # Ueber 90 %, aber noch nicht voll: speichern geht, keine Notiz verschwindet.
+
     monkeypatch.setattr(mem, "MAX_BYTES", int(groesse / 0.95))
     store.remember("noch eine")
     assert store.count() == 6
@@ -822,7 +822,7 @@ def test_notes_are_never_deleted_silently(tmp_path: Path, monkeypatch: pytest.Mo
     assert store.count() == 6
 
 
-# -- 6: vor der Anmeldung nicht der Zustand des Server-Profils ---------------
+
 def test_the_login_page_does_not_show_the_server_profile_state(
     monkeypatch: pytest.MonkeyPatch, settings: Settings
 ) -> None:
@@ -831,15 +831,15 @@ def test_the_login_page_does_not_show_the_server_profile_state(
 
     UIState(settings.db_path).write({"theme": "dark", "mode": "pro", "tracing": True})
     monkeypatch.setattr(web.DEFAULT_SESSION, "settings", lambda: settings)
-    monkeypatch.setattr(web, "AUTH", object())  # Konten sind an, niemand angemeldet
+    monkeypatch.setattr(web, "AUTH", object())
     html = web.with_state('<html lang="de"><body class="start"></body></html>')
     assert 'data-theme="dark"' not in html and "pro-mode" not in html
-    monkeypatch.setattr(web, "AUTH", None)  # ohne Konten: der eigene Rechner
+    monkeypatch.setattr(web, "AUTH", None)
     html = web.with_state('<html lang="de"><body class="start"></body></html>')
     assert 'data-theme="dark"' in html
 
 
-# -- 12/13: Anmeldung und Adressen -----------------------------------------
+
 def test_registration_does_not_reveal_which_email_exists(tmp_path: Path) -> None:
     from aquaticy.auth import AuthStore
 
@@ -870,7 +870,7 @@ def test_forwarded_for_counts_only_behind_a_trusted_proxy(
     assert client_ip("127.0.0.1", "kaputt") == "127.0.0.1"
 
 
-# -- 42: Messenger nur ueber ihr Add-on --------------------------------------
+
 @pytest.mark.parametrize("text,gesperrt", [
     ("web.whatsapp.com", True), ("https://WEB.WhatsApp.com./", True),
     ("web.telegram.org/k/", True), ("x.web.whatsapp.com", True),
@@ -884,7 +884,7 @@ def test_messenger_addresses_are_recognised(text: str, gesperrt: bool) -> None:
     assert not messenger_host("whatsapp.com")
 
 
-# -- 44/45: Export ------------------------------------------------------------
+
 def test_export_never_writes_script_links() -> None:
     from aquaticy.export import Turn, to_html, to_markdown
     from aquaticy.models import Product
@@ -917,7 +917,7 @@ def test_exported_images_get_a_suffix_from_their_type(tmp_path: Path,
     assert export.IMAGE_SUFFIXES["image/png"] == ".png"
 
 
-# -- 47: eine seltsame Antwort von Ollama wirft nicht mehr ---------------------
+
 @pytest.mark.parametrize("inhalt", [[1, 2], {"models": "kaputt"}, {"models": [1, {"name": "a"}]},
                                     "text"])
 def test_odd_ollama_answers_are_handled(monkeypatch: pytest.MonkeyPatch, inhalt: Any) -> None:
@@ -929,7 +929,7 @@ def test_odd_ollama_answers_are_handled(monkeypatch: pytest.MonkeyPatch, inhalt:
     assert lm.model_size_gb("a", "http://127.0.0.1:11434") is None
 
 
-# -- 33: sweep raeumt nur die eigenen Werkstaetten weg ----------------------------
+
 def test_sweep_only_touches_this_installation(monkeypatch: pytest.MonkeyPatch) -> None:
     from aquaticy import sandbox
 

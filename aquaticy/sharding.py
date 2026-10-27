@@ -50,31 +50,30 @@ from typing import Any
 
 from aquaticy.config import SPLIT_MODEL_ID
 
-#: So heisst das verteilte Modell in der Modellauswahl (LiteLLM: OpenAI-kompatibel).
 MODEL_ID = SPLIT_MODEL_ID
-#: Unter diesem Pfad nimmt ein Mitglied Tunnel des Masters an.
+
 TUNNEL_PATH = "/cluster/tunnel"
 TUNNEL_UPGRADE = "aquaticy-tunnel"
-#: So viel wird je Stueck gelesen und verschluesselt.
+
 READ_SIZE = 256 * 1024
-#: Groesser darf ein verschluesseltes Stueck nicht sein (Daten + 16 Byte Pruefsumme).
+
 FRAME_MAX = READ_SIZE + 16
-#: Gleichzeitige Tunnel je Server -- llama.cpp braucht je Server einen.
+
 MAX_TUNNELS = 8
-#: So lange wartet der Master nach dem Einschalten, bis alle Server bereit sind.
+
 GATHER_SECONDS = 30.0
-#: Nach einem Fehler so lange warten, bevor es noch einmal versucht wird.
+
 RESTART_DELAY = 30.0
-#: So oft nacheinander darf der Start scheitern -- dann bleibt es beim Fehler.
+
 MAX_FAILURES = 3
-#: So lange darf das Laden dauern: ein grosses Modell wandert dabei ueber das Netz.
+
 LOAD_TIMEOUT = 45 * 60.0
-#: Ein Modell braucht mehr Speicher, als seine Datei gross ist (Kontext, Puffer).
+
 MEMORY_FACTOR = 1.15
 MEMORY_EXTRA_GB = 1.5
-#: Ohne Takt nachzusehen kostet zu viel; so oft sieht die Steuerung nach.
+
 TICK_SECONDS = 3.0
-#: Kontextfenster des verteilten Modells (wie AQUATICY_CONTEXT_TOKENS, begrenzt).
+
 MIN_CONTEXT, MAX_CONTEXT = 4096, 32768
 MAX_MODEL_BYTES = 2 * 1024 * 1024
 
@@ -83,7 +82,7 @@ SERVER_NAMES = ("llama-server",)
 RPC_ENV, SERVER_ENV = "AQUATICY_RPC_SERVER", "AQUATICY_LLAMA_SERVER"
 
 _LOCK = threading.RLock()
-#: Die laufende Steuerung dieses Prozesses (fuer endpoint()).
+
 _AKTIV: Manager | None = None
 
 
@@ -95,9 +94,9 @@ class TunnelError(RuntimeError):
     """Der Tunnel ist kaputt oder nicht vom Verbund."""
 
 
-# ---------------------------------------------------------------------------
-# Programme und Modelle
-# ---------------------------------------------------------------------------
+
+
+
 def find_binary(env: str, names: tuple[str, ...]) -> str:
     """Wo das Programm liegt -- "" wenn es fehlt. Die Umgebung darf es vorgeben."""
     vorgabe = os.environ.get(env, "").strip()
@@ -218,7 +217,7 @@ def has_own_accelerator() -> bool:
     Ausgabe (Manager._karte).
     """
     if sys.platform == "darwin":
-        return True  # Metal nutzt der llama-server selbst
+        return True
     return nvidia_card()
 
 
@@ -302,9 +301,9 @@ def _beenden(proc: subprocess.Popen | None) -> None:
             proc.wait(timeout=5)
 
 
-# ---------------------------------------------------------------------------
-# Der Tunnel
-# ---------------------------------------------------------------------------
+
+
+
 def tunnel_keys(link: bytes, master: bytes, mitglied: bytes) -> tuple[bytes, bytes]:
     """Zwei Schluessel aus dem Kopplungsschluessel und dem Zufall beider Seiten.
 
@@ -596,9 +595,9 @@ class Tunnel:
                 sock.close()
 
 
-# ---------------------------------------------------------------------------
-# Die Prozesse
-# ---------------------------------------------------------------------------
+
+
+
 class RpcWorker:
     """Der rpc-server dieses Servers -- nur auf 127.0.0.1."""
 
@@ -608,7 +607,7 @@ class RpcWorker:
         self.log = log_dir / "rpc-server.log"
         self.port = 0
         self.error = ""
-        #: Kein Fehler, nur Geduld: llama.cpp wird gerade geladen.
+
         self.note = ""
         self._locate = locate or (lambda: (find_binary(RPC_ENV, RPC_NAMES), "", ""))
         self._memory = memory
@@ -675,7 +674,7 @@ class SplitServer:
 
     def __init__(self, log_dir: Path) -> None:
         self.log = log_dir / "llama-server.log"
-        self.phase = "aus"      # aus, wartet, lädt, bereit, fehler
+        self.phase = "aus"
         self.message = ""
         self.model = ""
         self.workers: list[str] = []
@@ -710,8 +709,8 @@ class SplitServer:
                "--alias", "aquaticy-verbund"]
         if geraete:
             cmd += ["--rpc", ",".join(geraete)]
-        # Den Schluessel ueber die Umgebung, nicht auf der Kommandozeile -- die
-        # kann jeder Nutzer des Rechners in der Prozessliste lesen.
+
+
         umgebung = {**os.environ, "LLAMA_API_KEY": schluessel}
         try:
             self._proc = _start(cmd, self.log, umgebung)
@@ -774,9 +773,9 @@ def _gesund(port: int) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Die Steuerung
-# ---------------------------------------------------------------------------
+
+
+
 class Manager:
     """Haelt die Prozesse passend zur Einstellung im Verbund -- alle drei Sekunden."""
 
@@ -788,7 +787,7 @@ class Manager:
         log_dir = Path(verbund.dir)
         from aquaticy.llamacpp import Installer
 
-        #: llama.cpp kommt von selbst (11.0.0 Luna) -- neben dem Ordner des Verbunds.
+
         self.llama = Installer(log_dir.parent / "llama.cpp", gpu=nvidia_card)
         self.worker = RpcWorker(log_dir, locate=lambda: self._programm("rpc"),
                                 memory=lambda: node_memory_gb(self._karte_oder_offen()))
@@ -802,7 +801,7 @@ class Manager:
         self._modelle: tuple[float, list[dict[str, Any]]] = (0.0, [])
         self._thread: threading.Thread | None = None
 
-    # -- Lebenszyklus ------------------------------------------------------
+
     def start(self) -> None:
         global _AKTIV
         if self._stop.is_set() or self._thread is not None:
@@ -830,7 +829,7 @@ class Manager:
             self._wake.clear()
             try:
                 self.tick()
-            except Exception as exc:  # pragma: no cover - der Takt darf nie sterben
+            except Exception as exc:  # pragma: no cover
                 print(f"  [Verbund] Serverlast aufteilen: {type(exc).__name__}: {exc}")
 
     def request_restart(self) -> None:
@@ -842,7 +841,7 @@ class Manager:
         """Einstellungen im Hintergrund anwenden, ohne den HTTP-Aufruf zu blockieren."""
         self._wake.set()
 
-    # -- llama.cpp -----------------------------------------------------------
+
     def _fassung(self) -> str:
         """Die Fassung von llama.cpp, die der Master fuer den Verbund gewaehlt hat."""
         from aquaticy.llamacpp import TAG_RE
@@ -899,7 +898,7 @@ class Manager:
         eintrag = self._installation()
         return None if eintrag is None or eintrag.accelerated else False
 
-    # -- Ein Takt ----------------------------------------------------------
+
     def tick(self) -> None:
         with self._lock:
             if not self._stop.is_set():
@@ -916,15 +915,15 @@ class Manager:
             return
         master = v.is_master
         if master and not self._fassung() and not self._selbst_gebaut():
-            # Eine Fassung fuer alle (11.0.0 Luna): der Master waehlt sie einmal
-            # und schickt sie mit der Einstellung an die Mitglieder.
+
+
             gewaehlt = self.llama.chosen()
             if gewaehlt:
                 with contextlib.suppress(Exception):
                     v.set_split_llama(gewaehlt)
             elif self.llama.phase != "fehler":
-                # Ohne Netz zu GitHub geht es mit einem llama.cpp aus dem
-                # Suchpfad weiter (wie bis 10.2) -- sonst wird gewartet.
+
+
                 self.server.phase = "wartet"
                 self.server.message = self.llama.message or "Sucht die passende Fassung " \
                                                             "von llama.cpp …"
@@ -951,7 +950,7 @@ class Manager:
         bereit = [n for n in lebendig if _split_ready(v.loads.get(n))]
         if self.server.running():
             if any(n not in bereit for n in self.server.workers):
-                # Ein beteiligter Server ist weg -- ohne ihn fehlen Schichten.
+
                 self.server.stop()
                 self.server.phase, self.server.message = (
                     "wartet", "Ein Server ist weggefallen — verteile neu …")
@@ -985,8 +984,8 @@ class Manager:
             raise ShardError("Kein Server hat einen rpc-server bereit — ist llama.cpp "
                              "auf den Servern installiert?")
         gguf = ollama_gguf(modell, self.ollama_url())
-        # Ollama kann langsam antworten. Zwischenzeitliches Abschalten,
-        # Austreten oder ein neuer Modellwunsch darf keinen alten Start ausloesen.
+
+
         v = self.verbund
         aktuell = v.split()
         if (self._stop.is_set() or not v.enabled or not v.joined or not v.is_master
@@ -994,8 +993,8 @@ class Manager:
                 != self._wunsch or self._neu.is_set()):
             return
         noetig = needed_gb(gguf.stat().st_size / 1_000_000_000)
-        # Der Master traegt bei, wenn er eine Grafikkarte hat (eigener is None)
-        # oder sein eigener rpc-server bereit ist -- sonst rechnet er nicht mit.
+
+
         eigen = (node_memory_gb(self._karte_oder_offen())
                  if eigener is None or eigener.ready else 0.0)
         verfuegbar = eigen + sum(
@@ -1008,7 +1007,7 @@ class Manager:
                           eigener.port if eigener is not None and eigener.ready else 0,
                           kontext, binary)
 
-    # -- Was andere davon sehen --------------------------------------------
+
     def worker_status(self) -> dict[str, Any]:
         """Fuer das Lebenszeichen an die anderen Server: bin ich bereit?
 
@@ -1066,8 +1065,8 @@ class Manager:
             "rpc_binary": bool(self._programm("rpc", laden=False)[0]),
             "server_binary": bool(self._programm("server", laden=False)[0]),
             "self": self.worker.status(),
-            # llama.cpp installiert sich selbst, wenn es fuer dieses System eine
-            # fertige Ausgabe gibt (11.0.0 Luna).
+
+
             "auto_install": bool(self.llama.names()),
             "llama": {**self.llama.status(), "fassung": self._fassung(),
                       "label": eintrag.label() if eintrag is not None else ""},
@@ -1090,7 +1089,7 @@ def _split_status_mem(last: Any) -> float:
         wert = float(last["split"].get("mem_gb") or 0)
     except (TypeError, ValueError, OverflowError):
         return 0.0
-    return wert if 0.0 <= wert <= 100_000.0 else 0.0  # auch NaN und Unendlich
+    return wert if 0.0 <= wert <= 100_000.0 else 0.0
 
 
 def endpoint() -> tuple[str, str]:

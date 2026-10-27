@@ -22,27 +22,13 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
-#: Aquaticy ist auf zwei Anbieter spezialisiert: **NVIDIA NIM** und **Mistral**.
-#:
-#: Das ist eine Entscheidung, keine Sparmassnahme. Eine Liste mit dreizehn
-#: Anbietern sieht grosszuegig aus, bedeutet aber dreizehnmal "irgendein
-#: Standardmodell, ungetestet, mit unbekannten Grenzen". Zwei Anbieter kann
-#: man kennen: welches Modell wofuer, wie schnell es antwortet, wie viele
-#: Anfragen pro Minute es vertraegt -- und genau danach richtet sich Aquaticy
-#: dann auch (siehe PROVIDER_LIMITS und `aquaticy/pace.py`).
-#:
-#: Lokale Modelle ueber Ollama bleiben davon unberuehrt: sie sind kein
-#: Anbieter, sondern der Weg, ganz ohne einen auszukommen.
-#:
-#: Diese Texte liest der Nutzer -- hier gehoeren echte Umlaute hin, anders
-#: als in Kommentaren und Codenamen.
 PROVIDER_NOTES: dict[str, str] = {
     "nvidia_nim": "Offene Modelle bei NVIDIA, großzügiges Freikontingent (40 Anfragen/Minute)",
     "mistral": "Europäischer Anbieter, antwortet schnell, Server in der EU",
     "ollama_chat": "Läuft auf deinem Rechner: keine Kosten, nichts verlässt das Haus",
 }
 
-#: Wie ein Anbieter in der Auswahl heisst. "ollama_chat" sagt niemandem etwas.
+
 PROVIDER_LABELS: dict[str, str] = {
     "nvidia_nim": "NVIDIA",
     "mistral": "Mistral",
@@ -50,43 +36,43 @@ PROVIDER_LABELS: dict[str, str] = {
     "ollama": "lokal",
 }
 
-#: Das Arbeitspferd je Anbieter: gut genug fuer alles, was Aquaticy den ganzen
-#: Tag tut -- recherchieren, lesen, zusammenfassen.
+
+
 PROVIDER_MODELS: dict[str, str] = {
-    # Llama 3.3 70B hat NVIDIA am 26.08.2026 abgeschaltet (410 Gone, 12.2.2 Astra).
+
     "nvidia_nim": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
     "mistral": "mistral/mistral-large-latest",
 }
 
-#: Das schnelle kleine Modell je Anbieter. Es macht die Arbeit, bei der es
-#: auf Tempo ankommt und nicht auf Tiefe: die Vorpruefung vor jeder Frage,
-#: die Planung -- und vor allem die Rechercheagenten, von denen es viele
-#: gleichzeitig gibt. Ein 70B-Modell fuer "such mir die Oeffnungszeiten"
-#: kostet Sekunden, die sich mit jedem Agenten summieren.
+
+
+
+
+
 FAST_MODELS: dict[str, str] = {
     "nvidia_nim": "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2",
     "mistral": "mistral/mistral-small-latest",
 }
 
-#: So viele Modelle eines Anbieters zeigt die Modellwahl hoechstens.
+
 MAX_PICKER_MODELS = 8
 
-#: Abgeschaltete Modelle (12.2.2 Astra): Der Anbieter antwortet mit "410 Gone -- reached
-#: its end of life". Fest, was bekannt ist; dazu, was Aquaticy beim Aufruf erfaehrt.
+
+
 RETIRED_MODELS = frozenset({
     "nvidia_nim/meta/llama-3.3-70b-instruct",
     "nvidia_nim/meta/llama-3.1-8b-instruct",
 })
-# Laufzeitbeobachtungen gehoeren zur Verbindung des Kontos, nie allen Konten.
-# Nur gehashte Bereiche; beide Ebenen sind gegen unbegrenztes Wachstum begrenzt.
+
+
 MAX_RETIRED_MODELS = 256
 MAX_RETIRED_SCOPES = 64
 _retired_seen: OrderedDict[str, OrderedDict[str, None]] = OrderedDict()
 _retired_lock = threading.Lock()
 _retirement_generation = 0
 
-#: Ersatz je Anbieter und Rolle -- nur genommen, wenn der Anbieter das Modell dem Konto
-#: auch anbietet (seine Liste beim Einrichten). Bei NVIDIA die Nemotron-Modelle vorn.
+
+
 PREFERRED_MODELS: dict[tuple[str, str], tuple[str, ...]] = {
     ("nvidia_nim", "main"): (
         "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
@@ -104,7 +90,7 @@ PREFERRED_MODELS: dict[tuple[str, str], tuple[str, ...]] = {
         "nvidia_nim/qwen/qwen2.5-coder-32b-instruct",
     ),
 }
-#: Woran man in einer Liste ein kleines, schnelles Modell erkennt.
+
 _KLEIN = re.compile(r"nano|mini|small|\b(?:[1-9]|1[0-4])b\b|-[1-9]b-", re.IGNORECASE)
 
 
@@ -228,17 +214,17 @@ def replacement(settings: Any, model: str) -> str:
         provider_choice(settings, anbieter, "main") or model
 
 
-#: Fuers Programmieren das jeweils staerkste Modell eines Anbieters -- dort,
-#: wo es ein anderes ist als das Arbeitspferd.
+
+
 CODING_MODELS: dict[str, str] = {
     "nvidia_nim": "nvidia_nim/qwen/qwen2.5-coder-32b-instruct",
     "mistral": "mistral/codestral-latest",
 }
 
-#: Grobe Rangfolge. Sie entscheidet, welcher der eingerichteten Anbieter im
-#: Code- und im Pro-Modus zum Zug kommt. Mistral steht vorn, weil es
-#: spuerbar schneller antwortet; wer es anders sieht, traegt unter
-#: AQUATICY_CODE_MODEL sein Modell selbst ein.
+
+
+
+
 CODING_ORDER: tuple[str, ...] = ("mistral", "nvidia_nim")
 
 PROVIDER_KEYS: dict[str, str] = {
@@ -246,17 +232,17 @@ PROVIDER_KEYS: dict[str, str] = {
     "mistral": "MISTRAL_API_KEY",
 }
 
-#: Was der Anbieter vertraegt: (Anfragen je Minute, gleichzeitige Anfragen).
-#:
-#: Die vierzig Anfragen pro Minute bei NVIDIA sind der Grund, warum Aquaticy
-#: dort "sehr sehr lange" gebraucht hat: vierundvierzig Agenten schicken
-#: ihre Anfragen auf einmal los, die Haelfte kommt als 429 zurueck, jede
-#: davon wird wiederholt -- und aus einer Recherche werden Minuten Wartezeit,
-#: in denen nichts passiert. Aquaticy haelt das Mass jetzt selbst ein (siehe
-#: `aquaticy/pace.py`): gleichmaessig verteilt statt in Wellen gegen die Wand.
-#:
-#: Wer einen groesseren Vertrag hat, hebt es mit AQUATICY_RPM und
-#: AQUATICY_PARALLEL_CALLS an.
+
+
+
+
+
+
+
+
+
+
+
 PROVIDER_LIMITS: dict[str, tuple[int, int]] = {
     "nvidia_nim": (40, 4),
     "mistral": (240, 8),
@@ -272,16 +258,16 @@ def provider_limits(provider: str) -> tuple[int, int]:
     return PROVIDER_LIMITS.get(provider or "", (0, 0))
 
 
-# ---------------------------------------------------------------------------
-# Auslastung
-# ---------------------------------------------------------------------------
+
+
+
 def cpu_load() -> dict[str, Any]:
     """Prozessorlast als Anteil der verfuegbaren Kerne."""
     cores = os.cpu_count() or 1
     try:
         one_minute = os.getloadavg()[0]
     except (OSError, AttributeError):
-        return {"cores": cores}  # Windows kennt keine Lastdurchschnitte
+        return {"cores": cores}
     return {
         "cores": cores,
         "load": round(one_minute, 2),
@@ -304,7 +290,7 @@ def memory_use() -> dict[str, Any]:
         if total:
             return _memory_dict(total, total - free)
 
-    # macOS und alles andere: sysconf kennt Seitenzahl und -groesse.
+
     try:
         total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     except (ValueError, OSError, AttributeError):
@@ -383,10 +369,10 @@ def snapshot(data_dir: Path | str | None = None) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Auswahl der Modelle
-# ---------------------------------------------------------------------------
-#: Wie die Herkunft eines Modells in der Auswahl heisst (seit 9.5.14 Seashell).
+
+
+
+
 SOURCE_LABELS: dict[str, str] = {"own": "Dein Schlüssel", "operator": "Gestellt"}
 
 
@@ -424,8 +410,8 @@ def model_origin(settings: Any, model_id: str, fallback: str = "operator") -> st
         return fallback
 
 
-#: Anbieter, bei denen LiteLLM die Zugangsdaten selbst aus der Umgebung liest --
-#: ohne einen Schluessel namens <ANBIETER>_API_KEY.
+
+
 _ZUGANG_AUS_UMGEBUNG: dict[str, tuple[str, ...]] = {
     "bedrock": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"),
     "sagemaker": ("AWS_ACCESS_KEY_ID", "AWS_PROFILE"),
@@ -476,7 +462,7 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
 
     model_id = str(model_id or "").strip()
     if not model_id or model_id == SPLIT_MODEL_ID:
-        # Den Server-Verbund zeigt web.py selbst -- nur, solange er laeuft.
+
         return False
     name = local_name(model_id)
     if name:
@@ -484,7 +470,7 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
                             else installed)
     provider = provider_of(model_id)
     if not provider or is_retired(model_id, settings):
-        # Abgeschaltet (12.2.2 Astra): beim Anklicken kaeme nur "410 Gone".
+
         return False
     try:
         weg = getattr(settings, "route", None)
@@ -559,14 +545,14 @@ def strongest_models(
         ))
 
     wanted = str(getattr(settings, "code_model", "") or "").strip()
-    # Nur wenn es auch antwortet (11.3.0 Luna): ein eingetragenes Modell ohne
-    # Schluessel oder ein geloeschtes Ollama-Modell stand sonst ganz oben.
+
+
     if wanted and model_usable(settings, wanted):
         dazu(wanted, PROVIDER_LABELS.get(provider_of(wanted), "eigenes"), "von dir eingetragen",
              model_origin(settings, wanted))
 
-    # Anbieter mit eigenem Schluessel zuerst: wer einen hinterlegt, will ihn
-    # benutzen -- und ihn kostet das Modell das Kontingent nicht.
+
+
     anbieter = sorted(
         (p for p in CODING_ORDER if key_origin(settings, p)),
         key=lambda p: (key_origin(settings, p) != "own", CODING_ORDER.index(p)),
@@ -674,12 +660,12 @@ def available_models(settings: Any) -> list[dict[str, str]]:
     found: list[dict[str, str]] = []
     current = getattr(settings, "model", "")
     base = ollama_base(settings)
-    # Jedes Mal live gefragt: was eben mit `ollama pull` dazukam, steht sofort da.
+
     lokal = installed_models(base)
     for name in lokal:
         model = known_model(name)
-        # `gemma3` eingestellt, `gemma3:latest` installiert: dasselbe Modell --
-        # dann gilt die eingestellte Kennung, sonst waere nichts ausgewaehlt.
+
+
         gleich = local_name(current) and is_installed(local_name(current), [name])
         found.append(_mit_herkunft(
             {
@@ -691,17 +677,17 @@ def available_models(settings: Any) -> list[dict[str, str]]:
             "operator",
         ))
 
-    # Eigene Schluessel zuerst (seit 9.5.14 Seashell): diese Modelle sieht nur
-    # dieses Konto -- gestellte sieht jedes.
+
+
     anbieter = sorted(
         (p for p in PROVIDER_KEYS if key_origin(settings, p)),
         key=lambda p: key_origin(settings, p) != "own",
     )
     for provider in anbieter:
         herkunft = key_origin(settings, provider)
-        # Nur, was der Anbieter diesem Konto wirklich anbietet und nicht abgeschaltet
-        # hat (12.2.2 Astra) -- bei NVIDIA die Nemotron-Modelle vorn. Ohne Liste
-        # (Schluessel des Betreibers) das Arbeitspferd und das schnelle Modell.
+
+
+
         schnell = provider_choice(settings, provider, "fast")
         for model_id in provider_models(settings, provider):
             klein = model_id == schnell
@@ -710,18 +696,18 @@ def available_models(settings: Any) -> list[dict[str, str]]:
                     "id": model_id,
                     "label": model_id.split("/", 1)[-1],
                     "kind": PROVIDER_LABELS.get(provider, provider),
-                    # Nicht jede Frage braucht das Arbeitspferd -- wer vor allem
-                    # Tempo will, waehlt das kleine, ohne eine Kennung zu tippen.
+
+
                     "note": "Klein und schnell: kurze Antworten in Sekunden" if klein
                     else PROVIDER_NOTES.get(provider, "Über die Schnittstelle des Anbieters"),
                 },
                 model_origin(settings, model_id, herkunft),
             ))
 
-    # Das laufende Modell gehoert in die Liste, auch wenn es sonst nirgends
-    # auftaucht -- sonst steht die Auswahl auf nichts. Aber nur, wenn es auch
-    # antwortet (11.3.0 Luna): das voreingestellte Mistral ohne Schluessel
-    # oder ein geloeschtes Ollama-Modell gehoeren nicht zur Wahl.
+
+
+
+
     if (current and not any(item["id"] == current for item in found)
             and model_usable(settings, current, lokal)):
         provider = provider_of(current)

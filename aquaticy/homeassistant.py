@@ -25,7 +25,6 @@ from typing import Any
 
 import httpx
 
-#: Uebliche Adressen, unter denen eine Instanz im Heimnetz zu finden ist.
 COMMON_URLS: tuple[str, ...] = (
     "http://homeassistant.local:8123",
     "http://homeassistant:8123",
@@ -33,36 +32,36 @@ COMMON_URLS: tuple[str, ...] = (
     "http://localhost:8123",
 )
 
-#: Der Port, auf dem Home Assistant lauscht.
+
 HA_PORT = 8123
 
-#: Bereiche, die auch bei erlaubtem Schalten eine ausdrueckliche Bestaetigung
-#: brauchen. Licht wieder auszuschalten ist harmlos; eine Tuer aufzuschliessen,
-#: eine Alarmanlage scharfzustellen oder das Garagentor zu oeffnen nicht.
+
+
+
 PROTECTED_DOMAINS: frozenset[str] = frozenset(
     {"lock", "alarm_control_panel", "cover", "water_heater", "climate", "vacuum",
-     # Skripte, Szenen und Knoepfe tun, was in ihnen steht -- und darin kann
-     # "Haustuer aufschliessen" stehen. Seit 9.5.16 fragen sie deshalb
-     # genauso nach wie das Schloss selbst.
+
+
+
      "script", "scene", "button"}
 )
 
-#: So sehen Bereich und Dienst aus: Kleinbuchstaben, Ziffern, Unterstrich.
-#: Alles andere (``../lock/unlock``, ``%2e%2e``, ``/``) wuerde aus
-#: ``services/light/<dienst>`` einen anderen Pfad machen -- bis 9.5.15 wurde
-#: so aus "Licht" ein Tuerschloss, ohne Rueckfrage (seit 9.5.16 zu).
+
+
+
+
 NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 
-#: Eine Entitaet: ``bereich.name``.
+
 ENTITY_RE = re.compile(r"^[a-z0-9_]{1,64}\.[a-z0-9_]{1,128}$")
 
-#: Womit Home Assistant ausser ``entity_id`` noch Ziele annimmt. Ein Bereich
-#: oder Geraet schaltet alles darin -- auch das Schloss.
+
+
 TARGET_KEYS: frozenset[str] = frozenset({"area_id", "device_id", "floor_id", "label_id",
                                          "target"})
 
-#: Bereiche, in denen aquaticy ueberhaupt schalten darf. Alles andere lehnt er
-#: ab -- lieber eine Absage als ein unerwarteter Eingriff.
+
+
 ALLOWED_DOMAINS: frozenset[str] = frozenset(
     {
         "light",
@@ -83,16 +82,16 @@ ALLOWED_DOMAINS: frozenset[str] = frozenset(
     }
 )
 
-#: Was ohne Rueckfrage geschaltet werden darf, wenn der Nutzer es erlaubt hat
-#: (AQUATICY_HA_DIRECT, 12.5.5 Sol): harmlose Bereiche, nur an/aus/umschalten.
-#: Schloesser, Alarm, Tore, Heizung, Skripte und Szenen (PROTECTED_DOMAINS) sind
-#: nie dabei.
+
+
+
+
 DIRECT_DOMAINS: frozenset[str] = frozenset(
     {"light", "switch", "fan", "input_boolean", "media_player"})
 DIRECT_SERVICES: frozenset[str] = frozenset({"turn_on", "turn_off", "toggle"})
-#: Wie viele Geraete ein einzelner Befehl ohne Rueckfrage treffen darf.
+
 MAX_DIRECT_TARGETS = 10
-#: Zusatzangaben, die ein Licht ohne Rueckfrage bekommen darf: nur Zahlen im Bereich.
+
 DIRECT_LIGHT_DATA: dict[str, tuple[float, float]] = {
     "brightness_pct": (0, 100), "brightness": (0, 255), "color_temp_kelvin": (1000, 10000),
     "kelvin": (1000, 10000), "transition": (0, 300),
@@ -141,14 +140,14 @@ def direct_allowed(arguments: dict[str, Any]) -> bool:
     return True
 
 
-#: So lange gilt eine einmal geholte Zustandsliste als frisch. Der Agent
-#: fragt in einer Runde gern dreimal -- erst die Uebersicht, dann einen
-#: Bereich, dann gezielt. Bei tausend Entitaeten waeren das drei volle
-#: Uebertragungen fuer denselben Augenblick. Laenger halten wollen wir sie
-#: nicht: ein Licht kann in zehn Sekunden ausgehen.
+
+
+
+
+
 STATES_TTL = 10.0
 
-#: (Profil, Adresse, Token-Hash) -> (Zeitpunkt, Zustaende), nie Klartext-Tokens.
+
 _states_cache: dict[tuple[str, str, str], tuple[float, list[Entity]]] = {}
 _states_lock = threading.Lock()
 _states_generation = 0
@@ -166,9 +165,9 @@ def forget_states(profile: Path | str | None = None) -> None:
             if scope is None or key[0] == scope:
                 _states_cache.pop(key, None)
 
-#: So viele Entitaeten gibt aquaticy hoechstens an das Modell weiter. Eine
-#: gewachsene Installation hat schnell tausend -- die wuerden das
-#: Kontextfenster sprengen, bevor die eigentliche Frage drankommt.
+
+
+
 MAX_ENTITIES = 60
 
 
@@ -210,13 +209,13 @@ def normalize_url(url: str) -> str:
         return ""
     if "://" not in url:
         url = f"http://{url}"
-    # Ohne Portangabe den Standardport ergaenzen -- niemand tippt ihn gern mit.
+
     from urllib.parse import urlparse
 
-    # Seit 9.5.34: der Port gehoert an den Rechnernamen, nicht hinter den Pfad
-    # ("nas.local/ha" -> "nas.local:{port}/ha"); ein ungueltiger Port
-    # ("ha.local:abc") ergibt "" statt eines Absturzes. Seit 11.3.0 ebenso eine
-    # unlesbare Adresse ("[1, 2]", Steuerzeichen) -- sonst stuerzte der Test ab.
+
+
+
+
     if any(ord(zeichen) < 33 or ord(zeichen) == 127 for zeichen in url):
         return ""
     try:
@@ -260,14 +259,14 @@ class HomeAssistant:
                 headers={"Authorization": f"Bearer {self.token}"},
                 json=payload,
                 timeout=self.timeout,
-                # Nie ueber einen Proxy aus der Umgebung (9.5.34): das Token
-                # ginge sonst womoeglich im Klartext durch fremde Haende.
+
+
                 trust_env=False,
             )
         except httpx.HTTPError as exc:
             raise HomeAssistantError(f"{self.url} nicht erreichbar: {exc}") from exc
         except (httpx.InvalidURL, ValueError, UnicodeError) as exc:
-            # Ein Rechnername, den es so nicht geben kann (zu lang, falsche Zeichen).
+
             raise HomeAssistantError("Die Adresse von Home Assistant ist ungültig.") from exc
         if response.status_code == 401:
             raise HomeAssistantError(
@@ -283,7 +282,7 @@ class HomeAssistant:
         except ValueError:
             return response.text
 
-    # -- Lesen ------------------------------------------------------------
+
     def ping(self) -> str:
         """Prueft die Verbindung und gibt die Version zurueck."""
         self._request("GET", "/")
@@ -314,8 +313,8 @@ class HomeAssistant:
             raise HomeAssistantError("Unerwartete Antwort auf die Zustandsabfrage.")
         entities = [_entity(item) for item in raw if isinstance(item, dict)]
         with _states_lock:
-            # Eine spaete Leseantwort darf nach Schalten/Loeschen nicht erneut
-            # als frischer Zustand im gemeinsamen Speicher landen.
+
+
             if generation == _states_generation:
                 _states_cache.pop(key, None)
                 while len(_states_cache) >= MAX_STATE_CACHES:
@@ -343,7 +342,7 @@ class HomeAssistant:
             counts[entity.domain] = counts.get(entity.domain, 0) + 1
         return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
 
-    # -- Schalten ---------------------------------------------------------
+
     def call(self, domain: str, service: str, entity_id: str = "", data: Any = None) -> list[Any]:
         """Ruft einen Dienst auf, etwa `light.turn_on`.
 
@@ -353,7 +352,7 @@ class HomeAssistant:
         """
         payload = check_call(domain, service, entity_id, data)
         result = self._request("POST", f"services/{domain}/{service}", payload)
-        # Nach dem Schalten stimmt der zwischengespeicherte Zustand nicht mehr.
+
         forget_states(self._scope or None)
         return result if isinstance(result, list) else []
 
@@ -447,5 +446,5 @@ def discover(subnet: str = "", timeout: float = 1.0) -> list[str]:
             if candidate not in found:
                 found.append(candidate)
     except (NotPrivate, ValueError):
-        pass  # Kein erkennbares Netz -- die Namensfunde bleiben trotzdem gueltig
+        pass
     return found

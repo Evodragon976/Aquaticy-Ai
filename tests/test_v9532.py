@@ -23,7 +23,7 @@ from aquaticy.auth import ARGON_PREFIX, AuthStore, _argon_params, _password_hash
 from aquaticy.devices import clean_device
 from aquaticy.memory import CipherError
 from tests.anmeldung import wie_die_app
-from tests.test_end_to_end import _req, server  # noqa: F401 -- Fixture
+from tests.test_end_to_end import _req, server  # noqa: F401
 
 TERMS = {"terms_accepted": True, "terms_version": "1"}
 PC_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0 Safari/537.36"
@@ -41,20 +41,20 @@ def _roh(pfad: Path) -> str:
         return "\n".join(str(zeile) for zeile in conn.iterdump())
 
 
-# -- privacy.py ---------------------------------------------------------------------
+
 def test_sealing_is_authenticated_and_bound(tmp_path: Path) -> None:
     sealer = privacy.profile_sealer(tmp_path / "users" / ("a" * 32))
     text = sealer.seal_text("geheimer Chat", "history.question")
     assert text.startswith(privacy.TEXT_PREFIX) and "geheim" not in text
     assert sealer.open_text(text, "history.question") == "geheimer Chat"
-    # An eine andere Spalte gebunden -> nicht zu oeffnen.
+
     with pytest.raises(CipherError):
         sealer.open_text(text, "history.answer")
-    # Ein veraendertes Zeichen -> Fehler statt falscher Daten.
+
     kaputt = text[:-3] + ("A" if text[-3] != "A" else "B") + text[-2:]
     with pytest.raises(CipherError):
         sealer.open_text(kaputt, "history.question")
-    # Alter Klartext bleibt lesbar.
+
     assert sealer.open_text("alter Klartext", "history.question") == "alter Klartext"
 
 
@@ -83,18 +83,18 @@ def test_private_files(tmp_path: Path) -> None:
     privacy.write_private(datei, b"\x89PNG echtes Foto", profil)
     assert b"echtes Foto" not in datei.read_bytes()
     assert privacy.read_private(datei) == b"\x89PNG echtes Foto"
-    # Umbenannt (in eine andere Datei kopiert) -> nicht zu oeffnen.
+
     kopie = profil / "uploads" / "2-anderes.png"
     kopie.write_bytes(datei.read_bytes())
     with pytest.raises(CipherError):
         privacy.read_private(kopie)
-    # Unverschluesselte Dateien (Terminal, alte Uploads) bleiben lesbar.
+
     alt = profil / "uploads" / "alt.png"
     alt.write_bytes(b"alt")
     assert privacy.read_private(alt) == b"alt"
 
 
-# -- Chats verschluesselt -------------------------------------------------------------
+
 def test_chats_are_encrypted_on_disk(tmp_path: Path) -> None:
     from aquaticy.cache import Cache
 
@@ -106,7 +106,7 @@ def test_chats_are_encrypted_on_disk(tmp_path: Path) -> None:
     cache.add_note("Ich wohne in der Geheimstraße")
     roh = _roh(profil / "aquaticy.sqlite3")
     assert "Geheimnis" not in roh and "Geheimstraße" not in roh and "example.org" not in roh
-    # Lesen, Suchen, Liste -- wie vorher.
+
     eintrag = cache.chat_history("chat1")[0]
     assert eintrag.question.startswith("Wie heißt") and eintrag.meta["sources"]
     assert cache.recent_chats()[0]["title"] == "Arztbesuch Geheimnis"
@@ -144,7 +144,7 @@ def test_pictures_are_encrypted(tmp_path: Path) -> None:
     datei = snapshot_path(profil, kennung)
     assert datei is not None and b"echtes Bild" not in datei.read_bytes()
     assert load_snapshot(profil, kennung) == (b"\xff\xd8\xff echtes Bild", "image/jpeg")
-    # Ein fremdes Profil kann das Bild nicht oeffnen.
+
     fremd = tmp_path / "users" / ("0" * 32)
     (fremd / "media").mkdir(parents=True)
     (fremd / "media" / kennung).write_bytes(datei.read_bytes())
@@ -165,7 +165,7 @@ def test_uploads_are_encrypted_and_the_vision_model_can_read_them(
     assert privacy.read_private(pfad) == b"\x89PNG privates Foto"
 
 
-# -- Passwoerter ----------------------------------------------------------------------
+
 def test_passwords_use_argon2id_with_pepper(store: AuthStore) -> None:
     konto = store.register("a@example.org", "ein langes Passwort", "normal", username="aa",
                            **TERMS)
@@ -174,7 +174,7 @@ def test_passwords_use_argon2id_with_pepper(store: AuthStore) -> None:
     assert bytes(gespeichert).startswith(ARGON_PREFIX)
     assert store.authenticate("a@example.org", "ein langes Passwort") == konto
     assert store.authenticate("a@example.org", "falsches Passwort!!") is None
-    # Ohne den Pfeffer (auth.key) passt das Passwort nicht -- die Datenbank allein reicht nicht.
+
     store._pepper = b"x" * 32
     assert store.authenticate("a@example.org", "ein langes Passwort") is None
 
@@ -206,7 +206,7 @@ def test_a_forged_hash_cannot_make_the_server_work_forever(store: AuthStore) -> 
     assert _argon_verify("x", b"s" * 16, b"p" * 32, ARGON_PREFIX + b"kaputt") is False
 
 
-# -- Konten verschluesselt ------------------------------------------------------------
+
 def test_emails_ips_and_devices_are_not_readable_on_disk(store: AuthStore) -> None:
     geraet = clean_device(PC, user_agent=PC_UA, cookie="K" * 32)
     konto = store.register("anna.geheim@example.org", "ein langes Passwort", "normal",
@@ -215,7 +215,7 @@ def test_emails_ips_and_devices_are_not_readable_on_disk(store: AuthStore) -> No
     roh = _roh(store.db_path)
     for klartext in ("anna.geheim", "203.0.113.77", "198.51.100.66", "RTX 4070", "Chrome"):
         assert klartext not in roh, klartext
-    # Der Server arbeitet trotzdem damit.
+
     assert store.authenticate("anna.geheim@example.org", "ein langes Passwort") is not None
     assert store.account_by_name("anna.geheim@example.org") == konto or \
         store.account_by_name("anna.geheim@example.org").id == konto.id
@@ -223,7 +223,7 @@ def test_emails_ips_and_devices_are_not_readable_on_disk(store: AuthStore) -> No
     assert store.last_address(konto.id) == "198.51.100.66"
     hardware, browser = store.last_device(konto.id)
     assert "RTX 4070" in hardware and browser.startswith("Chrome")
-    # Die Adresse steht nur als Schluessel-Hash am Konto.
+
     assert re.fullmatch(r"[0-9a-f]{64}", store.account(konto.id).last_ip)
 
 
@@ -265,7 +265,7 @@ def test_ip_bans_work_with_hashes_only(tmp_path: Path) -> None:
     assert kuerzel.startswith("#") and len(kuerzel) == 9
     assert guard.is_banned(ip="203.0.113.7") is not None
     assert "203.0.113.7" not in _roh(tmp_path / "accounts.sqlite3")
-    # Alte Klartext-Sperren (vor 9.5.32) werden beim Start umgeschrieben.
+
     with sqlite3.connect(tmp_path / "accounts.sqlite3") as conn:
         conn.execute("INSERT INTO aiguard_bans (subject, at, reason, by) "
                      "VALUES ('ip:198.51.100.3', 1, 'alt', 'terminal')")
@@ -306,7 +306,7 @@ def test_the_operator_sees_only_a_tag_and_can_ban_by_it(
         config.reset_settings_cache()
 
 
-# -- Konto verwalten ------------------------------------------------------------------
+
 def test_change_password_ends_other_sessions(store: AuthStore) -> None:
     konto = store.register("pw@example.org", "ein langes Passwort", "normal", username="pw",
                            **TERMS)
@@ -354,7 +354,7 @@ def test_wipe_keeps_the_account_but_removes_the_data(store: AuthStore) -> None:
     assert store.device_count(konto.id) == 0
 
 
-# -- Ende zu Ende ---------------------------------------------------------------------
+
 def _registrieren(port: int, name: str, geraet: str = "") -> str:
     _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
     zustimmung = kopf["Set-Cookie"].split(";", 1)[0]
@@ -393,7 +393,7 @@ def test_deleting_the_account_needs_password_and_word(server: tuple[int, Path]) 
     status, antwort = _post(port, "/api/account/delete",
                             {"password": "ein langes Passwort", "confirm": "löschen"}, keks)
     assert status == 200 and antwort["deleted"]
-    # Danach ist die Sitzung weg und die Anmeldung geht nicht mehr.
+
     status, _, _ = _req(port, "GET", "/api/account", None, keks)
     assert status == 401
     _, kopf, _ = _req(port, "POST", "/api/consent", {"accepted": True})
@@ -449,7 +449,7 @@ def test_wrong_passwords_are_limited(server: tuple[int, Path]) -> None:  # noqa:
     assert codes[-1] == 429 and 403 in codes
 
 
-# -- Oberflaeche ----------------------------------------------------------------------
+
 def _seite() -> str:
     from aquaticy import web
 
@@ -468,10 +468,10 @@ def test_font_size_is_part_of_the_state_and_page() -> None:
         assert f'data-fsize="{stufe}"' in html
     assert ':root[data-fontsize="small"]{--fs:.9}' in html
     assert ':root[data-fontsize="large"]{--fs:1.15}' in html
-    # Alle Schriftgroessen im Stil folgen der Einstellung.
+
     stil = html[html.index("<style>"):html.index("</style>")]
-    # Ausnahmen: das Eingabefeld am Handy (unter 16 px zoomt iOS) und die drei
-    # "A" im Design-Fenster, die die Stufen zeigen.
+
+
     for fest in ("textarea{font-size:16px}", ".fs-glyph-s{font-size:12px!important}",
                  ".fs-glyph-l{font-size:19px!important}"):
         stil = stil.replace(fest, "")
@@ -518,7 +518,7 @@ def test_ultra_only_switches_show_a_lock() -> None:
 
 def test_switches_do_not_rely_on_colour_alone() -> None:
     html = _seite()
-    # Seit 9.6.0 ohne "I/O": Rand (aus) gegen Fuellung (an) -- nicht nur die Farbe.
+
     assert ".schalter{box-shadow:inset 0 0 0 2px var(--switch-off)}" in html
     assert 'content:"O"' not in html and 'content:"I"' not in html
     assert "--switch-off:" in html
@@ -536,12 +536,12 @@ def test_retry_capabilities_and_account_controls_are_there() -> None:
                  'id="account-wipe"', 'id="account-password"', 'id="account-logout-all"',
                  'id="security-banner"', 'id="device-list"'):
         assert teil in html, teil
-    # Seit 11.2.2 sichtbar 34px, zum Antippen weiter 44px (unsichtbarer Rand) --
-    # nachgemessen im Rundgang (tools/rundgang.py, Abschnitt Handy).
+
+
     assert ".send{width:34px;height:34px" in html and ".send::after{inset:-5px 0 -5px -5px}" in html
 
 
-# -- Ai-guard: getarnte Beleidigungen -------------------------------------------------
+
 @pytest.mark.parametrize("text", [
     "du d🙂u🙂m🙂m🙂e🙂r Bot", "du bíst dúmm", "yooouuu are useless", "du biiist dumm",
     "y o u ' r e so stupid", "I.d.1.o.t!", "du A****l0ch", "du_1d10t", "du Kn*llkopf",
@@ -607,7 +607,7 @@ def test_at_least_99_percent_of_disguised_insults_are_found() -> None:
     assert quote >= 0.99, f"{quote:.2%}"
 
 
-# -- Parallele Suchen in Aufruf-Reihenfolge -------------------------------------------
+
 def test_parallel_searches_keep_the_call_order() -> None:
     """Unter Last trugen sich parallele Suchen in Start-Reihenfolge ein ("b, a")."""
     from aquaticy.agent import _in_call_order
@@ -617,7 +617,7 @@ def test_parallel_searches_keep_the_call_order() -> None:
     suchen = ["frueher", "c", "a", "b"]
     _in_call_order(suchen, 1, aufrufe)
     assert suchen == ["frueher", "a", "b", "c"]
-    # Kaputte Argumente oder fremde Werkzeuge stoeren nicht.
+
     suchen = ["x", "y"]
     _in_call_order(suchen, 0, [{"function": {"name": "web_search", "arguments": "{kaputt"}},
                                {"function": {"name": "fetch_page", "arguments": "{}"}}])

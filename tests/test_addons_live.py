@@ -25,7 +25,7 @@ pytestmark = pytest.mark.skipif(
     not _bereit(), reason="kein Docker-Dienst oder kein Desktop-Abbild gebaut"
 )
 
-#: Ein "Blender", das nur ein Fenster aufmacht.
+
 FAKE_BLENDER = b"#!/bin/sh\nxterm -T FakeBlender -e sleep 600\n"
 
 
@@ -85,7 +85,7 @@ def test_install_runs_locked_and_leaves_only_the_volume(volume: str) -> None:
                                   "--quelle", "http://127.0.0.1:8000", timeout=120)
         assert '"ok": true' in fertig.stdout, fertig.stdout + fertig.stderr
         assert '"version": "4.5.3"' in fertig.stdout
-        # Nichts landet ausserhalb des Datentraegers: das Wurzeldateisystem ist fest.
+
         versuch = box.run("touch /usr/local/bin/x 2>&1; echo rc=$?")
         assert "rc=0" not in versuch.stdout
     finally:
@@ -105,13 +105,13 @@ def test_the_desktop_starts_the_installed_program(volume: str) -> None:
         geoeffnet = box.desktop("open", "blender", timeout=60)
         assert geoeffnet.returncode == 0, geoeffnet.stderr
         assert b"FakeBlender" in geoeffnet.stdout, geoeffnet.stdout
-        # Ein zweites Mal startet es nicht noch einmal, es kommt nach vorn.
+
         nochmal = box.desktop("open", "blender", timeout=60)
         assert b"nach vorn" in nochmal.stdout
-        # WhatsApp ist nicht eingehaengt -- also gibt es das hier auch nicht.
+
         fehlt = box.desktop("open", "whatsapp", timeout=30)
         assert fehlt.returncode == 2 and b"nicht installiert" in fehlt.stderr + fehlt.stdout
-        # Blender-Skripte finden das Programm aus dem Add-on.
+
         from aquaticy.addons import werkstatt_command_for_blender
 
         vorn, _, _ = werkstatt_command_for_blender().rpartition('"$B"')

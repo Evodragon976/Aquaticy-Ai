@@ -22,9 +22,9 @@ def _ok(payload: Any):
 CONFIG = {"app": "storage-system", "name": "Lagerverwaltung", "version": "1.0.0"}
 
 
-# ---------------------------------------------------------------------------
-# Adressen und Rechte
-# ---------------------------------------------------------------------------
+
+
+
 @pytest.mark.parametrize(
     ("given", "expected"),
     [
@@ -80,9 +80,9 @@ def test_without_an_address_the_hint_says_where_to_put_one() -> None:
         client.rooms()
 
 
-# ---------------------------------------------------------------------------
-# Lesen
-# ---------------------------------------------------------------------------
+
+
+
 def test_the_server_has_to_identify_itself() -> None:
     """Auf Port 3000 laeuft in vielen Haushalten irgendein anderer Server."""
     client = Storage("192.168.1.5", client=_client(_ok({"maxUploadMb": 25})))
@@ -141,9 +141,9 @@ def test_long_lists_are_cut() -> None:
     assert len(client.rooms()) == storage.MAX_ROWS
 
 
-# ---------------------------------------------------------------------------
-# Schreiben
-# ---------------------------------------------------------------------------
+
+
+
 def test_adding_an_item_sends_name_and_quantity() -> None:
     seen: dict[str, Any] = {}
 
@@ -207,9 +207,9 @@ def test_there_is_no_way_to_delete() -> None:
     assert not [name for name in dir(Storage) if "delete" in name or "remove" in name]
 
 
-# ---------------------------------------------------------------------------
-# Fehler
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_404_is_put_in_plain_words() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404, json={"error": "Artikel nicht gefunden."})
@@ -228,9 +228,9 @@ def test_an_unreachable_server_is_reported_not_raised_raw() -> None:
         client.rooms()
 
 
-# ---------------------------------------------------------------------------
-# Im Netz finden
-# ---------------------------------------------------------------------------
+
+
+
 def test_discovery_only_accepts_a_real_storage(monkeypatch: pytest.MonkeyPatch) -> None:
     """Auf Port 3000 laeuft oft ein anderer Entwicklungsserver."""
     monkeypatch.setattr("aquaticy.lan.find_port", lambda port, subnet: ["10.0.0.7", "10.0.0.9"])

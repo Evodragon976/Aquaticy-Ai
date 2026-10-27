@@ -57,7 +57,7 @@ def test_google_refresh_cannot_restore_a_disconnected_or_replaced_account(
     store.save(Tokens(access_token="expired", refresh_token="refresh-old"))
 
     def refresh(*args):
-        # The other browser action happens while the provider is answering.
+
         other = TokenStore(tmp_path)
         other.clear()
         if reconnect:
@@ -131,8 +131,8 @@ def test_google_atomic_save_keeps_the_explicit_private_file_protection(tmp_path,
     original = memory.secure_file
 
     def protect(path):
-        # This helper also applies the explicit Windows ACL, which mkstemp
-        # mode bits alone cannot provide. Protect before any token is written.
+
+
         assert Path(path).read_bytes() == b""
         protected.append(Path(path))
         original(path)

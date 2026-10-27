@@ -37,9 +37,9 @@ def _slug(text: str, limit: int = 40) -> str:
     return (slug[:limit].rstrip("-")) or "recherche"
 
 
-#: Womit eine Zelle nie beginnen darf: Excel und LibreOffice lesen sie sonst als
-#: Formel (``=HYPERLINK(...)``, ``+cmd|...``, ``@SUMME``). Die Inhalte stammen
-#: aus fremden Seiten -- ein Produktname kann genau so gebaut sein (seit 9.5.15).
+
+
+
 FORMULA_START = ("=", "+", "-", "@", "\t", "\r", "\n", "\uff1d", "\uff0b", "\uff0d", "\uff20")
 
 
@@ -70,12 +70,12 @@ def default_path(turns: list[Turn], fmt: str, directory: Path) -> Path:
     return directory / f"aquaticy-{stamp}-{topic}.{fmt}"
 
 
-#: Groesser ist kein Produktbild -- der Rest wird nicht erst geladen.
+
 MAX_IMAGE_BYTES = 8_000_000
 
-#: Welche Bilder als Datei landen -- und mit welcher Endung. Die Endung kommt
-#: aus dem Inhaltstyp, nicht aus der Adresse (seit 9.5.16): sonst lag aus
-#: "bild.html" oder einem SVG mit Skript eine aktive Datei neben dem Export.
+
+
+
 IMAGE_SUFFIXES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
                   "image/gif": ".gif", "image/avif": ".avif"}
 
@@ -98,13 +98,13 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
     """Laedt Produktbilder in *directory* und gibt {url: dateiname} zurueck."""
     directory.mkdir(parents=True, exist_ok=True)
     mapping: dict[str, str] = {}
-    # Fortlaufender Zaehler ueber ALLE Turns: mit dem Index je Turn wuerden
-    # gleichnamige Produkte aus verschiedenen Turns dieselbe Datei
-    # ueberschreiben und auf das falsche Bild zeigen.
+
+
+
     counter = 0
-    # Bildadressen stammen aus fremden Seiten (JSON-LD, OpenGraph): nur
-    # oeffentliche Ziele, jede Weiterleitung geprueft, Groesse beim Laden
-    # begrenzt (aquaticy/netguard.py, seit 9.5.15).
+
+
+
     with netguard.image_client(timeout=timeout) as client:
         for turn in turns:
             for product in turn.products:
@@ -118,7 +118,7 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
                     art = response.headers.get("content-type", "").split(";", 1)[0]
                     suffix = IMAGE_SUFFIXES.get(art.strip().lower(), "")
                     if not suffix:
-                        continue  # kein Rasterbild (SVG, HTML, ...) -- nicht speichern
+                        continue
                     name = f"{_slug(product.name, 30)}-{counter}{suffix}"
                     counter += 1
                     (directory / name).write_bytes(response.content)
@@ -128,9 +128,9 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
     return mapping
 
 
-# ---------------------------------------------------------------------------
-# Markdown
-# ---------------------------------------------------------------------------
+
+
+
 def _md_text(text: object) -> str:
     """Linktext aus fremden Seiten: Klammern maskiert (9.5.34).
 
@@ -195,9 +195,9 @@ def to_markdown(turns: list[Turn], image_map: dict[str, str] | None = None) -> s
     return "\n".join(lines).rstrip() + "\n"
 
 
-# ---------------------------------------------------------------------------
-# HTML
-# ---------------------------------------------------------------------------
+
+
+
 HTML_STYLE = """
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -329,9 +329,9 @@ def to_html(turns: list[Turn], image_map: dict[str, str] | None = None) -> str:
     return "\n".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# CSV
-# ---------------------------------------------------------------------------
+
+
+
 def write_csv(turns: list[Turn], path: Path) -> Path:
     """Eine Zeile je Produkt; Specs werden zu Spalten."""
     products = [product for turn in turns for product in turn.products]
@@ -355,7 +355,7 @@ def write_csv(turns: list[Turn], path: Path) -> Path:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = _SafeCsv(csv.writer(handle))
         if not products:
-            # Ohne Produkte exportieren wir die Antworten selbst.
+
             writer.writerow(["frage", "antwort", "quellen"])
             for turn in turns:
                 writer.writerow(
@@ -384,9 +384,9 @@ def write_csv(turns: list[Turn], path: Path) -> Path:
     return path
 
 
-# ---------------------------------------------------------------------------
-# Einstieg
-# ---------------------------------------------------------------------------
+
+
+
 def export(
     turns: list[Turn],
     fmt: str,
@@ -412,9 +412,9 @@ def export(
     if with_images and fmt in ("html", "md"):
         asset_dir = target.with_suffix("") / "bilder"
         image_map = {
-            # HTML und Markdown verwenden URLs, keine Windows-Pfade. Ein
-            # Backslash funktioniert im Browser nicht verlaesslich und machte
-            # heruntergeladene Bilder auf Windows unsichtbar.
+
+
+
             url: (Path(asset_dir.parent.name) / "bilder" / name).as_posix()
             for url, name in download_images(turns, asset_dir).items()
         }

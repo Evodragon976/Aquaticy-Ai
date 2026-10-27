@@ -23,7 +23,6 @@ from selectolax.parser import HTMLParser, Node
 from aquaticy.jsonutil import loads
 from aquaticy.models import Product, domain_of
 
-#: Ueberschriften, unter denen typischerweise technische Daten stehen.
 SPEC_HEADINGS = (
     "technische daten",
     "technische details",
@@ -39,17 +38,17 @@ SPEC_HEADINGS = (
     "ausstattung",
 )
 
-#: Zeilen mit diesen Schluesseln sind Navigations- statt Produktdaten.
+
 SPEC_KEY_BLOCKLIST = ("cookie", "newsletter", "datenschutz", "impressum", "versand nach")
 
 MAX_SPECS = 40
 MAX_SPEC_VALUE_LEN = 160
 
-#: Eine Preiszahl mit ihren Trennzeichen. Zwei Formen, in dieser Reihenfolge:
-#: erst die gruppierte (``1.299,00``, ``1,299.00``, ``12 345``), dann die
-#: einfache (``249.99``, ``1299``). Das Komma MUSS in der Gruppe stehen --
-#: ohne es brach die Suche bei ``1,299.00`` nach der ersten Ziffer ab und
-#: lieferte ``1,29``: aus 1299 Dollar wurde ein Euro neunundzwanzig.
+
+
+
+
+
 _PRICE_RE = re.compile(
     r"(\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)"
 )
@@ -121,9 +120,9 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
-# ---------------------------------------------------------------------------
-# 1. JSON-LD
-# ---------------------------------------------------------------------------
+
+
+
 def _iter_jsonld_objects(tree: HTMLParser) -> list[dict[str, Any]]:
     objects: list[dict[str, Any]] = []
     for node in tree.css('script[type="application/ld+json"]'):
@@ -133,7 +132,7 @@ def _iter_jsonld_objects(tree: HTMLParser) -> list[dict[str, Any]]:
         try:
             data = loads(raw)
         except (ValueError, RecursionError):
-            # Manche Seiten haengen mehrere JSON-Objekte hintereinander.
+
             try:
                 data = loads(f"[{raw.strip().rstrip(',')}]")
             except (ValueError, RecursionError):
@@ -227,9 +226,9 @@ def product_from_jsonld(tree: HTMLParser, base_url: str) -> Product | None:
     return None
 
 
-# ---------------------------------------------------------------------------
-# 2. Open Graph
-# ---------------------------------------------------------------------------
+
+
+
 def _meta(tree: HTMLParser, *names: str) -> str | None:
     for name in names:
         for selector in (f'meta[property="{name}"]', f'meta[name="{name}"]'):
@@ -260,9 +259,9 @@ def product_from_opengraph(tree: HTMLParser, base_url: str) -> Product | None:
     )
 
 
-# ---------------------------------------------------------------------------
-# 3. Microdata
-# ---------------------------------------------------------------------------
+
+
+
 def _itemprop(tree: HTMLParser, prop: str) -> str | None:
     node = tree.css_first(f'[itemprop="{prop}"]')
     if node is None:
@@ -293,9 +292,9 @@ def product_from_microdata(tree: HTMLParser, base_url: str) -> Product | None:
     )
 
 
-# ---------------------------------------------------------------------------
-# 4. Spec-Tabellen
-# ---------------------------------------------------------------------------
+
+
+
 def _clean_spec(key: str, value: str) -> tuple[str, str] | None:
     key = key.strip().rstrip(":").strip()
     value = value.strip()
@@ -345,9 +344,9 @@ def has_spec_heading(tree: HTMLParser) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Orchestrierung
-# ---------------------------------------------------------------------------
+
+
+
 def _merge(base: Product, extra: Product | None) -> Product:
     """Fuellt leere Felder von *base* aus *extra* auf."""
     if extra is None:
@@ -376,8 +375,8 @@ def extract_product(html: str, base_url: str) -> Product | None:
     from_micro = product_from_microdata(tree, base_url)
 
     if product is None:
-        # Ohne JSON-LD brauchen wir ein zweites Signal, sonst halten wir jede
-        # beliebige Seite mit og:title faelschlich fuer ein Produkt.
+
+
         candidate = from_micro or from_og
         if candidate is None:
             return None

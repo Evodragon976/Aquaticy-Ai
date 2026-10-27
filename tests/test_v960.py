@@ -16,7 +16,7 @@ PNG = b"\x89PNG\r\n\x1a\n"
 
 @pytest.fixture
 def locked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # Mit Konten ist alles außer dem Logo hinter der Anmeldung.
+
     monkeypatch.setattr(web, "AUTH", AuthStore(tmp_path / "accounts", "PRO123456"))
     monkeypatch.setattr(web, "SESSIONS", web.SessionRegistry())
     monkeypatch.setattr(web, "SESSION", web.SessionProxy())
@@ -56,11 +56,11 @@ def test_ui_uses_the_logo_everywhere() -> None:
     head = html.split("</head>", 1)[0]
     assert 'rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"' in head
     assert 'rel="apple-touch-icon"' in head
-    # Seitenleiste: Logo, darunter der Name, daneben die Version.
+
     assert '<img class="mark" src="/logo.png"' in html
     assert '<span class="name">Aquaticy</span>' in html
     assert "flex-direction:column" in html.split(".brand-logo{", 1)[1].split("}", 1)[0]
-    # Browser-Tab: nur das Logo, kein SVG-Stern mehr.
+
     assert "data:image/svg+xml" not in head
 
 
@@ -72,7 +72,7 @@ def test_side_pages_carry_the_favicon() -> None:
 
 
 def test_version_is_962() -> None:
-    # Seit 9.6.2 -- die Fassung steht in tests/test_v962.py mit.
+
     import aquaticy
 
     assert aquaticy.__version__ == NUMMER
@@ -81,14 +81,14 @@ def test_version_is_962() -> None:
     )
 
 
-# -- Netguard (Funde der Pruefung) ---------------------------------------------------------
+
 def test_site_local_ipv6_is_blocked_and_nat64_follows_the_ipv4() -> None:
     from aquaticy import netguard
 
     assert not netguard.ip_allowed("fec0::1")
-    assert netguard.ip_allowed("64:ff9b::5db8:d822")  # 93.184.216.34
-    assert not netguard.ip_allowed("64:ff9b::7f00:1")  # 127.0.0.1
-    assert not netguard.ip_allowed("64:ff9b::a00:1")  # 10.0.0.1
+    assert netguard.ip_allowed("64:ff9b::5db8:d822")
+    assert not netguard.ip_allowed("64:ff9b::7f00:1")
+    assert not netguard.ip_allowed("64:ff9b::a00:1")
 
 
 def test_an_unusable_proxy_does_not_silently_go_direct(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -192,14 +192,14 @@ def test_headers_trickling_in_hit_the_total_deadline(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(netguard, "_gesamtfrist", lambda client, timeout: 3.0)
     client = netguard.guarded_client(timeout=1.0)
     start = time.monotonic()
-    with pytest.raises(Exception):  # noqa: B017 -- ReadTimeout je nach Ebene
+    with pytest.raises(Exception):  # noqa: B017
         netguard.get(client, f"http://127.0.0.1:{srv.getsockname()[1]}/", max_bytes=1000)
     assert time.monotonic() - start < 8
     client.close()
     srv.close()
 
 
-# -- Ai-guard (Funde der Pruefung) ---------------------------------------------------------
+
 @pytest.mark.parametrize("text", [
     "How do I force push without destroying my colleague's commits?",
     "Kannst du mir helfen, die Präsentation für meinen Chef fertig zu machen?",
@@ -320,7 +320,7 @@ def test_a_shorter_automatic_ban_never_replaces_a_longer_one(tmp_path: Path) -> 
     guard.record_incident("u1", "beleidigung", 2, chat="c1")
     sperre = guard.is_banned(user_id="u1")
     assert sperre is not None and not sperre.until and "Von Hand" in sperre.reason
-    # Von Hand darf man dagegen kuerzen.
+
     guard.ban_user("u1", "kuerzer", "terminal", until=9e12)
     assert guard.is_banned(user_id="u1").until == 9e12
 
@@ -340,7 +340,7 @@ def test_note_and_incident_count_the_same_way(tmp_path: Path) -> None:
     assert erste.kind == "ban" and zweite is True
 
 
-# -- Web: Fehlertexte, HEAD, Modellmenue -----------------------------------------------------
+
 def test_error_texts_never_carry_keys() -> None:
     text = web.scrub_error("AuthenticationError: Bearer sk-abcdefghijklmnopqrstuvwxyz1234 "
                            "?api_key=geheim123456 for nvapi-ABCDEFGHIJKLMNOPQRSTUVWX",
@@ -378,7 +378,7 @@ def test_settings_answer_without_a_server_path() -> None:
     assert '"path": str(written)' not in quelle
 
 
-# -- 9.6.0: Oberflaeche ---------------------------------------------------------------------
+
 def _ui() -> str:
     return web.UI_FILE.read_text(encoding="utf-8")
 
@@ -406,8 +406,8 @@ def test_settings_save_themselves_with_a_small_note() -> None:
 def test_internal_versions_show_a_yellow_note() -> None:
     import aquaticy
 
-    # 9.6.2 ist eine oeffentliche Fassung: kein Zusatz, kein gelber Hinweis --
-    # der Mechanismus bleibt fuer die naechste interne Fassung.
+
+
     assert aquaticy.__stage__ == "" and not aquaticy.INTERNAL
     assert aquaticy.VERSION_LABEL == LABEL
     html = _ui()
@@ -447,7 +447,7 @@ def test_the_agent_marks_text_before_a_tool_call_as_interim() -> None:
     from aquaticy.agent import Agent
 
     quelle = inspect.getsource(Agent._completion)
-    # Gestreamt und nicht gestreamt: Text vor einem Werkzeugaufruf ist eine
-    # Zwischennachricht, keine Antwort. Seit 11.2.2 Terra dazu: ein als Text
-    # gestreamter Werkzeugaufruf (qwen2.5-coder & Co.) wird ebenso zurueckgenommen.
+
+
+
     assert quelle.count('self._emit("interim"') == 3

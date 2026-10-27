@@ -110,7 +110,7 @@ class ParallelOllama:
 
 @pytest.fixture
 def ten_users(tmp_path, monkeypatch):
-    # Vor dem Thread-Start importieren; der echte LiteLLM-Aufruf bleibt bestehen.
+
     import litellm  # noqa: F401
 
     backend = ParallelOllama()
@@ -183,13 +183,13 @@ def test_ten_accounts_stream_at_once_with_isolated_history_and_usage(ten_users, 
             assert all(state["running"] for state in states), states
             assert len({state["id"] for state in states}) == 10
             assert len({state["chat"] for state in states}) == 10
-            # Kenntnis einer fremden Kennung oeffnet weder Lauf noch Chat.
+
             assert site.request(0, "GET", f"/api/run?id={states[1]['id']}")[0] == 404
             assert site.request(0, "GET", "/api/runstate",
                                 **{"X-Aquaticy-Chat": states[1]["chat"]})[0] == 400
             assert site.request(None, "GET", "/api/runstate")[0] == 401
             assert site.request(0, "POST", "/api/stop", {}, Origin="https://evil.example")[0] == 403
-            # Ein Konto darf seinen eigenen Lauf stoppen, ohne die anderen zu beenden.
+
             if cancel_first:
                 assert json.loads(site.request(0, "POST", "/api/stop", {})[1])["ok"]
             assert all(not future.done() for future in futures[1:])
@@ -222,7 +222,7 @@ def test_ten_accounts_stream_at_once_with_isolated_history_and_usage(ten_users, 
     assert all(len(set(re.findall(r"NUTZER_\d{2}", json.dumps(request["messages"])))) == 1
                for request in site.backend.requests)
     assert len({web.SESSIONS.get(a).settings().db_path for a in site.accounts}) == 10
-    # Das ausgeschöpfte Kontingent eines Kontos sperrt nur dieses Konto.
+
     quota = site.store.quota(site.accounts[0])
     quota.record(quota.session_tokens, "Test")
     assert site.request(0, "POST", "/api/chat", {"message": "Noch eine Frage"})[0] == 429
@@ -319,7 +319,7 @@ def test_queue_limit_is_per_chat_and_rejects_before_spawning_work(ten_users):
     assert status == 429 and json.loads(body)["code"] == "busy", body
     assert not site.backend.requests
     assert not site.store.quota(site.accounts[0]).status()["session"]["active"]
-    # Das volle Buch eines Kontos blockiert kein anderes Konto.
+
     site.backend.release["NUTZER_01"].set()
     status, body = site.request(1, "POST", "/api/chat", {
         "message": "Erkläre Photosynthese. Kennung NUTZER_01.", "online": False})

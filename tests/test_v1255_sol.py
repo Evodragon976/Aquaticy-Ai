@@ -31,7 +31,7 @@ LICHT = {"domain": "light", "service": "turn_on", "entity_id": "light.kueche"}
     {**LICHT, "service": "turn_off"},
     {**LICHT, "service": "toggle"},
     {**LICHT, "entity_id": "light.kueche,light.flur"},
-    # Leerraum am Rand schneidet ha_call vor dem Ausfuehren ab: geprueft = ausgefuehrt.
+
     {**LICHT, "entity_id": " light.kueche\n"},
     {**LICHT, "data": {"brightness_pct": 40}},
     {**LICHT, "data": {"brightness": 200, "color_temp_kelvin": 2700, "transition": 2}},
@@ -82,7 +82,7 @@ def test_everything_else_is_not_allowed_without_asking(arguments: dict[str, Any]
     assert not direct_allowed(arguments)
 
 
-# -- Chat: das Lesen löst keine Rückfrage mehr aus --------------------------------------
+
 def _kasten(settings: Settings, monkeypatch: pytest.MonkeyPatch, *, direct: bool,
             antwort: str = "ja") -> tuple[Toolbox, list[str], list[tuple]]:
     configured(settings)
@@ -180,7 +180,7 @@ def test_protected_areas_ask_even_with_the_switch(
         "ha_call", {"domain": domain, "service": service, "entity_id": entity})["error"]
 
 
-# -- Coworker -----------------------------------------------------------------------------
+
 def _coworker(settings: Settings, regel: str = "fragen", *, plan: str = "ultra"):
     configured(settings)
     store = cw.CoworkerStore(settings.db_path)
@@ -237,7 +237,7 @@ def test_a_coworker_needs_ultra_and_the_same_connection(settings: Settings) -> N
     _, _, session = _coworker(settings, "fragen")
     box = Toolbox(settings)
     assert session.ha_direct(box, LICHT)
-    # Der Werkzeugkasten stammt vom Start; die Einstellungen sind inzwischen andere.
+
     session.current_settings = lambda: dataclasses.replace(
         settings, ha_token="ein-ganz-anderer-token-123456")
     assert not session.ha_direct(box, LICHT), "neuer Token: die alte Verbindung gilt nicht"
@@ -246,7 +246,7 @@ def test_a_coworker_needs_ultra_and_the_same_connection(settings: Settings) -> N
     box.close()
 
 
-# -- Einstellung, Konto, Modell ----------------------------------------------------------
+
 def test_the_model_cannot_turn_the_switch_on() -> None:
     assert "AQUATICY_HA_DIRECT" in preferences.PROTECTED
     assert preferences.find("AQUATICY_HA_DIRECT") is None

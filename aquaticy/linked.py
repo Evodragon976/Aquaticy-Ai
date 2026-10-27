@@ -46,7 +46,6 @@ import httpx
 
 from aquaticy.jsonutil import loads
 
-#: Die Anbieter: Name im Schluesselbund, Praefix fuer LiteLLM, wo es den Schluessel gibt.
 PROVIDERS: dict[str, dict[str, str]] = {
     "mistral": {"label": "Mistral", "company": "Mistral AI", "key": "MISTRAL_API_KEY",
                 "prefix": "mistral/", "get_key": "https://console.mistral.ai/api-keys",
@@ -57,9 +56,9 @@ PROVIDERS: dict[str, dict[str, str]] = {
 }
 KEY_NAMES = frozenset(p["key"] for p in PROVIDERS.values())
 
-#: Wie man sich auf der Seite des Anbieters anmelden kann, um den Schluessel zu
-#: holen (9.6.2). Nur, was der Anbieter selbst anbietet -- Aquaticy meldet
-#: niemanden an, es oeffnet nur die richtige Seite.
+
+
+
 SIGN_IN: dict[str, tuple[str, ...]] = {
     "mistral": ("google", "apple", "microsoft", "email"),
     "nvidia_nim": ("google", "email"),
@@ -67,7 +66,7 @@ SIGN_IN: dict[str, tuple[str, ...]] = {
 SIGN_IN_LABELS = {"google": "Mit Google", "apple": "Mit Apple", "microsoft": "Mit Microsoft",
                   "email": "Mit E-Mail"}
 
-#: Ein Mistral-Schluessel: 32 Buchstaben und Ziffern, ohne Vorsilbe.
+
 _MISTRAL_FORM = re.compile(r"[A-Za-z0-9]{32}")
 
 
@@ -83,9 +82,9 @@ def detect_provider(key: str) -> str:
 
 STATE_FILE = "linked.json"
 TIMEOUT = 15.0
-#: Hoechstens so viele Modelle je Anbieter in der Auswahl.
+
 MAX_MODELS = 12
-#: Runden im Council, bevor der Richter in jedem Fall entscheidet.
+
 COUNCIL_ROUNDS = 3
 
 MISTRAL_API = "https://api.mistral.ai/v1"
@@ -98,7 +97,7 @@ class LinkError(RuntimeError):
     """Der Anbieter hat abgelehnt oder war nicht erreichbar."""
 
 
-# -- Auslesen ----------------------------------------------------------------
+
 def _http(client: httpx.Client | None) -> httpx.Client:
     return client or httpx.Client(timeout=TIMEOUT, follow_redirects=False)
 
@@ -118,7 +117,7 @@ def _int(wert: Any) -> int | None:
         return None
 
 
-#: Wie Anbieter ihre Token-Grenzen mitschicken: (Grenze, Rest, Zeitraum).
+
 _TOKEN_HEADERS: tuple[tuple[str, str, str], ...] = (
     ("x-ratelimit-limit-tokens-minute", "x-ratelimit-remaining-tokens-minute", "Minute"),
     ("ratelimitbysize-limit", "ratelimitbysize-remaining", "Minute"),
@@ -201,23 +200,23 @@ def _inspect_mistral(http: httpx.Client, key: str) -> dict[str, Any]:
     return info
 
 
-#: Chat-Modelle im Katalog von NVIDIA erkennt man am Namen -- Bild-, Sprach-,
-#: Such- und Pruefmodelle bleiben draussen.
+
+
 _NVIDIA_CHAT = re.compile(r"instruct|chat|nemotron|deepseek|qwen|kimi|glm|gpt-oss|mixtral",
                           re.IGNORECASE)
 _NVIDIA_SKIP = re.compile(
     r"embed|rerank|retriev|guard|safety|reward|clip|vila|neva|vision|-vl|vl-|parakeet|"
     r"whisper|flux|diffusion|ocr|deplot|kosmos|fuyu|detect|pii|riva|audio|tts|asr|"
     r"translate|cosmos|-base\b", re.IGNORECASE)
-#: Diese zuerst: das Arbeitspferd, das schnelle, das fuers Programmieren. Seit 12.2.2
-#: Astra Nemotron -- Llama 3.3 70B und 3.1 8B hat NVIDIA am 26.08.2026 abgeschaltet.
+
+
 _NVIDIA_FIRST = ("nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia/nvidia-nemotron-nano-9b-v2",
                  "qwen/qwen3-coder-480b-a35b-instruct")
 
 
 def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
-    # Die Modellliste bei NVIDIA ist oeffentlich -- ob der Schluessel stimmt,
-    # zeigt erst eine Antwort.
+
+
     probe = _probe(http, f"{NVIDIA_API}/chat/completions", key, _NVIDIA_FIRST[1])
     if probe.status_code in (401, 403):
         raise _fehler(probe, "NVIDIA NIM")
@@ -226,7 +225,7 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
         info["warning"] = "Grenze erreicht. In einer Minute geht es weiter."
     elif probe.status_code >= 500:
         raise _fehler(probe, "NVIDIA NIM")
-    # Ein anderes 4xx sagt nur etwas ueber das Probemodell, nicht ueber den Schluessel.
+
     ids: list[str] = []
     antwort = http.get(f"{NVIDIA_API}/models", headers={"Authorization": f"Bearer {key}"})
     if antwort.status_code == 200:
@@ -234,7 +233,7 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
     ids = [i for i in dict.fromkeys(ids) if i and _NVIDIA_CHAT.search(i)
            and not _NVIDIA_SKIP.search(i)]
     vorne = [i for i in _NVIDIA_FIRST if i in ids or not ids]
-    # Nemotron vor dem Rest (12.2.2 Astra), dann alphabetisch.
+
     rest = sorted((i for i in ids if i not in vorne), key=lambda i: ("nemotron" not in i, i))
     info["models"] = [{"id": "nvidia_nim/" + i, "label": i.split("/", 1)[-1]}
                       for i in (vorne + rest)[:MAX_MODELS]]
@@ -244,7 +243,7 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
     return info
 
 
-# -- Gespeicherter Stand (kein Geheimnis: nur Modelle und Grenzen) -----------
+
 def _path(data_dir: Path | str) -> Path:
     return Path(data_dir) / STATE_FILE
 
@@ -333,7 +332,7 @@ def best_model(settings: Any, provider: str) -> str:
     return modelle[0] if modelle else ""
 
 
-# -- AI Council ---------------------------------------------------------------
+
 def council_roles(settings: Any) -> tuple[list[tuple[str, str]], tuple[str, str] | None]:
     """(Bearbeiter, Pruefer) als (Anbieter, Modell). Der letzte verknuepfte prueft."""
     dabei = [(p, best_model(settings, p)) for p in linked_providers(settings)]

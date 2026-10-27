@@ -155,9 +155,9 @@ def test_empty_query_short_circuits() -> None:
     assert search_web("   ") == []
 
 
-# ---------------------------------------------------------------------------
-# Offene Backends ohne Schluessel
-# ---------------------------------------------------------------------------
+
+
+
 def test_keyless_backends_need_no_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die schluessellosen Backends duerfen ohne jede Umgebungsvariable laufen."""
     for name in ("BRAVE_API_KEY", "TAVILY_API_KEY"):
@@ -230,9 +230,9 @@ def test_engine_failure_message_points_to_the_alternatives(
     assert "searxng" in message
 
 
-# ---------------------------------------------------------------------------
-# SearXNG
-# ---------------------------------------------------------------------------
+
+
+
 def test_searxng_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_get(url, **kwargs):
         assert url == "http://localhost:8080/search"
@@ -307,9 +307,9 @@ def test_unknown_backend_lists_the_keyless_ones() -> None:
     assert "searxng" in str(excinfo.value)
 
 
-# ---------------------------------------------------------------------------
-# Auffaecherung: mehrere Anfragen auf einmal
-# ---------------------------------------------------------------------------
+
+
+
 def test_a_single_query_needs_no_machinery() -> None:
     """Eine Anfrage laeuft direkt durch -- kein Thread, kein Versatz."""
     calls: list[tuple[str, int]] = []

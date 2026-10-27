@@ -40,9 +40,9 @@ sys.path.insert(0, str(REPO))
 CHROMIUM = "/opt/pw-browsers/chromium"
 
 
-# ---------------------------------------------------------------------------
-# Der gestellte Agent
-# ---------------------------------------------------------------------------
+
+
+
 class FakeAgent:
     """Verhaelt sich wie der echte Agent -- ohne Modell, ohne Netz.
 
@@ -58,13 +58,13 @@ class FakeAgent:
         self.ask_handler: Any = None
         self.gesehen: list[dict[str, Any]] = []
         self.abgebrochen = False
-        #: Liegt das gestellte Modell schon im Speicher? Beim ersten Satz nicht.
+
         self.modell_geladen = False
         self.stats = self
-        #: Ein gespeichertes Bildschirmfoto fuer den User mode (setzt der Rundgang).
+
         self.bildschirm = ""
 
-    # -- was der Server vom Agenten erwartet -------------------------------
+
     def set_ask_handler(self, handler: Any) -> None:
         self.ask_handler = handler
 
@@ -104,16 +104,16 @@ class FakeAgent:
         )
         text = message.lower()
 
-        # Beim allerersten Satz liegt das oertliche Modell noch auf der
-        # Platte. Genau wie beim echten Agenten wird das einmal gesagt --
-        # und danach nie wieder, weil es dann im Speicher liegt.
+
+
+
         if not self.modell_geladen:
             self.modell_geladen = True
             self.on_event("model_loading", {"model": "ollama_chat/gemma3:12b"})
             self.on_event("model_ready", {"model": "ollama_chat/gemma3:12b", "seconds": 8.4})
 
-        # Wie beim echten Agenten: was der Rechtsrahmen ablehnt, loest keine
-        # einzige Suche aus -- die Absage kommt vor allem anderen.
+
+
         if "rechtsrahmen-probe" in text:
             self.on_event(
                 "guard",
@@ -124,9 +124,9 @@ class FakeAgent:
             self.on_event("answer_chunk", {"text": absage})
             self.on_event("done", {"tool_calls": 0, "hit_limit": False})
             return type("R", (), {"answer": absage, "stopped": False})()
-        # Der User mode: eine virtual machine als Desktop mit Internet. Die Attrappe
-        # meldet, was die echte meldet -- Sperre, Desktop, Handgriffe, eine
-        # Ablehnung -- und legt das Bildschirmfoto in den Chat.
+
+
+
         if "usermode-probe" in text:
             self.on_event("vm_start", {"runtime": "Docker (gehaertet)", "user_mode": True})
             self.on_event("vm_net", {"locked": True, "ranges": 6})
@@ -144,7 +144,7 @@ class FakeAgent:
                  "title": "Bildschirm der virtual machine"}]})
             return type("R", (), {"answer": antwort, "stopped": False})()
         if "altbild-probe" in text:
-            # Historische Medien bleiben lesbar; es wird kein Bild erzeugt.
+
             self.on_event("model_auto", {"model": "mistral/mistral-large-latest",
                                          "kategorie": "recherche", "grund": "Recherche und Fragen"})
             antwort = "Dieses gespeicherte Bild stammt aus einem früheren Chat."
@@ -154,8 +154,8 @@ class FakeAgent:
                  "title": "KI-Bild (Altbestand)", "caption": "a lighthouse"}]})
             return type("R", (), {"answer": antwort, "stopped": False})()
         if "zwischen-probe" in text:
-            # Die neue Laufanzeige (9.6.0): Denken, Zwischennachricht, Websuche,
-            # wieder Denken -- und die Zwischennachricht verschwindet mit der Antwort.
+
+
             self.on_event("thought", {"text": "Der Nutzer will Nachrichten."})
             zwischen = "Ich suche jetzt nach den neuesten Nachrichten."
             self.on_event("answer_chunk", {"text": zwischen})
@@ -176,14 +176,14 @@ class FakeAgent:
             self.on_event("vm_write", {"path": "/work/loesung.py"})
             self.on_event("vm_run", {"command": "python loesung.py"})
             self.on_event("vm_done", {"exit_code": 0, "seconds": 0.4})
-        # Denkschritte kommen tokenweise -- genau wie beim echten Modell,
-        # damit der Rundgang auch das Zusammenwachsen in einer Zeile sieht.
+
+
         for stueck in ("Erst ", "die Frage ", "sortieren."):
             self.on_event("thought", {"text": stueck})
-        # Eine Mitlese-Zeile, die keine Denkzeile ist -- damit der Rundgang
-        # die beiden auseinanderhalten kann.
+
+
         self.on_event("action", {"tool": "web_search", "arguments": {"query": "x"}})
-        # Der Master: er stellt die Einheit auf, bewertet und schickt nach.
+
         if structured and mode == "pro":
             self.on_event(
                 "master_plan",
@@ -204,8 +204,8 @@ class FakeAgent:
                 },
             )
             self.on_event("subagent_done", {"task": "Teil eins"})
-        # Die vier Pruefer: im Pro-Modus, sobald gegengeprueft werden soll
-        # oder die Denktiefe auf hoch steht.
+
+
         if structured and mode == "pro" and (recheck or effort == "high"):
             self.on_event("checkers", {"count": 4})
             self.on_event("check", {"task": "Was kostet Teil eins?"})
@@ -213,7 +213,7 @@ class FakeAgent:
                 "check_done", {"task": "Was kostet Teil eins?", "verdict": "ABWEICHUNG"}
             )
             self.on_event("checks_done", {"checked": 2, "deviations": 1})
-        # Die Karte -- fuer das, was keine Suchmaschine kennt.
+
         if structured and mode == "pro":
             self.on_event("places", {"what": "Fahrradladen", "where": "Bremen"})
             self.on_event("places_done", {"what": "Fahrradladen", "hits": 3})
@@ -236,7 +236,7 @@ class FakeAgent:
             )
             self.on_event("master_review", {"verdict": "gut", "missing": [], "round": 2})
         if "reihe" in text:
-            # 12.1.1 Luna: mehrere Fragen hintereinander, das Fenster zaehlt 1/3 ... 3/3.
+
             reihe = [("Wo wohnst du?", ["Bremen", "Hamburg"]),
                      ("Was interessiert dich?", ["Sport", "Politik"]),
                      ("Wie viel Zeit hast du?", [])]
@@ -249,8 +249,8 @@ class FakeAgent:
         elif "frag" in text:
             self.on_event("ask", {"question": "Welches Budget?", "options": ["bis 800 €"]})
             self.ask_handler("Welches Budget?", ["bis 800 €"])
-        # Der Fall, in dem Aquaticy merkt, dass seine Antwort nur eine Frage
-        # war: das Angefangene wird verworfen und neu angesetzt.
+
+
         if "neuansatz" in text:
             self.on_event("answer_chunk", {"text": "Fuer welchen Ort soll ich nachsehen?"})
             self.on_event("answer_reset", {"reason": "rueckfrage"})
@@ -261,10 +261,10 @@ class FakeAgent:
                     break
         self.on_event("search", {"query": "beispiel"})
         self.on_event("fetch", {"url": "https://example.org/a"})
-        # Die zweite Runde gibt es im Pro-Modus nicht: dort haben die vier
-        # Pruefer schon nebenher gegengelesen. Der echte Agent haelt es
-        # genauso (`recheck_on`) -- der gestellte muss es auch, sonst prueft
-        # der Rundgang eine Lage, die es nie gibt.
+
+
+
+
         if recheck and mode != "pro":
             self.on_event("recheck", {"sources": 2})
             self.on_event("recheck_done", {"changed": True})
@@ -274,9 +274,9 @@ class FakeAgent:
         return type("R", (), {"answer": antwort, "stopped": self.abgebrochen})()
 
 
-# ---------------------------------------------------------------------------
-# Protokoll
-# ---------------------------------------------------------------------------
+
+
+
 class Protokoll:
     """Sammelt Befunde und schreibt sie mit, waehrend der Rundgang laeuft."""
 
@@ -307,23 +307,23 @@ def starte_server(agent: FakeAgent) -> int:
     os.environ.setdefault("AQUATICY_MODEL", "mistral/mistral-large-latest")
     from aquaticy import linked, web
 
-    # Das Add-on Mistral fragt beim Verknuepfen den Anbieter -- im Rundgang ohne Netz.
+
     def _gestellter_anbieter(provider: str, key: str, client: Any = None) -> dict[str, Any]:
         return {"models": [{"id": "mistral/mistral-small-latest", "label": "Mistral Small"}],
                 "tier": "", "tokens": None}
 
     linked.inspect = _gestellter_anbieter                # type: ignore[assignment]
 
-    # Am Bauplan, nicht am einzelnen Objekt: seit der Mehrbenutzer-Version
-    # bekommt jedes Konto seine eigene Sitzung, und die baut sich ihren Agenten
-    # selbst. Wer nur die Standardsitzung umbiegt, sieht den gestellten Agenten
-    # nie wieder -- die Oberflaeche telefoniert dann wirklich nach draussen.
+
+
+
+
     vergeben = False
 
     def _gestellter_agent(self: Any) -> FakeAgent:
         nonlocal vergeben
-        # `_agent` mitsetzen wie das Original: der Abbruch greift bewusst
-        # ohne Sperre auf dieses Feld zu und wuerde sonst ins Leere laufen.
+
+
         if self._agent is None:
             if not vergeben:
                 self._agent = agent
@@ -340,7 +340,7 @@ def starte_server(agent: FakeAgent) -> int:
 
                 self._agent.cancel = cancel
             if self._carry_over:
-                # Wie ChatSession.agent: ein Modellwechsel behaelt Chat und Vertrauensgrenze.
+
                 self._agent.resume(self._carry_over, [])
                 self._agent.untrusted_seen = self._carry_untrusted
                 self._carry_over, self._carry_untrusted = "", False
@@ -353,8 +353,8 @@ def starte_server(agent: FakeAgent) -> int:
     threading.Thread(
         target=lambda: web.serve(port=port, open_browser=False), daemon=True
     ).start()
-    # Warten, bis der Server wirklich antwortet -- eine feste Pause ist
-    # entweder zu kurz (dann schlaegt der Rundgang grundlos fehl) oder zu lang.
+
+
     for _ in range(100):
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.2):
@@ -404,7 +404,7 @@ def anmelden(pg: Any, port: int) -> None:
     pg.fill("#auth-pro-code", ultra_code_for(get_settings().data_dir))
     pg.check("#auth-terms")
     pg.click("#auth-submit")
-    # Nach dem Anlegen laedt die Seite selbst neu; dann ist die Tuer zu.
+
     pg.wait_for_selector("#auth-gate", state="hidden", timeout=15_000)
 
 
@@ -461,7 +461,7 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.click("#btn-settings")
     pg.wait_for_selector("#overlay.open", state="visible")
     pg.wait_for_timeout(700)
-    # 9.5.14: Sitzung und Woche als Balken in Prozent -- keine Tokenzahlen.
+
     pg.click('#secnav button:has-text("Nutzung")')
     pg.wait_for_timeout(700)
     grenzen = pg.inner_text("#limits")
@@ -475,15 +475,15 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
                f"im Konto steht Prozent: {pg.inner_text('#account-tokens')!r}")
     log.pruefe(not pg.inner_text("#zaehler").strip(),
                "Tokenzahlen sieht ein normales Konto nicht")
-    # 9.5.21: Die Auslastung des Rechners gehoert zu Ultra -- Normal (und Pro)
-    # sehen den Abschnitt gar nicht, und der Server gibt die Zahlen nicht heraus.
+
+
     log.pruefe(pg.is_hidden("#pro-system"), "die Auslastung ist für Normal nicht zu sehen")
-    # 9.5.24: Das rote „Info“ gibt es nur bei einer Sperre.
+
     log.pruefe(pg.is_hidden("#ban-info"), "ohne Sperre steht unter der Version kein „Info“")
     pg.evaluate("zeigeSperre({banned: true, reason: 'Test', duration: 'noch 2 Tag(e)', "
                 "until: '01.01.2030', permanent: false, what_to_do: 'Warten.'})")
     log.pruefe(pg.is_visible("#ban-info"), "bei einer Sperre erscheint das rote „Info“")
-    # Die Einstellungen liegen hier noch darueber -- also direkt auf den Knopf.
+
     pg.evaluate("document.querySelector('#ban-info').click()")
     pg.wait_for_selector("#banbox.open", state="visible")
     log.pruefe("noch 2 Tag" in pg.inner_text("#ban-duration")
@@ -494,7 +494,7 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.evaluate("zeigeSperre({banned: false})")
     status = pg.evaluate("async () => (await fetch('/api/system')).status")
     log.pruefe(status == 403, f"und am Fenster vorbei gibt der Server sie nicht her ({status})")
-    # 9.5.17: "Eigene Modelle" -- erst da, wenn man oben selbst etwas eintraegt.
+
     log.pruefe(pg.is_hidden("#sec-schluessel"),
                "Eigene Modelle ist nicht da, solange nichts Eigenes eingetragen ist")
     log.pruefe(pg.locator('#secnav button[data-section="sec-schluessel"]').count() == 0,
@@ -506,7 +506,7 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.wait_for_selector("#modelbox.open", state="visible")
     log.pruefe(pg.eval_on_selector('[name="AQUATICY_API_BASE"]', "e => e.readOnly"),
                "die Modelladresse ist auch im Chat für Normal schreibgeschützt")
-    # Seit 12.0.0 Luna: Schluessel gibt es nur noch ueber die Add-ons NVIDIA NIM und Mistral.
+
     log.pruefe(pg.locator("#keys").count() == 0 and pg.locator("#linked-quick-key").count() == 0,
                "kein Schlüsselfeld in den Einstellungen und kein Sammelfeld")
     pg.click("#btn-addons-modell")
@@ -573,14 +573,14 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.click("#guard-ok")
     pg.wait_for_selector("#guardbox", state="hidden")
     log.pruefe(pg.is_checked("#legalguard"), "und die Leitplanken bleiben an")
-    # Seit 9.6.0 ohne Speichern-Knopf: Enter in einem Feld speichert (oben "Gespeichert").
+
     pg.evaluate("() => document.querySelector('#settings').requestSubmit()")
     pg.wait_for_timeout(1200)
     log.pruefe(
         "Gespeichert" in pg.inner_text("#saved-pill"),
         f"Speichern klappt trotzdem: {pg.inner_text('#saved-pill')[:50]!r}",
     )
-    # Das Fenster bleibt seit 9.6.0 nach dem Speichern offen -- zu geht es mit "Zurück".
+
     pg.click("#cancel")
     pg.wait_for_selector("#overlay", state="hidden")
     antwort = pg.evaluate(
@@ -600,7 +600,7 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
         werte.get("AQUATICY_LEGAL_GUARD") == "true",
         "und danach steht der Schalter weiter auf an",
     )
-    # 9.5.9: der User mode gehoert zu Pro -- gleiche Art wie die Leitplanken.
+
     pg.click("#btn-settings")
     pg.wait_for_selector("#overlay.open", state="visible")
     pg.wait_for_timeout(700)
@@ -615,7 +615,7 @@ def normales_konto(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.click("#guard-ok")
     pg.wait_for_selector("#guardbox", state="hidden")
     log.pruefe(not pg.is_checked("#usermode"), "und der User mode bleibt aus")
-    # 9.5.11: wohin der Server Anfragen schickt, legt bei normalen Konten der Betreiber fest.
+
     log.pruefe(pg.eval_on_selector('[name="AQUATICY_API_BASE"]', "e => e.readOnly")
                and pg.eval_on_selector('[name="AQUATICY_SEARXNG_URL"]', "e => e.readOnly"),
                "Modell- und SearXNG-Adresse sind schreibgeschuetzt")
@@ -695,7 +695,7 @@ def konto_loeschen(browser: Any, port: int, log: Protokoll, fehler: list[str]) -
     pg.wait_for_selector("#auth-gate", state="hidden", timeout=15_000)
     pg.wait_for_load_state("networkidle")
     pg.wait_for_timeout(800)
-    # Nach dem Anlegen laedt die Seite neu -- erst danach ist der Knopf bereit.
+
     pg.click("#btn-settings")
     pg.wait_for_selector("#overlay.open", state="visible", timeout=8_000)
     ende = time.time() + 8
@@ -779,7 +779,7 @@ def anmeldeschutz(browser: Any, port: int, log: Protokoll, fehler: list[str]) ->
     def ist_login(antwort: Any) -> bool:
         return "/api/auth/login" in antwort.url
 
-    # Wie ein Mensch im Browser: normaler User-Agent, nicht ferngesteuert.
+
     kontext = browser.new_context(viewport={"width": 1200, "height": 860},
                                   user_agent=agent.replace("HeadlessChrome", "Chrome"))
     kontext.add_init_script(
@@ -793,7 +793,7 @@ def anmeldeschutz(browser: Any, port: int, log: Protokoll, fehler: list[str]) ->
     pg.wait_for_selector("#auth-gate", state="hidden", timeout=15_000)
     kontext.close()
 
-    # Ferngesteuert: erst "Bestaetige kurz, dass du ein Mensch bist".
+
     kontext = browser.new_context(viewport={"width": 1200, "height": 860})
     pg = anmeldeseite(kontext, "ferngesteuert")
     anmelden_als(pg)
@@ -828,8 +828,8 @@ def zweite_seite(browser: Any, quelle: Any, **optionen: Any) -> Any:
     """
     kontext = browser.new_context(**optionen)
     kontext.add_cookies(quelle.context.cookies())
-    # Wer fertig ist, schliesst den ganzen Kontext, nicht nur die Seite (11.4.0 Luna):
-    # offen gebliebene Kontexte hielten Verbindungen und Speicher bis zum Schluss.
+
+
     return kontext.new_page()
 
 
@@ -858,15 +858,15 @@ def lege_chats_an() -> None:
     cache = Cache(settings.db_path, settings.cache_ttl_hours)
     cache.add_history("alt-1", "Welcher Laptop bis 1200 Euro?", "Antwort", {})
     cache.add_history("rundgang", "Was kostet ein Lastenrad?", "Antwort", {})
-    # Ein Chat, in dem ein Auftrag nachts geantwortet hat: der soll leuchten,
-    # bis ihn jemand oeffnet.
+
+
     cache.add_history("auftrag-nacht", "Was gibt es Neues?", "Einiges.", {})
     cache.mark_unread("auftrag-nacht", reason="auftrag")
 
 
-# ---------------------------------------------------------------------------
-# Die Abschnitte des Rundgangs
-# ---------------------------------------------------------------------------
+
+
+
 def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
              nur: set[str]) -> None:
     def dran(name: str) -> bool:
@@ -908,7 +908,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(pg.locator(".msg.user").count() == 1, "die Frage steht dabei")
         schritte = schritte_lesen(pg)
         log.pruefe("[Suche]" in schritte, f"Zwischenschritte sichtbar: {schritte[:40]!r}")
-        # Der erste Satz an ein Modell, das erst in den Speicher muss.
+
         log.pruefe("[Modell]" in schritte, "der Ladehinweis steht beim ersten Satz da")
         log.pruefe("ist bereit (8.4s)" in schritte, "und wird danach zu einer Fertigmeldung")
         log.pruefe(
@@ -1007,10 +1007,10 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         )
         log.pruefe(hoehen[2] <= hoehen[3] + 1,
                    f"das Fenster endet im Bild ({hoehen[2]} von {hoehen[3]})")
-        # Der Fuss ist die letzte Zeile -- kommt man dort hin, kommt man
-        # ueberall hin. Frueher scrollte nur die Modellliste, und alles
-        # darunter war unerreichbar.
-        # Der Fuss des Menues selbst -- nicht der Hinweis in einer leeren Liste.
+
+
+
+
         pg.locator("#picker-models > .picker-foot").scroll_into_view_if_needed()
         pg.wait_for_timeout(300)
         kasten = pg.locator("#picker-models > .picker-foot").bounding_box()
@@ -1020,7 +1020,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                    "Aufwand und Weitere Einstellungen sind erreichbar")
         log.pruefe(pg.locator("#btn-imagemode").count() == 0,
                    "keine Bilderstellung im Modellmenü")
-        # Seit 9.5.34: die Modellauswahl sitzt unten, links neben dem Senden-Knopf.
+
         modell = pg.locator("#btn-model").bounding_box()
         senden = pg.locator("#send").bounding_box()
         log.pruefe(modell is not None and senden is not None
@@ -1035,14 +1035,14 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(menue_box is not None and eingabe is not None
                    and menue_box["y"] + menue_box["height"] <= eingabe["y"] + 1,
                    "das Menü öffnet sich nach oben, über der Eingabe")
-        # Die Ueberschrift steht in Grossbuchstaben -- das macht das CSS.
+
         log.pruefe(pg.inner_text("#picker-head").lower().startswith("modell"),
                    "im Standardmodus stehen alle Modelle zur Wahl")
         foto("04a-modellmenue")
         pg.keyboard.press("Escape")
         pg.wait_for_timeout(400)
 
-        # Aufwand: ein kleines Fenster mit Denktiefe und Zahl der Agenten.
+
         menue(pg, "aufwand")
         log.pruefe(pg.is_visible("#win-aufwand") and not pg.is_visible("#picker-models"),
                    "Aufwand öffnet ein eigenes kleines Fenster")
@@ -1052,7 +1052,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.click("#win-aufwand [data-minwin-close]")
         pg.wait_for_timeout(300)
         log.pruefe(not pg.is_visible("#win-aufwand"), "das Kreuz schließt es")
-        # Weitere Einstellungen: darunter die Schalter (virtual machine, Suche ...).
+
         menue(pg, "weitere")
         log.pruefe(pg.is_visible("#online") and pg.is_visible("#structure"),
                    "Weitere Einstellungen zeigt die Schalter")
@@ -1061,7 +1061,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_timeout(300)
         log.pruefe(not pg.is_visible("#win-weitere"), "ein Klick daneben schließt es")
 
-        # Modellverbindungen sind nur ueber die Modellauswahl im Chat erreichbar.
+
         menue(pg)
         pg.click("#picker-settings")
         pg.wait_for_selector("#modelbox.open", state="visible")
@@ -1135,8 +1135,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.keyboard.press("Escape")
         pg.wait_for_timeout(300)
 
-        # Im Code-Modus ist "am staerksten" ein anderes Modell: eines fuers
-        # Programmieren. Das soll auch dranstehen.
+
+
         pg.click('#modes .mode[data-mode="code"]')
         pg.wait_for_timeout(700)
         menue(pg)
@@ -1234,8 +1234,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             pg.eval_on_selector("body", "e => e.classList.contains('pro-mode')"),
             "Pro-Modus schaltet um",
         )
-        # Optisch derselbe Knopf: gleiche Hoehe, gleiche Schrift wie die
-        # anderen beiden. Nur die Leistung dahinter ist eine andere.
+
+
         masse = pg.eval_on_selector_all(
             "#modes .mode",
             "els => els.map(e => [Math.round(e.getBoundingClientRect().height),"
@@ -1249,7 +1249,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(pg.is_checked("#structure"),
                    "Strukturieren geht beim Wechsel an -- ohne das keine Agenten")
         log.pruefe(pg.is_visible("#recheck"), "Gegenprüfen gibt es auch hier")
-        # Derselbe Schalter, andere Bedeutung -- und genau das steht dran.
+
         erklaerung = pg.inner_text('label[for="recheck"]')
         log.pruefe("Vier Prüfer" in erklaerung,
                    f"und es steht dran, was er hier heißt ({erklaerung[:60]!r})")
@@ -1280,7 +1280,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe("[Nachrunde]" in schritte, "und schickt nach")
         log.pruefe("die Rückmeldungen tragen" in schritte, "am Ende trägt es")
 
-        # Und jetzt die vier Pruefer: Schalter an, noch einmal fragen.
+
         menue(pg, "weitere")
         pg.wait_for_timeout(400)
         pg.check("#recheck")
@@ -1314,8 +1314,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         menue(pg, "weitere")
         pg.wait_for_timeout(400)
         log.pruefe(pg.is_visible("#recheck"), "im Standardmodus ist es wieder da")
-        # Der Schalter bleibt umlegbar -- und der Rundgang laesst die Lage so
-        # zurueck, wie er sie vorgefunden hat.
+
+
         pg.uncheck("#structure")
         pg.wait_for_timeout(200)
         log.pruefe(not pg.is_checked("#structure"), "und Strukturieren geht wieder aus")
@@ -1335,7 +1335,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         schritte = schritte_lesen(pg)
         log.pruefe("44 Agenten" in schritte, "und es sind alle")
         log.pruefe("volle Mannschaft" in schritte, "die Anzeige sagt es")
-        # Ohne Frage ist es keine Recherche, sondern eine Erklärung.
+
         pg.fill("#input", "/max")
         pg.click("#send")
         pg.wait_for_timeout(900)
@@ -1350,10 +1350,10 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.click("#send")
         pg.wait_for_timeout(700)
         log.pruefe(pg.is_visible("#stop"), "die Anfrage läuft")
-        # Weg von der Seite -- und zurück. Frueher war die Anfrage damit weg.
+
         pg.reload()
-        # Nicht auf die Begruessung warten: sie ist weg, sobald der
-        # wiederaufgenommene Lauf im Chat steht. Genau darum geht es hier.
+
+
         pg.wait_for_selector("#input")
         pg.wait_for_timeout(1500)
         schritte = schritte_lesen(pg)
@@ -1362,7 +1362,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_selector("#stop", state="hidden", timeout=30000)
         log.pruefe("Eine Antwort" in pg.inner_text(".msg.bot >> nth=-1"),
                    "und die Antwort kommt an, ohne dass jemand neu fragt")
-        # Ein zweites Laden holt denselben Lauf nicht noch einmal.
+
         pg.reload()
         pg.wait_for_selector("#input")
         pg.wait_for_timeout(1000)
@@ -1374,9 +1374,9 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.reload()
         pg.wait_for_selector("#chips")
         vorschlag = pg.inner_text("#chips")
-        # Wie bei den Coding-Vorschlaegen: die drei gezeigten wechseln bei
-        # jedem Aufruf. Nach einem festen Wort zu suchen war ein Muenzwurf --
-        # geprueft wird, dass jeder Vorschlag aus der richtigen Liste stammt.
+
+
+
         aus_liste = pg.evaluate(
             """() => [...document.querySelectorAll("#chips .chip")]
                      .every(c => TEXTE.suggestions.normal.includes(c.textContent.trim()))"""
@@ -1388,9 +1388,9 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_timeout(400)
         log.pruefe(pg.is_visible("#chips-code"), "im Code-Modus stehen die anderen da")
         log.pruefe(not pg.is_visible("#chips"), "und die Suchvorschläge sind weg")
-        # Die Vorschlaege wechseln bei jedem Aufruf. Nach einem festen Wort zu
-        # suchen war deshalb ein Muenzwurf -- gepruefte wird stattdessen, dass
-        # jeder gezeigte Vorschlag wirklich aus der Coding-Liste stammt.
+
+
+
         aus_liste = pg.evaluate(
             """() => [...document.querySelectorAll("#chips-code .chip")]
                      .every(c => TEXTE.suggestions.code.includes(c.textContent.trim()))"""
@@ -1403,7 +1403,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                    "im Pro-Modus wieder die Suchvorschläge")
         pg.click('#modes .mode[data-mode="normal"]')
         pg.wait_for_timeout(400)
-        # Ein Klick auf einen Vorschlag fuellt die Eingabe.
+
         pg.click("#chips .chip >> nth=0")
         pg.wait_for_timeout(200)
         log.pruefe(len(pg.input_value("#input")) > 5, "ein Klick füllt die Eingabe")
@@ -1423,16 +1423,16 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe("Budget" in pg.inner_text("#thread"), "die Frage bleibt im Verlauf")
         log.pruefe(not pg.is_visible("#ask-count"), "eine einzelne Frage hat keinen Zähler")
         pg.wait_for_timeout(600)
-        # Mehrere Fragen hintereinander: oben rechts 1/3, 2/3, 3/3 (12.1.1 Luna).
+
         pg.fill("#input", "Stell eine reihe Fragen")
         pg.click("#send")
         pg.wait_for_selector("#askbox.open", state="visible")
         log.pruefe(pg.inner_text("#ask-count") == "1/3" and "Wo wohnst" in pg.inner_text("#ask-q"),
                    f"die erste Frage trägt 1/3 ({pg.inner_text('#ask-count')!r})")
         foto("05b-rueckfrage-reihe")
-        # Die Pop-Animation skaliert das Fenster. Zwei getrennte Messungen
-        # konnten aus verschiedenen Frames stammen und eine korrekte Lage
-        # als Fehler melden. Nach der Animation beide Kanten zusammen lesen.
+
+
+
         pg.wait_for_function("""() => {
           const sheet = document.querySelector("#askbox .ask-sheet");
           return sheet && sheet.getAnimations().every(a =>
@@ -1518,8 +1518,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
 
     if dran("usermode"):
         log.abschnitt("6b. User mode")
-        # Ein echtes JPEG, gespeichert wie jedes Bildschirmfoto der virtual machine:
-        # die Oberflaeche soll es aus dem Speicher des Kontos laden.
+
+
         from aquaticy.media import save_snapshot
 
         foto_bytes = pg.screenshot(type="jpeg", quality=60,
@@ -1723,7 +1723,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             "Mitlesen schaltet sich ein",
         )
         pg.uncheck("#showtrace")
-        # virtual machine: der User mode -- ein Schalter mit Erklaerung.
+
         log.pruefe(
             pg.locator('#workshop-settings [name="AQUATICY_VM_USER_MODE"]').count() == 1,
             "der User mode steht bei der virtual machine",
@@ -1731,7 +1731,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(not pg.is_checked("#usermode"), "und ist ab Werk aus")
         log.pruefe("Bilder" in pg.inner_text("#usermode-note"),
                    "der Hinweis nennt, was er braucht (ein Modell, das Bilder versteht)")
-        # Dev settings: der Schalter fuer die Rechts-Leitplanken, nur mit Pro.
+
         log.pruefe(
             pg.locator('#secnav button:has-text("Dev settings")').count() == 1,
             "die Dev settings haben eine Sprungmarke",
@@ -1793,15 +1793,15 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         namen = pg.eval_on_selector_all("#palettes .pal .pname", "es => es.map(e => e.textContent)")
         log.pruefe(namen == ["Standard", "Schlicht", "Design selber erstellen"],
                    f"nur Standard, Schlicht und der eigene Designer: {namen}")
-        # Standard und Schlicht, jeweils hell und dunkel: vier verschiedene Untergründe.
+
         farben = set()
         for modus in ("light", "dark"):
             pg.click(f'[data-tmode="{modus}"]')
             pg.wait_for_timeout(150)
             for pid in ("", "mono"):
                 pg.click(f'.pal[data-palette="{pid}"]')
-                # Der Untergrund blendet weich ueber -- erst danach ablesen
-                # (unter Last waren 120 ms zu knapp).
+
+
                 pg.wait_for_timeout(450)
                 gesetzt = pg.get_attribute("html", "data-palette") or ""
                 if gesetzt != pid:
@@ -1810,7 +1810,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                     pg.eval_on_selector("body", "e => getComputedStyle(e).backgroundColor")
                 )
         log.pruefe(len(farben) == 4, f"{len(farben)} verschiedene Untergründe")
-        # Schlicht: hell weiß mit schwarzer Schrift, dunkel genau umgekehrt.
+
         pg.click('[data-tmode="light"]')
         pg.click('.pal[data-palette="mono"]')
         pg.wait_for_function("() => getComputedStyle(document.body).backgroundColor === "
@@ -1826,11 +1826,11 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                              "'rgb(242, 242, 242)'")
         dunkel = pg.eval_on_selector("body", "e => [getComputedStyle(e).backgroundColor,"
                                              " getComputedStyle(e).color]")
-        # Seit 9.5.32 fast schwarz (#121212) statt reinem Schwarz -- weisse
-        # Schrift auf #000 "strahlt" und ermuedet die Augen.
+
+
         log.pruefe(dunkel == ["rgb(18, 18, 18)", "rgb(242, 242, 242)"],
                    f"Schlicht dunkel: genau umgekehrt {dunkel}")
-        # Schriftgroesse (9.5.32): drei Stufen, sofort sichtbar, beim Konto gemerkt.
+
         vorher_px = pg.eval_on_selector("body", "e => parseFloat(getComputedStyle(e).fontSize)")
         pg.click('[data-fsize="large"]')
         pg.wait_for_timeout(500)
@@ -1846,7 +1846,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         log.pruefe(gemerkt.get("fontsize") == "small", "die Schriftgröße steht beim Konto")
         pg.click('[data-fsize="normal"]')
         pg.wait_for_timeout(400)
-        # Der eigene Designer.
+
         pg.click('[data-tmode="light"]')
         pg.click('.pal[data-palette="custom"]')
         pg.wait_for_selector("#designer:not([hidden])", timeout=5_000)
@@ -1912,8 +1912,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.reload(wait_until="networkidle")
         pg.wait_for_timeout(600)
         log.pruefe("New chat" in pg.inner_text("#btn-new"), "nach dem Neuladen noch englisch")
-        # Was jemand schreibt, bleibt, wie es geschrieben wurde -- auch wenn es
-        # zufaellig genau wie ein Knopf heisst.
+
+
         pg.fill("#input", "Neuer Chat")
         pg.click("#send")
         pg.wait_for_selector(".msg.user .bubble", state="visible")
@@ -1950,8 +1950,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.fill("#input", "Hallo")
         log.pruefe(not pg.eval_on_selector("#input", "e => e.classList.contains('is-command')"),
                    "normaler Text leuchtet nicht")
-        # Seit 9.5.20 faerbt ein Spiegel ueber dem Eingabefeld nur das
-        # Befehlswort -- das Argument dahinter bleibt normaler Text.
+
+
         pg.fill("#input", "/max 5")
         farbe = pg.evaluate("""() => {
           const wort = document.querySelector('#input-mirror .command-word');
@@ -1982,8 +1982,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                    "nach dem Absenden leuchtet die leere Zeile nicht mehr")
         pg.wait_for_timeout(900)
         log.pruefe("/clear" in pg.inner_text("#thread"), "/help zeigt die Befehle")
-        # 9.5.13: /export kommt als Download im Browser an -- nicht als Pfad
-        # auf dem Server, mit dem man an einem anderen Geraet nichts anfaengt.
+
+
         try:
             with pg.expect_download(timeout=8000) as geladen:
                 pg.fill("#input", "/export md")
@@ -1992,7 +1992,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             inhalt = Path(datei.path()).read_text(encoding="utf-8")
             log.pruefe(datei.suggested_filename.endswith(".md") and "Lastenrad" in inhalt,
                        f"/export lädt die Datei herunter ({datei.suggested_filename})")
-        except Exception as exc:  # der Rundgang meldet, statt abzubrechen
+        except Exception as exc:
             log.pruefe(False, f"/export lädt die Datei herunter ({type(exc).__name__})")
         pg.wait_for_timeout(300)
         pg.fill("#input", "/notes")
@@ -2015,7 +2015,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         zeile = pg.inner_text('label[for="denken"]')
         log.pruefe("Denken" in zeile, "er heisst Denken")
 
-        # Der Schalter ist ein echtes Ankreuzfeld -- nur anders angezogen.
+
         log.pruefe(
             pg.eval_on_selector("#denken", "e => e.type") == "checkbox",
             "unter dem Anstrich steckt ein Ankreuzfeld",
@@ -2067,8 +2067,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             pg.locator(".trace.think:visible").count() == 0,
             "ausgeschaltet verschwindet er wieder -- auch rueckwirkend",
         )
-        # Und das Mitlesen darf ihn nicht durch die Hintertuer wieder
-        # hereinlassen: sonst stuende er da, obwohl "Denken" aus ist.
+
+
         pg.evaluate("document.body.classList.add('tracing')")
         pg.wait_for_timeout(300)
         log.pruefe(
@@ -2116,7 +2116,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                    "ein Klick auf 'Denken' zeigt, was gedacht wurde")
         log.pruefe("Hier sind die neuesten Nachrichten" in pg.inner_text(".msg.bot >> nth=-1"),
                    "die richtige Antwort steht da")
-        # Code-Modus: statt "Denken" wechselnde Woerter wie bei Claude.
+
         pg.click('#modes .mode[data-mode="code"]')
         pg.wait_for_timeout(500)
         pg.fill("#input", "zwischen-probe warte")
@@ -2137,22 +2137,22 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_timeout(300)
         pg.click("#btn-new")
         pg.wait_for_timeout(700)
-        # Nicht "Frage" nennen: die Attrappe stellt bei allem mit "frag"
-        # eine Rueckfrage und wartet dann auf eine Antwort.
+
+
         for nummer in (1, 2, 3):
             pg.fill("#input", f"Thema {nummer}")
             pg.click("#send")
-            # Die Antwort steht schon da, waehrend der Lauf noch laeuft.
-            # Gewartet wird deshalb darauf, dass das Abbrechen verschwindet
-            # -- der Senden-Knopf taugt nicht dafuer, er ist auch bei leerem
-            # Eingabefeld aus.
+
+
+
+
             pg.wait_for_selector("#stop", state="hidden", timeout=25000)
             pg.wait_for_timeout(700)
         log.pruefe(
             pg.locator(".msg.user").count() == 3,
             f"drei Fragen stehen im selben Verlauf ({pg.locator('.msg.user').count()})",
         )
-        # Die Leiste zaehlt Chats, nicht Fragen: aus dreien darf einer werden.
+
         namen = pg.eval_on_selector_all(
             "#recents .recent .name", "es => es.map(e => e.textContent.trim())"
         )
@@ -2161,10 +2161,10 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             f"und in der Leiste steht dafuer ein Eintrag, nicht drei ({namen})",
         )
 
-        # Dass der Server ueber alle Fragen hinweg denselben Chat meint, kann
-        # der Rundgang nicht pruefen: hier steckt eine Attrappe in der
-        # Sitzung, deren Kennung fest ist. Das liegt bei den Tests in
-        # tests/test_web.py, die die echte ChatSession benutzen.
+
+
+
+
 
         log.abschnitt("10c. Arbeitsweise wechseln")
         vorher = pg.locator(".msg").count()
@@ -2187,8 +2187,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
 
     if dran("zustand"):
         log.abschnitt("10d. Der Zustand liegt beim Server")
-        # Etwas umstellen, neu laden, nachsehen: was der Server weiss,
-        # ueberlebt das Neuladen -- und den Wechsel des Geraets.
+
+
         menue(pg, "weitere")
         pg.check("#recheck")
         pg.wait_for_timeout(200)
@@ -2217,7 +2217,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                                 "e => e.classList.contains('on')"),
             "und die Denktiefe auch",
         )
-        # Der Server sagt dasselbe wie der Bildschirm.
+
         vom_server = pg.evaluate(
             "async () => await (await fetch('/api/prefs')).json()")
         log.pruefe(
@@ -2226,7 +2226,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             f"recheck={vom_server.get('recheck')})",
         )
 
-        # Und er glaubt nicht alles: Unsinn faellt auf den Standard zurueck.
+
         geprueft = pg.evaluate(
             """async () => await (await fetch("/api/prefs", {
                  method: "POST", headers: {"Content-Type": "application/json"},
@@ -2245,7 +2245,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
             'die Zeichenkette "false" heisst aus, nicht an',
         )
 
-        # Aufraeumen, damit die folgenden Abschnitte nicht darauf stossen.
+
         pg.evaluate(
             """async () => await fetch("/api/prefs", {
                  method: "POST", headers: {"Content-Type": "application/json"},
@@ -2305,8 +2305,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.wait_for_selector("#overlay.open", state="visible")
         pg.click("#btn-memory")
         pg.wait_for_selector("#membox.open", state="visible")
-        # Das Fenster ist offen, bevor die Antwort des Servers da ist --
-        # ohne dieses Warten prueft man eine noch leere Liste.
+
+
         pg.wait_for_timeout(800)
         log.pruefe(
             pg.locator("#merkliste .merk").count() > 0
@@ -2376,20 +2376,20 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.select_option("#cw-task-rhythm", "hourly")
         pg.wait_for_timeout(200)
         log.pruefe(not pg.is_visible("#cw-task-tag-feld"), "stündlich braucht keinen Wochentag")
-        # Seit 9.5.16: kurze Takte gibt es fuer Recherchen nicht -- jeder Lauf
-        # waere ein neuer Chat.
+
+
         log.pruefe(
             pg.eval_on_selector('#cw-task-rhythm option[value="always"]', "o => o.disabled"),
             "eine Recherche läuft nicht „die ganze Zeit“",
         )
-        # Durchgehend beobachten: keine Uhrzeit, aber ein Wort zu den Kosten.
+
         pg.select_option("#cw-task-kind", "visual")
         pg.wait_for_timeout(200)
         pg.select_option("#cw-task-rhythm", "always")
         pg.wait_for_timeout(200)
         log.pruefe(not pg.is_visible("#cw-task-zeit-feld"), "durchgehend hat keine Uhrzeit")
         log.pruefe(pg.is_visible("#cw-task-takt-hinweis"), "und sagt, dass es Token kostet")
-        # Die Bildsuche: Bildfeld statt Pflichtadresse.
+
         pg.select_option("#cw-task-kind", "image")
         pg.wait_for_timeout(200)
         log.pruefe(pg.is_visible("#cw-task-bild-feld"), "die Bildsuche fragt nach einem Bild")
@@ -2417,9 +2417,9 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
 
     if dran("werkstatt2"):
         log.abschnitt("17. virtual machine: Dateien")
-        # Die Modusknoepfe liegen in der Kopfzeile, der virtual-machine-Schalter in
-        # der Modellauswahl. Waehrend die offen ist, liegt eine Sperrflaeche
-        # ueber der Kopfzeile -- also erst umschalten, dann aufklappen.
+
+
+
         pg.click('#modes .mode[data-mode="code"]')
         pg.wait_for_timeout(300)
         menue(pg, "weitere")
@@ -2514,8 +2514,8 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
         pg.eval_on_selector("body", "e => e.scrollWidth <= window.innerWidth + 1"),
         f"nichts steht seitlich ueber ({breite}px breit)",
     )
-    # 11.2.2: Der Senden-Knopf ist klein, trifft aber auf 44px Hoehe -- und
-    # die eingeklappte Seitenleiste wirft keinen Schatten mehr an den Rand.
+
+
     treffer = pg.evaluate(
         """() => {
              const b = document.querySelector("#send").getBoundingClientRect();
@@ -2531,14 +2531,14 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
             "() => document.body.classList.contains('collapsed') ? "
             "getComputedStyle(document.querySelector('aside')).boxShadow : 'none'")
         log.pruefe(schatten == "none", "die eingeklappte Seitenleiste wirft keinen Schatten")
-    # 12.0.0 Sol: Der Modell-Knopf endet gleich hinter dem Pfeil -- die Luecke bis
-    # zum Mikrofon ist kein Klickfeld.
+
+
     if breite >= 340:
         rand = pg.evaluate(
             """() => document.querySelector("#btn-model").getBoundingClientRect().right
                    - document.querySelector("#btn-model .caret").getBoundingClientRect().right""")
         log.pruefe(rand <= 16, f"der Modell-Knopf endet hinter dem Pfeil ({rand:.0f}px)")
-    # Die Kopfzeile und die Modellauswahl duerfen sich nicht schneiden.
+
     menue(pg)
     pg.wait_for_timeout(500)
     ueberschnitten = pg.evaluate(
@@ -2554,14 +2554,14 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
                             "e => e.getBoundingClientRect().width <= window.innerWidth"),
         "und passt in die Breite",
     )
-    # Die beiden Knoepfe im Menue muessen sich mit dem Daumen treffen lassen.
+
     for knopf in ("#btn-aufwand", "#btn-weitere"):
         kh = pg.eval_on_selector(knopf, "e => e.getBoundingClientRect().height")
         log.pruefe(kh >= 40, f"{knopf} ist {kh:.0f}px hoch")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(400)
-    # Ein Schalter, den man mit dem Daumen treffen soll, braucht Flaeche -- er
-    # steht seit 9.5.34 im kleinen Fenster "Weitere Einstellungen".
+
+
     menue(pg, "weitere")
     hoehe = pg.eval_on_selector("#online",
                                 "e => e.closest('label').getBoundingClientRect().height")
@@ -2575,8 +2575,8 @@ def geraet(pg: Any, log: Protokoll, name: str, nummer: str,
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(400)
 
-    # Das Einstellungsfenster ist das laengste -- wenn eines quer laeuft,
-    # dann dieses.
+
+
     if breite < 900:
         pg.click("#btn-side")
         pg.wait_for_timeout(400)
@@ -2641,9 +2641,9 @@ def handy(pg: Any, log: Protokoll, bilder: Path | None) -> None:
     log.pruefe(spalten >= 2, f"die Farbkarten stehen zu {spalten} nebeneinander")
     pg.keyboard.press("Escape")
     pg.wait_for_timeout(300)
-    # Drei Arbeitsweisen statt zwei -- die Knopfzeile ueber der Eingabe ist
-    # die engste Stelle der ganzen Oberflaeche. Sie muss in eine Zeile passen,
-    # ohne dass etwas umbricht oder hinausragt.
+
+
+
     log.pruefe(
         pg.eval_on_selector(".crow", "e => e.scrollWidth <= e.clientWidth + 1"),
         "die Knopfzeile passt in die Breite",
@@ -2705,16 +2705,16 @@ def main() -> int:
             "console",
             lambda m: fehler.append(f"Konsole: {m.text}") if m.type == "error" else None,
         )
-        # Erst durch die Tuer, dann den Verlauf anlegen: er gehoert in den
-        # Ordner des Kontos, und den gibt es erst nach der Anmeldung.
+
+
         anmelden(seite, port)
         lege_chats_an()
         seite.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
 
         rundgang(seite, log, agent, bilder, nur)
 
-        # Dieselbe Oberflaeche auf drei Groessen. Was auf dem eigenen
-        # Bildschirm gut aussieht, muss es auf den anderen zweien nicht.
+
+
         if not nur or "geraete" in nur:
             for name, nummer, breit, hoch in (
                 ("Handy", "19a", 390, 844),

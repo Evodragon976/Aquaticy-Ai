@@ -36,13 +36,10 @@ from aquaticy.pace import key_of as pace_key_of
 from aquaticy.pace import paced
 from aquaticy.subagents import Task, as_task
 
-#: Hoechstens so viele Nachrunden. Zwei sind das Mass: nach der zweiten liegt
-#: es nicht mehr an der Formulierung, sondern daran, dass es die Information
-#: im Netz nicht gibt -- und dann gehoert genau das in die Antwort.
 MAX_ROUNDS = 2
 
-#: So viele Agenten bekommt eine Nachrunde hoechstens. Sie soll Luecken
-#: schliessen, nicht die ganze Recherche wiederholen.
+
+
 MAX_RETRY = 8
 
 PLAN_PROMPT = """\
@@ -158,7 +155,7 @@ class Mission:
 
     tasks: list[Task] = field(default_factory=list)
     plan: str = ""
-    #: Kam der Master gar nicht zu Wort (Ausfall, Zeitlimit)?
+
     fallback: bool = False
 
 
@@ -319,10 +316,10 @@ def review_results(
         return Review(ok=True)
     urteil = str(payload.get("urteil") or "").strip().lower()
     roh = payload.get("fehlt") or []
-    roh = [roh] if isinstance(roh, str) else roh if isinstance(roh, list) else []  # 9.5.34
+    roh = [roh] if isinstance(roh, str) else roh if isinstance(roh, list) else []
     fehlt = [str(eintrag).strip() for eintrag in roh if str(eintrag).strip()]
     nachrunde = _tasks_from(payload.get("nachrunde"), retry, max(0, int(strong)))
-    # Das Urteil zaehlt, aber Taten zaehlen mehr: wer Nachauftraege vergibt,
-    # hat Luecken gesehen, auch wenn er "gut" geschrieben hat.
+
+
     ok = urteil.startswith("gut") and not nachrunde
     return Review(ok=ok, missing=fehlt[:10], retries=nachrunde)

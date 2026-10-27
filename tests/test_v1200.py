@@ -17,7 +17,7 @@ def _ui() -> str:
     return web.UI_FILE.read_text(encoding="utf-8")
 
 
-# -- Oberflaeche ---------------------------------------------------------------------------
+
 def test_the_modes_sit_in_the_sidebar_under_the_logo() -> None:
     html = _ui()
     leiste = html[html.index("<aside>"): html.index("</aside>")]
@@ -25,7 +25,7 @@ def test_the_modes_sit_in_the_sidebar_under_the_logo() -> None:
         < leiste.index('id="btn-new"') < leiste.index("Letzte Chats")
     fuss = html[html.index("<footer>"): html.index("</footer>")]
     assert 'id="modes"' not in fuss and 'data-mode=' not in fuss
-    # Auf dem Handy liegt die Leiste ueber dem Chat: nach der Wahl geht sie zu.
+
     klick = html[html.index('document.querySelectorAll("#modes .mode").forEach(button =>\n'
                             '  button.addEventListener("click"'):]
     klick = klick[: klick.index("}));")]
@@ -39,7 +39,7 @@ def test_the_composer_row_is_attach_model_microphone_send() -> None:
     stellen = [reihe.index(f'id="{teil}"') for teil in ("clip", "btn-model", "mic", "send")]
     assert stellen == sorted(stellen)
     assert 'aria-label="Spracheingabe"' in reihe and 'aria-pressed="false"' in reihe
-    # Das Modellmenue oeffnet sich jetzt links am Knopf, nicht mehr rechts am Senden.
+
     assert 'const knopf = document.querySelector("#btn-model");' in html
     assert 'modelBox.style.right = "auto";' in html
 
@@ -48,22 +48,22 @@ def test_voice_input_explains_first_and_then_sends_by_itself() -> None:
     html = _ui()
     dialog = html[html.index('<div class="overlay" id="voicebox">'):]
     dialog = " ".join(dialog[: dialog.index('<div class="overlay" id="overlay">')].split())
-    # Alle Fakten: wer die Aufnahme bekommt, was Aquaticy bekommt.
+
     for fakt in ("Chrome: Google", "Edge: Microsoft", "Safari: Apple", "auf dem Gerät",
                  "Aquaticy bekommt nur den Text", "Die Aufnahme bekommt Aquaticy nie"):
         assert fakt in dialog, fakt
-    skript = html[html.index("/* ---------- Spracheingabe (12.0.0 Luna) ----------"):]
-    skript = skript[: skript.index("/* ---------- Seitenleiste ---------- */")]
+    skript = html[html.index("const micKnopf = $(\"#mic\"), voiceBox = $(\"#voicebox\");"):]
+    skript = skript[: skript.index("const narrow = ")]
     assert "window.SpeechRecognition || window.webkitSpeechRecognition" in skript
     assert "if (!stimmeOk){ openOverlay(voiceBox);" in skript, "erst der Hinweis"
     assert "merkeZustand({ voice_ok: true });" in skript
     assert "if (!busy) send.click();" in skript, "nach dem Sprechen geht es von selbst los"
     assert "window.isSecureContext" in skript
     assert 'document.addEventListener("visibilitychange"' in skript
-    # Waehrend Aquaticy antwortet, hoert das Mikrofon nicht zu; Esc bricht ab.
+
     assert '$("#mic").disabled = on;' in html and "if (on) hoerenStoppen(false);" in html
     assert "if (hoeren) { hoerenStoppen(false); return; }" in html
-    # Und die Datenschutzseite sagt dasselbe.
+
     from aquaticy.legal import legal_page
 
     roh = legal_page("/privacy")
@@ -90,21 +90,21 @@ def test_auto_scroll_is_a_design_choice_kept_on_the_server() -> None:
     assert 'id="autoscroll"' in design and 'data-scroll="on"' in design \
         and 'data-scroll="off"' in design
     assert "setAutoScroll(START.autoscroll !== false, { merken: false });" in html
-    # Aus heisst: die neue Frage und der Anfang der Antwort kommen noch ins Bild ...
+
     assert "if (!immer && !autoScroll) return;" in html
     assert html.count("thread.appendChild(el); scroll(true);") == 2
-    # ... und "Standard" stellt es wieder an.
+
     assert 'setSchrift("normal"); setAutoScroll(true);' in html
 
 
-# -- Nur Mistral, NVIDIA NIM oder der Server selbst ----------------------------------------
+
 @pytest.mark.parametrize("modell, adresse", [
     ("mistral/mistral-large-latest", ""),
     ("nvidia_nim/meta/llama-3.3-70b-instruct", ""),
-    ("nvidia_nim/openai/gpt-oss-120b", ""),          # offenes Modell bei NVIDIA
-    ("ollama_chat/qwen2.5:7b", ""),                   # Ollama auf dem Server
+    ("nvidia_nim/openai/gpt-oss-120b", ""),
+    ("ollama_chat/qwen2.5:7b", ""),
     ("ollama_chat/qwen2.5:7b", "http://127.0.0.1:11434"),
-    ("openai/lokal", "http://192.168.1.20:1234/v1"),  # LM Studio im Heimnetz
+    ("openai/lokal", "http://192.168.1.20:1234/v1"),
     ("openai/lokal", "http://lmstudio.local:1234/v1"),
     ("hosted_vllm/qwen", "http://[::1]:8000/v1"),
     ("lm_studio/qwen", ""),
@@ -118,18 +118,18 @@ def test_allowed_models(modell: str, adresse: str, monkeypatch: pytest.MonkeyPat
 
 @pytest.mark.parametrize("modell, adresse", [
     ("anthropic/claude-sonnet-4-5", ""),
-    ("openai/gpt-4o", ""),                            # ohne Adresse: OpenAI selbst
+    ("openai/gpt-4o", ""),
     ("openai/gpt-4o", "https://api.openai.com/v1"),
     ("gemini/gemini-2.5-pro", ""),
     ("vertex_ai/gemini-2.5-pro", ""),
     ("azure/gpt-4o", "https://firma.openai.azure.com"),
     ("openrouter/anthropic/claude-3.5-sonnet", ""),
     ("bedrock/anthropic.claude-3-sonnet", ""),
-    ("groq/llama-3.3-70b-versatile", ""),             # andere Cloud: auch nicht
-    ("gpt-4o", ""), ("claude-3-5-sonnet", ""),        # ohne Kuerzel geht es in die Cloud
-    ("ollama_chat/gpt-oss:120b-cloud", ""),           # Ollama reicht das an ollama.com weiter
+    ("groq/llama-3.3-70b-versatile", ""),
+    ("gpt-4o", ""), ("claude-3-5-sonnet", ""),
+    ("ollama_chat/gpt-oss:120b-cloud", ""),
     ("ollama_chat/qwen2.5:7b", "http://8.8.8.8:11434"),
-    ("openai/lokal", "http://1.1.1.1:1234/v1"),       # oeffentliche Adresse ist kein Server hier
+    ("openai/lokal", "http://1.1.1.1:1234/v1"),
     ("hosted_vllm/qwen", ""),
 ])
 def test_everything_else_is_refused(modell: str, adresse: str,
@@ -137,8 +137,8 @@ def test_everything_else_is_refused(modell: str, adresse: str,
     for name in ("HOSTED_VLLM_API_BASE", "OPENAI_API_BASE", "OPENAI_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
     assert not model_allowed(modell, adresse)
-    # Ein Anbieter, den LiteLLM kennt, bekommt die Regel. Ein Name, den es keinem
-    # zuordnet ("claude-3-5-sonnet"), bekommt den Hinweis aufs fehlende Kuerzel.
+
+
     problem = config.model_problem(modell, adresse)
     if config.resolve_model(modell):
         assert problem == MODEL_RULE_TEXT
@@ -195,13 +195,13 @@ def test_the_picker_never_offers_a_refused_model(monkeypatch: pytest.MonkeyPatch
     assert not model_usable(s, "groq/llama-3.3-70b-versatile", installed=[])
 
 
-# -- Schluessel nur ueber die Add-ons NVIDIA NIM und Mistral -------------------------------
+
 def test_old_keys_are_deleted_from_the_vault(tmp_path: Path) -> None:
     geheim = b"s" * 32
     tresor = keyvault.KeyVault(tmp_path / "k.sqlite3", "konto-a", geheim)
     tresor.set("MISTRAL_API_KEY", "eigen-mistral-geheim-1111")
     tresor.set_secret("HA_TOKEN", "ha-token-1234567890")
-    # So lagen sie bis 11.4.1 da -- Claude, Tavily, der allgemeine Platz.
+
     with sqlite3.connect(tmp_path / "k.sqlite3") as conn:
         for name in ("ANTHROPIC_API_KEY", "TAVILY_API_KEY", "AQUATICY_API_KEY"):
             conn.execute("INSERT INTO api_keys VALUES ('konto-a', ?, 'x', '', 1.0)", (name,))
@@ -235,11 +235,11 @@ def test_the_addon_cards_carry_the_key_entry_and_nothing_else_does() -> None:
     html = _ui()
     assert 'if (a.login_kind === "apikey") return addonKonto(a);' in html
     assert 'a.installed && a.login_kind !== "apikey"' in html, "kein Schalter"
-    # Kein Sammelfeld oben, kein Bereich "API-Schluessel" in den Einstellungen.
+
     for weg in ('id="linked-quick-key"', 'id="keys"', 'id="keys-summary"', "/api/keys",
                 "function zeichneKeys", "sk-ant-", "AIza"):
         assert weg not in html, weg
-    # Aus Einstellungen -> Modell fuehrt ein Knopf zu den Add-ons.
+
     modell = html[html.index("<fieldset><legend>Modell</legend>"):]
     modell = modell[: modell.index("</fieldset>")]
     assert 'id="btn-addons-modell"' in modell
@@ -263,8 +263,8 @@ def test_the_setup_wizard_asks_for_no_key() -> None:
 def test_twelve_is_the_version() -> None:
     import aquaticy
 
-    # Nummer und Name stehen seit 12.0.1 Nutshell nur in tests/test_version.py --
-    # hier: noch Fassung 12 und die Rueckfallangabe passt zu beidem.
+
+
     assert aquaticy.__version__.startswith("12.")
     label = f"{aquaticy.__version__} {aquaticy.__codename__}"
     assert f'window.__AQUATICY_VERSION__ || "{label}"' in _ui()

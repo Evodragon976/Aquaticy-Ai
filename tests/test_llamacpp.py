@@ -33,7 +33,7 @@ API = llamacpp.REPO_API
 DOWNLOAD = "https://github.com/ggml-org/llama.cpp/releases/download"
 CDN = "https://release-assets.githubusercontent.com/github-production-release-asset"
 
-#: Ein gestellter llama-server, der auch "--version" und "--list-devices" kennt.
+
 FAKE_SERVER = (
     'import sys\n'
     'if "--version" in sys.argv:\n'
@@ -43,7 +43,7 @@ FAKE_SERVER = (
     '    print("Available devices:\\n  CPU: gestellt")\n'
     '    sys.exit(0)\n'
 )
-#: Eine Grafik-Ausgabe, die auf diesem Rechner keine Karte findet.
+
 FAKE_SERVER_OHNE_KARTE = (
     'import sys\n'
     'print("ggml_vulkan: No devices found.", file=sys.stderr)\n'
@@ -151,7 +151,7 @@ def github(monkeypatch) -> GitHub:
 
 def _installer(root: Path, namen: list[str]) -> llamacpp.Installer:
     installer = llamacpp.Installer(root)
-    installer._namen = list(namen)  # sonst haengt es am Rechner, auf dem der Test laeuft
+    installer._namen = list(namen)
     return installer
 
 
@@ -161,14 +161,14 @@ def _fertig(installer: llamacpp.Installer, tag: str = TAG) -> llamacpp.Install |
     return installer.installed(tag)
 
 
-# -- Welche Ausgabe ---------------------------------------------------------------------
+
 def test_each_system_gets_its_own_edition() -> None:
     namen = llamacpp.platform_names
     assert namen("Darwin", "arm64") == ["macos-arm64"]
     assert namen("Darwin", "x86_64") == ["macos-x64"]
     assert namen("Linux", "x86_64") == ["ubuntu-x64"]
     assert namen("Linux", "x86_64", gpu=True, vulkan=True) == ["ubuntu-vulkan-x64", "ubuntu-x64"]
-    # Ohne Vulkan-Lader startet die Grafik-Ausgabe nicht -- dann gleich die fuer den Prozessor.
+
     assert namen("Linux", "x86_64", gpu=True, vulkan=False) == ["ubuntu-x64"]
     assert namen("Linux", "aarch64") == ["ubuntu-arm64"]
     assert namen("Windows", "AMD64", gpu=True) == ["win-vulkan-x64", "win-cpu-x64"]
@@ -182,7 +182,7 @@ def test_the_right_asset_is_picked() -> None:
     daten = {"tag_name": TAG, "assets": [
         {"name": f"llama-{TAG}-bin-ubuntu-vulkan-x64.zip"},
         {"name": f"llama-{TAG}-bin-ubuntu-x64.tar.gz"},
-        {"name": "llama-b6999-bin-ubuntu-x64.zip"},  # fremde Fassung
+        {"name": "llama-b6999-bin-ubuntu-x64.zip"},
         {"name": f"llama-{TAG}-bin-win-cuda-12.4-x64.zip"},
         {"name": "cudart-llama-bin-win-cuda-12.4-x64.zip"},
         "kaputt",
@@ -194,7 +194,7 @@ def test_the_right_asset_is_picked() -> None:
     assert llamacpp.pick_asset(daten, ["macos-arm64"]) is None
 
 
-# -- Installieren ---------------------------------------------------------------------------
+
 def test_llama_cpp_installs_itself_checked_and_once(github: GitHub, tmp_path: Path) -> None:
     github.add("ubuntu-x64", _zip(_programme(), links={"build/bin/libggml.so": "LICENSE"}))
     installer = _installer(tmp_path / "llama.cpp", ["ubuntu-x64"])
@@ -205,7 +205,7 @@ def test_llama_cpp_installs_itself_checked_and_once(github: GitHub, tmp_path: Pa
     for programm in (eintrag.rpc_server, eintrag.llama_server):
         assert programm.is_file() and os.access(programm, os.X_OK)
         assert programm.is_relative_to(eintrag.folder)
-    # Verknuepfungen innerhalb des Ordners bleiben Verknuepfungen.
+
     link = eintrag.folder / "build" / "bin" / "libggml.so"
     assert link.is_symlink() and os.readlink(link) == "LICENSE"
     merkzettel = json.loads((eintrag.folder / llamacpp.MARKER).read_text())
@@ -213,10 +213,10 @@ def test_llama_cpp_installs_itself_checked_and_once(github: GitHub, tmp_path: Pa
         github.archive[f"llama-{TAG}-bin-ubuntu-x64.zip"]).hexdigest()
     assert installer.status()["phase"] == "bereit" and eintrag.label() == \
         f"llama.cpp {TAG} (Prozessor)"
-    # Ueber die Umleitung zu GitHubs Download-Server -- und kein Rest im Ordner.
+
     assert any(url.startswith(CDN) for url in github.calls)
     assert [p.name for p in (tmp_path / "llama.cpp").iterdir()] == [f"{TAG}-ubuntu-x64"]
-    # Schon da: kein zweiter Download.
+
     vorher = len(github.calls)
     assert installer.ensure(TAG) == eintrag and len(github.calls) == vorher
 
@@ -289,7 +289,7 @@ def test_an_edition_without_the_programs_is_refused(github: GitHub, tmp_path: Pa
     assert _fertig(installer) is None and "fehlt" in installer.message
 
 
-# -- Boese Archive ----------------------------------------------------------------------------
+
 @pytest.mark.parametrize("dateien,links", [
     ({"../ausserhalb": b"x"}, None),
     ({"/etc/ausserhalb": b"x"}, None),
@@ -356,7 +356,7 @@ def test_a_foreign_marker_is_not_trusted(tmp_path: Path) -> None:
         assert llamacpp.read_install(ordner) is None, kaputt
 
 
-# -- Welche Fassung -----------------------------------------------------------------------------
+
 def test_the_master_picks_one_version_for_everyone(github: GitHub, tmp_path: Path,
                                                    monkeypatch) -> None:
     github.latest = "b7123"
@@ -364,13 +364,13 @@ def test_the_master_picks_one_version_for_everyone(github: GitHub, tmp_path: Pat
     assert installer.chosen() == "" or installer.chosen() == "b7123"
     installer.wait(30)
     assert installer.chosen() == "b7123"
-    # Was schon installiert ist, bleibt die Fassung -- nicht jedes Mal die neueste.
+
     github.add("ubuntu-x64", _zip(_programme()))
     vorhanden = _installer(tmp_path / "zwei", ["ubuntu-x64"])
     assert _fertig(vorhanden) is not None
     neu = _installer(tmp_path / "zwei", ["ubuntu-x64"])
     assert neu.chosen() == TAG
-    # Der Betreiber kann eine Fassung fest vorgeben.
+
     monkeypatch.setenv(llamacpp.TAG_ENV, "b6000")
     assert neu.chosen() == "b6000"
 
@@ -388,7 +388,7 @@ def test_a_preinstalled_version_is_used_without_download(github: GitHub, tmp_pat
     assert eintrag is not None and eintrag.folder.is_relative_to(mitgeliefert.resolve())
     assert github.calls == []
     assert installer.chosen() == TAG
-    # Ein Ordner, in den jeder schreiben darf, zaehlt nicht.
+
     mitgeliefert.chmod(0o777)
     try:
         assert _installer(tmp_path / "eigen", ["ubuntu-x64"]).installed(TAG) is None
@@ -407,7 +407,7 @@ def test_failures_back_off_and_say_why(tmp_path: Path, monkeypatch) -> None:
     assert installer.ensure(TAG) is None
     installer.wait(30)
     assert installer.phase == "fehler" and "GitHub ist nicht erreichbar" in installer.message
-    # Gleich noch einmal: es wird nicht sofort wieder geladen.
+
     assert installer.ensure(TAG) is None and installer._thread is not None
     assert not installer._thread.is_alive() and installer._naechster > time.monotonic()
 
@@ -423,14 +423,14 @@ def test_a_rate_limit_is_not_a_refusal() -> None:
         llamacpp.release(http=antwort({}))
 
 
-# -- Im Verbund ------------------------------------------------------------------------------
+
 def test_split_mode_installs_llama_cpp_on_every_server(paar, github: GitHub,  # noqa: F811
                                                        tmp_path: Path, monkeypatch) -> None:
     """Niemand installiert etwas: einschalten, und das Modell laeuft verteilt."""
     a, b = paar
     for env in (sharding.RPC_ENV, sharding.SERVER_ENV):
         monkeypatch.delenv(env, raising=False)
-    # Kein llama.cpp im Suchpfad -- alles kommt von "GitHub".
+
     monkeypatch.setattr(sharding, "find_binary", lambda env, namen: "")
     monkeypatch.setenv("FAKE_LLAMA_RECORD", str(tmp_path / "llama.json"))
     monkeypatch.setattr(sharding, "nvidia_card", lambda: False)
@@ -447,7 +447,7 @@ def test_split_mode_installs_llama_cpp_on_every_server(paar, github: GitHub,  # 
     monkeypatch.setattr(web, "SHARDING", mgr_b)
     try:
         a.set_split(True, "testmodell")
-        # Der Master waehlt die Fassung und schickt sie an alle.
+
         _warte(lambda: (mgr_a.tick(), a.split().get("llama"))[1] == TAG, 30)
         assert b.split().get("llama") == TAG, "die Fassung kommt mit der Mitgliederliste"
         _warte(lambda: (mgr_b.tick(), mgr_b.worker.ready)[1], 60)
@@ -467,7 +467,7 @@ def test_split_mode_installs_llama_cpp_on_every_server(paar, github: GitHub,  # 
         assert ansicht["llama"]["fassung"] == TAG
         assert ansicht["llama"]["label"] == f"llama.cpp {TAG} (Prozessor)"
         assert ansicht["server_binary"] and ansicht["auto_install"]
-        # Der Download lief je Server einmal -- beide holen dieselbe Fassung.
+
         geladen = [u for u in github.calls if u.startswith(CDN)]
         assert len(geladen) == 2
     finally:

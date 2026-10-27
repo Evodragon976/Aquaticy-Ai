@@ -7,9 +7,6 @@ from pathlib import Path
 
 import pytest
 
-# Argon2id mit 64 MiB je Passwort (seit 9.5.32) machte die Suite um Minuten
-# langsamer. In Tests reicht die schnelle Einstellung; die echte prueft
-# tests/test_v9532.py ausdruecklich.
 os.environ.setdefault("AQUATICY_KDF", "schnell")
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
@@ -36,8 +33,8 @@ def settings(tmp_path: Path):
         request_delay_seconds=0.0,
         fetch_timeout=5.0,
         enable_playwright=False,
-        # Die automatische Vorrecherche wird gezielt in eigenen Tests
-        # geprueft -- sonst verbraucht sie hier ueberall einen LLM-Aufruf.
+
+
         subagents_auto=False,
     )
 
@@ -104,7 +101,7 @@ def _keine_echte_env(monkeypatch, tmp_path_factory):
     config.reset_settings_cache()
 
 
-#: Eine oeffentliche Adresse fuer erfundene Namen (shop.example, cam.test ...).
+
 TEST_PUBLIC_IP = "93.184.216.34"
 
 
@@ -151,6 +148,6 @@ def _frische_anfragegrenze(monkeypatch):
     monkeypatch.setattr(web, "ADDRESS_LIMIT", web.RateLimiter(attempts=1200, window_seconds=60))
     monkeypatch.setattr(web, "AUTH_LIMIT", web.RateLimiter(attempts=8, window_seconds=60))
     monkeypatch.setattr(web, "LOGIN_FAILS", web.RateLimiter(attempts=10, window_seconds=15 * 60))
-    # Der Anmeldeschutz (12.0.0 Terra) zaehlt Fehlversuche je Adresse eine Stunde lang.
+
     monkeypatch.setattr(web, "BOT_FAILS", web.botguard.Failures())
     monkeypatch.setattr(web, "BOT_BANS", web.botguard.Bans())

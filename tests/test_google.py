@@ -44,9 +44,9 @@ def _client(handler) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-# ---------------------------------------------------------------------------
-# Ablage
-# ---------------------------------------------------------------------------
+
+
+
 def test_tokens_are_not_readable_on_disk(store: TokenStore) -> None:
     """Wer die Datei oeffnet, soll darin kein Refresh-Token finden."""
     store.save(Tokens(access_token="geheim-at", refresh_token="geheim-rt"))
@@ -77,12 +77,12 @@ def test_disconnecting_removes_the_file(store: TokenStore) -> None:
     store.save(Tokens(refresh_token="rt"))
     store.clear()
     assert not store.path.exists()
-    store.clear()  # zweimal trennen ist kein Fehler
+    store.clear()
 
 
-# ---------------------------------------------------------------------------
-# Anmeldung
-# ---------------------------------------------------------------------------
+
+
+
 def test_only_read_scopes_are_requested() -> None:
     """Ohne ausdrueckliche Erlaubnis soll Schreiben technisch unmoeglich sein."""
     url = google.consent_url("id-1", "http://localhost:8765/google")
@@ -97,8 +97,8 @@ def test_write_asks_for_exactly_two_more_rights() -> None:
     url = google.consent_url("id-1", "http://localhost:8765/google", write=True)
     assert "calendar.events" in url
     assert "gmail.compose" in url
-    # Und weiterhin nichts, womit sich eine Mail verschicken oder etwas
-    # loeschen liesse.
+
+
     for forbidden in ("gmail.send", "gmail.modify", "auth/calendar+", "drive"):
         assert forbidden not in url
 
@@ -147,9 +147,9 @@ def test_an_empty_code_is_refused() -> None:
         google.exchange_code("id", "secret", "   ", "http://localhost/google")
 
 
-# ---------------------------------------------------------------------------
-# Kalender
-# ---------------------------------------------------------------------------
+
+
+
 def test_events_come_back_readable(linked: TokenStore) -> None:
     seen: dict[str, Any] = {}
 
@@ -199,12 +199,12 @@ def test_the_number_of_days_stays_sane(linked: TokenStore) -> None:
     api = Google("id", "secret", linked, _client(handler))
     api.events(days=99999)
     assert "timeMax" in seen["url"]
-    api.events(days=0)  # kein Absturz bei 0
+    api.events(days=0)
 
 
-# ---------------------------------------------------------------------------
-# Gmail
-# ---------------------------------------------------------------------------
+
+
+
 def test_mail_search_returns_headers_only(linked: TokenStore) -> None:
     calls: list[str] = []
 
@@ -298,9 +298,9 @@ def test_reading_without_an_id_is_refused(linked: TokenStore) -> None:
         api.read_mail("  ")
 
 
-# ---------------------------------------------------------------------------
-# Token-Erneuerung und Fehler
-# ---------------------------------------------------------------------------
+
+
+
 def test_an_expired_token_is_renewed(store: TokenStore, monkeypatch: pytest.MonkeyPatch) -> None:
     store.save(Tokens(access_token="alt", refresh_token="rt-1", expires_at=0))
     monkeypatch.setattr(
@@ -380,9 +380,9 @@ def test_the_stored_file_is_json_shaped(store: TokenStore) -> None:
     assert json.loads(raw)["email"] == "a@b.de"
 
 
-# ---------------------------------------------------------------------------
-# Schreiben -- nur mit Erlaubnis, nie verschicken
-# ---------------------------------------------------------------------------
+
+
+
 def test_an_event_is_created_with_the_given_times(linked: TokenStore) -> None:
     gesehen: dict[str, Any] = {}
 
@@ -401,7 +401,7 @@ def test_an_event_is_created_with_the_given_times(linked: TokenStore) -> None:
     assert antwort["id"] == "ev-1"
     assert gesehen["method"] == "POST"
     assert "calendars/primary/events" in gesehen["url"]
-    # Ohne Ende: eine Stunde, nicht ein Fehler.
+
     ende = datetime.fromisoformat(gesehen["body"]["end"]["dateTime"])
     assert (ende.hour, ende.minute) == (15, 0)
     assert ende.utcoffset() is not None

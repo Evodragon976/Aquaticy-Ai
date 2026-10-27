@@ -70,7 +70,7 @@ def _json(**werte: Any) -> str:
     return json.dumps(werte)
 
 
-# -- Klicken ---------------------------------------------------------------
+
 def test_a_harmless_click_goes_where_the_image_model_points() -> None:
     d, box, auge, ereignisse = _desktop(
         _json(gefunden=True, x=412, y=250, was="Link", art="harmlos")
@@ -165,7 +165,7 @@ def test_a_found_spot_off_the_screen_is_not_clicked() -> None:
     assert box.aufrufe == []
 
 
-# -- Tippen ----------------------------------------------------------------
+
 @pytest.mark.parametrize(
     "text",
     ["4111 1111 1111 1111", "IBAN: DE89 3704 0044 0532 0130 00", "5500-0000-0000-0004"],
@@ -230,13 +230,13 @@ def test_too_much_text_at_once_is_refused() -> None:
     assert "vm_write" in d.type("x" * (desk.MAX_TYPE_CHARS + 1))["error"]
 
 
-# -- Tasten ----------------------------------------------------------------
+
 def test_plain_keys_need_no_look() -> None:
     d, box, auge, _ = _desktop()
     assert d.key("ctrl+l Tab")["gedrueckt"] == ["ctrl+l", "Tab"]
     assert auge.gesehen == []
-    # ctrl+l ist kein Blaettern -- also wird einmal nachgesehen, ob vorn ein
-    # Messenger mit "Nur lesen" ist (9.5.10). Hier ist es keiner.
+
+
     assert box.aufrufe == [(("windows",), None), (("key", "ctrl+l", "Tab"), None)]
 
 
@@ -261,7 +261,7 @@ def test_keys_also_come_as_a_list() -> None:
     assert d.key(["ctrl+a", "Delete"])["gedrueckt"] == ["ctrl+a", "Delete"]
 
 
-# -- Scrollen, Oeffnen, Fenster ---------------------------------------------
+
 def test_scrolling_is_clamped_and_centered() -> None:
     d, box, _, _ = _desktop()
     assert d.scroll("runter", 99)["schritte"] == 30
@@ -319,7 +319,7 @@ def test_without_an_image_model_the_desktop_says_so(monkeypatch: pytest.MonkeyPa
         d.look()
 
 
-# -- Bausteine ---------------------------------------------------------------
+
 @pytest.mark.parametrize(
     ("text", "erwartet"),
     [
@@ -359,7 +359,7 @@ def test_the_first_json_object_is_read() -> None:
     assert parse_object("") is None
 
 
-# -- Im Werkzeugkasten --------------------------------------------------------
+
 def _box_mit_desktop(monkeypatch: pytest.MonkeyPatch, settings: Settings, *antworten: str):
     from aquaticy.tools import Toolbox
 
@@ -386,7 +386,7 @@ def test_the_picture_lands_in_the_chat_not_in_the_model(
     werkzeuge.on_event = lambda event, payload: ereignisse.append((event, payload))
     antwort = werkzeuge.call("desktop_look", {"question": "Was ist offen?"})
     assert "_bild" not in antwort
-    json.dumps(antwort)  # geht so an das Modell
+    json.dumps(antwort)
     visual = werkzeuge.stats.visuals[-1]
     assert visual["kind"] == "desktop" and visual["media_id"].endswith(".jpg")
     assert (Path(settings.data_dir) / "media" / visual["media_id"]).exists() or any(
@@ -442,7 +442,7 @@ def test_the_tools_exist_only_in_user_mode(settings: Settings) -> None:
     assert "Internet, aber kein Heimnetz" in run["function"]["description"]
 
 
-# -- Im Agenten ---------------------------------------------------------------
+
 def _antwort(content: str = "", tool_calls: list[Any] | None = None):
     from types import SimpleNamespace
 
@@ -488,7 +488,7 @@ def test_without_user_mode_the_workshop_stays_offline(
     assert "Was sie NICHT hat: Netz" in agent.messages[0]["content"]
 
 
-# -- Einstellungen --------------------------------------------------------------
+
 def test_the_chat_cannot_switch_user_mode_on(settings: Settings) -> None:
     from aquaticy import preferences
     from aquaticy.tools import Toolbox
@@ -520,8 +520,8 @@ def test_an_account_reads_its_switch(tmp_path: Path) -> None:
     profil.mkdir()
     (profil / ".env").write_text("AQUATICY_VM_USER_MODE=true\n", encoding="utf-8")
     assert web._profile_settings(profil, "ultra").vm_user_mode is True
-    # Seit 9.5.17 gehoert der User mode zu Ultra -- ein "an" in der .env eines
-    # normalen oder eines Pro-Kontos zaehlt nicht.
+
+
     assert web._profile_settings(profil, "pro").vm_user_mode is False
     assert web._profile_settings(profil, "normal").vm_user_mode is False
 
@@ -540,11 +540,11 @@ def test_a_normal_account_cannot_switch_the_user_mode_on(
         web.save_values({"AQUATICY_VM_USER_MODE": "true"})
     assert not (profil / ".env").exists() or "USER_MODE=true" not in (
         profil / ".env").read_text()
-    # Ausschalten geht immer.
+
     web.save_values({"AQUATICY_VM_USER_MODE": "false"})
 
 
-# -- Der Bildschirm im Web --------------------------------------------------------
+
 def _hole(pfad: str, session: Any) -> tuple[int, str, bytes]:
     import threading
     from http.client import HTTPConnection
@@ -625,6 +625,6 @@ def test_the_boxed_start_says_what_user_mode_needs(monkeypatch: pytest.MonkeyPat
     sandkasten.runtime = werkstatt.Runtime("docker", "docker", "Docker (gehaertet)")
     with pytest.raises(werkstatt.SandboxUnavailable, match="/dev/net/tun"):
         sandkasten.ensure()
-    # Ohne User mode braucht die virtual machine kein Netz -- und also kein Geraet.
+
     ohne = werkstatt.Sandbox(user_mode=False)
     ohne._check_nested_network()

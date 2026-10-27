@@ -21,7 +21,7 @@ from aquaticy.aiguard import (
     insult_level,
 )
 from tests import aiguard_korpus, auftrag_korpus
-from tests.test_end_to_end import _chat, _konto, _req, server  # noqa: F401 -- Fixture
+from tests.test_end_to_end import _chat, _konto, _req, server  # noqa: F401
 
 
 @pytest.mark.parametrize(("text", "davor"), auftrag_korpus.AUFTRAG)
@@ -42,7 +42,7 @@ def test_harmless_sentences_are_no_request_either(text: str) -> None:
 
 
 @pytest.mark.parametrize("text", [
-    "Mein Kumpel hat gesagt: du Hurensohn",       # war 7 Tage Bann
+    "Mein Kumpel hat gesagt: du Hurensohn",
     "Er schrieb mir: du Spast",
     "Sie hat zu mir gesagt, du blöde Kuh",
     "Er hat mich beschimpft: du Wichser",
@@ -86,7 +86,7 @@ def test_the_lock_names_the_reason(tmp_path: Path) -> None:
     assert "Zitat allein" in chat_locked_message(DEMEANING_REASON)
 
 
-# -- Ende zu Ende ---------------------------------------------------------------------
+
 def test_a_quote_alone_goes_through_the_request_locks_the_chat(
     server: tuple[int, Path],  # noqa: F811
 ) -> None:

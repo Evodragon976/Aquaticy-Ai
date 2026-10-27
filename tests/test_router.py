@@ -113,7 +113,7 @@ def test_the_list_of_models_is_remembered(tmp_path: Path,
     assert aufrufe == ["work"], "einmal nachgesehen, dann gemerkt"
 
 
-# Die entfernten Anbieter haben keinen Import- oder Ausfuehrungspfad mehr.
+
 @pytest.mark.parametrize("arguments", [
     {}, {"prompt": "a lighthouse"}, {"prompt": "", "format": "quer"},
     {"prompt": "x", "format": "hoch"}, {"prompt": "x", "format": "quadrat"},
@@ -139,7 +139,7 @@ def test_retired_image_tool_has_no_provider_or_dispatch_path(settings, arguments
         box.close()
 
 
-# -- Im Agenten ----------------------------------------------------------------------
+
 def _antwort(text: str = "", tool_calls: Any = None) -> SimpleNamespace:
     return SimpleNamespace(choices=[SimpleNamespace(
         message=SimpleNamespace(content=text, tool_calls=tool_calls))])

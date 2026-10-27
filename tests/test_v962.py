@@ -17,18 +17,18 @@ def _ui() -> str:
 def test_version_is_public_962() -> None:
     import aquaticy
 
-    # Seit 9.6.2.5 (Pruefrunde nach 9.6.2) -- weiterhin oeffentlich.
+
     assert aquaticy.__version__ == NUMMER
     assert aquaticy.VERSION_LABEL == LABEL and not aquaticy.INTERNAL
 
 
 def test_sign_in_buttons_and_quick_link() -> None:
     html = _ui()
-    # Seit 12.0.0 Luna gibt es kein Sammelfeld mehr: Schluessel nur in der Karte des
-    # Add-ons NVIDIA NIM oder Mistral, mit den Anmelde-Knoepfen darueber.
+
+
     assert 'id="linked-quick-key"' not in html and 'id="linked-paste"' not in html
     assert "for (const weg of k.sign_in || [])" in html
-    # Die Zwischenablage nur, wo der Browser sie erlaubt (HTTPS, eigener Rechner).
+
     assert "window.isSecureContext && navigator.clipboard?.readText" in html
 
 

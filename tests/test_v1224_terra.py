@@ -273,7 +273,7 @@ def test_retirement_eviction_during_a_check_cannot_restore_an_old_cache_binding(
         current.fast_kwargs_for(model)
         if model == MODEL:
             raise RuntimeError("410 Gone")
-        # Another request can evict the first observation while this call runs.
+
         system.mark_retired("mistral/unrelated-model", current)
         return '{"missbrauch":false,"art":"ok","grund":""}'
 

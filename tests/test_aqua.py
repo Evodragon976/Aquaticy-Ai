@@ -148,7 +148,7 @@ def test_explicit_moved_reply_can_redirect_without_duplicate_execution(tmp_path,
 
     def moved(*args):
         attempts.append(True)
-        return "moved"  # Heimserver hat vor der Ausfuehrung abgelehnt.
+        return "moved"
 
     monkeypatch.setattr(entrance, "_proxy_once", moved)
     assert not entrance.forward(_Handler("/api/coworkers"), "user1", b"{}", False, "127.0.0.1")

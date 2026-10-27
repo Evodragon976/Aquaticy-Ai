@@ -29,19 +29,17 @@ import threading
 import time
 from pathlib import Path
 
-#: Mehr als das darf ein Profil nie belegen. Bewusst 400 Millionen Byte und
-#: nicht 400 MiB: die Anzeige soll dieselbe Zahl nennen, die hier steht.
 MAX_BYTES = 400_000_000
 
-#: Ab hier wird aufgeraeumt, statt bis zum Anschlag zu warten.
+
 CLEANUP_AT = 0.9
 
-#: Aufgeraeumt wird bis hierher -- sonst stuende man gleich wieder davor.
+
 CLEANUP_TO = 0.7
 
-#: Wie lange eine Messung gilt. Das Durchzaehlen eines Ordners mit ein paar
-#: hundert Bildern kostet Millisekunden; bei jedem Zwischenspeicher-Eintrag
-#: waere es trotzdem zu oft.
+
+
+
 MEASURE_SECONDS = 3.0
 
 _messungen: dict[str, tuple[float, int]] = {}
@@ -133,8 +131,8 @@ def _zwischenspeicher_leeren(data_dir: Path, alles: bool) -> None:
                 geloescht = conn.execute("DELETE FROM cache WHERE expires_at < ?",
                                          (time.time(),)).rowcount
             conn.commit()
-            # VACUUM nur, wenn es etwas zu verdichten gibt (9.5.34: vorher bei
-            # jedem Aufruf -- nahe am Deckel bei jedem Schreiben).
+
+
             if geloescht:
                 conn.execute("VACUUM")
         finally:
@@ -176,9 +174,9 @@ def make_room(data_dir: Path | str) -> int:
         _aelteste_zuerst(ordner / "uploads", lambda n: True),
         _aelteste_zuerst(ordner / "media", lambda n: AI_MARK in n),
     )
-    # Reicht selbst alles Loeschbare nicht, um unter das Ziel zu kommen (der
-    # Verlauf allein ist zu gross), werden Uploads und Bilder NICHT geopfert
-    # (9.5.34) -- vorher verschwanden sie bei jedem Schreiben, ohne dass es half.
+
+
+
     entfernbar = 0
     for dateien in stufen:
         for datei in dateien:

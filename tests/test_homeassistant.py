@@ -63,7 +63,7 @@ def ha(monkeypatch: pytest.MonkeyPatch) -> HomeAssistant:
 
     def patched(method: str, url: str, **kwargs: Any) -> httpx.Response:
         kwargs.pop("timeout", None)
-        kwargs.pop("trust_env", None)  # seit 9.5.34: nie ueber einen Umgebungs-Proxy
+        kwargs.pop("trust_env", None)
         with httpx.Client(transport=transport) as session:
             return session.request(method, url, **kwargs)
 
@@ -73,7 +73,7 @@ def ha(monkeypatch: pytest.MonkeyPatch) -> HomeAssistant:
     return instance
 
 
-# -- Adressen -------------------------------------------------------------
+
 def test_a_bare_address_gets_scheme_and_port() -> None:
     """Niemand tippt gern http:// und :8123 mit."""
     assert normalize_url("192.168.1.5") == "http://192.168.1.5:8123"
@@ -92,7 +92,7 @@ def test_an_empty_address_stays_empty() -> None:
     assert not HomeAssistant("http://x:8123", "").configured
 
 
-# -- Lesen ----------------------------------------------------------------
+
 def test_ping_reports_name_and_version(ha: HomeAssistant) -> None:
     assert ha.ping() == "Zuhause 2026.8.1"
 
@@ -128,7 +128,7 @@ def test_the_search_result_is_capped(ha: HomeAssistant) -> None:
     assert len(ha.find(limit=2)) == 2
 
 
-# -- Fehlerfaelle ---------------------------------------------------------
+
 def test_a_wrong_token_says_where_to_get_a_new_one(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"message": "Unauthorized"})
@@ -162,7 +162,7 @@ def test_without_setup_the_message_points_at_the_command() -> None:
     assert "connect-ha" in str(exc.value)
 
 
-# -- Schalten -------------------------------------------------------------
+
 def test_calling_a_service(ha: HomeAssistant) -> None:
     changed = ha.call("light", "turn_on", "light.wohnzimmer", {"brightness_pct": 40})
     assert changed == [{"entity_id": "light.wohnzimmer"}]
@@ -183,7 +183,7 @@ def test_the_protected_domains_cover_what_matters() -> None:
     assert PROTECTED_DOMAINS <= ALLOWED_DOMAINS
 
 
-# -- Zwischenspeicher -----------------------------------------------------
+
 def test_repeated_reads_hit_the_instance_once(ha: HomeAssistant) -> None:
     """Der Agent fragt in einer Runde gern dreimal -- das reicht einmal."""
     from aquaticy.homeassistant import _states_cache
@@ -202,10 +202,10 @@ def test_a_stale_cache_is_refused(ha: HomeAssistant, monkeypatch: pytest.MonkeyP
 
     module._states_cache.clear()
     ha.states()
-    # Die Uhr muss VORWAERTS gestellt werden, und zwar von dort aus, wo sie
-    # gerade steht. Eine feste Zahl ging nur so lange gut, wie der Rechner
-    # weniger als knapp drei Stunden lief -- danach stellte sie die Uhr
-    # zurueck, der Eintrag galt als frisch und der Test schlug fehl.
+
+
+
+
     spaeter = time.monotonic() + module.STATES_TTL + 1
     monkeypatch.setattr(module.time, "monotonic", lambda: spaeter)
     ha.states()

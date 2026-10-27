@@ -111,8 +111,8 @@ def test_typing_and_sending_through_the_checks_arrives_intact(box) -> None:
     time.sleep(1)
 
     arten = iter([
-        '{"feld": "suche", "art": "harmlos"}',          # vor dem Tippen
-        '{"was": "sucht", "art": "harmlos"}',           # vor dem Enter
+        '{"feld": "suche", "art": "harmlos"}',
+        '{"was": "sucht", "art": "harmlos"}',
     ])
     gefragt: list[str] = []
     desktop = Desktop(

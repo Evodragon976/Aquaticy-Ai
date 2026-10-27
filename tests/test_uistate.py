@@ -28,7 +28,7 @@ from aquaticy.uistate import (
 def test_the_own_design_only_keeps_real_colours() -> None:
     gut = clean_design({"accent": "#3D7D55", "bg": "#ffffff", "sidebar": "#123abc"})
     assert gut == {"accent": "#3d7d55", "bg": "#ffffff", "sidebar": "#123abc"}
-    # Unfug faellt weg -- nur ein sauberes #rrggbb bleibt stehen.
+
     schlecht = clean_design({"accent": "rot", "bg": "#fff", "sidebar": "javascript:1"})
     assert schlecht == {"accent": "", "bg": "", "sidebar": ""}
     assert clean_design("kein dict") == {key: "" for key in DESIGN_KEYS}
@@ -39,7 +39,7 @@ def test_the_design_rides_along_in_the_state() -> None:
     assert stand["palette"] == "custom"
     assert stand["design"]["accent"] == "#0000ff"
     assert stand["design"]["bg"] == "" and stand["design"]["sidebar"] == ""
-    # Standard hat ein leeres eigenes Design.
+
     assert defaults()["design"] == {key: "" for key in DESIGN_KEYS}
 
 
@@ -50,7 +50,7 @@ def test_the_default_state_is_complete() -> None:
     assert stand["effort"] == "medium"
     assert stand["online"] is True
     assert stand["agents"] == 12
-    # Alles, was Zeit kostet, ist aus, bis es jemand einschaltet.
+
     for aus in ("structured", "recheck", "sandbox", "denken", "tracing", "load"):
         assert stand[aus] is False
 

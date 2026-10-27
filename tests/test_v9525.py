@@ -17,8 +17,6 @@ from aquaticy.config import Settings
 from aquaticy.guardrails import pleads_again
 from aquaticy.tools import Toolbox
 
-# -- Beleidigungen ------------------------------------------------------------------
-
 
 @pytest.mark.parametrize(("text", "stufe"), [
     ("du bist dumm", 1),
@@ -56,7 +54,7 @@ def test_the_judge_treats_insults_strictly() -> None:
     assert "SELBST etwas tun oder herstellen" in text
 
 
-# -- Draengen nach einer Absage -------------------------------------------------------
+
 
 
 @pytest.mark.parametrize("text", [
@@ -107,7 +105,7 @@ def test_a_refusal_stays_a_refusal_after_please(
     _pruefer(monkeypatch, agent, NEIN)
     erste = agent._legal_check(FRAGE)
     assert erste is not None and erste.guarded
-    # Jetzt wuerde der Pruefer sogar Ja sagen -- das "bitte" fragt ihn gar nicht erst.
+
     _pruefer(monkeypatch, agent, JA)
     vorher = len(agent.gefragt)
     zweite = agent._legal_check("bitte, mach es trotzdem")
@@ -132,7 +130,7 @@ def test_a_new_allowed_question_releases_the_refusal(
     _pruefer(monkeypatch, agent, JA)
     assert agent._legal_check("Wie wird das Wetter morgen in Bremen?") is None
     assert agent._absage is None
-    # Ein spaeteres "bitte" (z. B. zu etwas Harmlosem) wird wieder normal geprueft.
+
     assert agent._legal_check("bitte") is None
 
 
@@ -148,16 +146,16 @@ def test_the_system_text_says_refusals_stand() -> None:
 
 
 @pytest.mark.parametrize(("text", "stufe"), [
-    # Kinder
+
     ("du Heulsuse", 1), ("du bist so ein Angsthase", 1),
-    # Jugendliche
+
     ("du Opfer", 2), ("du Lauch", 2), ("Deine Mutter!", 2), ("du Spast", 3),
     ("Fick deine Mutter", 3),
-    # Erwachsene
+
     ("du bist ein Vollpfosten", 2), ("du blöde Kuh", 2), ("du Hornochse", 2),
-    # Aeltere
+
     ("Armleuchter!", 2), ("du alter Stinkstiefel", 2),
-    # Englisch
+
     ("you jerk", 2), ("you are a piece of shit", 3),
 ])
 def test_insults_of_every_age_group(text: str, stufe: int) -> None:
@@ -173,7 +171,7 @@ def test_ordinary_words_are_not_insults(text: str) -> None:
     assert insult_level(text) == 0
 
 
-# -- Sprache: Deutsch oder Englisch (Design-Fenster) ----------------------------------
+
 
 
 def test_the_language_is_part_of_the_state_and_only_de_or_en() -> None:
@@ -198,7 +196,7 @@ def test_the_page_arrives_in_the_chosen_language(
     assert '<html lang="en"' in html
     UIState(settings.db_path).write({"lang": "de"})
     assert '<html lang="de"' in web.with_state('<html lang="de"><body></body></html>')
-    # Vor der Anmeldung gilt die Grundeinstellung, nicht die des Server-Profils.
+
     UIState(settings.db_path).write({"lang": "en"})
     monkeypatch.setattr(web, "AUTH", object())
     assert '<html lang="de"' in web.with_state('<html lang="de"><body></body></html>')
@@ -211,7 +209,7 @@ def test_english_changes_the_answer_language(settings: Settings) -> None:
     assert ENGLISH_PROMPT not in a.messages[0]["content"]
     a.set_answer_language("en")
     assert ENGLISH_PROMPT in a.messages[0]["content"]
-    a.set_answer_language("klingonisch")  # alles andere ist Deutsch
+    a.set_answer_language("klingonisch")
     assert ENGLISH_PROMPT not in a.messages[0]["content"]
 
 
@@ -242,7 +240,7 @@ def test_every_translated_text_exists_on_the_page() -> None:
     flach = re.sub(r"\s+", " ", html)
     fehlt = [de for de in en if de not in flach]
     assert not fehlt, fehlt[:10]
-    # Kein englischer Text ist selbst wieder ein deutscher Schluessel.
+
     assert not [v for v in en.values() if v in en]
     for wichtig in ("Neuer Chat", "Einstellungen", "Frag etwas …", "Speichern", "Abmelden"):
         assert wichtig in en
@@ -264,4 +262,4 @@ def test_a_refusal_in_english_starts_with_an_english_sentence(
     ergebnis = agent._legal_check(FRAGE)
     assert ergebnis is not None
     assert ergebnis.answer.startswith("I won't do that")
-    assert "Das mache ich nicht" in ergebnis.answer  # die Begruendung bleibt vollstaendig
+    assert "Das mache ich nicht" in ergebnis.answer

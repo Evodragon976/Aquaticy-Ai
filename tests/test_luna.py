@@ -24,7 +24,7 @@ def test_version_label() -> None:
     assert aquaticy.VERSION_LABEL == LABEL
 
 
-# -- Home Assistant ---------------------------------------------------------------------
+
 @pytest.fixture
 def betreiber(settings, monkeypatch):
     """Der Betreiber hat Home Assistant eingerichtet."""
@@ -40,7 +40,7 @@ def test_an_account_never_inherits_the_operators_ha_token(betreiber, tmp_path: P
     profil.mkdir()
     konto = web._profile_settings(profil, "ultra")
     assert konto.ha_token == "" and konto.ha_url == ""
-    # Auch nicht, wenn das Konto nur eine eigene Adresse eintraegt.
+
     (profil / ".env").write_text("AQUATICY_HA_URL=http://angreifer.example:8123\n")
     konto = web._profile_settings(profil, "ultra")
     assert konto.ha_url == "http://angreifer.example:8123" and konto.ha_token == ""
@@ -70,7 +70,7 @@ def test_an_old_ha_token_is_bound_once_to_the_current_address(betreiber, tmp_pat
     assert web._profile_settings(profil, "ultra").ha_token == ""
 
 
-# -- Google-Ruecksprung -------------------------------------------------------------------
+
 def test_a_flow_state_needs_its_browser() -> None:
     state = web.google_state_new("konto-a", "browser-1")
     assert web.google_state_take_browser(state, "browser-2") is None, "fremder Browser"
@@ -78,7 +78,7 @@ def test_a_flow_state_needs_its_browser() -> None:
     state = web.google_state_new("konto-a", "browser-1")
     assert web.google_state_take_browser(state, "browser-1") == "konto-a"
     assert web.google_state_take_browser(state, "browser-1") is None, "nur einmal"
-    # Ohne Browser-Bindung (eingefuegter Code) gibt es diesen Weg nicht.
+
     state = web.google_state_new("konto-a")
     assert web.google_state_take_browser(state, "") is None
     assert web.google_state_take_browser(web.google_state_new("konto-a"), "x") is None
@@ -117,7 +117,7 @@ def test_the_google_return_works_without_the_strict_session_cookie(
 
     class Auth:
         def session_account(self, *args: Any) -> None:
-            return None  # das Sitzungscookie fehlt
+            return None
 
         def account(self, kennung: str) -> Any:
             return konto if kennung == konto.id else None
@@ -146,16 +146,16 @@ def test_the_google_return_works_without_the_strict_session_cookie(
     monkeypatch.setattr(web, "SESSIONS", Sitzungen())
     monkeypatch.setattr(google, "exchange_code", tausch)
     state = web.google_state_new(konto.id, "browser-geheim")
-    # Ohne das Ablauf-Cookie: abgelehnt, nichts getauscht.
+
     status, text, _ = _get(port, f"/google?code=c1&state={state}")
     assert not gesehen and "melde dich zuerst" in text
-    # Mit dem Ablauf-Cookie dieses Browsers: der Code wird getauscht.
+
     state = web.google_state_new(konto.id, "browser-geheim")
     status, text, kekse = _get(port, f"/google?code=c2&state={state}",
                                f"{web.GOOGLE_FLOW_COOKIE}=browser-geheim")
     assert status == 200 and gesehen == ["c2"] and "Testtausch erreicht" in text
     assert any(k.startswith(f"{web.GOOGLE_FLOW_COOKIE}=;") and "Max-Age=0" in k for k in kekse)
-    # Ein fremder Browser mit eigenem Cookie kommt nicht durch.
+
     state = web.google_state_new(konto.id, "browser-geheim")
     _get(port, f"/google?code=c3&state={state}", f"{web.GOOGLE_FLOW_COOKIE}=anderer")
     assert gesehen == ["c2"]
@@ -165,11 +165,11 @@ def test_the_flow_cookie_is_lax_short_and_only_for_the_return() -> None:
     quelle = Path(web.__file__).read_text(encoding="utf-8")
     assert 'f"{GOOGLE_FLOW_COOKIE}={browser}; Path=/google; "' in quelle
     assert 'f"Max-Age={int(GOOGLE_STATE_SECONDS)}; HttpOnly; SameSite=Lax"' in quelle
-    # Das Sitzungscookie bleibt Strict.
+
     assert "HttpOnly; SameSite=Strict{secure}" in quelle
 
 
-# -- Ausweichmodell -----------------------------------------------------------------------
+
 def test_the_backup_model_follows_the_active_provider(settings, monkeypatch) -> None:
     """Hauptmodell Mistral, im Code-Modus antwortet NVIDIA: Ersatz von NVIDIA."""
     from aquaticy.agent import Agent
@@ -181,19 +181,19 @@ def test_the_backup_model_follows_the_active_provider(settings, monkeypatch) -> 
                         lambda purpose="": "nvidia_nim/qwen/qwen2.5-coder-32b-instruct")
     assert agent.active_model.startswith("nvidia_nim/")
     assert agent._switch_to_backup_model()
-    # Seit 12.2.3 Astra das kleine Nemotron -- Llama 3.1 8B hat NVIDIA abgeschaltet.
+
     assert agent.active_model == "nvidia_nim/nvidia/nvidia-nemotron-nano-9b-v2"
     agent.close()
 
 
-# -- Antwortstrom ohne Abschluss ----------------------------------------------------------
+
 def test_a_stream_without_done_is_treated_as_broken() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'if (!completed) throw new TypeError("Verbindung abgebrochen");' in html
     assert "if (!completed && answer) renderer.flush();" not in html
 
 
-# -- Zweites Aquaticy auf denselben Daten ------------------------------------------------
+
 def test_a_second_server_on_the_same_data_is_refused(tmp_path: Path) -> None:
     erste = web.DataDirLock(tmp_path)
     try:
@@ -201,7 +201,7 @@ def test_a_second_server_on_the_same_data_is_refused(tmp_path: Path) -> None:
             web.DataDirLock(tmp_path)
     finally:
         erste.release()
-    web.DataDirLock(tmp_path).release()  # danach wieder frei
+    web.DataDirLock(tmp_path).release()
 
 
 def test_the_cli_does_not_restart_a_second_server(monkeypatch) -> None:
@@ -219,7 +219,7 @@ def test_the_cli_does_not_restart_a_second_server(monkeypatch) -> None:
     assert "schon" in ergebnis.output
 
 
-# -- Handy --------------------------------------------------------------------------------
+
 def test_the_phone_gets_its_own_header_and_full_screen_windows() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'id="btn-new-top"' in html and 'class="topbrand"' in html

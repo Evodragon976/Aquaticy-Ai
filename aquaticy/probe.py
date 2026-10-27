@@ -11,7 +11,6 @@ fehlgeschlagener Test ist ein Ergebnis, kein Absturz.
 
 from __future__ import annotations
 
-#: Genug fuer "ok", zu wenig, um Geld zu kosten.
 PROBE_TOKENS = 8
 PROBE_TIMEOUT = 30
 PROBE_QUESTION = "Antworte mit genau dem Wort: ok"
@@ -36,8 +35,8 @@ def check_llm(
             kwargs["api_key"] = api_key
         if api_base:
             kwargs["api_base"] = api_base
-        # Ein Test mit eigenem Schluessel laeuft in dessen eigenem Takt, einer
-        # mit dem gestellten in dem des Betreibers.
+
+
         from aquaticy import llmcall
         from aquaticy.pace import paced
 

@@ -42,7 +42,7 @@ ZONE = "a" * 32
 KONTO = "b" * 32
 TUNNEL = "11111111-2222-3333-4444-555555555555"
 TOKEN = "cf_" + "x" * 37
-#: Wie ein echtes Tunnel-Token: Base64, mit "+", "/" und "=".
+
 TUNNEL_TOKEN = "eyJhIjoi" + "Ab+/" * 12 + "Zz=="
 
 
@@ -54,7 +54,7 @@ def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-# -- Eingaben ------------------------------------------------------------------------------
+
 @pytest.mark.parametrize(("roh", "erwartet"), [
     ("chat.example.de", "chat.example.de"),
     ("https://Chat.Example.de/", "chat.example.de"),
@@ -92,11 +92,11 @@ def test_config_comes_from_the_environment() -> None:
                                   "AQUATICY_PUBLIC_PORT": "80"})
     assert config is not None
     assert config.domain == DOMAIN
-    assert config.public_port == website.DEFAULT_PUBLIC_PORT  # unter 1024 nicht
+    assert config.public_port == website.DEFAULT_PUBLIC_PORT
     assert config.tunnel_name == "aquaticy-chat-example-de"
 
 
-# -- Cloudflare (nachgebaut) ----------------------------------------------------------------
+
 class FakeCloudflare:
     def __init__(self) -> None:
         self.tunnels: list[dict[str, Any]] = []
@@ -125,7 +125,7 @@ class FakeCloudflare:
             self.tunnels.append(neu)
             return self._ok(neu)
         if pfad == f"/accounts/{KONTO}/cfd_tunnel/{TUNNEL}/token":
-            # Echte Tunnel-Tokens sind Base64 -- mit "+", "/" und "=".
+
             return self._ok(TUNNEL_TOKEN)
         if pfad == f"/accounts/{KONTO}/cfd_tunnel/{TUNNEL}/configurations":
             self.ingress = body
@@ -171,7 +171,7 @@ def test_provisioning_creates_tunnel_route_and_domain(tmp_path: Path) -> None:
     regel = fake.ingress["config"]["ingress"][0]
     assert regel["hostname"] == DOMAIN
     assert regel["service"] == "https://localhost:8443"
-    # Noch kein echtes Zertifikat: cloudflared vertraut genau dem selbst ausgestellten.
+
     assert regel["originRequest"]["originServerName"] == DOMAIN
     assert regel["originRequest"]["caPool"].endswith("selfsigned-cert.pem")
     assert "noTLSVerify" not in regel["originRequest"]
@@ -180,7 +180,7 @@ def test_provisioning_creates_tunnel_route_and_domain(tmp_path: Path) -> None:
     assert (eintrag["type"], eintrag["content"], eintrag["proxied"]) == \
         ("CNAME", f"{TUNNEL}.cfargotunnel.com", True)
     assert schritte
-    # Gemerkt -- nur fuer den eigenen Nutzer lesbar.
+
     datei = website.site_dir(tmp_path) / "site.json"
     assert datei.stat().st_mode & 0o077 == 0
     assert website.load_state(tmp_path, DOMAIN) == zustand
@@ -228,7 +228,7 @@ def test_a_rejected_token_names_the_rights(tmp_path: Path) -> None:
                           cloudflare=_cf(fake))
 
 
-# -- Let's Encrypt (nachgebaut) -------------------------------------------------------------
+
 class FakeAcme:
     """Ein ACME-Server nach RFC 8555 -- so streng, wie es fuer den Test zaehlt."""
 
@@ -380,8 +380,8 @@ def test_a_certificate_is_obtained_via_dns(monkeypatch: pytest.MonkeyPatch,
         wait=lambda name, wert: gewartet.append(name), sleep=lambda s: None)
     assert ablauf > datetime.now(UTC) + timedelta(days=80)
     assert gewartet == [f"_acme-challenge.{DOMAIN}"]
-    assert acme.txt_seen  # Let's Encrypt hat den Eintrag gesehen ...
-    assert not [r for r in cf.records if r["type"] == "TXT"]  # ... und er ist wieder weg
+    assert acme.txt_seen
+    assert not [r for r in cf.records if r["type"] == "TXT"]
     zert, key = website.cert_paths(tmp_path)
     assert zert.read_bytes().startswith(b"-----BEGIN CERTIFICATE-----")
     assert key.stat().st_mode & 0o077 == 0
@@ -389,7 +389,7 @@ def test_a_certificate_is_obtained_via_dns(monkeypatch: pytest.MonkeyPatch,
     assert not website.needs_certificate(tmp_path, DOMAIN)
     assert website.needs_certificate(tmp_path, DOMAIN,
                                      now=datetime.now(UTC) + timedelta(days=70))
-    # Der Kontoschluessel bleibt fuer die Erneuerung.
+
     assert (website.site_dir(tmp_path) / "acme-account.key").stat().st_mode & 0o077 == 0
 
 
@@ -455,13 +455,13 @@ def test_the_website_sets_itself_up_and_switches_to_strict_checking(
     assert regel["originRequest"] == {"originServerName": DOMAIN}
     assert seite.strict is True
     assert seite.view()["url"] == f"https://{DOMAIN}/"
-    # Ein zweiter Durchgang aendert nichts mehr bei Cloudflare.
+
     vorher = len(cf.calls)
     seite._step()
     assert len(cf.calls) == vorher
 
 
-# -- TLS fuer den Eingang ------------------------------------------------------------------
+
 def test_without_a_real_certificate_a_self_signed_one_is_used(tmp_path: Path) -> None:
     kontext, echt = website.tls_context(tmp_path, DOMAIN)
     assert isinstance(kontext, ssl.SSLContext)
@@ -469,7 +469,7 @@ def test_without_a_real_certificate_a_self_signed_one_is_used(tmp_path: Path) ->
     assert (website.site_dir(tmp_path) / "selfsigned-key.pem").stat().st_mode & 0o077 == 0
 
 
-# -- cloudflared ---------------------------------------------------------------------------
+
 class FakeProzess:
     def __init__(self, aufrufe: list[Any], args: list[str], **kwargs: Any) -> None:
         aufrufe.append((args, kwargs))
@@ -509,7 +509,7 @@ def test_the_tunnel_token_never_appears_on_the_command_line(
     assert kwargs["env"]["TUNNEL_TOKEN"] == "eyJ" + "t" * 60
     assert "AQUATICY_CLOUDFLARE_TOKEN" not in kwargs["env"]
     assert "MISTRAL_API_KEY" not in kwargs["env"]
-    # Endet cloudflared, startet es neu -- mit wachsender Pause.
+
     assert len(aufrufe) == 3
     assert pausen == list(website.TUNNEL_BACKOFF[:3])
     assert tunnel.phase == "fehler"
@@ -567,7 +567,7 @@ def test_a_wrong_checksum_installs_nothing(monkeypatch: pytest.MonkeyPatch,
     assert not website.managed_cloudflared(tmp_path).exists()
 
 
-# -- Der oeffentliche Eingang --------------------------------------------------------------
+
 def test_the_public_entry_takes_the_visitor_address_from_cloudflare() -> None:
     from aquaticy.web import Handler, PublicHandler
 
@@ -578,7 +578,7 @@ def test_the_public_entry_takes_the_visitor_address_from_cloudflare() -> None:
     assert eingang._https() is True
     eingang.headers = {"CF-Connecting-IP": "kein; ip"}  # type: ignore[assignment]
     assert eingang._client_ip() == "127.0.0.1"
-    # Am normalen Eingang zaehlt die Kopfzeile nicht -- jeder koennte sie setzen.
+
     normal = Handler.__new__(Handler)
     normal.client_address = ("192.168.1.20", 50000)
     normal.headers = {"CF-Connecting-IP": "203.0.113.9"}  # type: ignore[assignment]
@@ -604,7 +604,7 @@ def test_the_public_entry_speaks_tls_on_loopback_and_hides_the_cluster(
     faden.start()
     try:
         port = server.server_address[1]
-        # Geprueft gegen das selbst ausgestellte Zertifikat -- es nennt auch "localhost".
+
         vertrauen = ssl.create_default_context(
             cafile=str(website.site_dir(tmp_path) / "selfsigned-cert.pem"))
         with httpx.Client(verify=vertrauen, timeout=10) as client:
@@ -619,7 +619,7 @@ def test_the_public_entry_speaks_tls_on_loopback_and_hides_the_cluster(
         server.server_close()
 
 
-# -- Kommandozeile -------------------------------------------------------------------------
+
 runner = CliRunner()
 
 
@@ -679,11 +679,11 @@ def test_website_setup_asks_and_writes_the_env(monkeypatch: pytest.MonkeyPatch,
     ergebnis = runner.invoke(cli.app, ["website", "setup", "--env-file", str(ziel)],
                              input=f"kaputt\nhttps://{DOMAIN}/\n{TOKEN}\n")
     assert ergebnis.exit_code == 0, ergebnis.output
-    assert "keine Domain" in ergebnis.output  # "kaputt" wurde abgelehnt
+    assert "keine Domain" in ergebnis.output
     text = ziel.read_text(encoding="utf-8")
     assert f"AQUATICY_DOMAIN={DOMAIN}" in text
     assert TOKEN in text
-    assert TOKEN not in ergebnis.output  # verdeckt eingegeben
+    assert TOKEN not in ergebnis.output
     assert eingerichtet[0].domain == DOMAIN
     assert ziel.stat().st_mode & 0o077 == 0
 
@@ -752,7 +752,7 @@ def test_with_a_domain_the_plain_entry_only_serves_the_home_network(
     for adresse in ("192.168.1.20", "10.0.0.7", "100.81.120.100", "127.0.0.1", "::1",
                     "fd12::5"):
         assert _handler_von(adresse)._nur_heimnetz() is False, adresse
-    # Der Tunnel-Eingang ist davon nicht betroffen.
+
     assert _handler_von("93.184.215.14", web.PublicHandler)._nur_heimnetz() is False
 
 

@@ -2,25 +2,23 @@
 
 import os as _os
 
-# LiteLLM holt sonst bei jedem Import seine Preisliste von GitHub (11.2.1).
-# Aquaticy braucht sie nicht; ohne Netz kostet der Versuch Sekunden.
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 __version__ = "12.6.6"
 
-#: Der Name dieser Fassung. Er steht ueberall hinter der Versionsnummer, wo
-#: Menschen sie lesen -- nicht in Paketangaben und Kennungen fuer Server.
-__codename__ = "Terra"
 
-#: Interne oder Test-Fassung (seit 9.6.0): "Intern", "Test" -- leer fuer eine
-#: oeffentliche Fassung. Steht dann hinter dem Namen, und die Oberflaeche zeigt
-#: unten mittig einen gelben Hinweis.
+
+__codename__ = "Sol"
+
+
+
+
 __stage__ = ""
 
-#: Ob dies eine interne oder Test-Fassung ist.
+
 INTERNAL = bool(__stage__)
 
-#: So steht die Fassung in der Oberflaeche, im Terminal und in der README.
+
 VERSION_LABEL = f"{__version__} {__codename__}" + (f" {__stage__}" if __stage__ else "")
 
 __all__ = ["INTERNAL", "VERSION_LABEL", "__codename__", "__stage__", "__version__"]

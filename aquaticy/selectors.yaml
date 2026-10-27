@@ -1,17 +1,17 @@
-# Konfiguration der Seiten-Saeuberung (Stufe 1 der Cookie-Behandlung).
-# Erweiterbar ohne Codeaenderung -- die Datei wird beim Start eingelesen.
 
-# CSS-Selektoren, deren Knoten vor der Textextraktion aus dem DOM fliegen.
+
+
+
 strip_selectors:
-  # generische Consent-/Overlay-Muster
+
   - '[id*="cookie" i]'
   - '[class*="cookie" i]'
   - '[id*="consent" i]'
   - '[class*="consent" i]'
   - '[id*="gdpr" i]'
   - '[class*="gdpr" i]'
-  # Nicht "cmp" allein: Adobe-Seiten nennen jeden Baustein "cmp-text",
-  # "cmp-container" ... -- das waere der ganze Inhalt.
+
+
   - '[class*="cmpbox" i]'
   - '[class*="cmpwrapper" i]'
   - '[class*="cmp-banner" i]'
@@ -24,7 +24,7 @@ strip_selectors:
   - '[role="dialog"]'
   - '[aria-modal="true"]'
   - 'dialog'
-  # konkrete Consent-Management-Plattformen
+
   - '#onetrust-consent-sdk'
   - '#onetrust-banner-sdk'
   - '#usercentrics-root'
@@ -44,7 +44,7 @@ strip_selectors:
   - '#klaro'
   - '#cookiescript_injected'
   - '#BorlabsCookieBox'
-  # allgemeiner Ballast, den trafilatura gelegentlich mitnimmt
+
   - 'script'
   - 'style'
   - 'noscript'
@@ -59,8 +59,8 @@ strip_selectors:
   - '[role="navigation"]'
   - '[aria-hidden="true"]'
 
-# Textbausteine, die als Consent-Geschwaetz gelten. Absaetze, die im
-# Wesentlichen daraus bestehen, werden aus dem extrahierten Text gestrichen.
+
+
 consent_phrases:
   - "wir verwenden cookies"
   - "wir nutzen cookies"
@@ -97,8 +97,8 @@ consent_phrases:
   - "personalised ads"
   - "personalized ads"
 
-# Zusaetzliche Marker: stehen diese im HTML und ist kaum Text uebrig,
-# gilt die Seite als Consent-Wall (Stufe 2).
+
+
 consent_wall_markers:
   - "onetrust"
   - "cookiebot"
@@ -118,8 +118,8 @@ consent_wall_markers:
   - "cookie_consent"
   - "cookieconsent"
 
-# Saetze einer Sperrseite (Bot-Schutz, Captcha). Sie zaehlen nur, wenn die
-# Seite kaum eigenen Text hat -- ein Artikel UEBER Captchas ist keine Sperre.
+
+
 blocked_markers:
   - "are you a robot"
   - "sind sie ein roboter"
@@ -139,9 +139,9 @@ blocked_markers:
   - "request blocked"
   - "just a moment..."
 
-# Spuren einer Sperrseite im HTML. Auch sie zaehlen nur bei wenig Text: viele
-# normale Seiten laden dieselben Skripte (reCAPTCHA im Kontaktformular,
-# DataDome, PerimeterX), ohne den Besucher aufzuhalten.
+
+
+
 blocked_html_markers:
   - "cf-browser-verification"
   - "cf-challenge"
@@ -151,7 +151,7 @@ blocked_html_markers:
   - "_incapsula_resource"
   - "incapsula incident id"
 
-# Marker fuer Bezahl- und Login-Schranken -- werden nie umgangen.
+
 paywall_markers:
   - "paywall"
   - "jetzt abonnieren"
@@ -171,9 +171,9 @@ paywall_markers:
   - "altersverifikation"
   - "age verification"
 
-# Domains, die einfache HTTP-Abrufe verlaesslich blocken. Sie werden erst gar
-# nicht abgerufen, sondern direkt als `blocked` markiert -- der Suchtreffer
-# bleibt aber als Kauf-/Referenzlink erhalten.
+
+
+
 known_blocking_domains:
   - "amazon.de"
   - "amazon.com"
@@ -199,9 +199,9 @@ known_blocking_domains:
   - "tripadvisor.com"
   - "idealo.de"
 
-# --- Stufe 3: Playwright-Fallback ------------------------------------------
-# Ablehnen-Schaltflaechen bekannter Consent-Management-Plattformen. Es wird
-# ausschliesslich abgelehnt -- "Alle akzeptieren" wird nie geklickt.
+
+
+
 cmp_reject_selectors:
   - '#onetrust-reject-all-handler'
   - '#onetrust-pc-btn-handler + button'
@@ -222,10 +222,10 @@ cmp_reject_selectors:
   - '[aria-label*="ablehnen" i]'
   - '[aria-label*="reject" i]'
 
-# Generischer Fallback: sichtbarer Button, dessen Text hierauf passt.
+
 reject_text_pattern: 'ablehnen|nur notwendige|nur essenziell|nur erforderlich|ohne einwilligung|reject|decline|necessary only|refuse|continue without'
 
-# Diese Knoten werden im Browser nur entfernt -- niemals angeklickt.
+
 overlay_remove_selectors:
   - '#onetrust-consent-sdk'
   - '#usercentrics-root'

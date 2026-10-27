@@ -32,19 +32,18 @@ from urllib.parse import urlparse
 
 import httpx
 
-#: Der Port, auf dem die Lagerverwaltung standardmaessig lauscht.
 STORAGE_PORT = 3000
 
-#: Womit sich der Server unter /api/config zu erkennen gibt.
+
 APP_ID = "storage-system"
 
-#: Die erlaubten Rechtestufen, von nichts bis alles.
+
 ACCESS_LEVELS = ("off", "read", "write")
 
 REQUEST_TIMEOUT = 10.0
 
-#: Hoechstzahl der Eintraege je Antwort. Ein Lager mit tausend Artikeln wuerde
-#: das Kontextfenster sonst allein fuellen.
+
+
 MAX_ROWS = 50
 
 
@@ -63,10 +62,10 @@ def normalize_url(url: str) -> str:
         return ""
     if "://" not in url:
         url = f"http://{url}"
-    # Seit 9.5.34: der Port gehoert an den Rechnernamen, nicht hinter den Pfad
-    # ("nas.local/ha" -> "nas.local:{port}/ha"); ein ungueltiger Port
-    # ("ha.local:abc") ergibt "" statt eines Absturzes. Seit 11.3.0 ebenso eine
-    # unlesbare Adresse ("[1, 2]", Steuerzeichen) -- sonst stuerzte der Test ab.
+
+
+
+
     if any(ord(zeichen) < 33 or ord(zeichen) == 127 for zeichen in url):
         return ""
     try:
@@ -101,7 +100,7 @@ class Storage:
         self.access = normalize_access(access)
         self._http = client or httpx.Client(timeout=timeout, follow_redirects=True)
 
-    # -- Zustand ----------------------------------------------------------
+
     @property
     def configured(self) -> bool:
         return bool(self.url) and self.access != "off"
@@ -114,7 +113,7 @@ class Storage:
         with contextlib.suppress(Exception):
             self._http.close()
 
-    # -- Grundlagen -------------------------------------------------------
+
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         if not self.url:
             raise StorageError(
@@ -153,7 +152,7 @@ class Storage:
             )
         return data
 
-    # -- Lesen ------------------------------------------------------------
+
     def rooms(self) -> list[dict[str, Any]]:
         """Alle Raeume mit der Zahl ihrer Moebel und Artikel."""
         return _rows(self._request("GET", "/api/rooms"))
@@ -182,7 +181,7 @@ class Storage:
         )
         return _rows(data.get("results") if isinstance(data, dict) else data)
 
-    # -- Schreiben --------------------------------------------------------
+
     def add_item(self, furniture_id: int, name: str, quantity: int = 1) -> dict[str, Any]:
         """Legt einen Artikel an. Die Nummer vergibt der Server."""
         name = (name or "").strip()
@@ -240,11 +239,11 @@ class Storage:
         )
 
 
-# ---------------------------------------------------------------------------
-# Aufbereiten
-# ---------------------------------------------------------------------------
-#: Felder, die das Modell nicht braucht. Bilddateinamen und Zeitstempel
-#: fuellen nur das Kontextfenster.
+
+
+
+
+
 DROP_FIELDS = frozenset({"imageFile", "createdAt", "updatedAt", "prefix", "seq"})
 
 
@@ -274,9 +273,9 @@ def _explain(response: httpx.Response) -> str:
     return f"Lagerverwaltung antwortet mit {response.status_code}: {detail or 'kein Grund genannt'}"
 
 
-# ---------------------------------------------------------------------------
-# Im Netz finden
-# ---------------------------------------------------------------------------
+
+
+
 def discover(subnet: str = "", timeout: float = 1.0) -> list[str]:
     """Sucht die Lagerverwaltung im eigenen Netz.
 
