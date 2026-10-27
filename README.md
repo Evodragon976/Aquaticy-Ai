@@ -1,4 +1,4 @@
-# Aquaticy AI 12.5.5 Terra
+# Aquaticy AI 12.5.5 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.5.5 Terra
+aquaticy --version            # 12.5.5 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -781,6 +781,10 @@ Nur mit **Ultra**.
   `aquaticy lan`.
 - **Home Assistant:** `aquaticy connect-ha` findet die Instanz. Aquaticy liest Zustände und
   schaltet, wenn du es erlaubst. Schlösser, Alarm, Tore und Heizung fragen immer nach.
+  Mit **„Auf Befehl ohne Rückfrage schalten“** (`AQUATICY_HA_DIRECT`) schaltet Aquaticy Licht,
+  Steckdosen, Ventilatoren und Mediaplayer sofort, wenn du darum bittest, und auch als
+  Coworker-Aufgabe. Bei Lampen darf es Helligkeit und Farbe setzen. Das Modell kann den
+  Schalter nicht selbst umlegen. Hat Aquaticy Webseiten oder Mails gelesen, fragt es trotzdem.
 - **Lagerverwaltung:** Räume → Möbel → Artikel. Aquaticy sagt, wo etwas liegt und wie viel da
   ist. Mit „Lesen und schreiben“ legt es auch an. Gelöscht wird nie.
 
@@ -1150,6 +1154,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_GOOGLE` / `AQUATICY_GOOGLE_WRITE` | Gmail und Kalender lesen / ändern | `false` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | eigene Google-Anwendung | – |
 | `AQUATICY_HA_URL` / `AQUATICY_HA_CONTROL` | Home Assistant / schalten erlaubt (Ultra) | – / `false` |
+| `AQUATICY_HA_DIRECT` | auf Befehl ohne Rückfrage schalten, braucht `AQUATICY_HA_CONTROL` (Ultra) | `false` |
 | `AQUATICY_LAN_ENABLED` / `AQUATICY_LAN_SUBNET` | Heimnetz ansehen (Ultra) | `true` / automatisch |
 | `AQUATICY_STORAGE_URL` / `AQUATICY_STORAGE_ACCESS` | Lagerverwaltung: Adresse / `off`, `read`, `write` (Ultra) | – / `read` |
 | `AQUATICY_DOMAIN` | eigene Domain (siehe [Website](#eigene-website-mit-domain)) | – |

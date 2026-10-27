@@ -2704,8 +2704,13 @@ class Toolbox:
         if payload.get("error"):
             # Auch eine Fehlermeldung kann fremden Text tragen (Grund einer Seite).
             return injection.clean(payload)
-        self.untrusted_seen = True
         markiert, arten = injection.mark(name, payload)
+        # Die eigenen Zustaende aus Home Assistant sind kein Web-Inhalt: Mit dem Schalter
+        # "Auf Befehl ohne Rueckfrage" (12.5.5 Sol) loest ihr Lesen keine Rueckfrage mehr
+        # aus. Steht darin aber eine Anweisung an eine KI, bleibt die Sperre.
+        if arten or not (name == "ha_states" and getattr(self.settings, "ha_direct", False)
+                         and getattr(self.settings, "ha_control", False)):
+            self.untrusted_seen = True
         if arten:
             self._emit("injection", tool=name, kinds=arten)
         return markiert

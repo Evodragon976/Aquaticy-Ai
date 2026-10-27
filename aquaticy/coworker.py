@@ -1110,7 +1110,7 @@ class Session:
             return {"error": f"„{kat.label}“ hat der Nutzer für Coworker gesperrt.",
                     "gesperrt": True}
         if name == "ha_call":
-            if self.ha_approved(toolbox, arguments):
+            if self.ha_approved(toolbox, arguments) or self.ha_direct(toolbox, arguments):
                 return None
         elif regel == "erlauben" and (kat.key == "werkstatt"
                                      or not getattr(toolbox, "untrusted_seen", False)):
@@ -1151,6 +1151,29 @@ class Session:
             and cw.enabled
             and cw.rule("zuhause") == "erlauben"
             and permits(cw.ha_binding, arguments, settings, ultra=plan == "ultra")
+        )
+
+    def ha_direct(self, toolbox: Any, arguments: dict[str, Any]) -> bool:
+        """Darf dieser Befehl wegen des Schalters "Auf Befehl ohne Rueckfrage" laufen?
+
+        Nur mit Ultra, nur ohne fremden Text im Lauf, nur fuer harmlose Bereiche und
+        nur, wenn die Verbindung dieselbe ist wie beim Start (12.5.5 Sol).
+        """
+        from aquaticy.coworker_context import connection_key
+        from aquaticy.homeassistant import direct_allowed
+
+        if self.cancelled is not None and self.cancelled():
+            return False
+        settings = (self.current_settings() if self.current_settings is not None
+                    else getattr(toolbox, "settings", None))
+        plan = self.current_plan() if self.current_plan is not None else self.plan
+        schluessel = connection_key(settings)
+        return bool(
+            plan == "ultra"
+            and getattr(settings, "ha_direct", False)
+            and schluessel and schluessel == connection_key(getattr(toolbox, "settings", None))
+            and not getattr(toolbox, "untrusted_seen", False)
+            and direct_allowed(arguments)
         )
 
     def _report(self, arguments: dict[str, Any]) -> dict[str, Any]:

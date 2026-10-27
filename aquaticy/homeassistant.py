@@ -83,6 +83,64 @@ ALLOWED_DOMAINS: frozenset[str] = frozenset(
     }
 )
 
+#: Was ohne Rueckfrage geschaltet werden darf, wenn der Nutzer es erlaubt hat
+#: (AQUATICY_HA_DIRECT, 12.5.5 Sol): harmlose Bereiche, nur an/aus/umschalten.
+#: Schloesser, Alarm, Tore, Heizung, Skripte und Szenen (PROTECTED_DOMAINS) sind
+#: nie dabei.
+DIRECT_DOMAINS: frozenset[str] = frozenset(
+    {"light", "switch", "fan", "input_boolean", "media_player"})
+DIRECT_SERVICES: frozenset[str] = frozenset({"turn_on", "turn_off", "toggle"})
+#: Wie viele Geraete ein einzelner Befehl ohne Rueckfrage treffen darf.
+MAX_DIRECT_TARGETS = 10
+#: Zusatzangaben, die ein Licht ohne Rueckfrage bekommen darf: nur Zahlen im Bereich.
+DIRECT_LIGHT_DATA: dict[str, tuple[float, float]] = {
+    "brightness_pct": (0, 100), "brightness": (0, 255), "color_temp_kelvin": (1000, 10000),
+    "kelvin": (1000, 10000), "transition": (0, 300),
+}
+
+
+def direct_allowed(arguments: dict[str, Any]) -> bool:
+    """Ist das ein Befehl, der ohne Rueckfrage laufen darf (12.5.5 Sol)?
+
+    Nur wenn ALLES passt: ein harmloser Bereich, an/aus/umschalten, bis zu zehn
+    genau benannte Geraete aus demselben Bereich -- nie "all", nie Raum oder
+    Etikett -- und als Zusatz bei Lampen nur Helligkeit und Farbe als Zahl.
+    """
+    if set(arguments) - {"domain", "service", "entity_id", "data"}:
+        return False
+    domain, service = arguments.get("domain"), arguments.get("service")
+    if (not isinstance(domain, str) or not isinstance(service, str)
+            or domain not in DIRECT_DOMAINS or domain in PROTECTED_DOMAINS
+            or service not in DIRECT_SERVICES):
+        return False
+    entity = arguments.get("entity_id")
+    if not isinstance(entity, str):
+        return False
+    ziele = _entities(entity)
+    if not 1 <= len(ziele) <= MAX_DIRECT_TARGETS or any(
+            not ENTITY_RE.fullmatch(z) or not z.startswith(domain + ".") for z in ziele):
+        return False
+    data = arguments.get("data")
+    if data in (None, {}):
+        return True
+    if domain != "light" or not isinstance(data, dict):
+        return False
+    for key, wert in data.items():
+        if key == "rgb_color":
+            if not (isinstance(wert, list) and len(wert) == 3 and all(
+                    isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= 255
+                    for x in wert)):
+                return False
+        elif key in DIRECT_LIGHT_DATA:
+            niedrig, hoch = DIRECT_LIGHT_DATA[key]
+            if (isinstance(wert, bool) or not isinstance(wert, int | float)
+                    or not niedrig <= wert <= hoch):
+                return False
+        else:
+            return False
+    return True
+
+
 #: So lange gilt eine einmal geholte Zustandsliste als frisch. Der Agent
 #: fragt in einer Runde gern dreimal -- erst die Uebersicht, dann einen
 #: Bereich, dann gezielt. Bei tausend Entitaeten waeren das drei volle

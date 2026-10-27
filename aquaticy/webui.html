@@ -2642,6 +2642,15 @@ html.vv,html.vv body{height:var(--app-h)}
               Licht. Bei Schlössern, Alarm, Toren und Heizung fragt es trotzdem jedes Mal.</span></label>
         </div>
         <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="hadirect" name="AQUATICY_HA_DIRECT">
+          <label for="hadirect" style="margin:0">Auf Befehl ohne Rückfrage schalten
+            <span class="why">Du sagst „Mach die Lampen an“, und es passiert gleich. Das gilt auch
+              für Aufgaben von Coworkern. Nur für Licht, Steckdosen, Ventilatoren und Mediaplayer.
+              Schlösser, Alarm, Tore, Heizung, Skripte und Szenen fragen weiter jedes Mal.
+              Hat Aquaticy Webseiten oder Mails gelesen, fragt es auch hier. Braucht „Aquaticy
+              darf auch schalten“.</span></label>
+        </div>
+        <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="lanon" name="AQUATICY_LAN_ENABLED">
           <label for="lanon" style="margin:0">Ins eigene Netz sehen dürfen
             <span class="why">Für Fragen wie „Welche Geräte sind in meinem WLAN?“ oder „Ist mein
@@ -2902,7 +2911,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.5.5 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.5.5 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6014,6 +6023,8 @@ const EN = {
 "Zugangsschlüssel (Token)": "Access key (token)",
 "Testen": "Test",
 "Aquaticy darf auch schalten": "Aquaticy may also switch things",
+"Auf Befehl ohne Rückfrage schalten": "Switch on command without asking",
+"Du sagst „Mach die Lampen an“, und es passiert gleich. Das gilt auch für Aufgaben von Coworkern. Nur für Licht, Steckdosen, Ventilatoren und Mediaplayer. Schlösser, Alarm, Tore, Heizung, Skripte und Szenen fragen weiter jedes Mal. Hat Aquaticy Webseiten oder Mails gelesen, fragt es auch hier. Braucht „Aquaticy darf auch schalten“.": "You say “Turn on the lamps”, and it happens right away. This also applies to coworker tasks. Only for lights, plugs, fans and media players. Locks, alarm, doors, heating, scripts and scenes still ask every time. If Aquaticy has read web pages or mails, it asks here too. Needs “Aquaticy may also switch things”.",
 "Aus: Aquaticy schaut nur nach. An: Es darf schalten, zum Beispiel Licht. Bei Schlössern, Alarm, Toren und Heizung fragt es trotzdem jedes Mal.": "Off: Aquaticy only looks. On: it may switch things, for example lights. For locks, alarms, gates and heating it still asks every time.",
 "Ins eigene Netz sehen dürfen": "May look into my own network",
 "Für Fragen wie „Welche Geräte sind in meinem WLAN?“ oder „Ist mein Drucker an?“. Aquaticy prüft nur, ob ein Gerät antwortet. Und nur in deinem Netz.": "For questions like “Which devices are on my Wi-Fi?” or “Is my printer on?”. Aquaticy only checks whether a device answers. And only on your network.",

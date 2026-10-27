@@ -337,6 +337,7 @@ SETTING_KEYS: tuple[str, ...] = (
     "AQUATICY_ENABLE_PLAYWRIGHT",
     "AQUATICY_HA_URL",
     "AQUATICY_HA_CONTROL",
+    "AQUATICY_HA_DIRECT",
     "AQUATICY_GOOGLE",
     "AQUATICY_GOOGLE_WRITE",
     "AQUATICY_STORAGE_URL",
@@ -686,6 +687,7 @@ _BOOL_SETTINGS = {
     "AQUATICY_SUBAGENTS_AUTO": "subagents_auto",
     "AQUATICY_ENABLE_PLAYWRIGHT": "enable_playwright",
     "AQUATICY_HA_CONTROL": "ha_control",
+    "AQUATICY_HA_DIRECT": "ha_direct",
     "AQUATICY_GOOGLE": "google_enabled",
     "AQUATICY_GOOGLE_WRITE": "google_write",
     "AQUATICY_LAN_ENABLED": "lan_enabled",
@@ -1246,6 +1248,7 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         settings.ha_url = ""
         settings.ha_token = ""
         settings.ha_control = False
+        settings.ha_direct = False
         settings.storage_url = ""
         settings.storage_access = "off"
         settings.vm_size = "normal"
@@ -2607,6 +2610,7 @@ def current_values() -> dict[str, str]:
         "AQUATICY_ENABLE_PLAYWRIGHT": "true" if settings.enable_playwright else "false",
         "AQUATICY_HA_URL": settings.ha_url,
         "AQUATICY_HA_CONTROL": "true" if settings.ha_control else "false",
+        "AQUATICY_HA_DIRECT": "true" if settings.ha_direct else "false",
         "AQUATICY_GOOGLE": "true" if settings.google_enabled else "false",
         "AQUATICY_GOOGLE_WRITE": "true" if settings.google_write else "false",
         "AQUATICY_STORAGE_URL": settings.storage_url,
@@ -2789,6 +2793,7 @@ def save_values(payload: dict[str, Any]) -> Path:
         for key in (
             "AQUATICY_HA_URL",
             "AQUATICY_HA_CONTROL",
+            "AQUATICY_HA_DIRECT",
             HA_TOKEN_FIELD,
             "AQUATICY_LAN_ENABLED",
             "AQUATICY_LAN_SUBNET",

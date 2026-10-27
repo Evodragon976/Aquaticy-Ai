@@ -155,6 +155,7 @@ CATALOGUE: tuple[Preference, ...] = (
 #: Der Grund wandert in die Ablehnung -- eine blosse Absage waere nutzlos.
 PROTECTED: dict[str, str] = {
     "AQUATICY_HA_CONTROL": "ob ich im Haus schalten darf",
+    "AQUATICY_HA_DIRECT": "ob ich im Haus ohne Rückfrage schalten darf",
     "AQUATICY_GOOGLE": "ob ich Mail und Kalender lesen darf",
     "AQUATICY_GOOGLE_WRITE": "ob ich bei Google etwas aendern darf",
     "AQUATICY_STORAGE_ACCESS": "was ich im Lager darf",

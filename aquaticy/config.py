@@ -499,6 +499,10 @@ class Settings:
     #: standardmaessig aus: eine missverstandene Nebenbemerkung soll nicht das
     #: Licht ausmachen.
     ha_control: bool = False
+    #: Darf Aquaticy auf Befehl (Chat) oder Aufgabe (Coworker) Licht, Steckdosen, Ventilatoren
+    #: und Mediaplayer OHNE Rueckfrage schalten (12.5.5 Sol)? Setzt ha_control voraus.
+    #: Schloesser, Alarm, Tore, Heizung, Skripte und Szenen fragen weiter jedes Mal.
+    ha_direct: bool = False
     #: Darf Aquaticy AI sich ueber Gespraeche hinweg Dinge merken?
     memory_enabled: bool = True
     #: Passphrase fuer den Speicher. Leer = Schluesseldatei im Datenordner.
@@ -1016,6 +1020,7 @@ def get_settings() -> Settings:
         ha_token=_env_str("HA_TOKEN") or _env_str("AQUATICY_HA_TOKEN"),
         github_token=_env_str("AQUATICY_GITHUB_TOKEN"),
         ha_control=_env_bool("AQUATICY_HA_CONTROL", False),
+        ha_direct=_env_bool("AQUATICY_HA_DIRECT", False),
         memory_enabled=_env_bool("AQUATICY_MEMORY", True),
         memory_key=_env_str("AQUATICY_MEMORY_KEY"),
         lan_enabled=_env_bool("AQUATICY_LAN_ENABLED", True),

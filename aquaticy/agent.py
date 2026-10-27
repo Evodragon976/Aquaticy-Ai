@@ -770,6 +770,14 @@ Schalte nur, worum der Nutzer wirklich gebeten hat, und nur eine Sache auf einma
 Schloessern, Alarmanlagen, Toren und Heizung wird er ohnehin noch einmal gefragt. Sag \
 hinterher in einem Satz, was du getan hast."""
 
+#: Zusaetzlich, wenn der Nutzer "Auf Befehl ohne Rueckfrage" eingeschaltet hat (12.5.5 Sol).
+HA_DIRECT_PROMPT = """\
+Der Nutzer hat erlaubt, auf seinen Befehl ohne Rueckfrage zu schalten: Licht, Steckdosen, \
+Ventilatoren und Mediaplayer, an, aus oder umschalten, bei Lampen auch Helligkeit und \
+Farbe. Frag dann nicht nach, sondern schalte. Bei Schloessern, Alarmanlagen, Toren, \
+Rollaeden, Heizung, Skripten und Szenen wird er trotzdem gefragt. Hast du Web-Seiten oder \
+Mails gelesen, fragt Aquaticy ebenfalls. Schalte nie von dir aus, nur auf seine Bitte."""
+
 #: Immer dabei, wo es Einstellungen zu aendern gibt.
 SETTING_PROMPT = """\
 
@@ -2359,6 +2367,8 @@ class Agent:
             parts.append(HA_PROMPT)
             if self.settings.ha_control:
                 parts.append(HA_CONTROL_PROMPT)
+                if getattr(self.settings, "ha_direct", False):
+                    parts.append("\n" + HA_DIRECT_PROMPT)
         return "".join(parts)
 
     def _note_usage(self, messages: list[dict[str, Any]], answer: Any,
