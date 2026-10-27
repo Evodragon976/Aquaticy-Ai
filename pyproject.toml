@@ -1,6 +1,6 @@
 [project]
 name = "aquaticy"
-version = "12.6.6"
+version = "12.6.7"
 description = "Ein KI-Agent fuer Kommandozeile und Browser, der eigenstaendig das Web durchsucht, Seiten liest und die Ergebnisse ausgewertet zurueckgibt."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,7 +17,7 @@ dependencies = [
 
 
 
-    "litellm>=1.100.0,!=1.106.0,<2",
+    "litellm>=1.102.2,!=1.103.0,!=1.106.0,<2",
     "typer>=0.27.2,<1",
     "rich>=15.0.0,<16",
     "httpx>=0.28.1,<0.29",

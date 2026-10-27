@@ -2757,7 +2757,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.6 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.7 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5413,6 +5413,8 @@ try {
 
 
 const EN = {
+"Kurze Unterbrechung. Die QR-Anzeige wird automatisch erneut geladen.": "Brief interruption. The QR display will reload automatically.",
+"Die QR-Erkennung fehlt. Aktualisiere Aquaticy und starte den Server neu.": "QR detection is missing. Update Aquaticy and restart the server.",
 "QR-Code anzeigen": "Show QR code",
 "Messenger verbinden": "Connect messenger",
 "WhatsApp Web verbinden": "Connect WhatsApp Web",
@@ -5425,7 +5427,7 @@ const EN = {
 "Die Anmeldung startet. Der QR-Code erscheint gleich hier.": "Sign-in is starting. The QR code will appear here shortly.",
 "Die Anmeldung konnte nicht geladen werden.": "Sign-in could not be loaded.",
 "Scanne den QR-Code mit deinem Handy. Bestätige danach die Anmeldung.": "Scan the QR code with your phone. Then confirm that you are signed in.",
-"Noch kein QR-Code sichtbar. Der Dienst lädt oder ist bereits verbunden.": "No QR code is visible yet. The service is loading or already connected.",
+"Noch kein QR-Code erkannt. Warte kurz. Falls dein Handy schon gekoppelt ist, bestätige die Anmeldung.": "No QR code detected yet. Wait a moment. If your phone is already linked, confirm that you are signed in.",
 "Die Anmeldung braucht zu lange. Versuch es erneut.": "Sign-in is taking too long. Try again.",
 "Ein Chat läuft gerade. Warte, bis er fertig ist.": "A chat is running. Wait until it finishes.",
 "Die Anmeldung ist abgelaufen. Öffne sie erneut.": "Sign-in has expired. Open it again.",
@@ -8964,6 +8966,7 @@ addonBox.addEventListener("click", (e) => { if (e.target === addonBox) addonsSch
 
 
 let qrAddon = null, qrToken = "", qrGeneration = 0, qrTimer = null, qrRequest = null;
+let qrFehler = 0;
 const qrBox = $("#qrbox");
 function qrAbmelden(id, token){
   if (!token) return;
@@ -8975,7 +8978,7 @@ function qrSchliessen(){
   clearTimeout(qrTimer);
   qrRequest?.abort(); qrRequest = null;
   if (qrAddon) qrAbmelden(qrAddon.id, qrToken);
-  qrAddon = null; qrToken = "";
+  qrAddon = null; qrToken = ""; qrFehler = 0;
   $("#qr-image").removeAttribute("src"); $("#qr-image").hidden = true;
   closeOverlay(qrBox);
 }
@@ -9011,15 +9014,21 @@ async function qrAktualisieren(){
   if (document.hidden){ qrTimer = setTimeout(qrAktualisieren, 2000); return; }
   const generation = qrGeneration, controller = new AbortController();
   qrRequest = controller;
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  let weiter = true;
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  let weiter = true, pause = 2000;
   try {
     const res = await api("/api/addons/qr", {method:"POST", quietErrors:true, signal:controller.signal,
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({id:qrAddon.id, token:qrToken})});
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (generation !== qrGeneration) return;
-    if (!res.ok) throw new Error(data.error || "Die Anmeldung konnte nicht geladen werden.");
+    if (!res.ok || data.ok !== true){
+      const error = new Error(data.error || "Die Anmeldung konnte nicht geladen werden.");
+      error.retryable = res.ok || [408,429,500,502,503,504].includes(res.status);
+      throw error;
+    }
+    qrFehler = 0;
+    $("#qr-retry").hidden = true;
     const image = $("#qr-image");
     if (data.image && data.image.startsWith("data:image/png;base64,")){
       image.src = data.image; image.hidden = false;
@@ -9027,7 +9036,7 @@ async function qrAktualisieren(){
       $("#qr-status").textContent = "Scanne den QR-Code mit deinem Handy. Bestätige danach die Anmeldung.";
     } else {
       image.removeAttribute("src"); image.hidden = true;
-      $("#qr-status").textContent = "Noch kein QR-Code sichtbar. Der Dienst lädt oder ist bereits verbunden.";
+      $("#qr-status").textContent = "Noch kein QR-Code erkannt. Warte kurz. Falls dein Handy schon gekoppelt ist, bestätige die Anmeldung.";
     }
   } catch (error){
     if (generation !== qrGeneration) return;
@@ -9035,12 +9044,15 @@ async function qrAktualisieren(){
     $("#qr-status").textContent = error.name === "AbortError"
       ? "Die Anmeldung braucht zu lange. Versuch es erneut."
       : (error.message || "Die Anmeldung konnte nicht geladen werden.");
-    $("#qr-retry").hidden = false;
-    weiter = false;
+    qrFehler++;
+    weiter = error.retryable !== false && qrFehler <= 3;
+    pause = 2000 * (2 ** (qrFehler - 1));
+    $("#qr-retry").hidden = weiter;
+    if (weiter) $("#qr-status").textContent = "Kurze Unterbrechung. Die QR-Anzeige wird automatisch erneut geladen.";
   } finally {
     clearTimeout(timeout);
     if (qrRequest === controller) qrRequest = null;
-    if (generation === qrGeneration && weiter) qrTimer = setTimeout(qrAktualisieren, 2000);
+    if (generation === qrGeneration && weiter) qrTimer = setTimeout(qrAktualisieren, pause);
   }
 }
 $("#qr-close").addEventListener("click", qrSchliessen);

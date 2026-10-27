@@ -66,10 +66,17 @@ def test_the_agent_and_the_meter_go_through_llmcall() -> None:
 
 
 def test_the_broken_litellm_is_excluded() -> None:
+    import tomllib
     from pathlib import Path
 
+    from packaging.requirements import Requirement
+
     text = (Path(llmcall.__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"litellm>=1.100.0,!=1.106.0,<2"' in text
+    requirements = [Requirement(value) for value in tomllib.loads(text)["project"]["dependencies"]]
+    sdk = next(requirement for requirement in requirements if requirement.name == "litellm")
+    for unsafe in ("1.102.1", "1.103.0", "1.106.0", "2.0.0"):
+        assert unsafe not in sdk.specifier
+    assert "1.102.2" in sdk.specifier
 
 
 def test_the_slider_minimum_is_accepted_by_the_server(monkeypatch, tmp_path) -> None:

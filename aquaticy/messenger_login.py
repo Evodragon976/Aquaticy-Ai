@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import re
+from urllib.parse import urlsplit
 
 MAX_BYTES = 6 * 1024 * 1024
 MAX_PIXELS = 4_000_000
@@ -17,6 +18,15 @@ def pairing_code(text: str, messenger: str) -> bool:
     if messenger == "signal":
         return text.startswith(("sgnl://linkdevice?", "tsdevice:/?"))
     if messenger == "whatsapp":
+        if text.startswith("https://"):
+            try:
+                url = urlsplit(text)
+            except ValueError:
+                return False
+            if (url.scheme != "https" or url.netloc != "wa.me"
+                    or url.path != "/settings/linked_devices" or url.query):
+                return False
+            text = url.fragment
         return bool(re.fullmatch(r"[0-9]+@[^,\s]+(?:,[^,\s]+){2,}", text))
     return False
 
@@ -45,7 +55,7 @@ def qr_image(data: bytes, messenger: str) -> str | None:
             if min(right - left, bottom - top) < 40:
                 continue
             crop = image.crop((left, top, right + 1, bottom + 1)).convert("RGB")
-            pad = max(16, crop.width // 8)
+            pad = max(16, crop.width // 5)
             result = Image.new("RGB", (crop.width + 2 * pad, crop.height + 2 * pad), "white")
             result.paste(crop, (pad, pad))
             out = io.BytesIO()

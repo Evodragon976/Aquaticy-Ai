@@ -39,7 +39,7 @@ jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 justext==3.0.2
 librt==0.12.0
-litellm==1.102.1
+litellm==1.102.2
 lxml==6.1.3
 lxml-html-clean==0.4.5
 markdown-it-py==4.2.0

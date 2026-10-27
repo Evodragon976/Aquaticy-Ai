@@ -1,4 +1,4 @@
-# Aquaticy AI 12.6.6 Sol
+# Aquaticy AI 12.6.7 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.6.6 Sol
+aquaticy --version            # 12.6.7 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -578,6 +578,8 @@ Scanne ihn mit der Handy-App und bestätige danach „Ich bin angemeldet“.
 Der Code wird lokal erkannt, nicht an ein KI-Modell geschickt und nicht im Chat gespeichert.
 Beim Schließen wird die Anzeige geleert. Die Anmeldung läuft nach zehn Minuten ab.
 Du musst die virtual machine dafür nicht selbst bedienen.
+Aktuelle WhatsApp-Codes mit `wa.me/settings/linked_devices` werden ebenso erkannt wie ältere Codes.
+Bei kurzen Verbindungsfehlern versucht das Anmeldefenster es automatisch erneut.
 
 ### KI-Modelle: NVIDIA NIM und Mistral
 

@@ -1349,6 +1349,7 @@ class ChatSession:
         self._chat_lock = threading.RLock()
         self._chat_sessions: dict[str, ChatSession] = {}
         self._qr_lock = threading.Lock()
+        self._qr_state_lock = threading.Lock()
         self._qr_login: tuple[str, str, float] = ("", "", 0.0)
         self._selected = self
 
@@ -3303,6 +3304,7 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                 "Bitte gleich noch einmal."
             )}, 409
         hinweis = ""
+        qr_token = ""
         if action == "install":
             addons.install(settings, addon.id, session.ultra,
                            on_done=lambda: session.reload(workshop=True))
@@ -3333,16 +3335,17 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
             hinweis = f"Angemeldet als {ergebnis['who']}." + (
                 f" {ergebnis['warning']}" if ergebnis["warning"] else "")
         elif action == "login":
-            hinweis = _addon_login(session, addon)
+            hinweis, qr_token = _addon_login(session, addon)
         elif action == "login_done":
-            if payload.get("token"):
-                name, token, until = session._owner._qr_login
-                if (not session.ultra or name != addon.id or until <= time.monotonic()
-                        or not same_secret(str(payload["token"]), token)):
-                    raise addons.AddOnError("Die Anmeldung ist abgelaufen. Öffne sie erneut.")
-            addons.mark_login(settings, addon.id, "angemeldet")
-            if session._owner._qr_login[0] == addon.id:
-                session._owner._qr_login = ("", "", 0.0)
+            with session._owner._qr_state_lock:
+                if payload.get("token"):
+                    name, token, until = session._owner._qr_login
+                    if (not session.ultra or name != addon.id or until <= time.monotonic()
+                            or not same_secret(str(payload["token"]), token)):
+                        raise addons.AddOnError("Die Anmeldung ist abgelaufen. Öffne sie erneut.")
+                addons.mark_login(settings, addon.id, "angemeldet")
+                if session._owner._qr_login[0] == addon.id:
+                    session._owner._qr_login = ("", "", 0.0)
             hinweis = "Gemerkt: angemeldet."
         elif action == "logout":
             if addon.programm:
@@ -3376,7 +3379,7 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500
     antwort = {"ok": True, "message": hinweis, **addons_view(session)}
     if action == "login":
-        antwort["qr_token"] = session._owner._qr_login[1]
+        antwort["qr_token"] = qr_token
     return antwort, 200
 
 
@@ -3674,7 +3677,7 @@ def workshop_busy(session: Any) -> bool:
     return any(chat.has_running_chat() for chat in sessions)
 
 
-def _addon_login(session: Any, addon: Any) -> str:
+def _addon_login(session: Any, addon: Any) -> tuple[str, str]:
     """Oeffnet das Programm in der virtual machine -- anmelden tut sich der Nutzer selbst."""
     from aquaticy import addons
     from aquaticy import sandbox as werkstatt
@@ -3691,14 +3694,20 @@ def _addon_login(session: Any, addon: Any) -> str:
     if workshop_busy(session):
         raise addons.AddOnError("Ein Chat läuft gerade. Warte, bis er fertig ist.")
     with session._owner._qr_lock:
-        session._owner._qr_login = (addon.id, secrets.token_urlsafe(24), time.monotonic() + 600)
+        qr_token = secrets.token_urlsafe(24)
+        with session._owner._qr_state_lock:
+            session._owner._qr_login = (addon.id, qr_token, time.monotonic() + 600)
         try:
             fertig = box.desktop("open", addons.APP_OF[addon.id], timeout=90)
         except Exception:
-            session._owner._qr_login = ("", "", 0.0)
+            with session._owner._qr_state_lock:
+                if session._owner._qr_login[1] == qr_token:
+                    session._owner._qr_login = ("", "", 0.0)
             raise
     if fertig.returncode != 0:
-        session._owner._qr_login = ("", "", 0.0)
+        with session._owner._qr_state_lock:
+            if session._owner._qr_login[1] == qr_token:
+                session._owner._qr_login = ("", "", 0.0)
         raise addons.AddOnError(
             f"{addon.name} ließ sich nicht öffnen: "
             + (fertig.stderr.decode("utf-8", "replace").strip() or "keine Meldung")[:300]
@@ -3706,7 +3715,7 @@ def _addon_login(session: Any, addon: Any) -> str:
     return (
         f"{addon.name} ist offen. Scanne den QR-Code im Anmeldefenster mit deinem Handy "
         "und drück dann „Ich bin angemeldet“."
-    )
+    ), qr_token
 
 
 def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -3718,16 +3727,25 @@ def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int
     if not session.ultra:
         return {"error": "Das gibt es nur mit einem Ultra-Konto."}, 403
     owner = session._owner
-    if not owner._qr_lock.acquire(blocking=False):
-        return {"error": "Einen Moment …"}, 409
-    try:
+
+    def valid() -> bool:
         name, token, until = owner._qr_login
-        if (not token or until <= time.monotonic() or payload.get("id") != name
-                or not same_secret(str(payload.get("token") or ""), token)):
-            return {"error": "Die Anmeldung ist abgelaufen. Öffne sie erneut."}, 409
-        if payload.get("close") is True:
+        return bool(token and until > time.monotonic() and payload.get("id") == name
+                    and same_secret(str(payload.get("token") or ""), token))
+
+    if payload.get("close") is True:
+        with owner._qr_state_lock:
+            if not valid():
+                return {"error": "Die Anmeldung ist abgelaufen. Öffne sie erneut."}, 409
             owner._qr_login = ("", "", 0.0)
             return {"ok": True}, 200
+    if not owner._qr_lock.acquire(blocking=False):
+        return {"error": "Einen Moment …"}, 429
+    try:
+        with owner._qr_state_lock:
+            if not valid():
+                return {"error": "Die Anmeldung ist abgelaufen. Öffne sie erneut."}, 409
+            name = owner._qr_login[0]
         settings = session.settings()
         if name not in ("whatsapp", "signal") or not addons.active(settings, name, session.ultra):
             return {"error": "Das Add-on ist nicht eingeschaltet."}, 403
@@ -3753,11 +3771,18 @@ def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int
             return {"ok": True, "image": None}, 200
         shot = box.screenshot(start=False)
         after = windows()
-        if (not window.get("titel") or after.get("aktiv") != window["titel"]
+        if (not window.get("titel") or str(after.get("aktiv") or "")[:200] != window["titel"]
                 or str(after.get("aktiv_klasse") or "").casefold()
                 != str(window.get("klasse") or "").casefold() or workshop_busy(session)):
             return {"ok": True, "image": None}, 200
-        return {"ok": True, "image": qr_image(shot, name)}, 200
+        image = qr_image(shot, name)
+        with owner._qr_state_lock:
+            if not valid():
+                return {"error": "Die Anmeldung ist abgelaufen. Öffne sie erneut."}, 409
+        return {"ok": True, "image": image}, 200
+    except ImportError:
+        return {"error": "Die QR-Erkennung fehlt. Aktualisiere Aquaticy und starte den "
+                         "Server neu."}, 503
     except Exception:
 
         return {"error": "Der QR-Code lässt sich gerade nicht lesen. Versuch es erneut."}, 502
