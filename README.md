@@ -1,4 +1,4 @@
-# Aquaticy AI 12.5.6 Sol
+# Aquaticy AI 12.6.6 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -91,7 +91,7 @@ $ aquaticy
   Pro und Ultra. Sie lesen Gmail, Kalender und GitHub, melden Ergebnisse und fragen, bevor sie etwas ändern.
 - **Add-ons:** **NVIDIA NIM** und **Mistral** (die einzigen Modelle mit API-Schlüssel), GitHub,
   Wetter, RSS-Feeds, Tagesschau, Wikipedia, Währungsrechner, Feiertage, WhatsApp Web, Signal,
-  Telegram Web, Blender. Dazu die Plugins **Code-Review** und **Security-Review**. Die Dienste
+  Blender. Dazu die Plugins **Code-Review** und **Security-Review**. Die Dienste
   und Plugins haben im Chat einen Befehl: `/code-review`, `/github`, `/wetter` …
 - **Speicher:** merkt sich, was länger gilt. Verschlüsselt und jederzeit einsehbar.
 - **Zeitpläne und Beobachtungen:** direkt in Coworker, für alle Konten.
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.5.6 Sol
+aquaticy --version            # 12.6.6 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -603,16 +603,57 @@ nimmt die Lösung an oder schickt sie zurück, bis zu drei Runden.
 | 📚 Wikipedia | Begriffe nachschlagen, mit Link (Deutsch/Englisch) | keine |
 | 💱 Währungsrechner | Tageskurse der EZB für gut 30 Währungen | keine |
 | 📅 Feiertage | gesetzliche Feiertage weltweit, auch je Bundesland | keine |
-| 💬 WhatsApp Web | Chats lesen, Antworten vorbereiten. Senden nur nach deinem Ja | QR-Code |
+| 💬 WhatsApp Web | Chats lesen, Antworten vorbereiten. Senden nur nach deinem Ja. Dazu die [Messenger-Brücke](#mit-aquaticy-per-whatsapp-oder-signal-schreiben) | QR-Code |
 | 🔵 Signal | wie WhatsApp, mit Signal Desktop | QR-Code |
-| ✈️ Telegram Web | Kanäle und Gruppen lesen, Antworten vorbereiten | QR-Code |
 | 🧊 Blender | 3D-Modelle bauen und rendern in der virtual machine | keine |
 | 🔍 Code-Review | prüft Code auf typische Fehler, gerade bei KI-Code | keine |
 | 🛡️ Security-Review | sucht Sicherheitslücken nach OWASP und zeigt die Lösung | keine |
 
-WhatsApp, Signal, Telegram und Blender laufen in der virtual machine und brauchen den User mode
+WhatsApp, Signal und Blender laufen in der virtual machine und brauchen den User mode
 (Ultra). Die Tagesschau ist nur für den privaten Gebrauch. Aquaticy hält die erlaubten 60
 Abrufe pro Stunde ein.
+
+### Mit Aquaticy per WhatsApp oder Signal schreiben
+
+Die **Messenger-Brücke** (nur Ultra, `aquaticy/bridge.py`) lässt dich mit Aquaticy chatten wie
+auf der Website. Du schreibst eine Nachricht, Aquaticy antwortet im selben Chat. Die Antwort
+beginnt mit `[Aquaticy]`.
+
+**Voraussetzungen:** User mode an, Add-on installiert und angemeldet, im Add-on „Lesen und
+schreiben“, ein Vision-Modell. Dann schaltest du unter dem Add-on **Mit Aquaticy schreiben** ein.
+Schreib erst, wenn „Bereit“ dasteht: Beim ersten Blick merkt sich Aquaticy nur, was schon im
+Chat steht.
+
+**Wer darf schreiben?**
+
+| Auswahl | Aquaticy antwortet in … |
+|---|---|
+| Nur mein eigener Chat | deinem Chat „Nachricht an dich selbst“ (Standard) |
+| Mein Chat und diese Nummern | zusätzlich bei den Nummern oder Namen, die du einträgst |
+| Alle Einzelchats | jedem Einzelchat |
+| Einzelchats und Gruppen | auch in Gruppen, dort nur bei „Aquaticy, …“ |
+
+**Was darf Aquaticy nutzen?** Je Dienst eine Stufe: Web und Rechnen, Home Assistant (lesen oder
+schalten), Gmail und Google Kalender (lesen oder ändern), GitHub (lesen), Lagerverwaltung
+(lesen oder ändern). Das gilt nur für dich und die freigegebenen Nummern. Alle anderen
+bekommen nur Web und Rechnen. Die Regeln stecken im Code, nicht im Prompt: Ein Werkzeug
+außerhalb der Auswahl läuft nie. Die Brücke geht nie weiter, als die App es erlaubt.
+
+**Wichtig zu wissen:**
+
+- Aquaticy sieht den Messenger über den Bildschirm der virtual machine. Es gibt keine offizielle
+  Schnittstelle. Antworten brauchen deshalb 30 Sekunden bis 5 Minuten (einstellbar).
+- Zum Lesen öffnet Aquaticy Chats. Andere sehen dann „gelesen“.
+- Rückfragen sind in Messengern nicht möglich. Was eine Bestätigung braucht, lehnt Aquaticy
+  dort ab und verweist auf die App.
+- Emojis kann die virtual machine nicht tippen. Sie fehlen in den Antworten.
+- Messenger erlauben oft keine Programme, die für dich schreiben. Dein Konto könnte gesperrt
+  werden.
+- Eine freigegebene Nummer ist sicherer als ein Name: Einen Namen kann sich bei Signal jeder
+  geben. Ein Titel mit „~“ davor (WhatsApp-Name eines Fremden) passt nie zu einem Namen.
+- Pro Stunde gibt es höchstens 40 Antworten. Läuft gerade ein Chat in der App oder ist das
+  Konto gesperrt, wartet die Brücke.
+- Ohne Add-on, Anmeldung oder Schreibrecht geht sie von selbst aus.
 
 ### Plugins im Chat
 
@@ -1152,7 +1193,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_MEMORY` | Speicher an | `true` |
 | `AQUATICY_LEGAL_GUARD` | Rechts-Leitplanken (abschaltbar nur mit Ultra) | `true` |
 | `AQUATICY_VM_SIZE` | virtual machine: `normal` oder `plus` (Ultra) | `normal` |
-| `AQUATICY_VM_IMAGE` | Abbild der virtual machine | `python:3.12-slim` |
+| `AQUATICY_VM_IMAGE` | Abbild der virtual machine | `docker.io/library/python:3.12-slim` |
 | `AQUATICY_VM_USER_MODE` | User mode (Ultra) | `false` |
 | `AQUATICY_VM_INTERNET` | Internet für die virtual machine (Ultra) | `false` |
 | `AQUATICY_VM_LAN` | virtual machine auch ins lokale Netz (Ultra) | `false` |

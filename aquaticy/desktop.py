@@ -67,7 +67,6 @@ APPS: dict[str, str] = {
     # Add-ons -- nur oeffenbar, wenn installiert und eingeschaltet
     # (aquaticy/addons.py). Sonst sind sie in der virtual machine gar nicht da.
     "whatsapp": "WhatsApp Web (Add-on)",
-    "telegram": "Telegram Web (Add-on)",
     "signal": "Signal Desktop (Add-on)",
     "blender": "Blender (Add-on)",
 }
@@ -98,7 +97,7 @@ READ_ONLY_KEYS = frozenset({
 })
 
 #: Die Programme, die von einem Add-on kommen.
-ADDON_APPS = frozenset({"whatsapp", "telegram", "signal", "blender"})
+ADDON_APPS = frozenset({"whatsapp", "signal", "blender"})
 
 #: Die Arten, die das Vision-Modell vergeben kann.
 KINDS = ("harmlos", "senden", "kaufen", "loeschen", "anmelden", "captcha", "alle_akzeptieren")
@@ -145,7 +144,7 @@ REFUSE: dict[str, tuple[str, str]] = {
     ),
     "messenger_browser": (
         "messenger_via_addon",
-        "Messenger nur ueber ihr Add-on (desktop_open app=whatsapp/telegram/signal) -- "
+        "Messenger nur ueber ihr Add-on (desktop_open app=whatsapp/signal) -- "
         "dort gelten die Rechte, die der Nutzer eingestellt hat.",
     ),
     "zahlung": (
@@ -302,6 +301,11 @@ _ARTEN = (
 )
 
 
+def grid_note() -> str:
+    """Der Satz zum Raster auf dem Bildschirmfoto -- auch fuer die Messenger-Bruecke."""
+    return _RASTER
+
+
 def look_prompt(question: str) -> str:
     frage = f" Frage dazu: {question.strip()}" if (question or "").strip() else ""
     return (
@@ -349,6 +353,7 @@ def key_prompt(key: str) -> str:
 
 def chat_prompt() -> str:
     return (
+        # Telegram ist kein Add-on mehr, wird als Fenster aber weiter erkannt.
         "Das Bild zeigt einen Messenger (WhatsApp, Signal oder Telegram).\n"
         'Antworte nur mit JSON: {"chat": "Name des gerade geoeffneten Chats, oder leer", '
         '"gruppe": true oder false oder null}\n'
@@ -455,6 +460,19 @@ class Desktop:
         self.ask = ask
         self._emit_hook = emit
         self._vision = vision
+
+    # -- Fuer die Messenger-Bruecke (12.6.6 Luna) ----------------------------
+    # Die Bruecke (aquaticy/bridge.py) liest und schreibt in einem Messenger, weil der
+    # Besitzer sie dafuer eingeschaltet hat. Ihre Regeln pruft sie selbst; diese beiden
+    # Zugaenge fuehren nur aus. Die Werkzeuge des Agenten erreichen sie nicht.
+    def see(self, image: bytes, prompt: str) -> str:
+        """Fragt das Vision-Modell zu einem Bildschirmfoto."""
+        return self._see(image, prompt)
+
+    def run_helper(self, *args: str, stdin: bytes | None = None,
+                   timeout: float = 60) -> dict[str, Any]:
+        """Ruft das Hilfsprogramm des Desktops auf (click, type, key ...)."""
+        return self._helper(*args, stdin=stdin, timeout=timeout)
 
     # -- Hilfen -----------------------------------------------------------
     def _emit(self, event: str, **payload: Any) -> None:

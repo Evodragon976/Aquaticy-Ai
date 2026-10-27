@@ -32,6 +32,7 @@ import time
 import unicodedata
 import webbrowser
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import replace
 from html import escape
 from http.cookies import SimpleCookie
@@ -2350,6 +2351,10 @@ class SessionRegistry:
 SESSIONS = SessionRegistry()
 #: Die Taktgeber der Coworker je Konto (11.0.0 Luna, aquaticy/coworker.py).
 USER_COWORKERS: dict[str, Any] = {}
+#: Die Hintergrundlaeufe der Messenger-Bruecke je Konto (12.6.6 Luna, aquaticy/bridge.py).
+USER_BRIDGES: dict[str, Any] = {}
+#: Die Bruecke ohne Konto (eigener Rechner).
+BRIDGE_RUNNER: Any = None
 #: Zwei Anmeldungen desselben Kontos koennen zeitgleich hereinkommen. Ohne
 #: Schloss startet dann jede ihren eigenen Taktgeber -- und jeder Auftrag
 #: liefe doppelt.
@@ -2451,6 +2456,99 @@ def start_user_scheduler(account: Account) -> None:
             )
             kollegen.start()
             USER_COWORKERS[account.id] = kollegen
+    start_user_bridge(account)
+
+
+def bridge_abuse(account: Any, payload: dict[str, Any]) -> None:
+    """Missbrauch in der Messenger-Bruecke -> Ai-guard, wie bei Auftraegen (12.6.6 Luna).
+
+    Die Bruecke meldet nur, was der Besitzer oder eine seiner Nummern geschrieben hat.
+    """
+    if AIGUARD is None or account is None:
+        return
+    AIGUARD.record_incident(
+        str(account.id), str(payload.get("art") or ""), payload.get("schwere") or 0,
+        chat="messenger", detail=str(payload.get("art") or ""),
+        enforce=not getattr(account, "ultra", False), text="")
+
+
+def _build_bridge_runner(get_session: Callable[[], Any], account: Any) -> Any:
+    """Der Hintergrundlauf der Messenger-Bruecke fuer ein Konto (oder den eigenen Rechner)."""
+    from aquaticy import bridge as bridge_mod
+    from aquaticy import sandbox as werkstatt
+    from aquaticy.desktop import Desktop
+
+    def einstellungen() -> Settings:
+        return get_session().settings()
+
+    def ruht() -> bool:
+        # Die Bruecke gehoert zu Ultra -- die Stufe wird bei jedem Durchgang neu gelesen.
+        # Sie wartet, solange im Konto ein Chat laeuft (die virtual machine ist geteilt),
+        # waehrend einer Ai-guard-Sperre und im Verbund, wenn dies nicht der Heimserver ist.
+        if account is not None:
+            if _plan_of(account.id, account) != "ultra":
+                return True
+            if AIGUARD is not None and AIGUARD.is_banned(user_id=account.id) is not None:
+                return True
+            if CLUSTER is not None and not CLUSTER.is_home(account.id):
+                return True
+        return bool(get_session().has_running_chat())
+
+    def treiber(messenger: str) -> Any:
+        settings = einstellungen()
+        return bridge_mod.VisionDriver(Desktop(werkstatt.shared(settings), settings), messenger)
+
+    antworter = bridge_mod.AgentAnswerer(
+        einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload))
+    runner = bridge_mod.Runner(
+        bridge_mod.Bridge(einstellungen, treiber, antworter, paused=ruht), einstellungen)
+    runner.answerer = antworter  # type: ignore[attr-defined]
+    return runner
+
+
+def start_user_bridge(account: Account) -> None:
+    """Startet die Messenger-Bruecke des Kontos -- aber nur, wenn eine eingeschaltet ist.
+
+    Die Pruefung liest nur die Datei im Profilordner: Die Einstellungen des Kontos werden
+    erst geladen, wenn sie gebraucht werden (nicht schon bei der Anmeldung).
+    """
+    from aquaticy import bridge as bridge_mod
+
+    if AUTH is None:
+        return
+    with contextlib.suppress(Exception):
+        if not bridge_mod.enabled_in(AUTH.profile_dir(account.id)):
+            return
+        with _SCHEDULER_LOCK:
+            runner = USER_BRIDGES.get(account.id)
+            if runner is None:
+                runner = _build_bridge_runner(lambda: SESSIONS.get(account), account)
+                USER_BRIDGES[account.id] = runner
+        runner.ensure_running()
+
+
+def _bridge_runner(session: Any) -> Any:
+    """Der Hintergrundlauf der Bruecke fuer die Sitzung -- gebaut beim ersten Bedarf."""
+    global BRIDGE_RUNNER
+    konto = getattr(session, "account", None)
+    if konto is not None:
+        with _SCHEDULER_LOCK:
+            if konto.id not in USER_BRIDGES:
+                USER_BRIDGES[konto.id] = _build_bridge_runner(
+                    lambda: SESSIONS.get(konto), konto)
+            return USER_BRIDGES[konto.id]
+    with _SCHEDULER_LOCK:
+        if BRIDGE_RUNNER is None:
+            BRIDGE_RUNNER = _build_bridge_runner(lambda: DEFAULT_SESSION, None)
+        return BRIDGE_RUNNER
+
+
+def _stop_bridge(runner: Any) -> None:
+    with contextlib.suppress(Exception):
+        runner.stop()
+        runner.wait_stopped()
+    with contextlib.suppress(Exception):
+        runner.answerer.close()
 
 
 def _bind_ha_token(settings: Settings, tresor: Any) -> None:
@@ -2478,10 +2576,15 @@ def _bind_ha_token(settings: Settings, tresor: Any) -> None:
 
 def _stop_schedulers() -> None:
     """Haelt alle Planer an -- beim Beenden und vor einem Neustart (9.6.8 Ultra)."""
-    global COWORKER_SCHEDULER
+    global COWORKER_SCHEDULER, BRIDGE_RUNNER
     with _SCHEDULER_LOCK:
         planer = list(USER_COWORKERS.values())
         USER_COWORKERS.clear()
+        bruecken = list(USER_BRIDGES.values())
+        USER_BRIDGES.clear()
+        if BRIDGE_RUNNER is not None:
+            bruecken.append(BRIDGE_RUNNER)
+        BRIDGE_RUNNER = None
     for global_planer in (COWORKER_SCHEDULER,):
         if global_planer is not None:
             planer.append(global_planer)
@@ -2489,6 +2592,8 @@ def _stop_schedulers() -> None:
     for eins in planer:
         with contextlib.suppress(Exception):
             eins.stop()
+    for bruecke in bruecken:
+        _stop_bridge(bruecke)
     with contextlib.suppress(Exception):
         from aquaticy import coworker as coworker_mod
 
@@ -2503,12 +2608,15 @@ def forget_account_runtime(account: Account) -> None:
     """
     with _SCHEDULER_LOCK:
         planer = [USER_COWORKERS.pop(account.id, None)]
+        bruecke = USER_BRIDGES.pop(account.id, None)
     for eins in planer:
         if eins is not None:
             with contextlib.suppress(Exception):
                 eins.stop()
                 if hasattr(eins, "wait_stopped"):
                     eins.wait_stopped()
+    if bruecke is not None:
+        _stop_bridge(bruecke)
     sitzung = SESSIONS.drop(account.id)
     # Die virtual machines seiner Coworker gehen mit (11.0.0 Luna) -- ohne die
     # Einstellungen neu zu bauen, das legte Ordner wieder an.
@@ -3119,21 +3227,54 @@ def addons_view(session: Any) -> dict[str, Any]:
         addons.mark_installed(settings, provider)
     view = addons.public_view(settings, session.ultra)
     konten = {k["provider"]: k for k in linked_view(session)["accounts"]}
+    from aquaticy import bridge
+
     for eintrag in view["addons"]:
         if eintrag["id"] in konten:
             eintrag["konto"] = konten[eintrag["id"]]
+        if eintrag["id"] in bridge.MESSENGERS:
+            # Die Messenger-Bruecke (12.6.6 Luna): Einstellung, Stand, Grund ohne Geheimnis.
+            eintrag["bruecke"] = bridge.public_view(settings, eintrag["id"], session.ultra)
     return view
 
 
 #: Was es im Add-on-Fenster zu tun gibt.
 ADDON_ACTIONS = frozenset({
     "install", "uninstall", "enable", "disable", "token", "login", "login_done", "logout",
-    "feeds", "rights",
+    "feeds", "rights", "bridge",
 })
 
 #: Aktionen, bei denen die laufende virtual machine neu aufgebaut werden muss --
 #: sie haelt die Datentraeger der Add-ons fest.
 _RESTARTS_WORKSHOP = frozenset({"uninstall", "enable", "disable", "logout"})
+
+
+def _bridge_action(session: Any, settings: Any, messenger: str, daten: Any) -> str:
+    """Speichert die Einstellungen der Messenger-Bruecke und weckt ihren Lauf (12.6.6 Luna).
+
+    Nur Ultra darf sie einschalten; Einschalten braucht alle Voraussetzungen.
+    """
+    from aquaticy import addons
+    from aquaticy import bridge as bridge_mod
+
+    if messenger not in bridge_mod.MESSENGERS:
+        raise addons.AddOnError("Dafür gibt es keine Brücke.")
+    if not isinstance(daten, dict):
+        raise addons.AddOnError("Es fehlen die Einstellungen.")
+    einschalten = daten.get("an") is True
+    ready = bridge_mod.ready_problem(settings, messenger, session.ultra) if einschalten else ""
+    try:
+        neu = bridge_mod.set_config(settings, messenger, daten, ready=ready)
+    except bridge_mod.BridgeError as exc:
+        raise addons.AddOnError(str(exc)) from exc
+    runner = _bridge_runner(session)
+    if neu["an"]:
+        runner.ensure_running()
+        runner.wake()
+        return ("Gespeichert. Die Brücke ist an. Schreib erst, wenn „bereit“ dasteht: "
+                "Beim ersten Blick merkt sie sich nur, was schon im Chat steht.")
+    runner.wake()
+    return "Gespeichert. Die Brücke ist aus."
 
 
 def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -3205,10 +3346,18 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
             # Kein Neuaufbau -- die virtual machine laeuft weiter.
             neu = addons.set_rights(settings, addon.id, payload.get("rechte"))
             hinweis = "Gespeichert: " + addons.rights_text(addon.id, neu) + "."
+        elif action == "bridge":
+            hinweis = _bridge_action(session, settings, addon.id, payload.get("bruecke"))
         else:  # feeds
             feeds = addons.set_feeds(settings, payload.get("feeds") or [])
             session.reload()  # Feeds laufen nicht in der virtual machine
             hinweis = f"{len(feeds)} Feeds gespeichert."
+        if action in ("uninstall", "disable", "logout"):
+            # Ohne Add-on oder Anmeldung gibt es nichts zu lesen: die Bruecke geht aus.
+            from aquaticy import bridge as bridge_mod
+
+            if addon.id in bridge_mod.MESSENGERS:
+                bridge_mod.set_config(session.settings(), addon.id, {"an": False})
     except addons.AddOnError as exc:
         return {"ok": False, "error": str(exc)}, 400
     except Exception as exc:
@@ -6996,6 +7145,9 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         COWORKER_SCHEDULER.start()
         for account in AUTH.accounts():
             start_user_scheduler(account)
+        # Ohne Konten (eigener Rechner) laeuft die Bruecke mit den Einstellungen des Rechners.
+        with contextlib.suppress(Exception):
+            _bridge_runner(DEFAULT_SESSION).ensure_running()
     except Exception:  # pragma: no cover - Auftraege duerfen den Start nie kosten
         pass
     try:

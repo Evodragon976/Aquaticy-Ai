@@ -13,8 +13,8 @@ wird. Nach dem Installieren meldet man sich an, so wie es der Dienst vorsieht:
 * **GitHub** -- mit einem persoenlichen Zugangs-Token. Aquaticy liest damit nur
   (Repos, Issues, Pull Requests, Dateien); geschrieben wird nie, auch wenn das
   Token es erlauben wuerde.
-* **WhatsApp Web** und **Telegram Web** -- per QR-Code mit dem Handy, in einem
-  eigenen Firefox-Profil in der virtual machine.
+* **WhatsApp Web** -- per QR-Code mit dem Handy, in einem eigenen Firefox-Profil in der
+  virtual machine. (Telegram Web gibt es seit 12.6.6 Luna nicht mehr.)
 * **Signal** -- ein "Signal Web" gibt es nicht. Das Add-on installiert Signal
   Desktop (das offizielle Programm) in der virtual machine; gekoppelt wird wie ein
   Computer, ebenfalls per QR-Code.
@@ -154,18 +154,6 @@ CATALOG: dict[str, AddOn] = {
             hinweis="Signal Desktop gibt es nur für x86_64. Nachrichten, die Aquaticy liest, "
             "gehen an dein Modell. Signal ist Ende-zu-Ende-verschlüsselt — überleg dir das also "
             "gut.",
-        ),
-        AddOn(
-            "telegram", "Telegram Web", "✈️", "Messenger",
-            "Telegram im Browser der virtual machine — Kanäle und Gruppen lesen, Antworten "
-            "vorbereiten. Senden nur nach deinem Ja.",
-            login="qr", werkstatt=True, programm="webapp",
-            adresse="https://web.telegram.org/a/", vorschlag=True,
-            anmelden="„Anmelden“ öffnet Telegram Web. Auf dem Handy: Telegram → "
-            "Einstellungen → Geräte → Desktop-Gerät verbinden, dann den QR-Code scannen. "
-            "Alternativ Telefonnummer und Code selbst in den Bildschirm tippen.",
-            hinweis="Was Aquaticy liest, geht an dein Modell. Braucht Firefox (kommt beim "
-            "Installieren mit).",
         ),
         AddOn(
             "blender", "Blender", "🧊", "Programme",
@@ -311,7 +299,6 @@ RIGHTS: dict[str, tuple[Recht, ...]] = {
     ),
     "whatsapp": _MESSENGER_RECHTE,
     "signal": _MESSENGER_RECHTE,
-    "telegram": _MESSENGER_RECHTE,
     "blender": (
         Recht("nutzung", "Blender nutzen",
               (("skripte", "Nur Skripte"), ("alles", "Skripte und Oberfläche")), "alles"),
@@ -349,8 +336,15 @@ RIGHTS: dict[str, tuple[Recht, ...]] = {
     ),
 }
 
-#: Die Messenger -- fuer die Pruefungen im Desktop.
-MESSENGERS = ("whatsapp", "signal", "telegram")
+#: Die Messenger mit eigenem Add-on -- fuer die Pruefungen im Desktop.
+MESSENGERS = ("whatsapp", "signal")
+
+#: Messenger ohne Add-on (12.6.6 Luna: Telegram Web ist kein Add-on mehr). Ihr Fenster
+#: wird weiter erkannt -- und bekommt die strengsten Rechte, also nur lesen.
+OTHER_MESSENGERS = ("telegram",)
+
+#: Add-ons, die es nicht mehr gibt. Ihr Eintrag und ihr Datentraeger werden aufgeraeumt.
+RETIRED = ("telegram",)
 
 #: Die strengsten Rechte: gelten, wenn ein Messenger-Fenster da ist, das zu
 #: keinem eingeschalteten Add-on gehoert (etwa im gewoehnlichen Browser).
@@ -415,7 +409,7 @@ def messenger_of(klasse: str, titel: str) -> str:
     if "signal" in klasse:
         return "signal"
     for name, merkmal in (("whatsapp", "whatsapp"), ("telegram", "telegram"),
-                          ("signal", "signal")):
+                          ("signal", "signal")):  # telegram: kein Add-on, aber erkannt
         if merkmal in titel:
             return name
     return ""
@@ -615,8 +609,41 @@ def feeds_of(settings: Any) -> list[str]:
     return [str(feed) for feed in feeds if isinstance(feed, str)][:MAX_FEEDS]
 
 
+def retire_removed(settings: Any) -> list[str]:
+    """Raeumt weggefallene Add-ons auf (12.6.6 Luna: Telegram Web) -- einmal.
+
+    Der Eintrag verschwindet aus ``addons.json``; war das Add-on installiert, geht auch
+    sein Datentraeger samt Anmeldung weg (soweit Docker oder Podman gerade antwortet --
+    sonst bleibt er unbenutzt liegen und geht mit dem Konto).
+
+    Returns: die aufgeraeumten Kennungen.
+    """
+    try:
+        roh = json.loads(_state_path(settings).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    eintraege = roh.get("addons") if isinstance(roh, dict) else None
+    if not isinstance(eintraege, dict):
+        return []
+    weg = [key for key in RETIRED if key in eintraege]
+    if not weg:
+        return []
+    if any(isinstance(eintraege[key], dict) and eintraege[key].get("installed") for key in weg):
+        with contextlib.suppress(Exception):
+            from aquaticy import sandbox as werkstatt
+
+            runtime = werkstatt.find_runtime()
+            if runtime is not None:
+                for key in weg:
+                    werkstatt.remove_addon_volume(runtime, volume_name(settings, key))
+    with _lock(settings):
+        _save_state(settings, load_state(settings))
+    return weg
+
+
 def public_view(settings: Any, pro: bool) -> dict[str, Any]:
     """Was der Browser sehen darf -- ohne ein einziges Geheimnis."""
+    retire_removed(settings)
     state = load_state(settings)
     liste = []
     for addon in CATALOG.values():
@@ -764,6 +791,11 @@ def _install_job(settings: Any, addon: AddOn, on_done: Any = None) -> None:
                 "installiert Aquaticy nichts."
             )
         image = getattr(settings, "vm_desktop_image", "") or werkstatt.DESKTOP_IMAGE
+        # Fehlt das Desktop-Abbild, baut Aquaticy es jetzt (12.6.6 Luna) -- bis dahin
+        # kam nur die Meldung von Podman ("short-name ... did not resolve").
+        werkstatt.ensure_image(
+            runtime, image, build=True,
+            progress=lambda text: _update(settings, addon.id, message=text))
         vols = {volume_name(settings, addon.id): f"{MOUNT_ROOT}/{addon.id}"}
         if addon.programm == "webapp":
             vols[volume_name(settings, FIREFOX)] = f"{MOUNT_ROOT}/{FIREFOX}"
@@ -1729,8 +1761,7 @@ def read_feeds(
 # ---------------------------------------------------------------------------
 # Was das Modell ueber die Add-ons erfaehrt
 # ---------------------------------------------------------------------------
-APP_OF = {"whatsapp": "whatsapp", "signal": "signal", "telegram": "telegram",
-          "blender": "blender"}
+APP_OF = {"whatsapp": "whatsapp", "signal": "signal", "blender": "blender"}
 
 
 def desktop_apps(settings: Any, pro: bool = True) -> list[str]:
@@ -1745,8 +1776,8 @@ def desktop_apps(settings: Any, pro: bool = True) -> list[str]:
 PROMPT = """\
 ## Add-ons
 Der Nutzer hat diese Add-ons eingeschaltet: %(liste)s.
-- Messenger (WhatsApp, Signal, Telegram) oeffnest du mit desktop_open (app = \
-whatsapp/signal/telegram) und bedienst sie wie ein Mensch. Lies nur, was die \
+- Messenger (WhatsApp, Signal) oeffnest du mit desktop_open (app = \
+whatsapp/signal) und bedienst sie wie ein Mensch. Lies nur, was die \
 Frage braucht. Eine Nachricht abschicken ist "senden": nur nach ausdruecklichem \
 Ja des Nutzers, und nur an die Person, die er genannt hat. Nie an mehrere \
 gleichzeitig, nie Werbung, nie etwas im Namen des Nutzers versprechen.

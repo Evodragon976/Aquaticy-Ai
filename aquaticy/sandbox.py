@@ -77,6 +77,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -132,8 +133,10 @@ MAX_FILE_BYTES = 20 * 1024 * 1024
 #: Wie viele Dateien die Liste hoechstens zeigt.
 MAX_LIST = 500
 
-#: Das Abbild. Klein, mit Python und den ueblichen Werkzeugen.
-DEFAULT_IMAGE = "python:3.12-slim"
+#: Das Abbild. Klein, mit Python und den ueblichen Werkzeugen. Mit vollem Namen
+#: (12.6.6 Luna): Podman ohne "unqualified-search-registries" in der registries.conf
+#: kennt "python:3.12-slim" nicht und bricht mit "short-name ... did not resolve" ab.
+DEFAULT_IMAGE = "docker.io/library/python:3.12-slim"
 
 #: Das Arbeitsverzeichnis in der virtual machine. Nur hier darf geschrieben werden.
 WORKDIR = "/work"
@@ -492,6 +495,121 @@ ADDON_PATH_RE = re.compile(r"^/addons/[a-z_]{2,20}$")
 ADDON_LABEL = "aquaticy-addon=1"
 
 
+#: Wie lange das Bauen des Desktop-Abbilds hoechstens dauern darf (Sekunden).
+BUILD_TIMEOUT = 3600
+#: Die Hilfsprogramme, die ins Desktop-Abbild kommen (docker/desktop/).
+DESKTOP_HELPERS = ("aquaticy-desktop", "aquaticy-netz", "aquaticy-addons")
+#: Zwei Add-ons gleichzeitig duerfen das Abbild nicht doppelt bauen.
+_BUILD_LOCK = threading.Lock()
+
+
+def short_name_problem(text: str) -> bool:
+    """Meldet die Laufzeit "short-name ... did not resolve" (12.6.6 Luna)?
+
+    Podman sucht einen Namen ohne Registry (``python:3.12-slim``) nur dort, wo die
+    ``registries.conf`` es erlaubt. Steht dort nichts, ist das Abbild "unbekannt" --
+    auch dann, wenn es nur noch nicht gebaut wurde.
+    """
+    klein = (text or "").lower()
+    return "short-name" in klein and "did not resolve" in klein
+
+
+def image_present(runtime: Runtime, image: str) -> bool:
+    """Gibt es dieses Abbild schon auf dem Rechner? (``image inspect`` kennt Docker und Podman.)"""
+    try:
+        return _runs(runtime.binary, "image", "inspect", image, timeout=30).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def desktop_recipe() -> tuple[Path, Path] | None:
+    """(Rezept, Ordner mit den Hilfsprogrammen) -- nur in einer Kopie des Projekts."""
+    wurzel = Path(__file__).resolve().parent.parent
+    rezept = wurzel / "docker" / "workshop-desktop.Dockerfile"
+    hilfen = wurzel / "docker" / "desktop"
+    if rezept.is_file() and all((hilfen / name).is_file() for name in DESKTOP_HELPERS):
+        return rezept, hilfen
+    return None
+
+
+def missing_image_text(runtime: Runtime, image: str) -> str:
+    """Ein Satz fuer Menschen, wenn ein Abbild fehlt -- statt der Meldung von Podman."""
+    if image == DESKTOP_IMAGE:
+        return (
+            f"Das Desktop-Abbild '{image}' gibt es auf diesem Rechner noch nicht. Aquaticy "
+            "baut es beim Installieren eines Add-ons selbst. Von Hand, im Ordner des "
+            f"Projekts: '{runtime.binary} build -f docker/workshop-desktop.Dockerfile "
+            f"-t {image} .'"
+        )
+    return (
+        f"Das Abbild '{image}' gibt es auf diesem Rechner nicht. Hol es mit "
+        f"'{runtime.binary} pull {image}' -- mit vollem Namen samt Registry, zum Beispiel "
+        "docker.io/library/... -- oder wähle ein anderes in AQUATICY_VM_DESKTOP_IMAGE."
+    )
+
+
+def build_desktop_image(runtime: Runtime) -> None:
+    """Baut das Desktop-Abbild aus docker/workshop-desktop.Dockerfile (12.6.6 Luna).
+
+    Gebaut wird aus einem kleinen, eigenen Ordner: das Rezept und die drei
+    Hilfsprogramme, sonst nichts. Das dauert beim ersten Mal einige Minuten.
+
+    Raises:
+        SandboxUnavailable: Wenn das Rezept fehlt oder das Bauen scheitert.
+    """
+    gefunden = desktop_recipe()
+    if gefunden is None:
+        raise SandboxUnavailable(
+            "Das Rezept für das Desktop-Abbild liegt nicht neben Aquaticy "
+            "(docker/workshop-desktop.Dockerfile). "
+            + missing_image_text(runtime, DESKTOP_IMAGE)
+        )
+    rezept, hilfen = gefunden
+    with tempfile.TemporaryDirectory(prefix="aquaticy-abbild-") as ordner:
+        wurzel = Path(ordner)
+        (wurzel / "docker" / "desktop").mkdir(parents=True)
+        ziel = wurzel / "docker" / "workshop-desktop.Dockerfile"
+        shutil.copy2(rezept, ziel)
+        for name in DESKTOP_HELPERS:
+            shutil.copy2(hilfen / name, wurzel / "docker" / "desktop" / name)
+        try:
+            gebaut = _runs(runtime.binary, "build", "-f", str(ziel), "-t", DESKTOP_IMAGE,
+                           str(wurzel), timeout=BUILD_TIMEOUT)
+        except subprocess.TimeoutExpired as exc:
+            raise SandboxUnavailable(
+                "Das Bauen des Desktop-Abbilds dauert zu lange (über eine Stunde). Prüfe die "
+                "Internetverbindung und versuch es noch einmal."
+            ) from exc
+    if gebaut.returncode != 0:
+        raise SandboxUnavailable(
+            "Das Desktop-Abbild ließ sich nicht bauen: "
+            + (gebaut.stderr.strip() or gebaut.stdout.strip())[-400:]
+            + (" (Podman findet Abbilder ohne Registry-Namen nicht: In "
+               "/etc/containers/registries.conf fehlt 'unqualified-search-registries'.)"
+               if short_name_problem(gebaut.stderr) else "")
+        )
+
+
+def ensure_image(runtime: Runtime, image: str, *, build: bool = False,
+                 progress: Any = None) -> None:
+    """Sorgt dafuer, dass *image* da ist -- das Desktop-Abbild baut Aquaticy bei Bedarf.
+
+    Raises:
+        SandboxUnavailable: Mit einem Satz, was fehlt und was zu tun ist.
+    """
+    if image_present(runtime, image):
+        return
+    if image == DESKTOP_IMAGE and build:
+        with _BUILD_LOCK:
+            if image_present(runtime, image):
+                return
+            if progress is not None:
+                progress("Baut das Desktop-Abbild (einmalig, 5 bis 20 Minuten) …")
+            build_desktop_image(runtime)
+        return
+    raise SandboxUnavailable(missing_image_text(runtime, image))
+
+
 def ensure_addon_volume(runtime: Runtime, volume: str, image: str) -> None:
     """Legt den Datentraeger eines Add-ons an (falls noetig) und gibt ihn 1000.
 
@@ -523,6 +641,9 @@ def ensure_addon_volume(runtime: Runtime, volume: str, image: str) -> None:
         timeout=120,
     )
     if prepared.returncode != 0:
+        if short_name_problem(prepared.stderr):
+            # Das Abbild fehlt -- Podman sagt es nur auf seine Art (12.6.6 Luna).
+            raise SandboxUnavailable(missing_image_text(runtime, image))
         raise SandboxUnavailable(
             "Datentraeger fuers Add-on liess sich nicht vorbereiten: "
             + prepared.stderr.strip()[:300]
@@ -868,6 +989,10 @@ class Sandbox:
                 hilfe = (
                     f" (Fehlt das Abbild? '{runtime.binary} pull {self.image}' holt es einmalig.)"
                 )
+            if short_name_problem(started.stderr):
+                # Das Abbild fehlt -- Podman sagt es nur auf seine Art (12.6.6 Luna).
+                hilfe = " " + missing_image_text(runtime, self.image)
+                started.stderr = "Das Abbild ist nicht da."
             raise SandboxUnavailable(
                 "Die virtual machine liess sich nicht starten: "
                 + started.stderr.strip()[:300] + hilfe

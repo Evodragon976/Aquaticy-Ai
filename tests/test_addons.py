@@ -9,6 +9,7 @@ gestellt; der echte Behaelter kommt in test_addons_live.py dran.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 import subprocess
 from pathlib import Path
@@ -77,10 +78,18 @@ def test_every_addon_has_install_even_without_download(konto: Settings) -> None:
 
 
 def test_normal_accounts_get_no_workshop_addons(konto: Settings) -> None:
-    for addon_id in ("whatsapp", "signal", "telegram", "blender"):
+    for addon_id in ("whatsapp", "signal", "blender"):
         with pytest.raises(addons.AddOnError, match="Ultra"):
             addons.install(konto, addon_id, pro=False)
     assert addons.load_state(konto) == {}
+
+
+def test_telegram_web_is_no_longer_an_addon(konto: Settings) -> None:
+    """12.6.6 Luna: Telegram Web wurde auf Wunsch aus den Add-ons genommen."""
+    assert "telegram" not in addons.CATALOG and "telegram" not in addons.MESSENGERS
+    with pytest.raises(addons.AddOnError, match="gibt es nicht"):
+        addons.get("telegram")
+    assert "telegram" not in addons.RIGHTS and "telegram" not in addons.APP_OF
 
 
 def test_workshop_addons_only_count_with_the_user_mode(konto: Settings) -> None:
@@ -153,7 +162,11 @@ def test_firefox_stays_while_another_web_app_needs_it(
     monkeypatch.setattr(werkstatt, "find_runtime", lambda: SimpleNamespace(binary="docker"))
     monkeypatch.setattr(werkstatt, "remove_addon_volume",
                         lambda runtime, volume: geloescht.append(volume) or True)
-    for addon_id in ("whatsapp", "telegram"):
+    # Seit 12.6.6 Luna ist WhatsApp die einzige Web-App; die zweite ist gestellt.
+    monkeypatch.setitem(addons.CATALOG, "zweite",
+                        dataclasses.replace(addons.CATALOG["whatsapp"], id="zweite",
+                                            name="Zweite"))
+    for addon_id in ("whatsapp", "zweite"):
         addons._update(konto, addon_id, installed=True, enabled=True)
     addons.uninstall(konto, "whatsapp")
     assert addons.volume_name(konto, addons.FIREFOX) not in geloescht
@@ -213,6 +226,8 @@ def fake_werkstatt(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     monkeypatch.setattr(werkstatt, "find_runtime", lambda: SimpleNamespace(binary="docker"))
     monkeypatch.setattr(werkstatt, "ensure_addon_volume",
                         lambda runtime, volume, image: angelegt.append(volume))
+    # Neu seit 12.6.6 Luna: Fehlt das Desktop-Abbild, baut die Installation es selbst.
+    monkeypatch.setattr(werkstatt, "ensure_image", lambda runtime, image, **kw: None)
     monkeypatch.setattr(werkstatt, "Sandbox", FakeBox)
     FakeBox.antworten = {}
     return angelegt

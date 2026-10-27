@@ -175,7 +175,7 @@ PROTECTED: dict[str, str] = {
     "AQUATICY_GITHUB_TOKEN": "mit welchem Zugang ich GitHub lese",
     "AQUATICY_ADDONS": (
         "welche Add-ons installiert, eingeschaltet und angemeldet sind (GitHub, "
-        "WhatsApp, Signal, Telegram, Blender, Wetter, Feeds)"
+        "WhatsApp, Signal, Blender, Wetter, Feeds)"
     ),
 }
 

@@ -21,7 +21,7 @@
 # Warum "plus": Blender braucht mehr als einen Kern und ein Gigabyte, um in
 # vertretbarer Zeit etwas zu rendern -- mit der Groesse "normal" laeuft ein
 # Rendering leicht ins Zeitlimit oder in den Speicher.
-FROM python:3.12-slim
+FROM docker.io/library/python:3.12-slim
 
 # Blender selbst plus die Bibliotheken, die es zum headless Rendern braucht
 # (Software-OpenGL ueber Mesa -- in der Werkstatt gibt es keine Grafikkarte).

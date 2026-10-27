@@ -10,7 +10,7 @@
 # Container sieht nur /data (Cache und Verlauf) und /work (Exporte).
 
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS base
+FROM docker.io/library/python:3.12-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

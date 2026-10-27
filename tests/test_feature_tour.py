@@ -207,7 +207,8 @@ def test_every_page_and_endpoint(tour: Tour, tmp_path: Path) -> None:
 
     # -- Add-ons ohne virtual machine -----------------------------------------------
     katalog = {a["id"] for a in tour("GET", "/api/addons")[1]["addons"]}
-    assert {"github", "signal", "whatsapp", "telegram", "wetter", "feeds", "blender"} <= katalog
+    assert {"github", "signal", "whatsapp", "wetter", "feeds", "blender"} <= katalog
+    assert "telegram" not in katalog, "Telegram Web ist seit 12.6.6 Luna kein Add-on mehr"
     for kennung in ("wetter", "feeds", "github"):
         status, stand = tour("POST", "/api/addons", {"action": "install", "id": kennung})
         assert status == 200 and kennung in stand["active"], kennung

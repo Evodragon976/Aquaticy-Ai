@@ -1414,6 +1414,11 @@ class AgentResult:
 class Agent:
     """Haelt den Gespraechsverlauf und fuehrt die Tool-Schleife aus."""
 
+    #: Sagt das Modell dem Nutzer, wo er "Schalten" und "Aendern" einschaltet (12.5.5 Terra)?
+    #: Die Messenger-Bruecke schaltet es aus: Dort liegt die Grenze in ihren eigenen
+    #: Einstellungen, nicht in denen der App (12.6.6 Luna).
+    OWN_HINTS = True
+
     def __init__(
         self,
         settings: Settings,
@@ -3420,14 +3425,14 @@ class Agent:
             if eigene_fehlen:
                 inhalt += ("\n[Nicht eingerichtet -- sag das dem Nutzer: "
                            f"{missing_text(eigene_fehlen)}]")
-            if ({"calendar", "mail"} & set(da)
+            if (self.OWN_HINTS and {"calendar", "mail"} & set(da)
                     and not getattr(self.settings, "google_write", False)):
                 # Ohne "Aendern erlaubt" gibt es die Schreib-Werkzeuge nicht (12.5.6 Sol).
                 inhalt += ("\n[Ändern ist aus: Bei Google darfst du nur lesen. Will der "
                            "Nutzer etwas eintragen, ändern oder entwerfen, sag ihm: Das "
                            "geht in den Einstellungen unter „Gmail & Kalender“ mit „Ändern "
                            "erlaubt“. Danach einmal neu verbinden.]")
-            if "home" in da and not self.settings.ha_control:
+            if self.OWN_HINTS and "home" in da and not self.settings.ha_control:
                 # Ohne den Schalter gibt es ha_call nicht -- das Modell soll sagen,
                 # wo er sich einschalten laesst, statt nur "geht nicht" (12.5.5 Terra).
                 inhalt += ("\n[Schalten ist aus: In Home Assistant darfst du nur nachsehen. "

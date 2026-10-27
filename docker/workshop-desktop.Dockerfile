@@ -21,7 +21,8 @@
 # Warum Ubuntu und Falkon: Falkon ist ein vollwertiger Browser (Chromium-
 # Engine) als gewoehnliches Paket. Firefox und Chromium gibt es unter Ubuntu
 # nur noch als Snap, und Snaps laufen in keinem Container.
-FROM ubuntu:24.04
+# Mit vollem Namen: Podman ohne "unqualified-search-registries" kennt "ubuntu:24.04" nicht.
+FROM docker.io/library/ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8
@@ -43,7 +44,7 @@ RUN (grep -rqs universe /etc/apt/sources.list /etc/apt/sources.list.d/ \
     && locale-gen de_DE.UTF-8
 
 # Bibliotheken fuer die Add-ons (Einstellungen -> Werkstatt -> Add-ons).
-# Die Programme selbst -- Firefox fuer WhatsApp Web und Telegram Web, Signal
+# Die Programme selbst -- Firefox fuer WhatsApp Web, Signal
 # Desktop, Blender -- liegen NICHT im Abbild: sie werden erst geladen, wenn
 # jemand auf "Installieren" drueckt, und zwar auf einen eigenen Datentraeger je
 # Add-on (aquaticy-addons, siehe unten). Was sie zum Laufen brauchen, muss aber

@@ -71,9 +71,9 @@ def test_a_broken_state_falls_back_to_the_default(konto: Settings) -> None:
 
 
 def test_the_window_shows_rights_with_their_dependency(konto: Settings) -> None:
-    _an(konto, "telegram")
+    _an(konto, "signal")
     ansicht = next(a for a in addons.public_view(konto, pro=True)["addons"]
-                   if a["id"] == "telegram")
+                   if a["id"] == "signal")
     assert ansicht["rechte"] == {"zugriff": "lesen", "wo": "einzeln"}
     wo = next(r for r in ansicht["rechte_katalog"] if r["key"] == "wo")
     assert wo["nur_wenn"] == ["zugriff", "schreiben"]
@@ -299,9 +299,9 @@ def test_single_chats_only_refuses_groups_and_unclear_chats(konto: Settings) -> 
 
 
 def test_groups_allowed_still_asks_before_sending(konto: Settings) -> None:
-    _an(konto, "telegram")
-    addons.set_rights(konto, "telegram", {"zugriff": "schreiben", "wo": "alle"})
-    box = Box(klasse="Navigator.aquaticy-telegram", titel="Telegram Web")
+    _an(konto, "signal")
+    addons.set_rights(konto, "signal", {"zugriff": "schreiben", "wo": "alle"})
+    box = Box(klasse="signal.Signal", titel="Signal")
     desktop, gefragt = _desktop(konto, box, Auge(art="senden", gruppe=True), ["nein"])
     assert desktop.type("Hallo zusammen")["getippt"] == 14
     assert desktop.key("Return")["done"] is False
@@ -311,7 +311,8 @@ def test_groups_allowed_still_asks_before_sending(konto: Settings) -> None:
 def test_a_messenger_outside_its_addon_gets_the_strictest_rights(konto: Settings) -> None:
     _an(konto, "whatsapp")
     addons.set_rights(konto, "whatsapp", {"zugriff": "schreiben", "wo": "alle"})
-    # Telegram ist nicht eingeschaltet -- sein Fenster (etwa im Browser) gilt als "Nur lesen".
+    # Telegram ist kein Add-on mehr (12.6.6 Luna) -- sein Fenster (etwa im Browser) gilt
+    # weiter als "Nur lesen".
     box = Box(klasse="Falkon Browser.Falkon", titel="Telegram Web - Falkon")
     desktop, _ = _desktop(konto, box, Auge())
     assert desktop.type("x")["skipped_reason"] == "messenger_read_only"

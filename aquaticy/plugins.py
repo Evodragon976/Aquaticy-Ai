@@ -212,7 +212,6 @@ ALIASES = {
     "währungsrechner": "waehrung",
     "währung": "waehrung",
     "whatsapp-web": "whatsapp",
-    "telegram-web": "telegram",
 }
 
 #: Was ein Werkzeug-Plugin dem Modell fuer diese eine Anfrage sagt.
@@ -229,8 +228,6 @@ TOOL_HINTS = {
                 "Mensch. Senden nur nach ausdrücklichem Ja des Nutzers.",
     "signal": "Öffne dafür Signal mit desktop_open (app=signal) und bediene es wie ein Mensch. "
               "Senden nur nach ausdrücklichem Ja des Nutzers.",
-    "telegram": "Öffne dafür Telegram mit desktop_open (app=telegram) und bediene es wie ein "
-                "Mensch. Senden nur nach ausdrücklichem Ja des Nutzers.",
     "blender": "Nutze dafür Blender: Skripte mit blender_run, die Oberfläche mit desktop_open "
                "(app=blender).",
 }
@@ -259,12 +256,11 @@ EXAMPLES = {
     "feiertage": "/feiertage Bayern 2027",
     "whatsapp": "/whatsapp Was hat Anna zuletzt geschrieben?",
     "signal": "/signal Was ist neu?",
-    "telegram": "/telegram Was ist neu im Kanal …?",
     "blender": "/blender Bau mir einen Würfel mit runden Kanten",
 }
 
 #: Programme, die in der virtual machine laufen -- dafuer braucht der Turn sie.
-DESKTOP_PLUGINS = frozenset({"whatsapp", "signal", "telegram", "blender"})
+DESKTOP_PLUGINS = frozenset({"whatsapp", "signal", "blender"})
 
 _COMMAND_RE = re.compile(r"^/([a-zäöü][a-zäöü0-9-]{1,40})(?:\s+(.*))?$", re.S | re.I)
 

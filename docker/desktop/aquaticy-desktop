@@ -12,7 +12,7 @@ Zeichen darin als Befehl gelesen werden kann.
     aquaticy-desktop type                                       <- Text
     aquaticy-desktop key TASTE [TASTE ...]
     aquaticy-desktop scroll X Y up|down|left|right N
-    aquaticy-desktop open APP [ZIEL]      (auch whatsapp, telegram, signal, blender)
+    aquaticy-desktop open APP [ZIEL]      (auch whatsapp, signal, blender)
     aquaticy-desktop windows
     aquaticy-desktop focus FENSTER-ID
     aquaticy-desktop version
@@ -59,7 +59,6 @@ APPS: dict[str, list[str]] = {
     # Datentraeger unter /addons/<name> -- und sind nur da, wenn der Nutzer sie
     # installiert und eingeschaltet hat (sonst ist nichts eingehaengt).
     "whatsapp": [],
-    "telegram": [],
     "signal": [],
     "blender": [],
 }
@@ -68,7 +67,7 @@ APPS: dict[str, list[str]] = {
 ADDONS = Path("/addons")
 
 #: Web-Apps laufen in Firefox, jede mit eigenem Profil (also eigener Anmeldung).
-WEBAPPS = {"whatsapp", "telegram"}
+WEBAPPS = {"whatsapp"}
 
 #: Die Grundeinstellungen fuer LibreOffice (siehe profil_anlegen).
 LIBREOFFICE_PROFIL = """<?xml version="1.0" encoding="UTF-8"?>

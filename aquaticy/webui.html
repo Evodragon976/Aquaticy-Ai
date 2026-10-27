@@ -1268,6 +1268,13 @@ input:focus,select:focus{border-color:var(--accent)}
 .addon-inhalt summary{cursor:pointer;color:var(--accent-text);font-weight:600}
 .addon-inhalt ul{margin:6px 0 0;padding-left:18px;line-height:1.5}
 .addon-rechte{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line-2)}
+.addon-bruecke select{border:1px solid var(--line-2);border-radius:10px;background:var(--bg);
+  color:var(--text);padding:6px 10px;font:inherit;font-size:calc(12.5px * var(--fs));max-width:100%}
+.addon-bruecke textarea{width:100%;box-sizing:border-box;border:1px solid var(--line-2);
+  border-radius:10px;background:var(--bg);color:var(--text);padding:8px 10px;
+  font:calc(12.5px * var(--fs)) var(--mono);resize:vertical;margin-top:6px}
+.addon-bruecke .addon-status{margin-top:10px}
+.addon-bruecke .addon-row{margin-top:10px}
 /* Coworker (11.0.0 Luna) */
 .side-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
   background:var(--accent);color:var(--bg);font:600 calc(11px * var(--fs))/18px var(--mono);
@@ -2919,7 +2926,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.5.6 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.6 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 // Interne oder Test-Fassung (9.6.0): unten mittig ein gelber Hinweis.
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6399,9 +6406,6 @@ const EN = {
 "Signal Desktop in der virtual machine (ein „Signal Web“ gibt es nicht): Aquaticy liest mit und bereitet Antworten vor. Senden nur nach deinem Ja.": "Signal Desktop in the virtual machine (there is no “Signal Web”): Aquaticy reads along and prepares replies. Sending only after your yes.",
 "„Anmelden“ startet Signal in der virtual machine. Auf dem Handy: Signal → Einstellungen → Gekoppelte Geräte → +, dann den QR-Code im Bildschirm unten scannen.": "“Sign in” starts Signal in the virtual machine. On your phone: Signal → Settings → Linked devices → +, then scan the QR code in the screen below.",
 "Signal Desktop gibt es nur für x86_64. Nachrichten, die Aquaticy liest, gehen an dein Modell. Signal ist Ende-zu-Ende-verschlüsselt — überleg dir das also gut.": "Signal Desktop is only available for x86_64. Messages Aquaticy reads go to your model. Signal is end-to-end encrypted — so think this through.",
-"Telegram im Browser der virtual machine — Kanäle und Gruppen lesen, Antworten vorbereiten. Senden nur nach deinem Ja.": "Telegram in the browser of the virtual machine — read channels and groups, prepare replies. Sending only after your yes.",
-"„Anmelden“ öffnet Telegram Web. Auf dem Handy: Telegram → Einstellungen → Geräte → Desktop-Gerät verbinden, dann den QR-Code scannen. Alternativ Telefonnummer und Code selbst in den Bildschirm tippen.": "“Sign in” opens Telegram Web. On your phone: Telegram → Settings → Devices → Link Desktop Device, then scan the QR code. Alternatively type your phone number and code into the screen yourself.",
-"Was Aquaticy liest, geht an dein Modell. Braucht Firefox (kommt beim Installieren mit).": "What Aquaticy reads goes to your model. Needs Firefox (comes with the installation).",
 "Programme": "Programs",
 "Das 3D-Programm von blender.org: mit Oberfläche im Desktop der virtual machine und für Skripte (blender_run). Damit baust du Modelle, richtest Szenen ein und renderst.": "The 3D program from blender.org: with its interface on the virtual machine's desktop and for scripts (blender_run). Build models, set up scenes and render.",
 "Rund 350 MB Download, ausgepackt über 1 GB. Mit der virtual machine in Größe „Plus“ läuft es viel ruhiger.": "About 350 MB to download, over 1 GB unpacked. It runs much more smoothly with the “Plus” virtual machine size.",
@@ -6532,6 +6536,37 @@ const EN = {
 "Chat-Infos verbergen": "Hide chat details",
 "Infos": "Details",
 "Diesen Modus gibt es nicht mehr.": "This mode no longer exists.",
+"Mit Aquaticy schreiben": "Chat with Aquaticy",
+"Schreib Aquaticy hier wie auf der Website. Du bestimmst, wer schreiben darf und was Aquaticy tun darf.": "Write to Aquaticy here like on the website. You decide who may write and what Aquaticy may do.",
+"Wer darf schreiben?": "Who may write?",
+"Freigegebene Nummern oder Namen, eine je Zeile. Diese Chats gelten wie du: Aquaticy darf dort deine Dienste nutzen.": "Approved numbers or names, one per line. These chats count like you: Aquaticy may use your services there.",
+"Freigegebene Nummern oder Namen, eine je Zeile": "Approved numbers or names, one per line",
+"Im Add-on steht „Nur Einzelchats“. Aquaticy schreibt deshalb nur in Einzelchats.": "The add-on says “Single chats only”. So Aquaticy only writes in single chats.",
+"Was darf Aquaticy hier nutzen?": "What may Aquaticy use here?",
+"Das gilt nur für dich und freigegebene Nummern. Alle anderen bekommen nur Web und Rechnen.": "This applies only to you and approved numbers. Everyone else gets only web and calculator.",
+"Wie oft nachsehen?": "How often to check?",
+"Bereit. Schreib jetzt im Messenger.": "Ready. Write in the messenger now.",
+"Antworten in dieser Stunde:": "Replies this hour:",
+"Startet … Beim ersten Blick merkt sich Aquaticy nur, was schon im Chat steht. Schreib erst, wenn „Bereit“ dasteht.": "Starting … On the first look, Aquaticy only notes what is already in the chat. Write only once it says “Ready”.",
+"Ausschalten": "Turn off",
+"Gut zu wissen": "Good to know",
+"Aquaticy sieht den Messenger über den Bildschirm der virtual machine. Antworten brauchen deshalb etwas Zeit.": "Aquaticy sees the messenger through the screen of the virtual machine. So replies take a little time.",
+"Antworten beginnen mit [Aquaticy]. So erkennt Aquaticy seine eigenen Nachrichten.": "Replies start with [Aquaticy]. That is how Aquaticy recognises its own messages.",
+"In Gruppen antwortet Aquaticy nur, wenn eine Nachricht mit „Aquaticy“ beginnt.": "In groups, Aquaticy only replies when a message starts with “Aquaticy”.",
+"Zum Lesen öffnet Aquaticy Chats. Andere sehen dann, dass die Nachricht gelesen wurde.": "To read, Aquaticy opens chats. Others then see that the message was read.",
+"Rückfragen kann Aquaticy hier nicht stellen. Was eine Bestätigung braucht, machst du in der App.": "Aquaticy can't ask follow-up questions here. What needs a confirmation, you do in the app.",
+"Messenger erlauben oft keine Programme, die für dich schreiben. Dein Konto könnte gesperrt werden.": "Messengers often don't allow programs that write for you. Your account could be blocked.",
+"Nur mein eigener Chat": "Only my own chat",
+"Mein Chat und diese Nummern": "My chat and these numbers",
+"Alle Einzelchats": "All single chats",
+"Web und Rechnen": "Web and calculator",
+"Google Kalender": "Google Calendar",
+"Lesen und schalten": "Read and switch",
+"Lesen und ändern": "Read and change",
+"Die Messenger-Brücke gehört zu Ultra.": "The messenger bridge is part of Ultra.",
+"Der User mode ist aus. Schalte ihn unter „virtual machine“ ein.": "User mode is off. Turn it on under “virtual machine”.",
+"Aquaticy braucht ein Vision-Modell, um den Messenger zu sehen (Modelle und Verbindungen → Vision-Modell).": "Aquaticy needs a vision model to see the messenger (Models and connections → Vision model).",
+"Eine Nummer ist sicherer als ein Name. Einen Namen kann sich bei Signal jeder geben.": "A number is safer than a name. Anyone can pick any name on Signal.",
 "Bild ansehen": "Viewing image"
 };
 const SPRACHEN = ["de", "en"];
@@ -6554,6 +6589,23 @@ const schluessel = text => text.replace(/\s+/g, " ").trim();
 // also ein Muster. Jedes Muster gilt fuer den ganzen Text (^...$); die Teile in
 // Klammern werden selbst noch einmal nachgeschlagen ("unbekanntes Gerät").
 const EN_MUSTER = [
+  [/^alle (\d+) Sekunden$/, "every $1 seconds"],
+  [/^alle (\d+) Minuten$/, "every $1 minutes"],
+  [/^(.+): Wer darf schreiben\?$/, "$1: Who may write?"],
+  [/^(.+): Wie oft nachsehen\?$/, "$1: How often to check?"],
+  [/^(.+) ist nicht installiert\. Installiere das Add-on zuerst\.$/,
+   "$1 is not installed. Install the add-on first."],
+  [/^(.+) ist ausgeschaltet\. Schalte das Add-on zuerst ein\.$/,
+   "$1 is turned off. Turn the add-on on first."],
+  [/^Melde dich zuerst bei (.+) an \(Add-on, QR-Code\)\.$/,
+   "Sign in to $1 first (add-on, QR code)."],
+  [new RegExp("^Im Add-on (.+) steht „Nur lesen“\\. Wähle dort „Lesen und schreiben“, "
+              + "sonst darf Aquaticy nichts senden\\.$"),
+   "The $1 add-on says “Read only”. Choose “Read and write” there, or Aquaticy can't send anything."],
+  [/^(.+) ist nicht angemeldet \(QR-Code zu sehen\)\. Melde dich im Add-on neu an\.$/,
+   "$1 is not signed in (QR code visible). Sign in again in the add-on."],
+  [/^Der Bildschirm ließ sich nicht lesen: (.+)$/, "The screen couldn't be read: $1"],
+  [/^Der Chat ließ sich nicht bearbeiten: (.+)$/, "The chat couldn't be handled: $1"],
   [/^Höchstens (\d+) Dateien\.$/, "At most $1 files."],
   [/^(\d+) GB auf deinem Rechner$/, "$1 GB on your computer"],
   [/^Verteilt auf (\d+) Server$/, "Spread across $1 servers"],
@@ -8062,6 +8114,8 @@ function addonKarte(a){
   // Und was Aquaticy damit darf -- je Add-on ein, zwei einfache Fragen.
   if (a.installed && !laeuft && (a.rechte_katalog || []).length)
     karte.appendChild(addonRechte(a));
+  // Mit Aquaticy per Messenger schreiben (12.6.6 Luna, aquaticy/bridge.py).
+  if (a.installed && !laeuft && a.bruecke) karte.appendChild(addonBruecke(a));
   // Was ein Pruef-Plugin abdeckt -- aufklappbar (11.0.0 Luna).
   if ((a.inhalt || []).length){
     const mehr = document.createElement("details");
@@ -8200,6 +8254,199 @@ function addonRechte(a){
     zeile.append(name, gruppe);
     box.appendChild(zeile);
   }
+  return box;
+}
+
+// Die Messenger-Bruecke: wer schreiben darf und was Aquaticy dabei nutzen darf.
+// Die Auswahl bleibt als Entwurf stehen, bis sie gespeichert ist.
+const brueckenEntwurf = new Map();
+function addonBruecke(a){
+  const b = a.bruecke, st = b.status, an = !!b.config.an;
+  if (!brueckenEntwurf.has(a.id)){
+    const c = b.config;
+    brueckenEntwurf.set(a.id, { wer: c.wer, nummern: [...c.nummern], takt: c.takt,
+                                dienste: { ...c.dienste } });
+  }
+  const entwurf = brueckenEntwurf.get(a.id);
+  const felder = () => ({ wer: entwurf.wer, nummern: entwurf.nummern, takt: entwurf.takt,
+                          dienste: entwurf.dienste });
+  const box = document.createElement("div");
+  box.className = "addon-rechte addon-bruecke";
+  const titel = document.createElement("div");
+  titel.className = "how"; titel.innerHTML = "<b></b>";
+  titel.firstChild.textContent = "Mit Aquaticy schreiben";
+  const wie = document.createElement("div");
+  wie.className = "addon-hint";
+  wie.textContent = "Schreib Aquaticy hier wie auf der Website. Du bestimmst, wer schreiben darf "
+    + "und was Aquaticy tun darf.";
+  box.append(titel, wie);
+
+  // Wer darf schreiben?
+  const werZeile = document.createElement("div");
+  werZeile.className = "recht";
+  const werName = document.createElement("span");
+  werName.className = "recht-name"; werName.textContent = "Wer darf schreiben?";
+  const wer = document.createElement("select");
+  wer.setAttribute("aria-label", `${a.name}: Wer darf schreiben?`);
+  for (const o of b.katalog.wer){
+    const opt = document.createElement("option");
+    opt.value = o.value; opt.textContent = o.label;
+    wer.appendChild(opt);
+  }
+  wer.value = entwurf.wer;
+  werZeile.append(werName, wer);
+  box.appendChild(werZeile);
+
+  // Freigegebene Nummern -- ab "Mein Chat und diese Nummern".
+  const nummern = document.createElement("div");
+  const nummernNote = document.createElement("div");
+  nummernNote.className = "addon-hint";
+  nummernNote.textContent = "Freigegebene Nummern oder Namen, eine je Zeile. Diese Chats gelten "
+    + "wie du: Aquaticy darf dort deine Dienste nutzen.";
+  const nummernFeld = document.createElement("textarea");
+  nummernFeld.rows = 3; nummernFeld.value = entwurf.nummern.join("\n");
+  nummernFeld.placeholder = "+49 151 2345678";
+  nummernFeld.setAttribute("aria-label", "Freigegebene Nummern oder Namen, eine je Zeile");
+  nummernFeld.addEventListener("input", () => {
+    entwurf.nummern = nummernFeld.value.split("\n");
+  });
+  const nummernWarnung = document.createElement("div");
+  nummernWarnung.className = "addon-hint";
+  nummernWarnung.textContent = "Eine Nummer ist sicherer als ein Name. Einen Namen kann sich bei "
+    + "Signal jeder geben.";
+  nummern.append(nummernNote, nummernFeld, nummernWarnung);
+  box.appendChild(nummern);
+
+  // Passt "Gruppen" zu den Rechten des Add-ons?
+  const gruppenNote = document.createElement("div");
+  gruppenNote.className = "addon-hint";
+  gruppenNote.textContent = "Im Add-on steht „Nur Einzelchats“. Aquaticy schreibt deshalb nur in "
+    + "Einzelchats.";
+  box.appendChild(gruppenNote);
+  const zeigeWer = () => {
+    nummern.hidden = entwurf.wer === "selbst";
+    gruppenNote.hidden = !(entwurf.wer === "gruppen" && a.rechte && a.rechte.wo !== "alle");
+  };
+  wer.addEventListener("change", () => { entwurf.wer = wer.value; zeigeWer(); });
+  zeigeWer();
+
+  // Was darf Aquaticy nutzen? Gilt nur fuer dich und freigegebene Nummern.
+  const nutzen = document.createElement("div");
+  nutzen.className = "how"; nutzen.textContent = "Was darf Aquaticy hier nutzen?";
+  const nutzenNote = document.createElement("div");
+  nutzenNote.className = "addon-hint";
+  nutzenNote.textContent = "Das gilt nur für dich und freigegebene Nummern. Alle anderen "
+    + "bekommen nur Web und Rechnen.";
+  box.append(nutzen, nutzenNote);
+  for (const dienst of b.katalog.dienste){
+    const zeile = document.createElement("div");
+    zeile.className = "recht";
+    const name = document.createElement("span");
+    name.className = "recht-name"; name.textContent = dienst.label;
+    const gruppe = document.createElement("div");
+    gruppe.className = "seg"; gruppe.setAttribute("role", "radiogroup");
+    gruppe.setAttribute("aria-label", `${a.name}: ${dienst.label}`);
+    for (const stufe of dienst.stufen){
+      const knopfStufe = document.createElement("button");
+      knopfStufe.type = "button"; knopfStufe.textContent = stufe.label;
+      knopfStufe.setAttribute("role", "radio");
+      const markiere = () => {
+        for (const x of gruppe.children){
+          const dran = x === knopfStufe;
+          x.classList.toggle("on", dran);
+          x.setAttribute("aria-checked", String(dran));
+        }
+      };
+      const dran = entwurf.dienste[dienst.key] === stufe.value;
+      knopfStufe.setAttribute("aria-checked", String(dran));
+      if (dran) knopfStufe.classList.add("on");
+      knopfStufe.addEventListener("click", () => {
+        entwurf.dienste[dienst.key] = stufe.value; markiere();
+      });
+      gruppe.appendChild(knopfStufe);
+    }
+    zeile.append(name, gruppe);
+    box.appendChild(zeile);
+  }
+
+  // Wie oft nachsehen?
+  const taktZeile = document.createElement("div");
+  taktZeile.className = "recht";
+  const taktName = document.createElement("span");
+  taktName.className = "recht-name"; taktName.textContent = "Wie oft nachsehen?";
+  const takt = document.createElement("select");
+  takt.setAttribute("aria-label", `${a.name}: Wie oft nachsehen?`);
+  for (const o of b.katalog.takt){
+    const opt = document.createElement("option");
+    opt.value = String(o.value); opt.textContent = o.label;
+    takt.appendChild(opt);
+  }
+  takt.value = String(entwurf.takt);
+  takt.addEventListener("change", () => { entwurf.takt = Number(takt.value); });
+  taktZeile.append(taktName, takt);
+  box.appendChild(taktZeile);
+
+  // Stand: warum es nicht geht, was schiefging, oder dass es bereit ist.
+  const stand = document.createElement("div");
+  stand.className = "note addon-status";
+  if (!an && b.problem){
+    stand.textContent = b.problem;
+  } else if (an && st.fehler && !st.ok){
+    stand.classList.add("bad"); stand.textContent = st.fehler;
+  } else if (an && st.bereit){
+    stand.classList.add("ok");
+    stand.textContent = "Bereit. Schreib jetzt im Messenger.";
+    const zahl = document.createElement("span");
+    zahl.textContent = ` ${st.diese_stunde} / ${st.grenze}`;
+    const zahlName = document.createElement("span");
+    zahlName.textContent = " Antworten in dieser Stunde:";
+    stand.append(zahlName, zahl);
+  } else if (an){
+    stand.textContent = "Startet … Beim ersten Blick merkt sich Aquaticy nur, was schon im "
+      + "Chat steht. Schreib erst, wenn „Bereit“ dasteht.";
+  }
+  if (stand.textContent) box.appendChild(stand);
+
+  const zeile = document.createElement("div");
+  zeile.className = "addon-row";
+  const speichern = (extra, b2) => addonTun(
+    { action: "bridge", id: a.id, bruecke: { ...felder(), ...extra } }, b2)
+    .then(ok => { if (ok) brueckenEntwurf.delete(a.id); return ok; });
+  if (an){
+    zeile.appendChild(knopf("Speichern", "primary", (k) => speichern({}, k)));
+    zeile.appendChild(knopf("Ausschalten", "", (k) =>
+      addonTun({ action: "bridge", id: a.id, bruecke: { an: false } }, k)
+        .then(ok => { if (ok) brueckenEntwurf.delete(a.id); })));
+  } else {
+    const ein = knopf("Einschalten", "primary", (k) => speichern({ an: true }, k));
+    ein.disabled = !!b.problem;
+    zeile.appendChild(ein);
+    zeile.appendChild(knopf("Speichern", "", (k) => speichern({}, k)));
+  }
+  box.appendChild(zeile);
+
+  const mehr = document.createElement("details");
+  mehr.className = "addon-inhalt";
+  const mehrTitel = document.createElement("summary");
+  mehrTitel.textContent = "Gut zu wissen";
+  const liste = document.createElement("ul");
+  for (const punkt of [
+    "Aquaticy sieht den Messenger über den Bildschirm der virtual machine. Antworten "
+      + "brauchen deshalb etwas Zeit.",
+    "Antworten beginnen mit [Aquaticy]. So erkennt Aquaticy seine eigenen Nachrichten.",
+    "In Gruppen antwortet Aquaticy nur, wenn eine Nachricht mit „Aquaticy“ beginnt.",
+    "Zum Lesen öffnet Aquaticy Chats. Andere sehen dann, dass die Nachricht gelesen wurde.",
+    "Rückfragen kann Aquaticy hier nicht stellen. Was eine Bestätigung braucht, machst du "
+      + "in der App.",
+    "Messenger erlauben oft keine Programme, die für dich schreiben. Dein Konto könnte "
+      + "gesperrt werden.",
+  ]){
+    const li = document.createElement("li");
+    li.textContent = punkt;
+    liste.appendChild(li);
+  }
+  mehr.append(mehrTitel, liste);
+  box.appendChild(mehr);
   return box;
 }
 
