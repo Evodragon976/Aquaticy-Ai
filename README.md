@@ -1,4 +1,4 @@
-# Aquaticy AI 12.6.6 Luna
+# Aquaticy AI 12.6.6 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.6.6 Luna
+aquaticy --version            # 12.6.6 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -568,6 +568,10 @@ ist gegen gestohlene Datenbanken und Sicherungen und gegen andere Konten.
 *Im Chat unter Modelle und Verbindungen → Add-ons oder unter Einstellungen → virtual machine → Add-ons.* Jedes Add-on lässt sich
 installieren, an- und ausschalten und entfernen. Anbieter und Schlüssel verwaltest du im jeweiligen Add-on. Anmelden musst du dich selbst –
 Aquaticy kennt keine Passwörter. Unter **Rechte** stellst du ein, was Aquaticy damit darf.
+
+Für WhatsApp, Signal und Blender baut Aquaticy den Desktop beim ersten Installieren.
+Die Bauvorlage und Hilfsprogramme sind auch im Python-Paket enthalten. Ein Git-Projektordner
+ist dafür nicht nötig. Docker oder Podman und eine Internetverbindung werden benötigt.
 
 ### KI-Modelle: NVIDIA NIM und Mistral
 

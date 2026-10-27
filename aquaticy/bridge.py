@@ -840,7 +840,13 @@ class AgentAnswerer:
         self._on_abuse = on_abuse
         self._factory = agent_factory
         self._clock = clock
-        self._agents: dict[str, tuple[Any, str, float]] = {}
+        self._agents: dict[str, tuple[Any, str, float, frozenset[str], tuple[bool, bool],
+                                      str]] = {}
+
+    def _discard(self, key: str) -> None:
+        eintrag = self._agents.pop(key)
+        with contextlib.suppress(Exception):
+            eintrag[0].close()
 
     def _build(self, settings: Any, erlaubt: frozenset[str], zusatz: str, trusted: bool) -> Any:
         def melden(name: str, payload: dict[str, Any]) -> None:
@@ -859,34 +865,41 @@ class AgentAnswerer:
         settings = effective_settings(base, config, decision)
         erlaubt = allowed_tools(config, decision.trusted)
         zusatz = trust_note(decision, config)
+        # App-Rechte und Verbindungen koennen auch ausserhalb der Bruecke wechseln.
+        # Nur einen Hash behalten, niemals Zugangsdaten in Schluesseln oder Protokollen.
+        basis_stand = hashlib.sha256(json.dumps(
+            {f.name: getattr(base, f.name) for f in dataclasses.fields(base)},
+            sort_keys=True, default=str).encode()).hexdigest()
         stand = hashlib.sha256(json.dumps(
             [sorted(erlaubt), zusatz, decision.trusted, decision.selbst,
-             str(getattr(base, "model", ""))]).encode()).hexdigest()[:16]
+             basis_stand]).encode()).hexdigest()[:16]
         jetzt = self._clock()
-        for alt in [k for k, (_, _, zeit) in self._agents.items()
-                    if jetzt - zeit > self.IDLE_SECONDS]:
-            del self._agents[alt]
+        for alt in [k for k, wert in self._agents.items()
+                    if jetzt - wert[2] > self.IDLE_SECONDS]:
+            self._discard(alt)
         while len(self._agents) >= self.MAX_AGENTS and key not in self._agents:
-            del self._agents[min(self._agents, key=lambda k: self._agents[k][2])]
+            self._discard(min(self._agents, key=lambda k: self._agents[k][2]))
         eintrag = self._agents.get(key)
+        rolle = (decision.trusted, decision.selbst)
         if eintrag is None or eintrag[1] != stand:
             agent = self._build(settings, erlaubt, zusatz, decision.trusted)
             if eintrag is not None:
-                # Die Rechte oder das Modell haben sich geaendert: neuer Agent, alter Verlauf.
-                agent.messages.extend(eintrag[0].messages[1:])
+                # Entzogene Rechte sperren auch bereits gelesene private Inhalte.
+                if (eintrag[3] <= erlaubt and eintrag[4] == rolle
+                        and eintrag[5] == basis_stand):
+                    agent.messages.extend(eintrag[0].messages[1:])
+                self._discard(key)
         else:
             agent = eintrag[0]
-        self._agents[key] = (agent, stand, jetzt)
+        self._agents[key] = (agent, stand, jetzt, erlaubt, rolle, basis_stand)
         ergebnis = agent.ask(auftrag, stream=False, structured=False, recheck=False,
                              mode="normal", online=config["dienste"].get("web") == "an",
                              sandbox=False)
         return str(getattr(ergebnis, "answer", "") or "")
 
     def close(self) -> None:
-        for agent, _, _ in self._agents.values():
-            with contextlib.suppress(Exception):
-                agent.close()
-        self._agents.clear()
+        for key in list(self._agents):
+            self._discard(key)
 
 
 # ---------------------------------------------------------------------------

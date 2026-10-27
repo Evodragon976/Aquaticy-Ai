@@ -10,7 +10,7 @@ __version__ = "12.6.6"
 
 #: Der Name dieser Fassung. Er steht ueberall hinter der Versionsnummer, wo
 #: Menschen sie lesen -- nicht in Paketangaben und Kennungen fuer Server.
-__codename__ = "Luna"
+__codename__ = "Terra"
 
 #: Interne oder Test-Fassung (seit 9.6.0): "Intern", "Test" -- leer fuer eine
 #: oeffentliche Fassung. Steht dann hinter dem Namen, und die Oberflaeche zeigt

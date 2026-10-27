@@ -523,12 +523,19 @@ def image_present(runtime: Runtime, image: str) -> bool:
 
 
 def desktop_recipe() -> tuple[Path, Path] | None:
-    """(Rezept, Ordner mit den Hilfsprogrammen) -- nur in einer Kopie des Projekts."""
-    wurzel = Path(__file__).resolve().parent.parent
-    rezept = wurzel / "docker" / "workshop-desktop.Dockerfile"
-    hilfen = wurzel / "docker" / "desktop"
-    if rezept.is_file() and all((hilfen / name).is_file() for name in DESKTOP_HELPERS):
-        return rezept, hilfen
+    """Rezept und Hilfen aus dem installierten Paket oder dem eigenen Projektordner.
+
+    Nie im Arbeitsordner suchen: Dort koennte ein fremdes Dockerfile liegen.
+    """
+    paket = Path(__file__).resolve().parent
+    kandidaten = [paket / "_desktop"]
+    if (paket.parent / "pyproject.toml").is_file():
+        kandidaten.append(paket.parent / "docker")
+    for wurzel in kandidaten:
+        rezept = wurzel / "workshop-desktop.Dockerfile"
+        hilfen = wurzel / "desktop"
+        if rezept.is_file() and all((hilfen / name).is_file() for name in DESKTOP_HELPERS):
+            return rezept, hilfen
     return None
 
 
@@ -560,8 +567,8 @@ def build_desktop_image(runtime: Runtime) -> None:
     gefunden = desktop_recipe()
     if gefunden is None:
         raise SandboxUnavailable(
-            "Das Rezept für das Desktop-Abbild liegt nicht neben Aquaticy "
-            "(docker/workshop-desktop.Dockerfile). "
+            "Die Bauvorlage für den Desktop fehlt in dieser Installation. "
+            "Installiere Aquaticy mit allen Paketdateien neu. "
             + missing_image_text(runtime, DESKTOP_IMAGE)
         )
     rezept, hilfen = gefunden

@@ -307,7 +307,7 @@ def test_connect_in_browser_preserves_code_during_polling(tmp_path, scenario):
                 page.fill("#cluster-port", f"{b.port}oops")
                 page.click("#cluster-add")
                 playwright.expect(page.locator("#cluster-status")).to_contain_text(
-                    "Ungültiger Port", timeout=4000)
+                    "Diesen Port gibt es nicht. Nimm eine Zahl von 1 bis 65535.", timeout=4000)
                 pending_file = b.root / "cluster" / "pending.json"
                 assert not pending_file.exists() or not json.loads(pending_file.read_text())
                 browser.close()

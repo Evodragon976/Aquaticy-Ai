@@ -396,10 +396,11 @@ def test_browser_learning_controls_and_batched_renderer(parallel_site):
             playwright.expect(toggle).not_to_be_checked()
             toggle.check()
             playwright.expect(page.locator("#learning-status")).to_contain_text(
-                "Zustimmung gespeichert")
+                "Gespeichert. Ab jetzt helfen nur neue Chats mit.")
             assert client.get("/api/learning").json()["enabled"]
             toggle.uncheck()
-            playwright.expect(page.locator("#learning-status")).to_contain_text("widerrufen")
+            playwright.expect(page.locator("#learning-status")).to_contain_text(
+                "Zustimmung zurückgenommen. Deine Beiträge sind gelöscht.")
             assert not client.get("/api/learning").json()["enabled"]
             result = page.evaluate("""() => {
               const oldRAF = window.requestAnimationFrame, oldCancel = window.cancelAnimationFrame;

@@ -38,6 +38,9 @@ RUN useradd --create-home --uid 1000 aquaticy \
 WORKDIR /app
 COPY pyproject.toml README.md constraints.txt ./
 COPY aquaticy ./aquaticy
+# Die Bauvorlage muss auch beim Paketbau im Container vorhanden sein.
+COPY docker/workshop-desktop.Dockerfile ./docker/workshop-desktop.Dockerfile
+COPY docker/desktop ./docker/desktop
 # Genau die getesteten Versionen (constraints.txt, seit 9.5.15).
 RUN pip install --no-cache-dir -c constraints.txt .
 

@@ -128,7 +128,7 @@ def test_without_the_recipe_the_error_says_how_to_build_by_hand(
         laufzeit, monkeypatch: pytest.MonkeyPatch) -> None:
     laufzeit(abbild_da=False)
     monkeypatch.setattr(werkstatt, "desktop_recipe", lambda: None)
-    with pytest.raises(SandboxUnavailable, match="Rezept"):
+    with pytest.raises(SandboxUnavailable, match="Bauvorlage"):
         werkstatt.ensure_image(PODMAN, werkstatt.DESKTOP_IMAGE, build=True)
 
 
