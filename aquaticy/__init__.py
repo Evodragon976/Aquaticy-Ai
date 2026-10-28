@@ -8,7 +8,7 @@ __version__ = "12.7.8"
 
 
 
-__codename__ = "Terra"
+__codename__ = "Terra v2"
 
 
 

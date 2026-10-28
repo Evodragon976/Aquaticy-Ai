@@ -366,8 +366,7 @@ def test_every_native_text_the_server_shows_has_english() -> None:
     en = json.loads(re.search(r"const EN = (\{.*?\n\});", html, re.S).group(1))
     quelle = (WEB / "messenger_native.py").read_text(encoding="utf-8")
     quelle = re.sub(r'"\s*\n\s*"', "", quelle)
-    for satz in ("Signal braucht das Programm signal-cli auf diesem Rechner "
-                 "(github.com/AsamK/signal-cli). Installiere es und starte Aquaticy neu.",
+    for satz in (nat.NEED_SIGNAL_CLI, nat.NEED_LIBMAGIC, nat.NEED_NEONIZE,
                  "WhatsApp hat die Kopplung beendet (am Handy abgemeldet).",
                  "Das Koppeln hat nicht geklappt. Versuch es erneut.",
                  "Der QR-Code ist abgelaufen. Verbinde noch einmal.",

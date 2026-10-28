@@ -42,13 +42,17 @@ COPY aquaticy ./aquaticy
 COPY docker/workshop-desktop.Dockerfile ./docker/workshop-desktop.Dockerfile
 COPY docker/desktop ./docker/desktop
 
-RUN pip install --no-cache-dir -c constraints.txt ".[messenger]"
+RUN pip install --no-cache-dir -c constraints.txt .
 
 
 
 
 RUN python -m aquaticy.llamacpp install --dir /opt/aquaticy/llama.cpp \
     || echo "llama.cpp: wird beim ersten Einschalten geladen"
+
+
+RUN python -m aquaticy.messenger_install signal-cli --dir /opt/aquaticy/signal-cli \
+    || echo "signal-cli: wird mit aquaticy install-messenger nachgeholt"
 
 
 RUN python -m aquaticy.website install-cloudflared --dir /opt/aquaticy/cloudflared \

@@ -1,4 +1,4 @@
-# Aquaticy AI 12.7.8 Terra
+# Aquaticy AI 12.7.8 Terra v2
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.7.8 Terra
+aquaticy --version            # 12.7.8 Terra v2
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -313,6 +313,7 @@ aquaticy notes                  # Merkzettel (--delete N löscht)
 aquaticy cache                  # Zwischenspeicher (--clear leert ihn)
 aquaticy install-model          # lokales Modell einrichten
 aquaticy install-vm             # Podman für die virtual machine einrichten
+aquaticy install-messenger      # WhatsApp und Signal direkt verbinden (ohne virtual machine)
 aquaticy install-browser        # echter Browser für schwierige Seiten
 aquaticy google                 # Gmail und Kalender verbinden (--aendern: auch schreiben)
 aquaticy connect-ha             # Home Assistant verbinden
@@ -576,12 +577,20 @@ ist dafür nicht nötig. Docker oder Podman und eine Internetverbindung werden b
 **Empfohlen: ohne virtual machine.** In der Karte von WhatsApp Web und Signal steht **Ohne
 virtual machine verbinden** (nur Ultra). Aquaticy wird wie ein weiteres Gerät an dein Handy
 gekoppelt: ein Klick auf „Verbinden“, ein QR-Code im Fenster, scannen, fertig. Es läuft kein
-Browser und keine virtual machine. Dafür braucht es:
+Browser und keine virtual machine. Die Teile dafür richtet Aquaticy mit ein:
 
-- **WhatsApp:** `pip install "aquaticy[messenger]"` (neonize) und auf Linux die Bibliothek
-  `libmagic`. Das Docker-Abbild bringt beides mit.
-- **Signal:** das Programm [signal-cli](https://github.com/AsamK/signal-cli) auf dem Rechner
-  (im Suchpfad oder über `AQUATICY_SIGNAL_CLI`). Es braucht Java, oder die native Fassung.
+- **WhatsApp:** Das Paket neonize ist bei der Installation von Aquaticy schon dabei (Linux mit
+  x86-64 oder ARM64, macOS, Windows). Auf Linux und macOS braucht es noch die Bibliothek
+  `libmagic`.
+- **Signal:** Das Programm [signal-cli](https://github.com/AsamK/signal-cli) lädt Aquaticy
+  selbst von GitHub, nur mit der veröffentlichten SHA-256-Prüfsumme. Auf Linux mit x86-64 geht
+  das ohne Java, sonst braucht signal-cli ein Java ab Version 21. Auf Windows richtest du es
+  selbst ein (Pfad in `AQUATICY_SIGNAL_CLI`).
+- **Wann das passiert:** Das Docker-Abbild bringt alles fertig mit. Sonst fragt
+  `aquaticy setup` am Ende und `aquaticy web` beim Start einmal im Terminal. Du siehst jeden
+  Befehl vorher. Nach einem Nein fragt Aquaticy nicht wieder. Jederzeit nachholen:
+  `aquaticy install-messenger` (mit `--yes` ohne Rückfrage). Nur `libmagic` braucht
+  Verwalterrechte (`sudo`). Aus dem Browser installiert Aquaticy nichts.
 
 Beides sind inoffizielle Wege. Die Sitzungsdaten liegen unverschlüsselt im Ordner deines Kontos
 (`messenger/`, nur für den Benutzer lesbar). „Trennen“ löscht sie. Entferne Aquaticy danach

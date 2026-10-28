@@ -457,8 +457,28 @@ def test_whatsapp_is_available_with_neonize_and_says_what_is_missing_without(
     nat.neonize_available.cache_clear()
     monkeypatch.setitem(__import__("sys").modules, "neonize.client", None)
     ok, warum = WhatsAppTransport(tmp_path, lambda m: None).available()
-    assert not ok and "neonize" in warum and "libmagic" in warum
+    assert not ok and warum == nat.NEED_NEONIZE
     nat.neonize_available.cache_clear()
+
+
+def test_a_missing_libmagic_is_named_on_its_own(tmp_path: Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    """python-magic wirft "failed to find libmagic": dann hilft nur install-messenger."""
+    import builtins
+
+    echt = builtins.__import__
+
+    def import_ohne_libmagic(name, *args, **kwargs):
+        if name == "neonize.client":
+            raise ImportError("failed to find libmagic.  Check your installation")
+        return echt(name, *args, **kwargs)
+
+    nat.neonize_available.cache_clear()
+    monkeypatch.setattr(builtins, "__import__", import_ohne_libmagic)
+    ok, warum = WhatsAppTransport(tmp_path, lambda m: None).available()
+    monkeypatch.undo()
+    nat.neonize_available.cache_clear()
+    assert not ok and warum == nat.NEED_LIBMAGIC and "install-messenger" in warum
 
 
 # -- Signal: die Verbindung mit gestelltem signal-cli ---------------------------------------------
@@ -667,11 +687,18 @@ def test_signal_unlink_deletes_the_session(signal, tmp_path) -> None:
 
 
 def test_signal_needs_the_program(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AQUATICY_DATA_DIR", str(tmp_path / "daten"))
     monkeypatch.delenv("AQUATICY_SIGNAL_CLI", raising=False)
     monkeypatch.setattr(nat.shutil, "which", lambda name: None)
     ok, warum = SignalTransport(tmp_path, lambda m: None).available()
     assert not ok and "signal-cli" in warum
-    monkeypatch.setenv("AQUATICY_SIGNAL_CLI", "/opt/signal-cli/bin/signal-cli")
+    # Seit Terra v2 muss der eingetragene Pfad eine Datei sein (sonst gaebe es erst beim Start
+    # einen Fehler); ein falscher Pfad zaehlt als "nicht da".
+    monkeypatch.setenv("AQUATICY_SIGNAL_CLI", str(tmp_path / "gibt-es-nicht"))
+    assert not SignalTransport(tmp_path, lambda m: None).available()[0]
+    programm = tmp_path / "signal-cli"
+    programm.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("AQUATICY_SIGNAL_CLI", str(programm))
     assert SignalTransport(tmp_path, lambda m: None).available() == (True, "")
     monkeypatch.delenv("AQUATICY_SIGNAL_CLI")
     monkeypatch.setattr(nat.shutil, "which", lambda name: "/usr/bin/signal-cli")

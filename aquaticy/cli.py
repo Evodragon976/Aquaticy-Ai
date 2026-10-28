@@ -303,6 +303,7 @@ def setup_command(
     )
 
     _vm_beim_start(get_settings())
+    _messenger_beim_start(get_settings())
 
 
 def _ask_website(*, no_probe: bool = False) -> dict[str, str]:
@@ -961,6 +962,7 @@ def web_command(
         )
 
     _vm_beim_start(settings)
+    _messenger_beim_start(settings)
 
     _ollama_beim_start(settings)
     import time as _time
@@ -1584,6 +1586,105 @@ def _vm_beim_start(settings: Any) -> None:
             nein.write_text("Podman beim Start nicht installieren.\n", encoding="utf-8")
 
 
+def _ensure_messenger(assume_yes: bool = False) -> str:
+    """Richtet die Direktverbindung zu WhatsApp und Signal ein (12.7.8 Terra v2).
+
+    WhatsApp: libmagic per Paketmanager (Befehle werden gezeigt, ohne --yes wird gefragt).
+    Signal: signal-cli von GitHub, mit Pruefsumme, ohne Verwalterrechte.
+    Returns: "bereit", "abgelehnt" oder "fehlgeschlagen".
+    """
+    from aquaticy import messenger_install as mi
+
+    ergebnis = "bereit"
+    problem = mi.whatsapp_problem()
+    if not problem:
+        console.print("[green]WhatsApp direkt:[/green] bereit")
+    else:
+        schritte = mi.libmagic_steps()
+        if "libmagic" not in problem or schritte is None:
+            console.print(f"[yellow]WhatsApp direkt:[/yellow] {problem}")
+            if "libmagic" in problem:
+                console.print(f"  {mi.libmagic_hint()}")
+            ergebnis = "fehlgeschlagen"
+        else:
+            console.print("\n[bold]libmagic für WhatsApp installieren[/bold]")
+            console.print("  [dim]Diese Befehle würden ausgeführt:[/dim]")
+            for befehl in schritte:
+                console.print(f"  [cyan]{' '.join(befehl)}[/cyan]")
+            if not (assume_yes or typer.confirm("  Ausführen?", default=True)):
+                console.print("  [dim]Abgebrochen. Später: aquaticy install-messenger[/dim]")
+                ergebnis = "abgelehnt"
+            elif mi.install_libmagic(on_step=lambda b: console.print(
+                    f"  [dim]→ {' '.join(b)}[/dim]")):
+                console.print("[green]WhatsApp direkt:[/green] bereit")
+            else:
+                console.print(f"[red]Installation fehlgeschlagen.[/red] {mi.libmagic_hint()}")
+                ergebnis = "fehlgeschlagen"
+
+    if mi.find_signal_cli() is not None:
+        console.print("[green]Signal direkt:[/green] bereit")
+        return ergebnis
+    name, art = mi.signal_asset_name("v0.0.0")
+    if not name:
+        console.print(f"[yellow]Signal direkt:[/yellow] {mi.signal_hint()}")
+        return "fehlgeschlagen"
+    console.print("\n[bold]signal-cli für Signal laden[/bold]")
+    java = "ohne Java" if art == "native" else "mit Java"
+    console.print(f"  [dim]Von github.com/AsamK/signal-cli ({java}), mit geprüfter Prüfsumme. "
+                  "Dafür brauchst du keine Verwalterrechte.[/dim]")
+    if not (assume_yes or typer.confirm("  Laden?", default=True)):
+        console.print("  [dim]Abgebrochen. Später: aquaticy install-messenger[/dim]")
+        return "abgelehnt" if ergebnis == "bereit" else ergebnis
+    settings = get_settings()
+    try:
+        with console.status("  lade signal-cli ..."):
+            mi.install_signal_cli(Path(settings.data_dir))
+    except mi.InstallError as exc:
+        console.print(f"[red]signal-cli:[/red] {exc}")
+        return "fehlgeschlagen"
+    console.print("[green]Signal direkt:[/green] bereit")
+    return ergebnis
+
+
+@app.command("install-messenger")
+def install_messenger_command(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Ohne Rückfrage installieren."),
+) -> None:
+    """Richtet WhatsApp und Signal für die Direktverbindung ein (ohne virtual machine)."""
+    load_env()
+    settings = get_settings()
+    with contextlib.suppress(OSError):
+        (Path(settings.data_dir) / "messenger-install-abgelehnt").unlink(missing_ok=True)
+    if _ensure_messenger(assume_yes=yes) != "bereit":
+        raise typer.Exit(code=1)
+
+
+def _messenger_beim_start(settings: Any) -> None:
+    """Beim Start von `aquaticy web` und nach `aquaticy setup`: fehlt etwas, wird es angeboten.
+
+    Wie bei Podman: einmal, nur mit einem Menschen am Terminal. Nach einem Nein fragt
+    Aquaticy nicht wieder; der Befehl `aquaticy install-messenger` bleibt.
+    """
+    from aquaticy import messenger_install as mi
+
+    try:
+        fehlt = [t for t in mi.status(Path(settings.data_dir)).values() if t]
+    except Exception:
+        return
+    if not fehlt:
+        return
+    nein = Path(settings.data_dir) / mi.NEIN
+    terminal = sys.stdin.isatty() and sys.stdout.isatty()
+    if not terminal or nein.exists():
+        console.print("[dim]WhatsApp und Signal direkt verbinden: "
+                      "[bold]aquaticy install-messenger[/bold] richtet es ein.[/dim]")
+        return
+    if _ensure_messenger() == "abgelehnt":
+        with contextlib.suppress(OSError):
+            nein.parent.mkdir(parents=True, exist_ok=True)
+            nein.write_text("WhatsApp und Signal beim Start nicht einrichten.\n", encoding="utf-8")
+
+
 def _ollama_beim_start(settings: Any) -> list[str]:
     """Beim Start von `aquaticy web`: was hat Ollama gerade? (11.3.0 Luna)
 
@@ -2128,6 +2229,7 @@ HELP_TEXT = """\
   aquaticy install-browser      Browser einrichten
   aquaticy install-model        Lokales Modell einrichten
   aquaticy install-vm           Podman für die virtual machine einrichten
+  aquaticy install-messenger    WhatsApp und Signal direkt verbinden (ohne virtual machine)
   aquaticy export               Recherchen exportieren
   aquaticy cluster              Server-Verbund: Anfrage annehmen (yes/no)
   aquaticy website              eigene Domain: Stand, setup, remove

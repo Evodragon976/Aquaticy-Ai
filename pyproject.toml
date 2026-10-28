@@ -37,12 +37,15 @@ dependencies = [
 
     "Pillow>=13.0.0,<14",
     "zxing-cpp>=3.1.1,<4",
+    # WhatsApp direkt koppeln, ohne virtual machine (12.7.8 Terra v2): von Anfang an dabei.
+    # Fertige Pakete gibt es fuer Linux (x86-64, ARM64), macOS und Windows.
+    'neonize>=0.5.2,<0.6; sys_platform == "win32" or sys_platform == "darwin" or (sys_platform == "linux" and (platform_machine == "x86_64" or platform_machine == "aarch64"))',
 ]
 
 [project.optional-dependencies]
 browser = ["playwright>=1.62.0,<2"]
-# WhatsApp direkt koppeln, ohne virtual machine (12.7.8 Terra); auf Linux braucht es libmagic.
-messenger = ["neonize>=0.5.2,<0.6"]
+# Seit 12.7.8 Terra v2 ist neonize eine feste Abhaengigkeit; der Name bleibt fuer alte Befehle.
+messenger = []
 images = ["term-image>=0.7,<0.8"]
 dev = [
     "pytest>=8.2,<10",

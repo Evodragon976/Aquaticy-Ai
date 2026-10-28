@@ -15,7 +15,6 @@ import functools
 import importlib
 import json
 import logging
-import os
 import queue
 import re
 import secrets
@@ -351,6 +350,14 @@ class Transport:
         self.store.clear(self.messenger)
 
 
+NEED_LIBMAGIC = ("WhatsApp braucht noch die Bibliothek libmagic. Führe auf dem Rechner "
+                 "„aquaticy install-messenger“ aus. Starte Aquaticy danach neu.")
+NEED_NEONIZE = ("WhatsApp braucht noch das Paket neonize. Installiere Aquaticy neu oder führe "
+                "„pip install neonize“ aus. Starte Aquaticy danach neu.")
+NEED_SIGNAL_CLI = ("Signal braucht noch das Programm signal-cli. Führe auf dem Rechner "
+                   "„aquaticy install-messenger“ aus.")
+
+
 @functools.lru_cache(maxsize=1)
 def neonize_available() -> tuple[bool, str]:
     """Ist neonize (samt libmagic) da? Das Ergebnis gilt, bis Aquaticy neu startet."""
@@ -358,9 +365,7 @@ def neonize_available() -> tuple[bool, str]:
         import neonize.client  # noqa: F401  # nosec B401
     except Exception as exc:  # fehlendes Paket oder fehlende Systembibliothek (libmagic)
         LOG.info("neonize nicht nutzbar: %s", exc)
-        return False, ("Die Direktverbindung zu WhatsApp braucht das Paket neonize "
-                       "(pip install aquaticy[messenger]) und auf Linux die "
-                       "Bibliothek libmagic. Danach Aquaticy neu starten.")
+        return False, NEED_LIBMAGIC if "magic" in str(exc).lower() else NEED_NEONIZE
     return True, ""
 
 
@@ -521,14 +526,20 @@ class SignalTransport(Transport):
         self._send_lock = threading.Lock()
 
     def _program(self) -> str:
-        return (self._binary or os.environ.get("AQUATICY_SIGNAL_CLI", "").strip()
-                or shutil.which("signal-cli") or "")
+        if self._binary:
+            return self._binary
+        from aquaticy.messenger_install import find_signal_cli
+
+        try:
+            gefunden = find_signal_cli()
+        except Exception:  # Einstellungen nicht lesbar: dann gibt es auch kein eigenes Programm
+            gefunden = None
+        return str(gefunden) if gefunden else ""
 
     def available(self) -> tuple[bool, str]:
         if self._program():
             return True, ""
-        return False, ("Signal braucht das Programm signal-cli auf diesem Rechner "
-                       "(github.com/AsamK/signal-cli). Installiere es und starte Aquaticy neu.")
+        return False, NEED_SIGNAL_CLI
 
     def _config(self) -> list[str]:
         sitzung = self.directory_for_session

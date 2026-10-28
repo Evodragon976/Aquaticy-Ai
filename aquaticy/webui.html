@@ -2759,7 +2759,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.8 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.8 Terra v2";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6439,11 +6439,12 @@ const EN = {
 "Hier zählt die echte Nummer des Absenders, mit Landesvorwahl. Namen und Nummern wie 0151 … passen nicht.": "Only the real number of the sender counts here, with country code. Names and numbers like 0151 … don't match.",
 "Die Verbindung steht noch nicht. Warte kurz.": "The connection is not up yet. Wait a moment.",
 "Aquaticy ist direkt mit deinem Handy gekoppelt. Antworten kommen sofort.": "Aquaticy is linked directly to your phone. Replies come right away.",
-"Die Direktverbindung zu WhatsApp braucht das Paket neonize (pip install aquaticy[messenger]) und auf Linux die Bibliothek libmagic. Danach Aquaticy neu starten.": "The direct connection to WhatsApp needs the neonize package (pip install aquaticy[messenger]) and, on Linux, the libmagic library. Then restart Aquaticy.",
-"Signal braucht das Programm signal-cli auf diesem Rechner (github.com/AsamK/signal-cli). Installiere es und starte Aquaticy neu.": "Signal needs the signal-cli program on this computer (github.com/AsamK/signal-cli). Install it and restart Aquaticy.",
 "WhatsApp hat die Kopplung beendet (am Handy abgemeldet).": "WhatsApp ended the link (signed out on the phone).",
 "Das Koppeln hat nicht geklappt. Versuch es erneut.": "Linking didn't work. Try again.",
 "Der QR-Code ist abgelaufen. Verbinde noch einmal.": "The QR code expired. Connect again.",
+"WhatsApp braucht noch die Bibliothek libmagic. Führe auf dem Rechner „aquaticy install-messenger“ aus. Starte Aquaticy danach neu.": "WhatsApp still needs the libmagic library. Run \"aquaticy install-messenger\" on the computer. Then restart Aquaticy.",
+"WhatsApp braucht noch das Paket neonize. Installiere Aquaticy neu oder führe „pip install neonize“ aus. Starte Aquaticy danach neu.": "WhatsApp still needs the neonize package. Reinstall Aquaticy or run \"pip install neonize\". Then restart Aquaticy.",
+"Signal braucht noch das Programm signal-cli. Führe auf dem Rechner „aquaticy install-messenger“ aus.": "Signal still needs the signal-cli program. Run \"aquaticy install-messenger\" on the computer.",
 "signal-cli wurde beendet.": "signal-cli stopped.",
 "Die gespeicherte Nummer ist ungültig. Verbinde noch einmal.": "The saved number is invalid. Connect again.",
 "Getrennt. Entferne Aquaticy am Handy auch unter „Verknüpfte Geräte“.": "Disconnected. Also remove Aquaticy on your phone under “Linked devices”.",
