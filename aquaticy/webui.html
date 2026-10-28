@@ -2034,7 +2034,9 @@ html.vv,html.vv body{height:var(--app-h)}
     <img id="qr-image" alt="QR-Code zum Verbinden deines Kontos" hidden>
     <p class="note" id="qr-status" role="status" aria-live="polite"></p>
     <p class="note">Der QR-Code wird lokal erkannt. Er geht nicht an ein KI-Modell oder in deinen Chat.</p>
+    <p class="note" id="qr-fallback" hidden>Klappt es nicht? Dann bedienst du den Bildschirm der virtual machine selbst.</p>
     <div class="actions">
+      <button type="button" class="btn" id="qr-screen" hidden>Bildschirm selbst bedienen</button>
       <button type="button" class="btn" id="qr-retry" hidden>Erneut versuchen</button>
       <button type="button" class="btn primary" id="qr-done" disabled>Ich bin angemeldet</button>
       <button type="button" class="btn" id="qr-close">Schließen</button>
@@ -2757,7 +2759,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.7 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.7 Astra";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6419,6 +6421,11 @@ const EN = {
 "Der User mode ist aus. Schalte ihn unter „virtual machine“ ein.": "User mode is off. Turn it on under “virtual machine”.",
 "Aquaticy braucht ein Vision-Modell, um den Messenger zu sehen (Modelle und Verbindungen → Vision-Modell).": "Aquaticy needs a vision model to see the messenger (Models and connections → Vision model).",
 "Eine Nummer ist sicherer als ein Name. Einen Namen kann sich bei Signal jeder geben.": "A number is safer than a name. Anyone can pick any name on Signal.",
+"Klappt es nicht? Dann bedienst du den Bildschirm der virtual machine selbst.": "Not working? Then you use the screen of the virtual machine yourself.",
+"Bildschirm selbst bedienen": "Use the screen yourself",
+"Das Fenster ist noch nicht offen. Warte kurz.": "The window is not open yet. Wait a moment.",
+"Ein anderes Fenster ist vorn. Aquaticy versucht es gleich noch einmal.": "Another window is in front. Aquaticy will try again in a moment.",
+"Das Fenster zeigt noch keinen QR-Code. Warte kurz.": "The window does not show a QR code yet. Wait a moment.",
 "Bild ansehen": "Viewing image"
 };
 const SPRACHEN = ["de", "en"];
@@ -8966,7 +8973,17 @@ addonBox.addEventListener("click", (e) => { if (e.target === addonBox) addonsSch
 
 
 let qrAddon = null, qrToken = "", qrGeneration = 0, qrTimer = null, qrRequest = null;
-let qrFehler = 0;
+let qrFehler = 0, qrLeer = 0;
+const QR_GRUENDE = {
+  kein_fenster: "Das Fenster ist noch nicht offen. Warte kurz.",
+  nicht_vorn: "Ein anderes Fenster ist vorn. Aquaticy versucht es gleich noch einmal.",
+  kein_qr: "Das Fenster zeigt noch keinen QR-Code. Warte kurz.",
+};
+const QR_LEER_BIS_AUSWEG = 5;
+function qrAusweg(zeigen){
+  $("#qr-fallback").hidden = !zeigen;
+  $("#qr-screen").hidden = !zeigen;
+}
 const qrBox = $("#qrbox");
 function qrAbmelden(id, token){
   if (!token) return;
@@ -8978,7 +8995,8 @@ function qrSchliessen(){
   clearTimeout(qrTimer);
   qrRequest?.abort(); qrRequest = null;
   if (qrAddon) qrAbmelden(qrAddon.id, qrToken);
-  qrAddon = null; qrToken = ""; qrFehler = 0;
+  qrAddon = null; qrToken = ""; qrFehler = 0; qrLeer = 0;
+  qrAusweg(false);
   $("#qr-image").removeAttribute("src"); $("#qr-image").hidden = true;
   closeOverlay(qrBox);
 }
@@ -8993,6 +9011,7 @@ async function qrAnmelden(addon){
   $("#qr-status").textContent = "Die Anmeldung startet. Der QR-Code erscheint gleich hier.";
   $("#qr-done").disabled = true;
   $("#qr-retry").hidden = true;
+  qrAusweg(false);
   openOverlay(qrBox); $("#qr-close").focus();
   const data = await addonTun({action:"login", id:addon.id}, null);
   if (generation !== qrGeneration){
@@ -9002,6 +9021,7 @@ async function qrAnmelden(addon){
   if (!data){
     $("#qr-status").textContent = $("#addon-note").textContent;
     $("#qr-retry").hidden = false;
+    qrAusweg(true);
     return;
   }
   qrToken = data.qr_token;
@@ -9033,10 +9053,14 @@ async function qrAktualisieren(){
     if (data.image && data.image.startsWith("data:image/png;base64,")){
       image.src = data.image; image.hidden = false;
       $("#qr-done").disabled = false;
+      qrLeer = 0; qrAusweg(false);
       $("#qr-status").textContent = "Scanne den QR-Code mit deinem Handy. Bestätige danach die Anmeldung.";
     } else {
       image.removeAttribute("src"); image.hidden = true;
-      $("#qr-status").textContent = "Noch kein QR-Code erkannt. Warte kurz. Falls dein Handy schon gekoppelt ist, bestätige die Anmeldung.";
+      qrLeer++;
+      qrAusweg(qrLeer >= QR_LEER_BIS_AUSWEG);
+      $("#qr-status").textContent = QR_GRUENDE[data.reason]
+        || "Noch kein QR-Code erkannt. Warte kurz. Falls dein Handy schon gekoppelt ist, bestätige die Anmeldung.";
     }
   } catch (error){
     if (generation !== qrGeneration) return;
@@ -9049,6 +9073,7 @@ async function qrAktualisieren(){
     pause = 2000 * (2 ** (qrFehler - 1));
     $("#qr-retry").hidden = weiter;
     if (weiter) $("#qr-status").textContent = "Kurze Unterbrechung. Die QR-Anzeige wird automatisch erneut geladen.";
+    qrAusweg(!weiter);
   } finally {
     clearTimeout(timeout);
     if (qrRequest === controller) qrRequest = null;
@@ -9058,6 +9083,12 @@ async function qrAktualisieren(){
 $("#qr-close").addEventListener("click", qrSchliessen);
 qrBox.addEventListener("click", e => { if (e.target === qrBox) qrSchliessen(); });
 $("#qr-retry").addEventListener("click", () => { if (qrAddon) qrAnmelden(qrAddon); });
+$("#qr-screen").addEventListener("click", () => {
+  const addon = qrAddon;
+  if (!addon) return;
+  qrSchliessen();
+  bildschirmOeffnen(addon);
+});
 $("#qr-done").addEventListener("click", async () => {
   if (!qrAddon || !qrToken) return;
   const generation = qrGeneration;

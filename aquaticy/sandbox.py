@@ -1124,9 +1124,10 @@ class Sandbox:
         )
 
     def screenshot(
-        self, *, grid: bool = False, mark: tuple[int, int] | None = None, start: bool = True
+        self, *, grid: bool = False, mark: tuple[int, int] | None = None, start: bool = True,
+        quality: int | None = None,
     ) -> bytes:
-        """Ein Bildschirmfoto als JPEG.
+        """Ein Bildschirmfoto als JPEG (quality 30 bis 95; ohne Angabe die Voreinstellung).
 
         Raises:
             SandboxUnavailable: Ohne User mode oder wenn kein Bild kommt.
@@ -1136,6 +1137,8 @@ class Sandbox:
             extra.append("--grid")
         if mark is not None:
             extra += ["--mark", str(int(mark[0])), str(int(mark[1]))]
+        if quality is not None:
+            extra += ["--quality", str(max(30, min(95, int(quality))))]
         done = self.desktop("shot", *extra, timeout=40, start=start)
         bild = done.stdout or b""
         if done.returncode != 0 or not bild.startswith(b"\xff\xd8"):

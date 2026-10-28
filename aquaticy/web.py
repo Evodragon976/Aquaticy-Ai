@@ -3718,6 +3718,23 @@ def _addon_login(session: Any, addon: Any) -> tuple[str, str]:
     ), qr_token
 
 
+def front_is_messenger(window: dict[str, Any], after: dict[str, Any], name: str) -> bool:
+    """Ist nach dem Bildschirmfoto der Messenger das vordere Fenster?
+
+    Ist der Titel des vorderen Fensters bekannt, muss er der des Messengers sein. Meldet der
+    Fenstermanager keinen Titel, entscheidet die Klasse; fehlt auch die, geht es weiter: Das
+    Bild verlaesst den Server ohnehin nur als frisch gezeichneter, echter Kopplungscode
+    dieses Messengers, nie als Ausschnitt vom Bildschirm.
+    """
+    from aquaticy import addons
+
+    titel = str(after.get("aktiv") or "")[:200]
+    if titel:
+        return titel == str(window.get("titel") or "")
+    klasse = str(after.get("aktiv_klasse") or "").casefold()
+    return addons.messenger_of(klasse, "") == name if klasse else True
+
+
 def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     """Kurzlebige, kontogebundene QR-Anmeldung. Gibt nie ein ganzes Bildschirmfoto heraus."""
     from aquaticy import addons
@@ -3757,28 +3774,38 @@ def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int
 
         def windows() -> dict[str, Any]:
             result = box.desktop("windows", start=False, timeout=10)
-            return json.loads(result.stdout) if result.returncode == 0 else {}
+            try:
+                info = json.loads(result.stdout) if result.returncode == 0 else {}
+            except ValueError:
+                return {}
+            return info if isinstance(info, dict) else {}
+
+        def nichts(grund: str) -> tuple[dict[str, Any], int]:
+            logging.getLogger("aquaticy.web").info("QR-Anmeldung %s: kein Bild (%s)", name, grund)
+            return {"ok": True, "image": None, "reason": grund}, 200
 
         info = windows()
         window = next((w for w in info.get("fenster", []) if isinstance(w, dict)
                        and addons.messenger_of(str(w.get("klasse") or ""), "") == name), None)
         if window is None:
-            return {"ok": True, "image": None}, 200
+            return nichts("kein_fenster")
         wid = str(window.get("id") or "")
         if not re.fullmatch(r"0x[0-9a-fA-F]{1,10}", wid):
-            return {"ok": True, "image": None}, 200
+            return nichts("kein_fenster")
         if box.desktop("focus", wid, start=False, timeout=10).returncode != 0:
-            return {"ok": True, "image": None}, 200
-        shot = box.screenshot(start=False)
+            return nichts("nicht_vorn")
+        shot = box.screenshot(start=False, quality=92)
         after = windows()
-        if (not window.get("titel") or str(after.get("aktiv") or "")[:200] != window["titel"]
-                or str(after.get("aktiv_klasse") or "").casefold()
-                != str(window.get("klasse") or "").casefold() or workshop_busy(session)):
-            return {"ok": True, "image": None}, 200
+        if not front_is_messenger(window, after, name):
+            return nichts("nicht_vorn")
+        if workshop_busy(session):
+            return {"error": "Ein Chat läuft gerade. Warte, bis er fertig ist."}, 409
         image = qr_image(shot, name)
         with owner._qr_state_lock:
             if not valid():
                 return {"error": "Die Anmeldung ist abgelaufen. Öffne sie erneut."}, 409
+        if image is None:
+            return nichts("kein_qr")
         return {"ok": True, "image": image}, 200
     except ImportError:
         return {"error": "Die QR-Erkennung fehlt. Aktualisiere Aquaticy und starte den "

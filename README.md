@@ -1,4 +1,4 @@
-# Aquaticy AI 12.6.7 Sol
+# Aquaticy AI 12.6.7 Astra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.6.7 Sol
+aquaticy --version            # 12.6.7 Astra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -577,6 +577,10 @@ Bei WhatsApp Web und Signal öffnet „Anmelden“ ein eigenes Fenster mit dem Q
 Scanne ihn mit der Handy-App und bestätige danach „Ich bin angemeldet“.
 Der Code wird lokal erkannt, nicht an ein KI-Modell geschickt und nicht im Chat gespeichert.
 Beim Schließen wird die Anzeige geleert. Die Anmeldung läuft nach zehn Minuten ab.
+Aquaticy liest auch dichte Codes (WhatsApp) und zeichnet sie scharf neu. Zeigt das Fenster
+keinen Code, steht dort der Grund: Fenster noch zu, ein anderes Fenster vorn oder noch kein
+Code auf dem Bildschirm. Nach etwa zehn Sekunden ohne Code gibt es „Bildschirm selbst
+bedienen“: Du siehst den Bildschirm der virtual machine und meldest dich dort selbst an.
 Du musst die virtual machine dafür nicht selbst bedienen.
 Aktuelle WhatsApp-Codes mit `wa.me/settings/linked_devices` werden ebenso erkannt wie ältere Codes.
 Bei kurzen Verbindungsfehlern versucht das Anmeldefenster es automatisch erneut.
