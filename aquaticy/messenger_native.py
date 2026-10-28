@@ -315,6 +315,16 @@ class Transport:
         thread = self._thread
         return bool(thread is not None and thread.is_alive())
 
+    def _finish_stale(self) -> None:
+        """Wartet, bis ein angehaltener Lauf wirklich zu Ende ist (nicht unter der Sperre).
+
+        Ohne das startet ein neuer Lauf nie: Der alte Faden gilt bis zu seinem Ende als laufend.
+        """
+        faden = self._thread
+        if (faden is not None and faden is not threading.current_thread()
+                and faden.is_alive() and self._stopping.is_set()):
+            faden.join(timeout=10)
+
     @property
     def directory_for_session(self) -> Path:
         return self.directory / self.messenger
@@ -402,6 +412,7 @@ class WhatsAppTransport(Transport):
         return NewClient(ziel, uuid=kennung)
 
     def start(self) -> None:
+        self._finish_stale()
         with self._lock:
             if self.running:
                 return
@@ -483,8 +494,12 @@ class WhatsAppTransport(Transport):
         self._stopping.set()
         client = self._client
         if client is not None:
+            # neonize: disconnect() trennt nur die Leitung. Erst stop() beendet den Aufruf
+            # connect() -- sonst bleibt der Faden haengen und ein neuer Start tut nichts mehr.
             with contextlib.suppress(Exception):
                 client.disconnect()
+            with contextlib.suppress(Exception):
+                client.stop()
         thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=10)
@@ -549,6 +564,7 @@ class SignalTransport(Transport):
         return [self._program(), "--config", str(sitzung)]
 
     def start(self) -> None:
+        self._finish_stale()
         with self._lock:
             if self.running:
                 return

@@ -281,7 +281,8 @@ class FakeClient:
         self.me = SimpleNamespace(JID=jid(ME), LID=jid("99887766", "lid"))
         self.sent: list[tuple[str, str]] = []
         self.logged_out = False
-        self.stop = threading.Event()
+        self.halt = threading.Event()
+        self.disconnected = False
         self.fail: Exception | None = None
         FakeClient.instances.append(self)
 
@@ -298,10 +299,13 @@ class FakeClient:
     def connect(self) -> None:
         if self.fail:
             raise self.fail
-        self.stop.wait(10)
+        self.halt.wait(10)
 
     def disconnect(self) -> None:
-        self.stop.set()
+        self.disconnected = True  # wie neonize: trennt nur, connect() bleibt blockiert
+
+    def stop(self) -> None:
+        self.halt.set()  # erst stop() beendet connect()
 
     def logout(self) -> None:
         self.logged_out = True
@@ -424,7 +428,7 @@ def test_unlinking_logs_out_and_deletes_the_session(whatsapp, tmp_path) -> None:
     client.handlers[Ev.PairStatusEv](client, SimpleNamespace(Status=1, ID=SimpleNamespace(User=ME)))
     (tmp_path / "messenger" / "whatsapp" / "session.sqlite3").write_text("x", encoding="utf-8")
     eins.unlink()
-    assert client.logged_out and client.stop.is_set()
+    assert client.logged_out and client.halt.is_set()
     assert not eins.store.linked("whatsapp") and eins.status().who == ""
     assert not (tmp_path / "messenger" / "whatsapp").exists()
     assert not eins.running
@@ -441,6 +445,39 @@ def test_every_connection_gets_its_own_client_id(whatsapp) -> None:
     erste, zweite = FakeClient.instances
     assert erste.uuid.startswith("aquaticy-") and zweite.uuid.startswith("aquaticy-")
     assert erste.uuid != zweite.uuid
+
+
+def test_after_a_stop_the_connection_can_start_again(whatsapp) -> None:
+    """Fehler in 12.7.8 Terra v2: stop() liess connect() haengen, der Neustart tat nichts.
+
+    Die Brücke ist nach dem Koppeln noch aus, die Verbindung wird nach kurzer Zeit getrennt.
+    Wer danach „Einschalten“ klickte, bekam nie wieder eine Verbindung (und keine Antwort).
+    """
+    eins, empfangen, _ = whatsapp
+    eins.start()
+    assert wait_for(lambda: FakeClient.instances and FakeClient.instances[0].handlers)
+    erster = FakeClient.instances[0]
+    eins.stop()
+    assert erster.disconnected and erster.halt.is_set()
+    assert not eins.running, "der Faden ist zu Ende"
+    eins.start()
+    assert wait_for(lambda: len(FakeClient.instances) == 2 and FakeClient.instances[1].handlers)
+    zweiter = FakeClient.instances[1]
+    zweiter.handlers[Ev.ConnectedEv](zweiter, SimpleNamespace())
+    assert eins.status().state == CONNECTED
+    zweiter.handlers[Ev.MessageEv](
+        zweiter, wa_event("Hallo", von_mir=True, chat=jid(ME), sender=jid(ME)))
+    assert wait_for(lambda: len(empfangen) == 1) and empfangen[0].self_chat
+
+
+def test_a_start_right_after_a_stop_waits_for_the_old_run(whatsapp) -> None:
+    eins, _, _ = whatsapp
+    eins.start()
+    assert wait_for(lambda: FakeClient.instances and FakeClient.instances[0].handlers)
+    eins._stopping.set()  # ein Anhalten ist im Gang, der Faden laeuft noch
+    threading.Timer(0.2, FakeClient.instances[0].halt.set).start()
+    eins.start()
+    assert wait_for(lambda: len(FakeClient.instances) == 2)
 
 
 def test_starting_twice_runs_one_connection(whatsapp) -> None:
@@ -940,6 +977,9 @@ def test_the_real_neonize_client_dispatches_events_into_our_handlers(tmp_path: P
             self._halt.wait(10)
 
         def disconnect(self) -> None:
+            pass  # wie in der echten Bibliothek: nur stop() beendet connect()
+
+        def stop(self) -> None:
             self._halt.set()
 
     empfangen: list[Incoming] = []

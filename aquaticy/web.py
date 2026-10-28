@@ -3372,6 +3372,9 @@ def _native_bridge_status(bruecke: dict[str, Any], native: dict[str, Any]) -> No
     status["bereit"] = bool(bruecke["config"]["an"]) and native["state"] == "verbunden"
     status["ok"] = native["state"] != "fehler"
     status["fehler"] = native["error"] if native["state"] == "fehler" else ""
+    if bruecke["config"]["an"] and native["state"] == "aus" and not native["available"]:
+        # An, aber es startet nie: sonst stuende dort fuer immer "Warte kurz".
+        status["ok"], status["fehler"] = False, native["hinweis"]
     bruecke["direkt"] = True
 
 

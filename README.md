@@ -1,4 +1,4 @@
-# Aquaticy AI 12.7.8 Terra v2
+# Aquaticy AI 12.7.8 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.7.8 Terra v2
+aquaticy --version            # 12.7.8 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
