@@ -88,8 +88,10 @@ from typing import Any
 IDLE_MINUTES = 20
 
 
-CPUS = 1
-MEMORY_MB = 1024
+# Die normale virtual machine: 2 Kerne und 3 GB (12.7.8 Luna).
+CPUS = 2
+# Die normale virtual machine: 3 GB (12.7.8 Luna), genug fuer Python, Pakete und Browser.
+MEMORY_MB = 3072
 DISK_GB = 4
 
 
@@ -153,7 +155,7 @@ DESKTOP_PID_LIMIT = 1024
 DESKTOP_FILE_LIMIT = 4096
 
 # Ein Desktop mit Firefox (WhatsApp Web) braucht mehr als die Voreinstellung der normalen
-# virtual machine (1 GB, 1 Kern): Der Tab stuerzt sonst ab (12.6.8 Astra). Der gemeinsame
+# virtual machine (damals 1 GB, 1 Kern): Der Tab stuerzt sonst ab (12.6.8 Astra). Der gemeinsame
 # Speicher (/dev/shm) zaehlt zum Speicher des Behaelters.
 DESKTOP_MIN_MEMORY_MB = 2048
 DESKTOP_MIN_CPUS = 2

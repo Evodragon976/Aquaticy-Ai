@@ -2653,12 +2653,22 @@ def test_the_workshop_size_shows_up_in_the_tool_texts(
 
 
 def test_a_single_core_gets_the_singular(settings: Settings, toolbox: Toolbox) -> None:
-    """Normal hat nur einen Kern -- 'ein Prozessorkern', nicht 'kerne'."""
+    """Bei einem Kern heisst es 'ein Prozessorkern', nicht 'kerne' (Normal hat seit 12.7.8 zwei)."""
+    settings.vm_cpus = 1
     agent = Agent(settings, cache=None, toolbox=toolbox)
     agent.ask("", mode="code", sandbox=True)
     system = agent.messages[0]["content"]
     assert "1 Prozessorkern" in system
     assert "1 Prozessorkerne" not in system
+
+
+def test_the_normal_vm_is_named_with_two_cores_and_three_gigabytes(
+        settings: Settings, toolbox: Toolbox) -> None:
+    """Die Zahlen im Systemtext sind die der normalen virtual machine."""
+    agent = Agent(settings, cache=None, toolbox=toolbox)
+    agent.ask("", mode="code", sandbox=True)
+    system = agent.messages[0]["content"]
+    assert "2 Prozessorkerne" in system and "3072 MB" in system
 
 
 def test_the_workshop_prompt_draws_the_line(settings: Settings, toolbox: Toolbox) -> None:

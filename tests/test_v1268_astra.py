@@ -27,12 +27,16 @@ def pair(flags: list[str], name: str) -> str:
 
 
 def test_the_desktop_gets_enough_memory_and_cores_for_firefox() -> None:
+    """Auch wer die virtual machine klein einstellt, bekommt im User mode genug für Firefox."""
+    small = sandbox.Sandbox(user_mode=True, memory_mb=1024, cpus=1)
+    assert small.memory_mb == sandbox.DESKTOP_MIN_MEMORY_MB >= 2048
+    assert small.cpus == sandbox.DESKTOP_MIN_CPUS >= 2
     desktop = sandbox.Sandbox(user_mode=True)
-    assert desktop.memory_mb == sandbox.DESKTOP_MIN_MEMORY_MB >= 2048
-    assert desktop.cpus == sandbox.DESKTOP_MIN_CPUS >= 2
-    flags = flags_of(desktop)
-    assert pair(flags, "--memory") == pair(flags, "--memory-swap") == f"{desktop.memory_mb}m"
-    assert pair(flags, "--cpus") == str(desktop.cpus)
+    assert desktop.memory_mb >= sandbox.DESKTOP_MIN_MEMORY_MB
+    assert desktop.cpus >= sandbox.DESKTOP_MIN_CPUS
+    flags = flags_of(small)
+    assert pair(flags, "--memory") == pair(flags, "--memory-swap") == f"{small.memory_mb}m"
+    assert pair(flags, "--cpus") == str(small.cpus)
 
 
 def test_larger_choices_stay_and_the_plain_vm_is_unchanged() -> None:

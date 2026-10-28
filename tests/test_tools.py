@@ -1518,7 +1518,7 @@ def test_vm_schemas_do_not_mutate_the_shared_template() -> None:
 
     vm_schemas_for(Settings(vm_cpus=4, vm_memory_mb=6144, vm_disk_gb=20))
     original = next(s for s in VM_SCHEMAS if s["function"]["name"] == "vm_run")
-    assert "1024 MB" in original["function"]["description"]
+    assert "3072 MB" in original["function"]["description"]
     assert "6144 MB" not in original["function"]["description"]
 
 

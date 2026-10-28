@@ -164,4 +164,4 @@ def test_normal_profile_cannot_enable_pro_integrations(tmp_path, monkeypatch) ->
     assert settings.ha_url == "" and settings.ha_token == ""
     assert settings.storage_url == "" and settings.storage_access == "off"
     assert settings.vm_size == "normal"
-    assert (settings.vm_cpus, settings.vm_memory_mb, settings.vm_disk_gb) == (1, 1024, 4)
+    assert (settings.vm_cpus, settings.vm_memory_mb, settings.vm_disk_gb) == (2, 3072, 4)

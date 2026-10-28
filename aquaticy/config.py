@@ -459,9 +459,9 @@ class Settings:
     vm_size: str = "normal"
     vm_image: str = ""
     vm_idle_minutes: int = 20
-    vm_memory_mb: int = 1024
+    vm_memory_mb: int = 3072  # wie sandbox.MEMORY_MB (ein Test prueft das)
     vm_disk_gb: int = 4
-    vm_cpus: int = 1
+    vm_cpus: int = 2  # wie sandbox.CPUS (ein Test prueft das)
 
 
 

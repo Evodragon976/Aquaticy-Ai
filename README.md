@@ -1,4 +1,4 @@
-# Aquaticy AI 12.6.8 Astra
+# Aquaticy AI 12.7.8 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.6.8 Astra
+aquaticy --version            # 12.7.8 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -704,8 +704,11 @@ Die **virtual machine** ist ein abgeschotteter Rechner. Darin führt Aquaticy Co
 
 | Größe | Kerne | Arbeitsspeicher | Platte |
 |---|---|---|---|
-| Normal | 1 | 1 GB | 4 GB |
+| Normal | 2 | 3 GB | 4 GB |
 | Plus (Ultra) | 4 | 6 GB | 20 GB |
+
+Die Größe wählst du unter Einstellungen → virtual machine. Sie bleibt gespeichert und gilt ab
+der nächsten virtual machine.
 
 - Kein root, die Platte ist begrenzt.
 - **Netz:** Normal und Pro haben dort **kein Netz**. Rechnen und Dateien bearbeiten geht

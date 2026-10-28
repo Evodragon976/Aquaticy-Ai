@@ -2302,7 +2302,7 @@ html.vv,html.vv body{height:var(--app-h)}
         <label><span class="lbl">Größe <span class="why">Gilt ab der nächsten virtual machine. Eine
           laufende bleibt, wie sie ist</span></span>
           <select name="AQUATICY_VM_SIZE">
-            <option value="normal">Normal — 1 Kern, 1 GB Arbeitsspeicher, 4 GB Speicher</option>
+            <option value="normal">Normal — 2 Kerne, 3 GB Arbeitsspeicher, 4 GB Speicher</option>
             <option value="plus">Plus — 4 Kerne, 6 GB Arbeitsspeicher, 20 GB Speicher</option>
           </select></label>
         <div class="note">Normal reicht für fast alles. Plus lohnt sich für schwere Arbeit, zum
@@ -2759,7 +2759,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.8 Astra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.8 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5791,7 +5791,7 @@ const EN = {
 "„Plus“ gibt es nur mit Ultra. „Normal“ kannst du nutzen.": "“Plus” is only with Ultra. You can use “Normal”.",
 "Größe": "Size",
 "Gilt ab der nächsten virtual machine. Eine laufende bleibt, wie sie ist": "Applies from the next virtual machine. A running one stays as it is",
-"Normal — 1 Kern, 1 GB Arbeitsspeicher, 4 GB Speicher": "Normal — 1 core, 1 GB RAM, 4 GB storage",
+"Normal — 2 Kerne, 3 GB Arbeitsspeicher, 4 GB Speicher": "Normal — 2 cores, 3 GB RAM, 4 GB storage",
 "Plus — 4 Kerne, 6 GB Arbeitsspeicher, 20 GB Speicher": "Plus — 4 cores, 6 GB RAM, 20 GB storage",
 "Normal reicht für fast alles. Plus lohnt sich für schwere Arbeit, zum Beispiel 3D mit Blender.": "Normal is enough for almost everything. Plus is worth it for heavy work, for example 3D with Blender.",
 "User mode — Aquaticy bedient die virtual machine wie ein Mensch": "User mode — Aquaticy uses the virtual machine like a person",

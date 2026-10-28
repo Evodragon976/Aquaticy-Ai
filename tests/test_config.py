@@ -359,12 +359,12 @@ def test_an_explicit_parallelism_is_never_exceeded() -> None:
 def test_the_default_size_matches_the_old_fixed_numbers(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Wer nichts einstellt, bekommt genau das, was vor der Groesse galt."""
+    """Wer nichts einstellt, bekommt "Normal": 2 Kerne, 3 GB, 4 GB Platte (seit 12.7.8 Luna)."""
     monkeypatch.setenv("AQUATICY_DATA_DIR", str(tmp_path / "data"))
     settings = config.get_settings()
     assert settings.vm_size == "normal"
-    assert settings.vm_cpus == 1
-    assert settings.vm_memory_mb == 1024
+    assert settings.vm_cpus == 2
+    assert settings.vm_memory_mb == 3072
     assert settings.vm_disk_gb == 4
 
 
@@ -387,7 +387,7 @@ def test_an_unknown_size_falls_back_to_normal(
     monkeypatch.setenv("AQUATICY_VM_SIZE", "gigantisch")
     settings = config.get_settings()
     assert settings.vm_size == "normal"
-    assert settings.vm_cpus == 1
+    assert settings.vm_cpus == 2
 
 
 def test_a_hand_picked_number_wins_over_the_size(

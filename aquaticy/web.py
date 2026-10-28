@@ -64,6 +64,7 @@ from aquaticy.config import (
 )
 from aquaticy.guardrails import rules_overview
 from aquaticy.legal import LEGAL_ROUTES, LEGAL_VERSION, legal_page
+from aquaticy.sandbox import VM_SIZES
 
 UI_FILE = Path(__file__).with_name("webui.html")
 
@@ -1149,6 +1150,31 @@ def remove_env_keys(path: Path, names: set[str]) -> None:
         secure_file(path)
 
 
+def _apply_vm_size(settings: Settings, raw: dict[str, str], plan: str) -> None:
+    """Die Groesse der virtual machine aus der Datei des Kontos -- samt Kernen, Speicher, Platte.
+
+    Bis 12.7.8 las das Konto nur seine anderen Einstellungen: "Plus" wurde gespeichert, beim
+    naechsten Oeffnen stand wieder "Normal", und die Zahlen blieben die der kleinen.
+    Nur Ultra darf waehlen; fehlt die Angabe, gilt, was der Betreiber eingestellt hat.
+    Eigene Zahlen in der Datei (AQUATICY_VM_MEMORY_MB, _DISK_GB, _CPUS) gehen vor.
+    """
+    if plan != "ultra":
+        return
+    groesse = raw.get("AQUATICY_VM_SIZE", "").strip().lower()
+    if groesse in VM_SIZES:
+        preset = VM_SIZES[groesse]
+        settings.vm_size = groesse
+        settings.vm_cpus = preset["cpus"]
+        settings.vm_memory_mb = preset["memory_mb"]
+        settings.vm_disk_gb = preset["disk_gb"]
+    for key, attr in (("AQUATICY_VM_MEMORY_MB", "vm_memory_mb"),
+                      ("AQUATICY_VM_DISK_GB", "vm_disk_gb"), ("AQUATICY_VM_CPUS", "vm_cpus")):
+        with contextlib.suppress(ValueError):
+            wert = int(raw.get(key, "").strip() or 0)
+            if wert > 0:
+                setattr(settings, attr, wert)
+
+
 def _profile_settings(profile: Path, plan: str, account: Account | None = None) -> Settings:
     """Kopiert die Servervorgaben und legt die Werte eines Kontos darueber."""
     base = get_settings()
@@ -1184,6 +1210,7 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         if key in raw:
             with contextlib.suppress(ValueError):
                 setattr(settings, attr, int(raw[key]))
+    _apply_vm_size(settings, raw, plan)
     if "AQUATICY_LEGAL_GUARD" in raw:
 
         settings.legal_guard = guard_on(raw["AQUATICY_LEGAL_GUARD"])
@@ -1255,9 +1282,9 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         settings.storage_url = ""
         settings.storage_access = "off"
         settings.vm_size = "normal"
-        settings.vm_cpus = 1
-        settings.vm_memory_mb = 1024
-        settings.vm_disk_gb = 4
+        settings.vm_cpus = VM_SIZES["normal"]["cpus"]
+        settings.vm_memory_mb = VM_SIZES["normal"]["memory_mb"]
+        settings.vm_disk_gb = VM_SIZES["normal"]["disk_gb"]
 
 
 

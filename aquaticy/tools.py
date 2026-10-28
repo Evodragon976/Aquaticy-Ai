@@ -29,6 +29,7 @@ from aquaticy.fetch import Fetcher, load_rules
 from aquaticy.guardrails import SENSITIVE_TOOLS, Guard, event_payload, tool_refusal
 from aquaticy.models import PageResult, Product, SearchResult, domain_of
 from aquaticy.queries import MAX_VARIANTS, keywords, mentions_place, variants, with_place
+from aquaticy.sandbox import CPUS, DISK_GB, MEMORY_MB
 from aquaticy.search import (
     OPEN_BACKEND_NAMES,
     SearchError,
@@ -895,7 +896,8 @@ VM_RUN_SCHEMA: dict[str, Any] = {
     "function": {
         "name": "vm_run",
         "description": VM_RUN_DESCRIPTION.format(
-            netz=VM_NET_OFF, memory_mb=1024, cpus=1, kern_wort="Prozessorkern", disk_gb=4
+            netz=VM_NET_OFF, memory_mb=MEMORY_MB, cpus=CPUS,
+            kern_wort="Prozessorkern" if CPUS == 1 else "Prozessorkerne", disk_gb=DISK_GB
         ),
         "parameters": {
             "type": "object",
@@ -1232,9 +1234,9 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
     """
     import copy
 
-    cpus = max(1, int(getattr(settings, "vm_cpus", 1) or 1))
-    memory_mb = max(1, int(getattr(settings, "vm_memory_mb", 1024) or 1024))
-    disk_gb = max(1, int(getattr(settings, "vm_disk_gb", 4) or 4))
+    cpus = max(1, int(getattr(settings, "vm_cpus", CPUS) or CPUS))
+    memory_mb = max(1, int(getattr(settings, "vm_memory_mb", MEMORY_MB) or MEMORY_MB))
+    disk_gb = max(1, int(getattr(settings, "vm_disk_gb", DISK_GB) or DISK_GB))
     user_mode = bool(getattr(settings, "vm_user_mode", False))
 
 

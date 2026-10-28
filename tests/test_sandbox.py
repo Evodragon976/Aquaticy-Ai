@@ -72,9 +72,9 @@ def test_the_container_is_locked_down(box: tuple[werkstatt.Sandbox, FakeRun]) ->
     assert paar("--security-opt") == "no-new-privileges"
     assert "--read-only" in zeile, "unveraenderliches Wurzeldateisystem"
     assert paar("--user") == werkstatt.RUN_AS, "nicht als root"
-    assert paar("--memory") == "1024m"
-    assert paar("--memory-swap") == "1024m", "kein Auslagern -- sonst waere das Limit keins"
-    assert paar("--cpus") == "1"
+    assert paar("--memory") == "3072m"
+    assert paar("--memory-swap") == "3072m", "kein Auslagern -- sonst waere das Limit keins"
+    assert paar("--cpus") == "2"
     assert paar("--pids-limit") == str(werkstatt.PID_LIMIT), "gegen die Gabelbombe"
     assert "/tmp:rw,noexec,nosuid,size=64m" in zeile
 
