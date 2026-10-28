@@ -1420,6 +1420,21 @@ def post_to_chat(settings: Any, cw: Coworker, titel: str, text: str) -> None:
         cache.mark_unread(cw.chat, reason="coworker")
 
 
+def push_to_messenger(settings: Any, cw: Coworker, titel: str, text: str, *,
+                      frage: bool = False, freigabe: bool = False) -> None:
+    """Die Meldung geht auch auf WhatsApp und Signal -- in den eigenen Chat des Besitzers.
+
+    "[Aquaticy] Coworker Ava" und dann die Nachricht. Nur wenn der Besitzer die Kopplung
+    gemacht und die Bruecke eingeschaltet hat; sonst passiert nichts. Scheitert das, bleibt die
+    Meldung in der App, wie immer.
+    """
+    with contextlib.suppress(Exception):
+        from aquaticy import bridge_native, messenger_native
+
+        messenger_native.notify_owner(settings, bridge_native.coworker_text(
+            cw.name, titel, text, frage=frage, freigabe=freigabe))
+
+
 def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
                 on_abuse: Callable[[Coworker, dict[str, Any]], None] | None = None,
                 agent_factory: Callable[[Any, Session], Any] | None = None,
@@ -1534,8 +1549,12 @@ def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
                       title=bericht["titel"])
         with contextlib.suppress(Exception):
             post_to_chat(settings, aktuell, bericht["titel"], bericht["text"])
+        push_to_messenger(settings, aktuell, bericht["titel"], bericht["text"],
+                          frage=bool(bericht["frage"]))
     for nummer in session.requested:
         store.add_log(cw.id, "aktion", f"Wartet auf deine Freigabe (Anfrage #{nummer}).")
+    if session.requested:
+        push_to_messenger(settings, aktuell, "Freigabe", "", freigabe=True)
     if protokoll and zustand == "fertig":
         store.add_log(cw.id, "schritt", protokoll, seen=True)
     minimum = MIN_SLEEP_MINUTES.get(plan, 15)
@@ -1606,7 +1625,9 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
     state, chat = schedule.run_job(schedule.JobStore._row(cw), settings,
                                    on_abuse=callback, agent_factory=factory,
                                    context=intro, active=alive,
-                                   chat_id=cw.chat if cw.interval_seconds else "")
+                                   chat_id=cw.chat if cw.interval_seconds else "",
+                                   on_answer=lambda antwort: push_to_messenger(
+                                       settings, cw, "", antwort))
     if not alive():
         return "angehalten"
     store.mark_read([n["id"] for n in messages])
@@ -1615,6 +1636,8 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
         store.add_log(cw.id, "frage" if report["frage"] else "meldung", report["text"],
                       title=report["titel"])
         post_to_chat(settings, cw, report["titel"], report["text"])
+        push_to_messenger(settings, cw, report["titel"], report["text"],
+                          frage=bool(report["frage"]))
     job = schedule.JobStore._row(cw)
     store.note_run(cw.id, state=state, notes=session.notes, chat=chat,
                    reason="Zeitplan", next_wake=schedule.next_time(

@@ -8,8 +8,11 @@ Stunde. Unterschiede: Ein Titel kann nichts mehr vortaeuschen, und es gibt kein 
 
 from __future__ import annotations
 
+import collections
+import contextlib
 import hashlib
 import logging
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -25,8 +28,10 @@ from aquaticy.bridge import (
     denial_text,
     is_own_text,
     load_config,
+    parse_command,
     remember,
     replies_left,
+    reply_limit,
     service_allowed,
     strip_trigger,
     to_chat_text,
@@ -37,10 +42,95 @@ LOG = logging.getLogger("aquaticy.bridge_native")
 
 FAIL_TEXT = f"{SIGNATURE} Das hat gerade nicht geklappt. Versuch es gleich noch einmal."
 
+#: Laengere Nachrichten werden abgeschnitten, bevor sie ein Modell sieht.
+MAX_INPUT_CHARS = 4000
+#: "schreibt ..." haelt nur kurz (WhatsApp, Signal ca. 10 bis 15 Sekunden): alle paar Sekunden neu.
+TYPING_REFRESH_SECONDS = 6.0
+TYPING_MAX_SECONDS = 600.0
+ACKED_KEEP = 500
+
 
 def message_fingerprint(msg: Incoming) -> str:
     roh = f"{msg.messenger}|{msg.chat}|{msg.id}|{msg.sender}|{msg.ts}"
     return hashlib.sha256(roh.encode()).hexdigest()[:16]
+
+
+COWORKER_REPLY_CHARS = 3000
+#: Titel, die nichts sagen: Sie stehen nicht noch einmal in der Nachricht.
+PLAIN_TITLES = frozenset({"", "meldung", "antwort", "frage", "freigabe"})
+
+
+def coworker_text(name: str, titel: str, text: str, *, frage: bool = False,
+                  freigabe: bool = False) -> str:
+    """Die Nachricht eines Coworkers im Messenger: "[Aquaticy] Coworker Ava" und dann der Text.
+
+    Gleiche Regeln wie bei jeder Antwort: kein Markdown, keine Zahlungsdaten, hoechstens
+    COWORKER_REPLY_CHARS Zeichen (weniger als eine Nachricht fasst, damit nichts geteilt wird).
+    """
+    from aquaticy.desktop import payment_data
+
+    kopf = "".join(z for z in str(name or "") if z.isprintable()).strip()[:40] or "Coworker"
+    titel = " ".join(str(titel or "").split())[:80]
+    if titel.lower() not in PLAIN_TITLES:
+        kopf += f" · {titel}"
+    if freigabe:
+        koerper = "Wartet auf deine Freigabe. Öffne die App."
+    elif payment_data(str(text or "")):
+        koerper = "Darin stehen Zahlungsdaten. Die sende ich nicht."
+    else:
+        koerper = str(text or "").strip()
+        if frage:
+            koerper += "\n\nAntworten kannst du in der App."
+    return to_chat_text(f"Coworker {kopf}\n{koerper}", wide=True, limit=COWORKER_REPLY_CHARS)
+
+
+class TypingIndicator:
+    """Zeigt im Chat "schreibt ...", solange gearbeitet wird -- und nimmt es danach weg.
+
+    Sendet alle paar Sekunden neu, hoert nach spaetestens TYPING_MAX_SECONDS auf und scheitert
+    nie hoerbar: Die Antwort geht vor.
+    """
+
+    def __init__(self, transport: Any, msg: Incoming, *,
+                 interval: float = TYPING_REFRESH_SECONDS,
+                 limit: float = TYPING_MAX_SECONDS) -> None:
+        self._transport = transport
+        self._msg = msg
+        self._interval = interval
+        self._limit = limit
+        self._halt = threading.Event()
+        self._lock = threading.Lock()
+        self._done = False
+        self._thread: threading.Thread | None = None
+
+    def _send(self, on: bool) -> None:
+        with self._lock:
+            if on and self._done:
+                return
+        # Ausserhalb der Sperre: Haengt die Verbindung, wartet die Antwort nicht darauf.
+        with contextlib.suppress(Exception):
+            self._transport.typing(self._msg, on)
+
+    def _loop(self) -> None:
+        ende = time.monotonic() + self._limit
+        while not self._halt.wait(self._interval):
+            if time.monotonic() >= ende:
+                return
+            self._send(True)
+
+    def __enter__(self) -> TypingIndicator:
+        self._send(True)
+        self._thread = threading.Thread(target=self._loop, name="aquaticy-schreibt", daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._halt.set()
+        with self._lock:
+            self._done = True
+        if self._thread is not None:
+            self._thread.join(timeout=2)
+        self._send(False)
 
 
 class NativeResponder:
@@ -53,36 +143,78 @@ class NativeResponder:
         self._answerer = answerer
         self._paused = paused
         self._clock = clock
+        self._acked: collections.OrderedDict[str, None] = collections.OrderedDict()
+        self._acked_lock = threading.Lock()
+
+    def _screen(self, msg: Incoming, config: dict[str, Any],
+                dedupe: Callable[[], bool] | None) -> tuple[str, Any, str]:
+        """Alle Pruefungen bis zur Entscheidung. Returns: (Grund, Entscheidung, Auftrag).
+
+        Ein Grund heisst: nichts tun. Ohne *dedupe* hinterlaesst die Pruefung keine Spur.
+        """
+        if not config["an"]:
+            return "aus", None, ""
+        if self._paused is not None and self._paused():
+            return "pausiert", None, ""
+        text = (msg.text or "").strip()[:MAX_INPUT_CHARS]
+        if not text or is_own_text(text):
+            return "eigene", None, ""
+        if msg.from_me and not msg.self_chat:
+            return "eigene", None, ""  # der Besitzer schreibt anderen vom Handy aus
+        if msg.ts and self._clock() - msg.ts > MAX_AGE_SECONDS:
+            return "zu alt", None, ""  # nach einer Pause kommt Aelteres nach
+        if dedupe is not None and not dedupe():
+            return "doppelt", None, ""
+        decision = decide_native(config, group=msg.group, self_chat=msg.self_chat,
+                                 number=msg.sender)
+        if not decision.allow:
+            return f"abgelehnt: {decision.why}", None, ""
+        auftrag = strip_trigger(text, decision.group)
+        if not auftrag:
+            return "keine Aufgabe", None, ""
+        return "", decision, auftrag
+
+    def acknowledge(self, msg: Incoming, transport: Any) -> str:
+        """Zeigt dem Absender "gelesen" -- sofort, auch wenn Aquaticy noch eine andere Nachricht
+        beantwortet. Nur fuer Nachrichten, die Aquaticy auch beantwortet (kein Haken fuer
+        Fremde, die abgelehnt werden: Sie sollen nicht merken, dass hier jemand mitliest).
+        """
+        settings = self._settings()
+        config = load_config(settings)[msg.messenger]
+        grund, _, _ = self._screen(msg, config, None)
+        if grund:
+            return grund
+        if replies_left(StateStore(settings), msg.messenger, self._clock()) <= 0:
+            return "grenze"
+        self._mark_read(msg, transport)
+        return "gelesen"
+
+    def _mark_read(self, msg: Incoming, transport: Any) -> None:
+        fp = message_fingerprint(msg)
+        with self._acked_lock:
+            if fp in self._acked:
+                return
+            self._acked[fp] = None
+            while len(self._acked) > ACKED_KEEP:
+                self._acked.popitem(last=False)
+        with contextlib.suppress(Exception):
+            transport.mark_read(msg)
 
     def __call__(self, msg: Incoming, transport: Any) -> str:
         settings = self._settings()
         config = load_config(settings)[msg.messenger]
-        if not config["an"]:
-            return "aus"
-        if self._paused is not None and self._paused():
-            return "pausiert"
-        text = (msg.text or "").strip()
-        if not text or is_own_text(text):
-            return "eigene"
-        if msg.from_me and not msg.self_chat:
-            return "eigene"  # der Besitzer schreibt anderen vom Handy aus -- das ist nicht fuer uns
-        if msg.ts and self._clock() - msg.ts > MAX_AGE_SECONDS:
-            return "zu alt"  # nach einer Pause kommt Aelteres nach: das beantwortet niemand mehr
         store = StateStore(settings)
-        if not self._first_time(store, msg):
-            return "doppelt"
-        decision = decide_native(config, group=msg.group, self_chat=msg.self_chat,
-                                 number=msg.sender)
-        if not decision.allow:
-            return f"abgelehnt: {decision.why}"
-        auftrag = strip_trigger(text, decision.group)
-        if not auftrag:
-            return "keine Aufgabe"
+        grund, decision, auftrag = self._screen(
+            msg, config, lambda: self._first_time(store, msg))
+        if grund:
+            return grund
         if replies_left(store, msg.messenger, self._clock()) <= 0:
             return "grenze"
         key = chat_key(msg.messenger, msg.chat)
+        self._mark_read(msg, transport)
         try:
-            antwort = self._reply(auftrag, decision, config, key, msg)
+            with TypingIndicator(transport, msg):
+                antwort = self._reply(auftrag, decision, config, key, msg)
         except Exception:
             LOG.exception("Die Antwort an einen %s-Chat ist fehlgeschlagen", msg.messenger)
             if decision.trusted:
@@ -110,13 +242,15 @@ class NativeResponder:
                msg: Incoming) -> str:
         from aquaticy.ownservices import own_sources
 
-        fehlend = [q for q in own_sources(auftrag) if not service_allowed(
+        # Ein Befehl ("/code-review ...") hat eigene Regeln; Codeschnipsel sind keine Mailfrage.
+        befehl = parse_command(auftrag) is not None
+        fehlend = [] if befehl else [q for q in own_sources(auftrag) if not service_allowed(
             config, decision.trusted, SOURCE_SERVICE[q])]
         if fehlend:
             antwort = denial_text(msg.messenger, fehlend, decision.trusted)
         else:
             antwort = self._answerer(auftrag, decision, config, key, msg.messenger)
-        text = to_chat_text(antwort, wide=True)
+        text = to_chat_text(antwort, wide=True, limit=reply_limit(auftrag))
         from aquaticy.desktop import payment_data
 
         if payment_data(text):

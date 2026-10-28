@@ -2536,11 +2536,29 @@ def _build_bridge_runner(get_session: Callable[[], Any], account: Any) -> Any:
         return bridge_mod.VisionDriver(Desktop(werkstatt.shared(settings), settings), messenger)
 
     antworter = bridge_mod.AgentAnswerer(
-        einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload))
+        einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload),
+        session_command=_messenger_session_command(get_session))
     runner = bridge_mod.Runner(
         bridge_mod.Bridge(einstellungen, treiber, antworter, paused=ruht), einstellungen)
     runner.answerer = antworter  # type: ignore[attr-defined]
     return runner
+
+
+def _messenger_session_command(get_session: Callable[[], Any]) -> Callable[[str, str], str]:
+    """/memory, /notes, /history, /uploads, /forget aus dem eigenen Messenger-Chat des Besitzers.
+
+    Die Bruecke erlaubt das nur dort (bridge.OWN_CHAT_COMMANDS); hier ist es zusaetzlich auf
+    genau diese Befehle begrenzt.
+    """
+    from aquaticy import bridge as bridge_mod
+
+    def ausfuehren(name: str, argument: str) -> str:
+        if name not in bridge_mod.OWN_CHAT_COMMANDS:
+            raise ValueError("Dieser Befehl geht hier nicht.")
+        ergebnis = get_session().command(f"/{name} {argument}".strip())
+        return str(ergebnis.get("text") or "")
+
+    return ausfuehren
 
 
 def _native_paused(account: Any) -> bool:
@@ -2564,14 +2582,15 @@ def _build_native_hub(get_session: Callable[[], Any], account: Any, directory: P
         return get_session().settings()
 
     antworter = bridge_mod.AgentAnswerer(
-        einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload))
+        einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload),
+        session_command=_messenger_session_command(get_session))
     antwort = NativeResponder(einstellungen, antworter,
                               paused=lambda: _native_paused(account))
 
     def gewollt(messenger: str) -> bool:
         return bool(bridge_mod.load_config(einstellungen())[messenger]["an"])
 
-    hub = NativeHub(directory, antwort, gewollt)
+    hub = NativeHub(directory, antwort, gewollt, paused=lambda: _native_paused(account))
     hub.answerer = antworter  # type: ignore[attr-defined]
     return hub
 
@@ -3906,9 +3925,9 @@ def native_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any]
             with contextlib.suppress(Exception):
                 bridge_mod.set_config(session.settings(), messenger, {"an": False})
     except RuntimeError as exc:
-        return {"ok": False, "error": str(exc)}, 400
+        return {"ok": False, "error": scrub_error(str(exc))}, 400
     except Exception as exc:
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]}, 500
+        return {"ok": False, "error": scrub_error(f"{type(exc).__name__}: {exc}")[:300]}, 500
     antwort = {"ok": True, **native_view(session, messenger)}
     if aktion == "unlink":
         antwort["message"] = ("Getrennt. Entferne Aquaticy am Handy auch unter „Verknüpfte "

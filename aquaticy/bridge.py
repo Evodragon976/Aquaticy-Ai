@@ -436,8 +436,12 @@ def strip_trigger(text: str, group: bool) -> str | None:
 
 PUBLIC_TOOLS = frozenset({
     "web_search", "fetch_page", "search_news", "local_places", "wikipedia", "weather",
-    "currency", "holidays", "news_tagesschau", "read_feeds",
+    "currency", "holidays", "news_tagesschau",
 })
+
+#: Mit Web, aber nur fuer den Besitzer und freigegebene Nummern: Die eingetragenen Feeds zeigen,
+#: was er liest (bis 12.7.8 durfte das auch ein Fremder in einem erlaubten Einzelchat).
+TRUSTED_WEB_TOOLS = frozenset({"read_feeds"})
 
 ALWAYS_TOOLS = frozenset({"calculate"})
 
@@ -463,6 +467,8 @@ def allowed_tools(config: dict[str, Any], trusted: bool) -> frozenset[str]:
     erlaubt = set(ALWAYS_TOOLS)
     if dienste.get("web") == "an":
         erlaubt |= PUBLIC_TOOLS
+        if trusted:
+            erlaubt |= TRUSTED_WEB_TOOLS
     if trusted:
         for name, stufen in SERVICE_TOOLS.items():
             erlaubt |= stufen.get(str(dienste.get(name, "aus")), frozenset())
@@ -541,10 +547,58 @@ def trust_note(decision: Decision, config: dict[str, Any]) -> str:
 
 
 
+# ---------------------------------------------------------------------------------------------
+# Slash-Befehle im Messenger (12.7.9 Sol)
+# ---------------------------------------------------------------------------------------------
+COMMAND_RE = re.compile(r"^/([a-zäöü][a-zäöü0-9-]*)(?=\s|$)\s*(.*)$", re.I | re.S)
+
+#: Plugins, die im Messenger gehen: reine Textarbeit mit den Werkzeugen, die der Chat bekommt.
+MESSENGER_PLUGINS = ("code-review", "security-review", "github", "wetter", "feeds",
+                     "nachrichten", "wikipedia", "waehrung", "feiertage")
+#: Welches Werkzeug ein Plugin braucht -- fehlt es dem Chat, sagt die Bruecke das, statt zu raten.
+PLUGIN_TOOL = {"github": "github", "wetter": "weather", "feeds": "read_feeds",
+               "nachrichten": "news_tagesschau", "wikipedia": "wikipedia",
+               "waehrung": "currency", "feiertage": "holidays"}
+#: Nur im eigenen Chat: Sie zeigen oder loeschen Daten des Besitzers.
+OWN_CHAT_COMMANDS = ("memory", "notes", "history", "uploads", "forget")
+#: Gehen nur in der App (Datei, Bild, Modellwechsel, Mannschaft, Bildschirm).
+APP_ONLY_COMMANDS = ("export", "image", "max", "quit", "exit", "q")
+REVIEW_REPLY_CHARS = 3000
+LOCATION_CHARS = 80
+MAX_LOCATIONS = 64
+
+
+def parse_command(text: str) -> tuple[str, str] | None:
+    """("befehl", "Rest") -- oder None, wenn der Text kein Befehl ist (etwa "/usr/bin")."""
+    treffer = COMMAND_RE.match(str(text or "").strip())
+    return (treffer.group(1).lower(), treffer.group(2).strip()) if treffer else None
+
+
+def reply_limit(auftrag: str) -> int:
+    """Wie lang die Antwort sein darf: Code-Review und Security-Review brauchen mehr Platz."""
+    from aquaticy import plugins
+
+    befehl = parse_command(auftrag)
+    if befehl is not None and plugins.resolve_name(befehl[0]) in plugins.REVIEW_PLUGINS:
+        return REVIEW_REPLY_CHARS
+    return MAX_REPLY_CHARS
+
+
+@dataclass
+class Expanded:
+    """Ein Plugin-Befehl, den das Modell beantwortet -- mit dem fertigen Auftrag."""
+
+    prompt: str
+
+
+def _app_only() -> str:
+    return "Das geht nur in der App."
+
+
 _MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 
 
-def to_chat_text(antwort: str, *, wide: bool = False) -> str:
+def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0) -> str:
     """Macht aus einer Antwort einen Text, wie ihn ein Messenger zeigt.
 
     Kein Markdown, keine Zeichen jenseits der Unicode-Grundebene (die virtual machine
@@ -563,8 +617,9 @@ def to_chat_text(antwort: str, *, wide: bool = False) -> str:
                    and (z == "\n" or z.isprintable()))
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-    if len(text) > MAX_REPLY_CHARS:
-        text = text[:MAX_REPLY_CHARS].rsplit(" ", 1)[0] + " … (Mehr in der App.)"
+    grenze = limit or MAX_REPLY_CHARS
+    if len(text) > grenze:
+        text = text[:grenze].rsplit(" ", 1)[0] + " … (Mehr in der App.)"
     return f"{SIGNATURE} {text or 'Dazu habe ich keine Antwort.'}"
 
 
@@ -894,11 +949,15 @@ class AgentAnswerer:
     def __init__(self, settings_getter: Callable[[], Any],
                  on_abuse: Callable[[dict[str, Any]], None] | None = None,
                  agent_factory: Callable[..., Any] | None = None,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 session_command: Callable[[str, str], str] | None = None) -> None:
         self._settings = settings_getter
         self._on_abuse = on_abuse
         self._factory = agent_factory
         self._clock = clock
+        #: Fuehrt /memory, /notes, /history, /uploads, /forget fuer den Besitzer aus (nur dort).
+        self._session_command = session_command
+        self._locations: dict[str, str] = {}
         self._agents: dict[str, tuple[Any, str, float, frozenset[str], tuple[bool, bool],
                                       str]] = {}
 
@@ -920,8 +979,17 @@ class AgentAnswerer:
 
     def __call__(self, auftrag: str, decision: Decision, config: dict[str, Any], key: str,
                  messenger: str) -> str:
+        befehl = parse_command(auftrag)
+        if befehl is not None:
+            ergebnis = self._command(befehl[0], befehl[1], decision, config, key, messenger)
+            if isinstance(ergebnis, str):
+                return ergebnis
+            auftrag = ergebnis.prompt
         base = self._settings()
         settings = effective_settings(base, config, decision)
+        ort = self._locations.get(key, "")
+        if ort:
+            settings.location = ort
         erlaubt = allowed_tools(config, decision.trusted)
         zusatz = trust_note(decision, config)
 
@@ -931,7 +999,7 @@ class AgentAnswerer:
             sort_keys=True, default=str).encode()).hexdigest()
         stand = hashlib.sha256(json.dumps(
             [sorted(erlaubt), zusatz, decision.trusted, decision.selbst,
-             basis_stand]).encode()).hexdigest()[:16]
+             basis_stand, ort]).encode()).hexdigest()[:16]
         jetzt = self._clock()
         for alt in [k for k, wert in self._agents.items()
                     if jetzt - wert[2] > self.IDLE_SECONDS]:
@@ -955,6 +1023,98 @@ class AgentAnswerer:
                              mode="normal", online=config["dienste"].get("web") == "an",
                              sandbox=False)
         return str(getattr(ergebnis, "answer", "") or "")
+
+    # -- Slash-Befehle -------------------------------------------------------------------
+    def _command(self, name: str, argument: str, decision: Decision, config: dict[str, Any],
+                 key: str, messenger: str) -> str | Expanded:
+        """Ein Befehl im Messenger. Wer was darf, steht hier im Code, nicht im Prompt."""
+        from aquaticy import plugins
+
+        base = self._settings()
+        if name == "help":
+            return self._help(decision, config, base)
+        if name == "clear":
+            if key in self._agents:
+                self._discard(key)
+            return "Verlauf verworfen."
+        if name == "location":
+            return self._location(key, argument)
+        if name == "model":
+            if not decision.trusted:
+                return "Das geht hier nicht."
+            return f"Modell: {base.model}. Wechseln geht nur in der App."
+        if name in APP_ONLY_COMMANDS:
+            return _app_only()
+        if name in OWN_CHAT_COMMANDS:
+            if not decision.selbst:
+                return "Das geht nur in deinem eigenen Chat."
+            if self._session_command is None:
+                return _app_only()
+            try:
+                return self._session_command(name, argument[:200]) or "Fertig."
+            except Exception:
+                return "Das hat nicht geklappt. Versuch es in der App."
+        addon = plugins.resolve_name(name)
+        if addon in MESSENGER_PLUGINS:
+            return self._plugin(addon, name, argument, decision, config, base, messenger)
+        if addon:
+            return _app_only()  # ein Add-on ohne Messenger-Befehl (etwa Blender, WhatsApp)
+        return f"Unbekannter Befehl /{name[:30]}. /help zeigt alle."
+
+    def _location(self, key: str, argument: str) -> str:
+        """Der Ortsfilter gilt nur fuer diesen Chat -- nie fuer die App oder andere Chats."""
+        ort = "".join(z for z in argument if z.isprintable()).strip()[:LOCATION_CHARS]
+        if not ort:
+            self._locations.pop(key, None)
+            return "Ortsfilter aufgehoben."
+        while len(self._locations) >= MAX_LOCATIONS and key not in self._locations:
+            self._locations.pop(next(iter(self._locations)))
+        self._locations[key] = ort
+        return f"Ortsfilter: {ort}"
+
+    def _help(self, decision: Decision, config: dict[str, Any], base: Any) -> str:
+        from aquaticy import plugins
+
+        zeilen = ["Befehle:", "/help: diese Liste", "/clear: das Gespräch hier vergessen",
+                  "/location Ort: Ortsfilter für diesen Chat"]
+        if decision.trusted:
+            zeilen.append("/model: zeigt das Modell")
+        if decision.selbst:
+            zeilen.append("/memory, /notes, /history, /uploads, /forget: deine Daten")
+        erlaubt = allowed_tools(config, decision.trusted)
+        try:
+            liste = plugins.commands(base, True)
+        except Exception:
+            liste = []
+        for eintrag in liste:
+            wort = str(eintrag.get("name", ""))
+            if wort in MESSENGER_PLUGINS and PLUGIN_TOOL.get(wort, "calculate") in erlaubt:
+                zeilen.append(f"/{wort}: {eintrag.get('label', wort)}")
+        zeilen.append("Nur in der App: /export, /image, /max.")
+        return "\n".join(zeilen)
+
+    def _plugin(self, addon: str, name: str, argument: str, decision: Decision,
+                config: dict[str, Any], base: Any, messenger: str) -> str | Expanded:
+        from aquaticy import plugins
+
+        turn = plugins.match(f"/{name} {argument}", base, True)
+        if turn is None:
+            return f"/{addon} ist aus. Schalte es in der App unter Add-ons ein."
+        werkzeug = PLUGIN_TOOL.get(addon)
+        if werkzeug and werkzeug not in allowed_tools(config, decision.trusted):
+            return (f"Das darf ich über {NAMES.get(messenger, messenger)} nicht. In der App "
+                    "unter Add-ons legst du fest, was ich hier darf.")
+        frage = argument or plugins.DEFAULT_QUESTIONS.get(addon, "")
+        if not frage:
+            if addon in plugins.REVIEW_PLUGINS:
+                return (f"Schreib den Code hinter /{name}, zum Beispiel: /{name} und darunter "
+                        "dein Code. Dateien lese ich hier nicht.")
+            return plugins.usage(addon)
+        auftrag = plugins.prompt(turn, frage, base, True)
+        if addon in plugins.REVIEW_PLUGINS:
+            auftrag += (f"\n\nFür diese Antwort gelten bis zu {REVIEW_REPLY_CHARS - 200} "
+                        "Zeichen statt zehn Zeilen. Keine Tabellen.")
+        return Expanded(auftrag)
 
     def close(self) -> None:
         for key in list(self._agents):

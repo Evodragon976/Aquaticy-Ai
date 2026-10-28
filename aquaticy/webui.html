@@ -2759,7 +2759,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.8 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.9 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6440,6 +6440,9 @@ const EN = {
 "Die Verbindung steht noch nicht. Warte kurz.": "The connection is not up yet. Wait a moment.",
 "Gekoppelt, aber die Brücke ist aus. Klick auf „Einschalten“, damit Aquaticy antwortet.": "Linked, but the bridge is off. Click “Einschalten” (turn on) so Aquaticy replies.",
 "Aquaticy ist direkt mit deinem Handy gekoppelt. Antworten kommen sofort.": "Aquaticy is linked directly to your phone. Replies come right away.",
+"Aquaticy zeigt „gelesen“ und „schreibt …“, sobald es deine Nachricht annimmt.": "Aquaticy shows “read” and “typing …” as soon as it accepts your message.",
+"Befehle mit / gehen auch hier. Schreib /help, dann siehst du alle.": "Commands with / work here too. Write /help to see them all.",
+"Meldungen deiner Coworker kommen in deinen eigenen Chat, solange die Brücke an ist.": "Messages from your coworkers arrive in your own chat as long as the bridge is on.",
 "WhatsApp hat die Kopplung beendet (am Handy abgemeldet).": "WhatsApp ended the link (signed out on the phone).",
 "Das Koppeln hat nicht geklappt. Versuch es erneut.": "Linking didn't work. Try again.",
 "Der QR-Code ist abgelaufen. Verbinde noch einmal.": "The QR code expired. Connect again.",
@@ -8373,6 +8376,9 @@ function addonBruecke(a){
   for (const punkt of direkt ? [
     "Aquaticy ist direkt mit deinem Handy gekoppelt. Antworten kommen sofort.",
     "Antworten beginnen mit [Aquaticy]. So erkennt Aquaticy seine eigenen Nachrichten.",
+    "Aquaticy zeigt „gelesen“ und „schreibt …“, sobald es deine Nachricht annimmt.",
+    "Befehle mit / gehen auch hier. Schreib /help, dann siehst du alle.",
+    "Meldungen deiner Coworker kommen in deinen eigenen Chat, solange die Brücke an ist.",
     "In Gruppen antwortet Aquaticy nur, wenn eine Nachricht mit „Aquaticy“ beginnt.",
     "Rückfragen kann Aquaticy hier nicht stellen. Was eine Bestätigung braucht, machst du "
       + "in der App.",

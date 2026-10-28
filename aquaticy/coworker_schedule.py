@@ -491,7 +491,7 @@ def describe_job_image(agent: Any, job: Job, settings: Any) -> str:
 
 def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
             agent_factory: Any = None, context: str = "", active: Any = None,
-            chat_id: str = "") -> tuple[str, str]:
+            chat_id: str = "", on_answer: Any = None) -> tuple[str, str]:
     """Fuehrt einen Auftrag aus. Returns: (Zustand, Chat-Kennung).
 
     Der Agent ist ein eigener: das laufende Gespraech des Nutzers bleibt
@@ -637,6 +637,9 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
             cache.add_history(chat, job.question, antwort, meta)
             with contextlib.suppress(Exception):
                 cache.mark_unread(chat, reason="beobachtung")
+            if on_answer is not None:
+                with contextlib.suppress(Exception):
+                    on_answer(antwort)
             return ("erfüllt", chat)
         if agent_factory is not None:
             meta = result.meta() if hasattr(result, "meta") else {}
@@ -647,6 +650,9 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
 
         with contextlib.suppress(Exception):
             cache.mark_unread(chat, reason="auftrag")
+        if on_answer is not None:
+            with contextlib.suppress(Exception):
+                on_answer(antwort)
         return ("fertig", chat)
     except Exception as exc:  # pragma: no cover
         return (f"Fehler: {type(exc).__name__}", "")

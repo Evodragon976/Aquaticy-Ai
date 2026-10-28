@@ -10,11 +10,13 @@ Aquaticy dabei tun darf, entscheidet allein aquaticy/bridge_native.py.
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import functools
 import importlib
 import json
 import logging
+import os
 import queue
 import re
 import secrets
@@ -36,12 +38,16 @@ DEVICE_NAME = "Aquaticy"
 #: Zustaende der Verbindung.
 OFF, STARTING, QR, CONNECTED, FAILED = "aus", "startet", "qr", "verbunden", "fehler"
 
+MESSAGE_ID_RE = re.compile(r"[0-9A-Za-z_.-]{3,64}")
 MAX_SEND_CHARS = 3800
 QR_MAX_CHARS = 4096
 LINK_TIMEOUT = 240.0
 MAX_AGE_SECONDS = 300.0
 QUEUE_SIZE = 20
 SETTLE_SECONDS = 15.0
+NOTIFY_PER_HOUR = 30
+NOTIFY_QUEUE = 10
+NOTIFY_KEEP_SECONDS = 3600.0
 
 NUMBER_RE = re.compile(r"\+[0-9]{6,15}")
 GROUP_ID_RE = re.compile(r"[A-Za-z0-9+/=_-]{8,120}")
@@ -66,6 +72,9 @@ class Incoming:
     from_me: bool = False
     self_chat: bool = False  # "Nachricht an dich selbst"
     name: str = ""
+    #: Nur fuer "gelesen": WhatsApp-Kennung des Absenders (in Gruppen) und Signal-Zeitstempel.
+    sender_id: str = field(default="", compare=False)
+    stamp: int = field(default=0, compare=False)
 
 
 @dataclass
@@ -198,6 +207,7 @@ def parse_whatsapp(event: Any, own: set[str]) -> Incoming | None:
     chat_id = _jid_text(chat)
     if not JID_RE.fullmatch(chat_id):
         return None
+    sender_id = _jid_text(sender)
     eigener_chat = (not gruppe and von_mir and str(chat.User) in own)
     nummer = ""
     if not von_mir:
@@ -211,7 +221,8 @@ def parse_whatsapp(event: Any, own: set[str]) -> Incoming | None:
     return Incoming(
         messenger="whatsapp", chat=chat_id, text=text, id=str(info.ID or ""),
         ts=_seconds(info.Timestamp), sender=nummer, group=gruppe, from_me=von_mir,
-        self_chat=eigener_chat, name=str(info.Pushname or "")[:60])
+        self_chat=eigener_chat, name=str(info.Pushname or "")[:60],
+        sender_id=sender_id if JID_RE.fullmatch(sender_id) else "")
 
 
 def parse_signal(params: Any, own_number: str) -> Incoming | None:
@@ -256,7 +267,18 @@ def parse_signal(params: Any, own_number: str) -> Incoming | None:
     return Incoming(
         messenger="signal", chat=chat, text=text, id=f"{zeit}:{nummer}",
         ts=_seconds(zeit), sender=nummer, group=bool(gruppe_id), from_me=von_mir,
-        self_chat=eigener, name=str(huelle.get("sourceName") or "")[:60])
+        self_chat=eigener, name=str(huelle.get("sourceName") or "")[:60],
+        stamp=zeit if isinstance(zeit, int) and not isinstance(zeit, bool) and zeit > 0 else 0)
+
+
+#: Jeder Teil einer geteilten Antwort beginnt mit der Kennung (bridge.SIGNATURE). Sonst hielte
+#: Aquaticy die weiteren Teile im eigenen Chat fuer Befehle des Besitzers und antwortete darauf.
+SIGNATURE = "[Aquaticy]"
+
+
+def message_parts(text: str) -> list[str]:
+    teile = split_text(text)
+    return [t if i == 0 else f"{SIGNATURE} {t}" for i, t in enumerate(teile)]
 
 
 def split_text(text: str, limit: int = MAX_SEND_CHARS) -> list[str]:
@@ -347,6 +369,16 @@ class Transport:
 
     def send(self, chat: str, text: str) -> None:  # pragma: no cover - abstrakt
         raise NotImplementedError
+
+    def own_chat(self) -> str:
+        """Der eigene Chat des Besitzers ("Nachricht an dich selbst") -- oder "" (unbekannt)."""
+        return ""
+
+    def mark_read(self, nachricht: Incoming) -> None:
+        """Zeigt dem Absender "gelesen" (die Haken). Nur ein Versuch, nie ein Fehler."""
+
+    def typing(self, nachricht: Incoming, on: bool) -> None:
+        """Zeigt dem Chat "schreibt ..." (an) oder nimmt es weg (aus). Nur ein Versuch."""
 
     def _deliver(self, nachricht: Incoming | None) -> None:
         if nachricht is not None:
@@ -472,6 +504,14 @@ class WhatsAppTransport(Transport):
                         nummer = ""
                 self._set(CONNECTED, who=nummer)
 
+            weg = getattr(ereignisse, "DisconnectedEv", None)
+            if weg is not None:
+                @client.event(weg)
+                def _on_disconnected(_: Any, __: Any) -> None:
+                    # whatsmeow verbindet selbst neu und meldet dann wieder "verbunden".
+                    if not self._stopping.is_set() and self.status().state == CONNECTED:
+                        self._set(STARTING)
+
             @client.event(LoggedOutEv)
             def _on_logged_out(_: Any, __: Any) -> None:
                 self._wipe_session()
@@ -521,8 +561,51 @@ class WhatsAppTransport(Transport):
         client = self._client
         if client is None or self.status().state != CONNECTED:
             raise RuntimeError("WhatsApp ist nicht verbunden.")
-        for teil in split_text(text):
+        for teil in message_parts(text):
             client.send_message(chat, teil)
+
+    def own_chat(self) -> str:
+        nummer = clean_number(self.store.who("whatsapp"))
+        return f"{digits(nummer)}@s.whatsapp.net" if nummer else ""
+
+    @staticmethod
+    def _jid(text: str) -> Any:
+        from neonize.utils.jid import build_jid
+
+        benutzer, server = text.rsplit("@", 1)
+        return build_jid(benutzer, server)
+
+    def _ready_client(self) -> Any:
+        return self._client if self.status().state == CONNECTED else None
+
+    def mark_read(self, nachricht: Incoming) -> None:
+        """Blaue Haken. Nur fuer fremde Nachrichten mit geprueften Kennungen."""
+        client = self._ready_client()
+        absender = nachricht.sender_id if nachricht.group else nachricht.chat
+        if (client is None or nachricht.from_me or not MESSAGE_ID_RE.fullmatch(nachricht.id)
+                or not JID_RE.fullmatch(nachricht.chat) or not JID_RE.fullmatch(absender)):
+            return
+        try:
+            from neonize.utils.enum import ReceiptType
+
+            client.mark_read(nachricht.id, chat=self._jid(nachricht.chat),
+                             sender=self._jid(absender), receipt=ReceiptType.READ)
+        except Exception as exc:  # die Antwort darf daran nie scheitern
+            LOG.debug("WhatsApp: gelesen nicht gesendet: %s", exc)
+
+    def typing(self, nachricht: Incoming, on: bool) -> None:
+        client = self._ready_client()
+        if client is None or nachricht.from_me or not JID_RE.fullmatch(nachricht.chat):
+            return
+        try:
+            from neonize.utils.enum import ChatPresence, ChatPresenceMedia
+
+            client.send_chat_presence(
+                self._jid(nachricht.chat),
+                ChatPresence.CHAT_PRESENCE_COMPOSING if on else ChatPresence.CHAT_PRESENCE_PAUSED,
+                ChatPresenceMedia.CHAT_PRESENCE_MEDIA_TEXT)
+        except Exception as exc:
+            LOG.debug("WhatsApp: schreibt nicht gesendet: %s", exc)
 
 
 class SignalTransport(Transport):
@@ -674,10 +757,21 @@ class SignalTransport(Transport):
         self._wipe_session()
         self._set(OFF, who="")
 
-    def send(self, chat: str, text: str) -> None:
+    def own_chat(self) -> str:
+        return "self" if clean_number(self.store.who("signal")) else ""
+
+    def _rpc(self, methode: str, parameter: dict[str, Any]) -> None:
         proc = self._proc
         if proc is None or proc.poll() is not None or self.status().state != CONNECTED:
             raise RuntimeError("Signal ist nicht verbunden.")
+        with self._send_lock:
+            self._next_id += 1
+            anfrage = {"jsonrpc": "2.0", "method": methode, "id": self._next_id,
+                       "params": parameter}
+            proc.stdin.write(json.dumps(anfrage) + "\n")
+            proc.stdin.flush()
+
+    def send(self, chat: str, text: str) -> None:
         if chat == "self":
             ziel: dict[str, Any] = {"noteToSelf": True}
         elif chat.startswith("group:") and GROUP_ID_RE.fullmatch(chat[6:]):
@@ -686,13 +780,33 @@ class SignalTransport(Transport):
             ziel = {"recipient": [chat]}
         else:
             raise ValueError("Ungueltiger Chat.")
-        for teil in split_text(text):
-            with self._send_lock:
-                self._next_id += 1
-                anfrage = {"jsonrpc": "2.0", "method": "send", "id": self._next_id,
-                           "params": {**ziel, "message": teil}}
-                proc.stdin.write(json.dumps(anfrage) + "\n")
-                proc.stdin.flush()
+        for teil in message_parts(text):
+            self._rpc("send", {**ziel, "message": teil})
+
+    def mark_read(self, nachricht: Incoming) -> None:
+        """Gelesen-Meldung an den Absender (signal-cli: sendReceipt)."""
+        if nachricht.from_me or not NUMBER_RE.fullmatch(nachricht.sender) or nachricht.stamp <= 0:
+            return
+        try:
+            self._rpc("sendReceipt", {"recipient": nachricht.sender, "type": "read",
+                                      "targetTimestamp": [nachricht.stamp]})
+        except Exception as exc:
+            LOG.debug("Signal: gelesen nicht gesendet: %s", exc)
+
+    def typing(self, nachricht: Incoming, on: bool) -> None:
+        """"schreibt ..." (signal-cli: sendTyping)."""
+        if nachricht.from_me:
+            return
+        if nachricht.chat.startswith("group:") and GROUP_ID_RE.fullmatch(nachricht.chat[6:]):
+            ziel: dict[str, Any] = {"groupId": nachricht.chat[6:]}
+        elif NUMBER_RE.fullmatch(nachricht.chat):
+            ziel = {"recipient": [nachricht.chat]}
+        else:
+            return
+        try:
+            self._rpc("sendTyping", {**ziel, **({} if on else {"stop": True})})
+        except Exception as exc:
+            LOG.debug("Signal: schreibt nicht gesendet: %s", exc)
 
 
 def _kill(proc: Any) -> None:
@@ -715,14 +829,32 @@ def _plain_error(exc: Exception, name: str) -> str:
 # ---------------------------------------------------------------------------
 # Alle Verbindungen eines Kontos
 # ---------------------------------------------------------------------------
+_HUBS: dict[str, NativeHub] = {}
+
+
+def _hub_key(directory: Path | str) -> str:
+    return os.path.abspath(str(directory))
+
+
+def notify_owner(settings: Any, text: str) -> list[str]:
+    """Meldet dem Besitzer etwas in seinem eigenen Chat -- ueber die Kopplungen seines Kontos.
+
+    Returns: die Messenger, ueber die es ging (leer: keine Kopplung, Bruecke aus oder pausiert).
+    """
+    hub = _HUBS.get(_hub_key(Path(getattr(settings, "data_dir", None) or ".") / "messenger"))
+    return hub.notify_owner(text) if hub is not None else []
+
+
 class NativeHub:
     """Haelt die Verbindungen eines Kontos und reicht Nachrichten der Reihe nach weiter."""
 
     def __init__(self, directory: Path, responder: Callable[[Incoming, Transport], Any],
                  wanted: Callable[[str], bool], *,
                  factories: dict[str, Callable[..., Transport]] | None = None,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 paused: Callable[[], bool] | None = None) -> None:
         self.directory = Path(directory)
+        self._paused = paused
         self._responder = responder
         self._wanted = wanted
         self._factories = factories or {"whatsapp": WhatsAppTransport, "signal": SignalTransport}
@@ -731,8 +863,16 @@ class NativeHub:
         self._lock = threading.RLock()
         self._queue: queue.Queue[tuple[Incoming, Transport] | None] = queue.Queue(QUEUE_SIZE)
         self._worker: threading.Thread | None = None
+        # "gelesen" geht sofort, auch wenn der Arbeiter gerade eine lange Antwort schreibt.
+        self._ack_queue: queue.Queue[tuple[Any, Incoming, Transport] | None] = queue.Queue(
+            QUEUE_SIZE)
+        self._ack_worker: threading.Thread | None = None
         self._timers: dict[str, threading.Timer] = {}
         self.dropped = 0
+        # Meldungen an den Besitzer (Coworker): was gerade nicht ankommt, wartet kurz.
+        self._pending: dict[str, list[tuple[float, str]]] = {}
+        self._sent_at: dict[str, collections.deque[float]] = {}
+        _HUBS[_hub_key(self.directory)] = self
 
     # -- Verbindungen --------------------------------------------------------
     def transport(self, messenger: str) -> Transport:
@@ -797,6 +937,8 @@ class NativeHub:
         return laufen
 
     def stop(self) -> None:
+        if _HUBS.get(_hub_key(self.directory)) is self:
+            del _HUBS[_hub_key(self.directory)]
         for name in list(self._timers):
             self._cancel_timer(name)
         with self._lock:
@@ -804,12 +946,69 @@ class NativeHub:
         for eins in eins_liste:
             with contextlib.suppress(Exception):
                 eins.stop()
-        with contextlib.suppress(queue.Full):
-            self._queue.put_nowait(None)
+        for warteschlange in (self._queue, self._ack_queue):
+            with contextlib.suppress(queue.Full):
+                warteschlange.put_nowait(None)
+
+    # -- Meldungen an den Besitzer (Coworker) -----------------------------------------------
+    def notify_owner(self, text: str) -> list[str]:
+        """Schickt dem Besitzer eine Nachricht in seinen eigenen Chat. Returns: wohin sie ging.
+
+        Nur ueber Messenger, die gekoppelt sind und die der Besitzer eingeschaltet hat (Bruecke
+        an). Steht die Verbindung gerade nicht, wartet die Nachricht bis zu NOTIFY_KEEP_SECONDS
+        auf die naechste. Hoechstens NOTIFY_PER_HOUR je Messenger und Stunde.
+        """
+        if self._paused is not None and self._paused():
+            return []
+        gesendet: list[str] = []
+        for name in MESSENGERS:
+            eins = self.transport(name)
+            if not eins.has_session() or not self._wanted(name) or not eins.own_chat():
+                continue
+            if eins.status().state == CONNECTED:
+                if self._send_owner(name, eins, text):
+                    gesendet.append(name)
+            else:
+                with self._lock:
+                    warte = self._pending.setdefault(name, [])
+                    warte.append((self._clock(), text))
+                    del warte[:-NOTIFY_QUEUE]
+        return gesendet
+
+    def _send_owner(self, name: str, eins: Transport, text: str) -> bool:
+        jetzt = self._clock()
+        with self._lock:
+            zeiten = self._sent_at.setdefault(name, collections.deque())
+            while zeiten and jetzt - zeiten[0] > 3600:
+                zeiten.popleft()
+            if len(zeiten) >= NOTIFY_PER_HOUR:
+                return False
+            zeiten.append(jetzt)
+        try:
+            eins.send(eins.own_chat(), text)
+        except Exception:
+            LOG.warning("%s: Meldung an den Besitzer nicht gesendet", NAMES.get(name, name))
+            return False
+        return True
+
+    def _flush(self, name: str) -> None:
+        """Nach dem Verbinden: was gewartet hat, geht jetzt raus (wenn es nicht zu alt ist)."""
+        with self._lock:
+            warte = self._pending.pop(name, [])
+        jetzt = self._clock()
+        eins = self.transport(name)
+        for zeit, text in warte:
+            if jetzt - zeit <= NOTIFY_KEEP_SECONDS and (
+                    self._paused is None or not self._paused()) and self._wanted(name):
+                self._send_owner(name, eins, text)
 
     # -- nach dem Koppeln --------------------------------------------------------
     def _settle(self, messenger: str) -> None:
         """Ist die Bruecke aus, trennt sich die frisch gekoppelte Verbindung nach kurzer Zeit."""
+        if self._pending.get(messenger):
+            # Nicht im Rueckruf von neonize senden: ein eigener Faden.
+            threading.Thread(target=self._flush, args=(messenger,), daemon=True,
+                             name="aquaticy-meldungen").start()
         if self._wanted(messenger):
             return
         self._cancel_timer(messenger)
@@ -833,28 +1032,69 @@ class NativeHub:
 
     # -- Nachrichten ------------------------------------------------------------------
     def _enqueue(self, messenger: str, nachricht: Incoming) -> None:
+        eins = self.transport(messenger)
         try:
-            self._queue.put_nowait((nachricht, self.transport(messenger)))
+            self._queue.put_nowait((nachricht, eins))
         except queue.Full:
             self.dropped += 1
             return
+        self._start_worker("_worker", self._work, "aquaticy-nachrichten")
+        quittung = getattr(self._responder, "acknowledge", None)
+        if quittung is not None:
+            with contextlib.suppress(queue.Full):
+                self._ack_queue.put_nowait((quittung, nachricht, eins))
+                self._start_worker("_ack_worker", self._ack_work, "aquaticy-gelesen")
+
+    def _start_worker(self, attribut: str, ziel: Callable[[], None], name: str) -> None:
         with self._lock:
-            if self._worker is None or not self._worker.is_alive():
-                self._worker = threading.Thread(target=self._work, name="aquaticy-nachrichten",
-                                                daemon=True)
-                self._worker.start()
+            faden = getattr(self, attribut)
+            if faden is None or not faden.is_alive():
+                faden = threading.Thread(target=ziel, name=name, daemon=True)
+                setattr(self, attribut, faden)
+                faden.start()
+
+    def _idle(self, attribut: str, warteschlange: queue.Queue[Any]) -> bool:
+        """Ein Arbeiter geht nach einer Minute Ruhe -- aber nie, wenn gerade etwas kam."""
+        with self._lock:
+            if warteschlange.empty():
+                setattr(self, attribut, None)
+                return True
+        return False
 
     def _work(self) -> None:
         while True:
             try:
                 eintrag = self._queue.get(timeout=60)
             except queue.Empty:
-                return
-            if eintrag is None:
-                return
+                if self._idle("_worker", self._queue):
+                    return
+                continue
+            if eintrag is None:  # "Anhalten" -- aber nie vor einer Nachricht, die schon wartet
+                if self._idle("_worker", self._queue):
+                    return
+                continue
             nachricht, eins = eintrag
             try:
                 self._responder(nachricht, eins)
             except Exception:
                 LOG.exception("Antwort auf eine %s-Nachricht ist fehlgeschlagen",
+                              nachricht.messenger)
+
+    def _ack_work(self) -> None:
+        while True:
+            try:
+                eintrag = self._ack_queue.get(timeout=60)
+            except queue.Empty:
+                if self._idle("_ack_worker", self._ack_queue):
+                    return
+                continue
+            if eintrag is None:
+                if self._idle("_ack_worker", self._ack_queue):
+                    return
+                continue
+            quittung, nachricht, eins = eintrag
+            try:
+                quittung(nachricht, eins)
+            except Exception:
+                LOG.exception("Gelesen-Meldung fuer eine %s-Nachricht ist fehlgeschlagen",
                               nachricht.messenger)

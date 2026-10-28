@@ -1,4 +1,4 @@
-# Aquaticy AI 12.7.8 Sol
+# Aquaticy AI 12.7.9 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.7.8 Sol
+aquaticy --version            # 12.7.9 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -693,6 +693,25 @@ außerhalb der Auswahl läuft nie. Die Brücke geht nie weiter, als die App es e
 - Über den Bildschirm sieht Aquaticy den Messenger in der virtual machine. Antworten brauchen
   dann 30 Sekunden bis 5 Minuten (einstellbar), und Aquaticy öffnet Chats. Andere sehen dann
   „gelesen“. Die direkte Kopplung braucht das nicht.
+- **Gelesen und „schreibt …“ (direkt gekoppelt):** Sobald Aquaticy eine Nachricht annimmt, siehst
+  du die blauen Haken (WhatsApp) oder „gelesen“ (Signal). Während Aquaticy lädt, denkt oder
+  recherchiert, steht im Chat „schreibt …“. Das gilt nur für Nachrichten, auf die Aquaticy auch
+  antwortet. Wer abgelehnt wird, merkt nichts davon.
+- **Meldungen deiner Coworker (direkt gekoppelt):** Was ein Coworker meldet oder fragt, kommt
+  auch in deinen eigenen Chat „Nachricht an dich selbst“: `[Aquaticy] Coworker Ava`, darunter
+  die Nachricht. Bei Coworkern mit Zeitplan (etwa alle 2 Stunden) ist das jede Antwort. Auch
+  eine wartende Freigabe wird gemeldet; freigeben kannst du nur in der App. Das gilt, solange
+  die Brücke an ist. Höchstens 30 Meldungen je Stunde. Ist die Verbindung kurz weg, wartet die
+  Meldung bis zu eine Stunde. Zahlungsdaten sendet Aquaticy nie. Bedenke: Was der Coworker
+  meldet (etwa aus deinen Mails), geht so durch WhatsApp oder Signal.
+- **Befehle mit `/`** gehen im Messenger auch (`/help` zeigt sie). Für alle erlaubten Chats:
+  `/help`, `/clear` (Gespräch hier vergessen), `/location Ort` (Ortsfilter nur für diesen Chat)
+  und die eingeschalteten Plugins: `/code-review`, `/security-review` (Code hinter den Befehl
+  schreiben), `/wetter`, `/nachrichten`, `/wikipedia`, `/waehrung`, `/feiertage`. `/model` zeigt
+  das Modell (nur dir und freigegebenen Nummern). `/feeds` und `/github` gehen nur dort, wo der
+  Dienst freigegeben ist. `/memory`, `/notes`, `/history`, `/uploads` und `/forget` gehen nur in
+  deinem eigenen Chat. `/export`, `/image`, `/max`, `/blender` und die Messenger-Add-ons gehen
+  nur in der App. Ein Plugin muss in der App eingeschaltet sein.
 - Rückfragen sind in Messengern nicht möglich. Was eine Bestätigung braucht, lehnt Aquaticy
   dort ab und verweist auf die App.
 - Emojis kann die virtual machine nicht tippen. Sie fehlen in den Antworten.
