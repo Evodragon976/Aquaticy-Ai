@@ -2759,7 +2759,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.7 Astra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.6.8 Astra";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6426,6 +6426,8 @@ const EN = {
 "Das Fenster ist noch nicht offen. Warte kurz.": "The window is not open yet. Wait a moment.",
 "Ein anderes Fenster ist vorn. Aquaticy versucht es gleich noch einmal.": "Another window is in front. Aquaticy will try again in a moment.",
 "Das Fenster zeigt noch keinen QR-Code. Warte kurz.": "The window does not show a QR code yet. Wait a moment.",
+"Der Browser ist abgestürzt. Aquaticy startet ihn neu. Warte kurz.": "The browser crashed. Aquaticy is restarting it. Wait a moment.",
+"Der Browser stürzt immer wieder ab. Gib der virtual machine mehr Speicher oder melde dich selbst an.": "The browser keeps crashing. Give the virtual machine more memory or sign in yourself.",
 "Bild ansehen": "Viewing image"
 };
 const SPRACHEN = ["de", "en"];
@@ -8978,6 +8980,8 @@ const QR_GRUENDE = {
   kein_fenster: "Das Fenster ist noch nicht offen. Warte kurz.",
   nicht_vorn: "Ein anderes Fenster ist vorn. Aquaticy versucht es gleich noch einmal.",
   kein_qr: "Das Fenster zeigt noch keinen QR-Code. Warte kurz.",
+  neustart: "Der Browser ist abgestürzt. Aquaticy startet ihn neu. Warte kurz.",
+  abgestuerzt: "Der Browser stürzt immer wieder ab. Gib der virtual machine mehr Speicher oder melde dich selbst an.",
 };
 const QR_LEER_BIS_AUSWEG = 5;
 function qrAusweg(zeigen){
@@ -9058,7 +9062,7 @@ async function qrAktualisieren(){
     } else {
       image.removeAttribute("src"); image.hidden = true;
       qrLeer++;
-      qrAusweg(qrLeer >= QR_LEER_BIS_AUSWEG);
+      qrAusweg(qrLeer >= QR_LEER_BIS_AUSWEG || data.reason === "abgestuerzt");
       $("#qr-status").textContent = QR_GRUENDE[data.reason]
         || "Noch kein QR-Code erkannt. Warte kurz. Falls dein Handy schon gekoppelt ist, bestätige die Anmeldung.";
     }

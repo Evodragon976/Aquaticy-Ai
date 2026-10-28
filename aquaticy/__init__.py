@@ -4,7 +4,7 @@ import os as _os
 
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "12.6.7"
+__version__ = "12.6.8"
 
 
 

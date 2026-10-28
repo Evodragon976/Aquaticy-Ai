@@ -152,6 +152,13 @@ DESKTOP_IMAGE = "aquaticy-werkstatt-desktop:local"
 DESKTOP_PID_LIMIT = 1024
 DESKTOP_FILE_LIMIT = 4096
 
+# Ein Desktop mit Firefox (WhatsApp Web) braucht mehr als die Voreinstellung der normalen
+# virtual machine (1 GB, 1 Kern): Der Tab stuerzt sonst ab (12.6.8 Astra). Der gemeinsame
+# Speicher (/dev/shm) zaehlt zum Speicher des Behaelters.
+DESKTOP_MIN_MEMORY_MB = 2048
+DESKTOP_MIN_CPUS = 2
+DESKTOP_SHM = "512m"
+
 
 DISPLAY = ":1"
 
@@ -727,6 +734,9 @@ class Sandbox:
         self.memory_mb = max(128, int(memory_mb))
         self.disk_gb = max(1, int(disk_gb))
         self.cpus = max(1, int(cpus))
+        if self.user_mode:
+            self.memory_mb = max(self.memory_mb, DESKTOP_MIN_MEMORY_MB)
+            self.cpus = max(self.cpus, DESKTOP_MIN_CPUS)
         self.on_event = on_event
         self.runtime: Runtime | None = None
         self._name = ""
@@ -944,9 +954,12 @@ class Sandbox:
         if desktop:
             flags += [
 
-                "--shm-size", "256m",
+                "--shm-size", DESKTOP_SHM,
                 "--env", f"DISPLAY={DISPLAY}",
                 "--label", "aquaticy-werkstatt-user=1",
+                # Firefox soll bei einem Absturz nichts an Mozilla schicken.
+                "--env", "MOZ_CRASHREPORTER_DISABLE=1",
+                "--env", "MOZ_CRASHREPORTER_NO_REPORT=1",
             ]
         return flags
 

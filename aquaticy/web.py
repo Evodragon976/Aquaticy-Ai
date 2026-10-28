@@ -1351,6 +1351,7 @@ class ChatSession:
         self._qr_lock = threading.Lock()
         self._qr_state_lock = threading.Lock()
         self._qr_login: tuple[str, str, float] = ("", "", 0.0)
+        self._qr_restarts: dict[str, int] = {}
         self._selected = self
 
     def chat_sessions(self) -> list[ChatSession]:
@@ -3697,6 +3698,7 @@ def _addon_login(session: Any, addon: Any) -> tuple[str, str]:
         qr_token = secrets.token_urlsafe(24)
         with session._owner._qr_state_lock:
             session._owner._qr_login = (addon.id, qr_token, time.monotonic() + 600)
+            session._owner._qr_restarts.clear()
         try:
             fertig = box.desktop("open", addons.APP_OF[addon.id], timeout=90)
         except Exception:
@@ -3716,6 +3718,27 @@ def _addon_login(session: Any, addon: Any) -> tuple[str, str]:
         f"{addon.name} ist offen. Scanne den QR-Code im Anmeldefenster mit deinem Handy "
         "und drück dann „Ich bin angemeldet“."
     ), qr_token
+
+
+CRASH_MARKERS = ("absturz", "crash")
+MAX_BROWSER_RESTARTS = 1
+
+
+def browser_crashed(window: dict[str, Any], after: dict[str, Any]) -> bool:
+    """Zeigt das Fenster die Absturzseite des Browsers ("Absturzmelder", "Tab Crashed")?"""
+    titel = f"{window.get('titel') or ''} {after.get('aktiv') or ''}".casefold()
+    return any(marke in titel for marke in CRASH_MARKERS)
+
+
+def restart_browser(box: Any, app: str) -> None:
+    """Schliesst den vorderen, abgestuerzten Browser und startet ihn neu.
+
+    Strg+Q geht an das vordere Fenster: Wer das ruft, hat vorher geprueft, dass es der
+    Messenger ist -- sonst schlosse es ein anderes Programm des Nutzers.
+    """
+    box.desktop("key", "ctrl+q", start=False, timeout=10)
+    time.sleep(3)
+    box.desktop("open", app, start=False, timeout=90)
 
 
 def front_is_messenger(window: dict[str, Any], after: dict[str, Any], name: str) -> bool:
@@ -3792,6 +3815,17 @@ def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int
         wid = str(window.get("id") or "")
         if not re.fullmatch(r"0x[0-9a-fA-F]{1,10}", wid):
             return nichts("kein_fenster")
+        if browser_crashed(window, {}):
+            token = str(payload.get("token") or "")
+            versuche = owner._qr_restarts.get(token, 0)
+            if versuche >= MAX_BROWSER_RESTARTS:
+                return nichts("abgestuerzt")
+            if (box.desktop("focus", wid, start=False, timeout=10).returncode != 0
+                    or not front_is_messenger(window, windows(), name)):
+                return nichts("nicht_vorn")
+            owner._qr_restarts[token] = versuche + 1
+            restart_browser(box, addons.APP_OF[name])
+            return nichts("neustart")
         if box.desktop("focus", wid, start=False, timeout=10).returncode != 0:
             return nichts("nicht_vorn")
         shot = box.screenshot(start=False, quality=92)

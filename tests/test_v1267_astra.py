@@ -199,7 +199,7 @@ def test_every_reason_the_server_gives_has_a_text_and_an_english_one() -> None:
     start = html.index("const QR_GRUENDE = {")
     block = html[start:html.index("};", start)]
     texts = dict(re.findall(r'(\w+): "([^"]+)"', block))
-    assert set(texts) == {"kein_fenster", "nicht_vorn", "kein_qr"}
+    assert set(texts) == {"kein_fenster", "nicht_vorn", "kein_qr", "neustart", "abgestuerzt"}
     english = json.loads(re.search(r"const EN = (\{.*?\n\});", html, re.S).group(1))
     for text in [*texts.values(), "Bildschirm selbst bedienen",
                  "Klappt es nicht? Dann bedienst du den Bildschirm der virtual machine selbst."]:
