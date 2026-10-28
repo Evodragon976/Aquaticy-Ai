@@ -97,7 +97,9 @@ def test_there_is_no_bridge_for_other_messengers(konto: Settings) -> None:
 
 
 @pytest.mark.parametrize(("titel", "eintrag", "erwartet"), [
-    ("+49 151 23456789", "0151 23456789", True),
+    ("+49 151 23456789", "0151 23456789", False),  # ohne Landesvorwahl: nie (12.7.8 Terra)
+    ("+44 151 23456789", "0151 23456789", False),
+    ("+49 151 23456789", "0049 151 23456789", True),
     ("+49 151 23456789", "+49 151 23456789", True),
     ("+49 (151) 234-56789", "004915123456789", True),
     ("+49 151 23456780", "0151 23456789", False),
@@ -143,8 +145,15 @@ def test_who_may_get_an_answer(wer: str, titel: str, gruppe: bool | None, nur_au
     assert (entscheidung.allow, entscheidung.trusted) == (erlaubt, vertraut), entscheidung.why
 
 
+def test_a_number_without_country_code_is_never_trusted() -> None:
+    """Dieselben Endziffern gibt es in anderen Ländern: Wer sie hat, bekäme sonst deine Dienste."""
+    konfig = cfg(wer="nummern", nummern=["0151 23456789"])
+    assert not decide(konfig, "+49 151 23456789", False, False).allow
+    assert not decide(konfig, "+44 151 23456789", False, False).allow
+
+
 def test_listed_numbers_are_trusted_but_only_in_single_chats() -> None:
-    konfig = cfg(wer="nummern", nummern=["0151 23456789", "Anna"])
+    konfig = cfg(wer="nummern", nummern=["+49 151 23456789", "Anna"])
     assert decide(konfig, "+49 151 23456789", False, False) == Decision(
         True, trusted=True, why="freigegebene Nummer")
     assert decide(konfig, "Anna", False, False).trusted

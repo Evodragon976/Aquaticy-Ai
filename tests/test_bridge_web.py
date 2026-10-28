@@ -283,7 +283,8 @@ def _english() -> dict[str, str]:
 def test_the_ui_has_the_bridge_section_and_sends_the_bridge_action() -> None:
     html = _ui_text()
     assert "function addonBruecke(a)" in html
-    assert "if (a.installed && !laeuft && a.bruecke) karte.appendChild(addonBruecke(a));" in html
+    assert ("if ((a.installed && !laeuft || a.native?.linked) && a.bruecke) "
+            "karte.appendChild(addonBruecke(a));") in html
     assert 'action: "bridge"' in html
 
     abschnitt = html[html.index("function addonBruecke(a)"):html.index("function zeigeAddons()")]

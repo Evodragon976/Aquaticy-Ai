@@ -315,9 +315,11 @@ def _digits(text: str) -> str:
 def matches_number(titel: str, eintrag: str) -> bool:
     """Passt der Chat-Titel zu einer Nummer oder einem Namen aus der Liste?
 
-    Nummern vergleicht die Bruecke an den letzten neun Ziffern (+49, 0049 und 0 vorn sind
-    dieselbe Nummer), Namen ganz und ohne Gross-/Kleinschreibung. Ein Titel, der nur Ziffern
-    enthaelt, aber zu kurz ist, passt nie.
+    Nummern gelten nur mit Landesvorwahl ("+49 ..." oder "0049 ...", ganz gleiche Ziffern).
+    Eine Nummer ohne Vorwahl ("0151 ...") passt nie: Dieselben Endziffern gibt es in anderen
+    Laendern, und wer so eine Nummer hat, bekaeme sonst die privaten Dienste (bis 12.7.8
+    verglich die Bruecke die letzten neun Ziffern). Namen passen ganz und ohne Gross-/
+    Kleinschreibung. Ein Titel, der nur Ziffern enthaelt, aber zu kurz ist, passt nie.
     """
     titel, eintrag = " ".join(str(titel or "").split()), " ".join(str(eintrag or "").split())
     if not titel or not eintrag:
@@ -325,7 +327,13 @@ def matches_number(titel: str, eintrag: str) -> bool:
     nummer = _digits(eintrag)
     if len(nummer) >= 7 and re.fullmatch(r"[+\d\s()\-./]+", eintrag):
         gesehen = _digits(titel)
-        return len(gesehen) >= 7 and gesehen[-9:] == nummer[-9:]
+        if len(gesehen) < 7:
+            return False
+        if eintrag.startswith("+"):
+            return gesehen == nummer
+        if eintrag.startswith("00"):
+            return gesehen == nummer[2:]
+        return False
     return titel.casefold() == eintrag.casefold()
 
 
@@ -362,6 +370,52 @@ def decide(config: dict[str, Any], titel: str, gruppe: bool | None,
         return Decision(False, why="Nur der eigene Chat ist erlaubt.")
     if wer == "nummern":
         return Decision(False, why="Der Chat steht nicht in der Liste.")
+    return Decision(True, why="Einzelchat erlaubt")
+
+
+def matches_exact_number(number: str, eintrag: str) -> bool:
+    """Passt eine ECHTE Nummer (aus dem Protokoll, nicht aus einem Namen) zu einem Listeneintrag?
+
+    Nur mit Landesvorwahl ("+49 151 ..." oder "0049 151 ..."), und die Ziffern muessen ganz
+    stimmen. Eine Nummer ohne Vorwahl ("0151 ...") passt nie: Dieselben Endziffern gibt es in
+    anderen Laendern, und wer so eine Nummer hat, bekaeme sonst die privaten Dienste. Namen
+    passen auch nie.
+    """
+    n = re.sub(r"\D", "", str(number or ""))
+    roh = " ".join(str(eintrag or "").split())
+    if not n or not roh or not re.fullmatch(r"[+\d\s()\-./]+", roh):
+        return False
+    e = re.sub(r"\D", "", roh)
+    if len(e) < 7:
+        return False
+    if roh.startswith("+"):
+        return n == e
+    if roh.startswith("00"):
+        return n == e[2:]
+    return False
+
+
+def decide_native(config: dict[str, Any], *, group: bool, self_chat: bool,
+                  number: str) -> Decision:
+    """Wie :func:`decide`, aber fuer die direkte Kopplung: Die Nummer ist echt, kein Anzeigename.
+
+    Der eigene Chat ("Nachricht an dich selbst") ist nur das, was das Protokoll dafuer meldet;
+    ein Titel kann nichts vortaeuschen. Freigegebene Nummern gelten nur in Einzelchats.
+    """
+    if self_chat and not group:
+        return Decision(True, trusted=True, selbst=True, why="eigener Chat")
+    wer = config.get("wer", "selbst")
+    if group:
+        if wer == "gruppen":
+            return Decision(True, group=True, why="Gruppe erlaubt")
+        return Decision(False, group=True, why="Gruppen sind nicht erlaubt.")
+    if wer != "selbst" and any(
+            matches_exact_number(number, eintrag) for eintrag in config.get("nummern", [])):
+        return Decision(True, trusted=True, why="freigegebene Nummer")
+    if wer == "selbst":
+        return Decision(False, why="Nur der eigene Chat ist erlaubt.")
+    if wer == "nummern":
+        return Decision(False, why="Die Nummer steht nicht in der Liste.")
     return Decision(True, why="Einzelchat erlaubt")
 
 
@@ -490,7 +544,7 @@ def trust_note(decision: Decision, config: dict[str, Any]) -> str:
 _MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 
 
-def to_chat_text(antwort: str) -> str:
+def to_chat_text(antwort: str, *, wide: bool = False) -> str:
     """Macht aus einer Antwort einen Text, wie ihn ein Messenger zeigt.
 
     Kein Markdown, keine Zeichen jenseits der Unicode-Grundebene (die virtual machine
@@ -505,7 +559,8 @@ def to_chat_text(antwort: str) -> str:
     text = re.sub(r"(?m)^\s*[-*+]\s+", "• ", text)
     text = re.sub(r"(?m)^\s*\|?\s*[-: |]{3,}\s*\|?\s*$", "", text)
     text = re.sub(r"(?m)^\s*\|(.*)\|\s*$", lambda m: m.group(1).replace("|", " – ").strip(), text)
-    text = "".join(z for z in text if ord(z) <= 0xFFFF and (z == "\n" or z.isprintable()))
+    text = "".join(z for z in text if (wide or ord(z) <= 0xFFFF)
+                   and (z == "\n" or z.isprintable()))
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if len(text) > MAX_REPLY_CHARS:
@@ -671,6 +726,10 @@ def ready_problem(settings: Any, messenger: str, pro: bool) -> str:
     name = NAMES.get(messenger, messenger)
     if not pro:
         return "Die Messenger-Brücke gehört zu Ultra."
+    from aquaticy import messenger_native
+
+    if messenger_native.linked(settings, messenger):
+        return ""  # direkt gekoppelt: keine virtual machine, kein Add-on, kein Vision-Modell
     if not getattr(settings, "vm_user_mode", False):
         return "Der User mode ist aus. Schalte ihn unter „virtual machine“ ein."
     eintrag = addons.load_state(settings).get(messenger) or {}
@@ -949,6 +1008,29 @@ def group_flag(aus_liste: bool | None, im_chat: bool | None) -> bool | None:
     return im_chat
 
 
+def replies_left(store: StateStore, messenger: str, now: float) -> int:
+    """Wie viele Antworten in dieser Stunde noch erlaubt sind."""
+    stunde = int(now // 3600)
+    eintrag = _dictof(store.messenger(messenger).get("stunde"))
+    benutzt = int(eintrag.get("n", 0)) if eintrag.get("h") == stunde else 0
+    return max(0, MAX_REPLIES_PER_HOUR - benutzt)
+
+
+def count_reply(store: StateStore, messenger: str, now: float) -> None:
+    """Zaehlt eine Antwort (Grenze je Stunde und Zaehler fuer die Anzeige)."""
+    stunde = int(now // 3600)
+
+    def aendern(eintrag: dict[str, Any]) -> None:
+        alt = _dictof(eintrag.get("stunde"))
+        n = int(alt.get("n", 0)) if alt.get("h") == stunde else 0
+        eintrag["stunde"] = {"h": stunde, "n": n + 1}
+        status = _dictof(eintrag.setdefault("status", {}))
+        status["antworten"] = int(status.get("antworten", 0)) + 1
+        status["letzte_antwort"] = int(now)
+
+    store.update(messenger, aendern)
+
+
 class Bridge:
     """Ein Durchgang fuer einen Messenger: ansehen, lesen, antworten."""
 
@@ -988,23 +1070,10 @@ class Bridge:
         return rep
 
     def _replies_left(self, store: StateStore, messenger: str) -> int:
-        stunde = int(self._clock() // 3600)
-        eintrag = _dictof(store.messenger(messenger).get("stunde"))
-        benutzt = int(eintrag.get("n", 0)) if eintrag.get("h") == stunde else 0
-        return max(0, MAX_REPLIES_PER_HOUR - benutzt)
+        return replies_left(store, messenger, self._clock())
 
     def _count_reply(self, store: StateStore, messenger: str) -> None:
-        stunde = int(self._clock() // 3600)
-
-        def aendern(eintrag: dict[str, Any]) -> None:
-            alt = _dictof(eintrag.get("stunde"))
-            n = int(alt.get("n", 0)) if alt.get("h") == stunde else 0
-            eintrag["stunde"] = {"h": stunde, "n": n + 1}
-            status = _dictof(eintrag.setdefault("status", {}))
-            status["antworten"] = int(status.get("antworten", 0)) + 1
-            status["letzte_antwort"] = int(self._clock())
-
-        store.update(messenger, aendern)
+        count_reply(store, messenger, self._clock())
 
 
     def run_once(self, messenger: str) -> Report:
@@ -1013,6 +1082,11 @@ class Bridge:
         config = capped_config(settings, messenger, load_config(settings)[messenger])
         if not config["an"]:
             rep.state = "aus"
+            return rep
+        from aquaticy import messenger_native
+
+        if messenger_native.linked(settings, messenger):
+            rep.state = "aus"  # direkt gekoppelt: bridge_native.py antwortet, nicht der Bildschirm
             return rep
         if self._paused is not None and self._paused():
             rep.state = "pausiert"
@@ -1216,7 +1290,11 @@ class Runner:
         leer_seit: float | None = None
         while not self._stop.is_set():
             try:
-                aktiv = enabled_messengers(self._settings())
+                from aquaticy import messenger_native
+
+                einstellungen = self._settings()
+                aktiv = [name for name in enabled_messengers(einstellungen)
+                         if not messenger_native.linked(einstellungen, name)]
             except Exception:
                 aktiv = []
             jetzt = self._clock()

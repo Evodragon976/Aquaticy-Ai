@@ -48,7 +48,8 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
     `auth.py` (Konten), `privacy.py`/`keyvault.py` (Verschlüsselung),
     `sandbox.py` (virtual machine).
   - Messenger: `bridge.py` (Chat mit Aquaticy per WhatsApp/Signal; Regeln für Absender und
-    Werkzeuge stehen dort im Code), `addons.py` (Add-ons, Rechte).
+    Werkzeuge stehen dort im Code), `messenger_native.py` (direkt koppeln ohne virtual machine:
+    neonize und signal-cli), `bridge_native.py` (die Regeln dafür), `addons.py` (Add-ons, Rechte).
   - Plugins: `plugins.py`, Vorprüfung für Code- und Security-Review in `review_scan.py`.
 - `tests/` – je Fassung eine Datei (`test_v1122.py` für 11.2.2), dazu Dateien je Thema.
   `tests/ollama_nachbau.py` ist ein nachgebautes Ollama: Damit lassen sich lokale Modelle

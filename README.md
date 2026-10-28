@@ -1,4 +1,4 @@
-# Aquaticy AI 12.7.8 Luna
+# Aquaticy AI 12.7.8 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.7.8 Luna
+aquaticy --version            # 12.7.8 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -573,7 +573,22 @@ Für WhatsApp, Signal und Blender baut Aquaticy den Desktop beim ersten Installi
 Die Bauvorlage und Hilfsprogramme sind auch im Python-Paket enthalten. Ein Git-Projektordner
 ist dafür nicht nötig. Docker oder Podman und eine Internetverbindung werden benötigt.
 
-Bei WhatsApp Web und Signal öffnet „Anmelden“ ein eigenes Fenster mit dem QR-Code.
+**Empfohlen: ohne virtual machine.** In der Karte von WhatsApp Web und Signal steht **Ohne
+virtual machine verbinden** (nur Ultra). Aquaticy wird wie ein weiteres Gerät an dein Handy
+gekoppelt: ein Klick auf „Verbinden“, ein QR-Code im Fenster, scannen, fertig. Es läuft kein
+Browser und keine virtual machine. Dafür braucht es:
+
+- **WhatsApp:** `pip install "aquaticy[messenger]"` (neonize) und auf Linux die Bibliothek
+  `libmagic`. Das Docker-Abbild bringt beides mit.
+- **Signal:** das Programm [signal-cli](https://github.com/AsamK/signal-cli) auf dem Rechner
+  (im Suchpfad oder über `AQUATICY_SIGNAL_CLI`). Es braucht Java, oder die native Fassung.
+
+Beides sind inoffizielle Wege. Die Sitzungsdaten liegen unverschlüsselt im Ordner deines Kontos
+(`messenger/`, nur für den Benutzer lesbar). „Trennen“ löscht sie. Entferne Aquaticy danach
+am Handy unter „Verknüpfte Geräte“.
+
+**Ältere Methode über die virtual machine:** Bei WhatsApp Web und Signal öffnet „Anmelden“ ein
+eigenes Fenster mit dem QR-Code.
 Scanne ihn mit der Handy-App und bestätige danach „Ich bin angemeldet“.
 Der Code wird lokal erkannt, nicht an ein KI-Modell geschickt und nicht im Chat gespeichert.
 Beim Schließen wird die Anzeige geleert. Die Anmeldung läuft nach zehn Minuten ab.
@@ -638,10 +653,16 @@ Die **Messenger-Brücke** (nur Ultra, `aquaticy/bridge.py`) lässt dich mit Aqua
 auf der Website. Du schreibst eine Nachricht, Aquaticy antwortet im selben Chat. Die Antwort
 beginnt mit `[Aquaticy]`.
 
-**Voraussetzungen:** User mode an, Add-on installiert und angemeldet, im Add-on „Lesen und
-schreiben“, ein Vision-Modell. Dann schaltest du unter dem Add-on **Mit Aquaticy schreiben** ein.
-Schreib erst, wenn „Bereit“ dasteht: Beim ersten Blick merkt sich Aquaticy nur, was schon im
-Chat steht.
+**Voraussetzungen, direkt gekoppelt (empfohlen):** nur die Kopplung (siehe oben) und Ultra.
+Dann schaltest du unter dem Add-on **Mit Aquaticy schreiben** ein. Aquaticy antwortet sofort.
+Die Nachrichten kommen mit der echten Nummer des Absenders an (`aquaticy/bridge_native.py`).
+Freigegebene Nummern gelten deshalb nur mit Landesvorwahl (`+49 151 …`); Namen und Nummern wie
+`0151 …` passen nie. Nachrichten, die älter als fünf Minuten sind, beantwortet Aquaticy nicht.
+
+**Voraussetzungen, über den Bildschirm:** User mode an, Add-on installiert und angemeldet, im
+Add-on „Lesen und schreiben“, ein Vision-Modell. Dann schaltest du unter dem Add-on **Mit
+Aquaticy schreiben** ein. Schreib erst, wenn „Bereit“ dasteht: Beim ersten Blick merkt sich
+Aquaticy nur, was schon im Chat steht.
 
 **Wer darf schreiben?**
 
@@ -660,16 +681,17 @@ außerhalb der Auswahl läuft nie. Die Brücke geht nie weiter, als die App es e
 
 **Wichtig zu wissen:**
 
-- Aquaticy sieht den Messenger über den Bildschirm der virtual machine. Es gibt keine offizielle
-  Schnittstelle. Antworten brauchen deshalb 30 Sekunden bis 5 Minuten (einstellbar).
-- Zum Lesen öffnet Aquaticy Chats. Andere sehen dann „gelesen“.
+- Über den Bildschirm sieht Aquaticy den Messenger in der virtual machine. Antworten brauchen
+  dann 30 Sekunden bis 5 Minuten (einstellbar), und Aquaticy öffnet Chats. Andere sehen dann
+  „gelesen“. Die direkte Kopplung braucht das nicht.
 - Rückfragen sind in Messengern nicht möglich. Was eine Bestätigung braucht, lehnt Aquaticy
   dort ab und verweist auf die App.
 - Emojis kann die virtual machine nicht tippen. Sie fehlen in den Antworten.
 - Messenger erlauben oft keine Programme, die für dich schreiben. Dein Konto könnte gesperrt
   werden.
-- Eine freigegebene Nummer ist sicherer als ein Name: Einen Namen kann sich bei Signal jeder
-  geben. Ein Titel mit „~“ davor (WhatsApp-Name eines Fremden) passt nie zu einem Namen.
+- Über den Bildschirm ist eine Nummer sicherer als ein Name: Einen Namen kann sich bei Signal
+  jeder geben. Ein Titel mit „~“ davor (WhatsApp-Name eines Fremden) passt nie zu einem Namen.
+  Nummern zählen nur mit Landesvorwahl: Dieselben Endziffern gibt es in anderen Ländern.
 - Pro Stunde gibt es höchstens 40 Antworten. Läuft gerade ein Chat in der App oder ist das
   Konto gesperrt, wartet die Brücke.
 - Ohne Add-on, Anmeldung oder Schreibrecht geht sie von selbst aus.
@@ -1223,6 +1245,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_VM_IDLE_MINUTES` | virtual machine löschen nach Minuten Ruhe | `20` |
 | `AQUATICY_ANSWER_CHECK` | Ai-guard prüft auch Antworten | `true` |
 | `AQUATICY_GITHUB_TOKEN` | Token des GitHub-Add-ons | – |
+| `AQUATICY_SIGNAL_CLI` | Pfad zu signal-cli (Signal direkt koppeln, ohne virtual machine) | im Suchpfad |
 | `AQUATICY_GOOGLE` / `AQUATICY_GOOGLE_WRITE` | Gmail und Kalender lesen / ändern | `false` |
 | `AQUATICY_GOOGLE_DIRECT` | auf Befehl ohne Rückfrage ändern, braucht `AQUATICY_GOOGLE_WRITE` | `false` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | eigene Google-Anwendung | – |

@@ -2386,6 +2386,9 @@ USER_COWORKERS: dict[str, Any] = {}
 USER_BRIDGES: dict[str, Any] = {}
 
 BRIDGE_RUNNER: Any = None
+#: Die direkten Kopplungen (ohne virtual machine) je Konto und ohne Konto (12.7.8 Terra).
+USER_NATIVE: dict[str, Any] = {}
+NATIVE_HUB: Any = None
 
 
 
@@ -2540,6 +2543,68 @@ def _build_bridge_runner(get_session: Callable[[], Any], account: Any) -> Any:
     return runner
 
 
+def _native_paused(account: Any) -> bool:
+    """Ruht die direkte Bruecke? Stufe, Ai-guard-Sperre und Verbund wie bei der anderen."""
+    if account is None:
+        return False
+    if _plan_of(account.id, account) != "ultra":
+        return True
+    if AIGUARD is not None and AIGUARD.is_banned(user_id=account.id) is not None:
+        return True
+    return CLUSTER is not None and not CLUSTER.is_home(account.id)
+
+
+def _build_native_hub(get_session: Callable[[], Any], account: Any, directory: Path) -> Any:
+    """Die direkten Kopplungen eines Kontos: WhatsApp (neonize) und Signal (signal-cli)."""
+    from aquaticy import bridge as bridge_mod
+    from aquaticy.bridge_native import NativeResponder
+    from aquaticy.messenger_native import NativeHub
+
+    def einstellungen() -> Settings:
+        return get_session().settings()
+
+    antworter = bridge_mod.AgentAnswerer(
+        einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload))
+    antwort = NativeResponder(einstellungen, antworter,
+                              paused=lambda: _native_paused(account))
+
+    def gewollt(messenger: str) -> bool:
+        return bool(bridge_mod.load_config(einstellungen())[messenger]["an"])
+
+    hub = NativeHub(directory, antwort, gewollt)
+    hub.answerer = antworter  # type: ignore[attr-defined]
+    return hub
+
+
+def _native_hub(session: Any) -> Any:
+    """Die Kopplungen der Sitzung -- gebaut beim ersten Bedarf."""
+    global NATIVE_HUB
+    konto = getattr(session, "account", None)
+    konto_id = str(getattr(konto, "id", "") or "")
+    if konto is not None and konto_id:
+        with _SCHEDULER_LOCK:
+            if konto_id not in USER_NATIVE:
+                from aquaticy.messenger_native import native_dir
+
+                USER_NATIVE[konto_id] = _build_native_hub(
+                    lambda: SESSIONS.get(konto), konto, native_dir(session.settings()))
+            return USER_NATIVE[konto_id]
+    with _SCHEDULER_LOCK:
+        if NATIVE_HUB is None:
+            from aquaticy.messenger_native import native_dir
+
+            NATIVE_HUB = _build_native_hub(
+                lambda: DEFAULT_SESSION, None, native_dir(DEFAULT_SESSION.settings()))
+        return NATIVE_HUB
+
+
+def _stop_native(hub: Any) -> None:
+    with contextlib.suppress(Exception):
+        hub.stop()
+    with contextlib.suppress(Exception):
+        hub.answerer.close()
+
+
 def start_user_bridge(account: Account) -> None:
     """Startet die Messenger-Bruecke des Kontos -- aber nur, wenn eine eingeschaltet ist.
 
@@ -2547,11 +2612,26 @@ def start_user_bridge(account: Account) -> None:
     erst geladen, wenn sie gebraucht werden (nicht schon bei der Anmeldung).
     """
     from aquaticy import bridge as bridge_mod
+    from aquaticy.messenger_native import NativeStore
 
     if AUTH is None:
         return
     with contextlib.suppress(Exception):
-        if not bridge_mod.enabled_in(AUTH.profile_dir(account.id)):
+        profil = Path(AUTH.profile_dir(account.id))
+        an = bridge_mod.enabled_in(profil)
+        gekoppelt = NativeStore(profil / "messenger")
+        direkt = [name for name in an if gekoppelt.linked(name)]
+        # Eine Sitzung gehoert zu genau einem Server: Zwei Verbindungen verdraengen sich.
+        zuhause = CLUSTER is None or CLUSTER.is_home(account.id)
+        if direkt and zuhause:
+            with _SCHEDULER_LOCK:
+                hub = USER_NATIVE.get(account.id)
+                if hub is None:
+                    hub = _build_native_hub(lambda: SESSIONS.get(account), account,
+                                            profil / "messenger")
+                    USER_NATIVE[account.id] = hub
+            hub.ensure_running()
+        if len(an) == len(direkt):
             return
         with _SCHEDULER_LOCK:
             runner = USER_BRIDGES.get(account.id)
@@ -2610,7 +2690,7 @@ def _bind_ha_token(settings: Settings, tresor: Any) -> None:
 
 def _stop_schedulers() -> None:
     """Haelt alle Planer an -- beim Beenden und vor einem Neustart (9.6.8 Ultra)."""
-    global COWORKER_SCHEDULER, BRIDGE_RUNNER
+    global COWORKER_SCHEDULER, BRIDGE_RUNNER, NATIVE_HUB
     with _SCHEDULER_LOCK:
         planer = list(USER_COWORKERS.values())
         USER_COWORKERS.clear()
@@ -2619,6 +2699,11 @@ def _stop_schedulers() -> None:
         if BRIDGE_RUNNER is not None:
             bruecken.append(BRIDGE_RUNNER)
         BRIDGE_RUNNER = None
+        direkte = list(USER_NATIVE.values())
+        USER_NATIVE.clear()
+        if NATIVE_HUB is not None:
+            direkte.append(NATIVE_HUB)
+        NATIVE_HUB = None
     for global_planer in (COWORKER_SCHEDULER,):
         if global_planer is not None:
             planer.append(global_planer)
@@ -2628,6 +2713,8 @@ def _stop_schedulers() -> None:
             eins.stop()
     for bruecke in bruecken:
         _stop_bridge(bruecke)
+    for hub in direkte:
+        _stop_native(hub)
     with contextlib.suppress(Exception):
         from aquaticy import coworker as coworker_mod
 
@@ -2643,6 +2730,7 @@ def forget_account_runtime(account: Account) -> None:
     with _SCHEDULER_LOCK:
         planer = [USER_COWORKERS.pop(account.id, None)]
         bruecke = USER_BRIDGES.pop(account.id, None)
+        hub = USER_NATIVE.pop(account.id, None)
     for eins in planer:
         if eins is not None:
             with contextlib.suppress(Exception):
@@ -2651,6 +2739,8 @@ def forget_account_runtime(account: Account) -> None:
                     eins.wait_stopped()
     if bruecke is not None:
         _stop_bridge(bruecke)
+    if hub is not None:
+        _stop_native(hub)
     sitzung = SESSIONS.drop(account.id)
 
 
@@ -3267,9 +3357,22 @@ def addons_view(session: Any) -> dict[str, Any]:
         if eintrag["id"] in konten:
             eintrag["konto"] = konten[eintrag["id"]]
         if eintrag["id"] in bridge.MESSENGERS:
-
             eintrag["bruecke"] = bridge.public_view(settings, eintrag["id"], session.ultra)
+            if session.ultra:
+                with contextlib.suppress(Exception):  # das Add-on-Fenster geht immer auf
+                    eintrag["native"] = native_view(session, eintrag["id"], image=False)
+                    if eintrag["native"]["linked"]:
+                        _native_bridge_status(eintrag["bruecke"], eintrag["native"])
     return view
+
+
+def _native_bridge_status(bruecke: dict[str, Any], native: dict[str, Any]) -> None:
+    """Bei direkter Kopplung zeigt die Bruecke den Stand der Verbindung, nicht den Bildschirm."""
+    status = bruecke["status"]
+    status["bereit"] = bool(bruecke["config"]["an"]) and native["state"] == "verbunden"
+    status["ok"] = native["state"] != "fehler"
+    status["fehler"] = native["error"] if native["state"] == "fehler" else ""
+    bruecke["direkt"] = True
 
 
 
@@ -3301,6 +3404,13 @@ def _bridge_action(session: Any, settings: Any, messenger: str, daten: Any) -> s
         neu = bridge_mod.set_config(settings, messenger, daten, ready=ready)
     except bridge_mod.BridgeError as exc:
         raise addons.AddOnError(str(exc)) from exc
+    from aquaticy import messenger_native
+
+    if messenger_native.linked(settings, messenger):
+        _native_hub(session).ensure_running()
+        if neu["an"]:
+            return "Gespeichert. Die Brücke ist an. Schreib jetzt: Aquaticy antwortet sofort."
+        return "Gespeichert. Die Brücke ist aus."
     runner = _bridge_runner(session)
     if neu["an"]:
         runner.ensure_running()
@@ -3745,6 +3855,62 @@ def _addon_login(session: Any, addon: Any) -> tuple[str, str]:
         f"{addon.name} ist offen. Scanne den QR-Code im Anmeldefenster mit deinem Handy "
         "und drück dann „Ich bin angemeldet“."
     ), qr_token
+
+
+def native_view(session: Any, messenger: str, *, image: bool = True) -> dict[str, Any]:
+    """Der Stand der direkten Kopplung -- mit dem QR-Code als Bild, solange er gebraucht wird."""
+    from aquaticy import messenger_native as nat
+    from aquaticy.messenger_login import render_qr
+
+    hub = _native_hub(session)
+    ok, hinweis = hub.available(messenger)
+    status = hub.status(messenger)
+    bild = None
+    if image and status.state == nat.QR and status.qr:
+        with contextlib.suppress(Exception):
+            bild = render_qr(status.qr)
+    return {"id": messenger, "available": ok, "hinweis": hinweis, "state": status.state,
+            "who": status.who, "error": status.error, "image": bild,
+            "linked": bool(hub.transport(messenger).store.linked(messenger))}
+
+
+NATIVE_ACTIONS = frozenset({"status", "link", "unlink", "cancel"})
+
+
+def native_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    """Koppeln ohne virtual machine: QR-Code zeigen, Stand abfragen, trennen (12.7.8 Terra).
+
+    Der QR-Code ist der Kopplungscode des Messengers selbst -- er bleibt im Speicher dieses
+    Servers, geht nie an ein Modell und wird nicht gespeichert.
+    """
+    if not session.ultra:
+        return {"ok": False, "error": "Das gibt es nur mit einem Ultra-Konto."}, 403
+    from aquaticy import bridge as bridge_mod
+    from aquaticy import messenger_native as nat
+
+    messenger = str(payload.get("id") or "").strip().lower()
+    aktion = str(payload.get("action") or "").strip().lower()
+    if messenger not in nat.MESSENGERS or aktion not in NATIVE_ACTIONS:
+        return {"ok": False, "error": "Unbekannte Aktion."}, 400
+    hub = _native_hub(session)
+    try:
+        if aktion == "link":
+            hub.link(messenger)
+        elif aktion == "cancel":
+            hub.cancel(messenger)
+        elif aktion == "unlink":
+            hub.unlink(messenger)
+            with contextlib.suppress(Exception):
+                bridge_mod.set_config(session.settings(), messenger, {"an": False})
+    except RuntimeError as exc:
+        return {"ok": False, "error": str(exc)}, 400
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"[:300]}, 500
+    antwort = {"ok": True, **native_view(session, messenger)}
+    if aktion == "unlink":
+        antwort["message"] = ("Getrennt. Entferne Aquaticy am Handy auch unter „Verknüpfte "
+                              "Geräte“.")
+    return antwort, 200
 
 
 CRASH_MARKERS = ("absturz", "crash")
@@ -5638,6 +5804,10 @@ class Handler(BaseHTTPRequestHandler):
             self._json(antwort, status)
         elif route == "/api/addons/qr":
             antwort, status = addon_qr(SESSION.current(), self._read_json(limit=AUTH_BODY_BYTES))
+            self._json(antwort, status)
+        elif route == "/api/messenger/native":
+            antwort, status = native_action(
+                SESSION.current(), self._read_json(limit=AUTH_BODY_BYTES))
             self._json(antwort, status)
         elif route == "/api/werkstatt/eingabe":
             antwort, status = workshop_input(self._read_json())

@@ -41,6 +41,8 @@ dependencies = [
 
 [project.optional-dependencies]
 browser = ["playwright>=1.62.0,<2"]
+# WhatsApp direkt koppeln, ohne virtual machine (12.7.8 Terra); auf Linux braucht es libmagic.
+messenger = ["neonize>=0.5.2,<0.6"]
 images = ["term-image>=0.7,<0.8"]
 dev = [
     "pytest>=8.2,<10",
@@ -88,7 +90,7 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 
-module = ["yaml", "term_image", "term_image.*"]
+module = ["yaml", "term_image", "term_image.*", "neonize", "neonize.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

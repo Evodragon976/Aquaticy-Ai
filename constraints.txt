@@ -95,3 +95,11 @@ yarl==1.25.1
 zipp==4.1.0
 pillow==13.0.0
 zxing-cpp==3.1.1
+beautifulsoup4==4.15.0
+linkpreview==0.13.2
+neonize==0.5.2
+phonenumbers==9.0.42
+protobuf==7.36.2
+python-magic==0.4.27
+segno==1.6.6
+soupsieve==3.0.4

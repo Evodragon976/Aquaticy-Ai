@@ -2759,7 +2759,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.8 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.7.8 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6428,6 +6428,26 @@ const EN = {
 "Das Fenster zeigt noch keinen QR-Code. Warte kurz.": "The window does not show a QR code yet. Wait a moment.",
 "Der Browser ist abgestürzt. Aquaticy startet ihn neu. Warte kurz.": "The browser crashed. Aquaticy is restarting it. Wait a moment.",
 "Der Browser stürzt immer wieder ab. Gib der virtual machine mehr Speicher oder melde dich selbst an.": "The browser keeps crashing. Give the virtual machine more memory or sign in yourself.",
+"Ohne virtual machine verbinden": "Connect without a virtual machine",
+"Aquaticy wird wie ein weiteres Gerät an dein Handy gekoppelt. Du scannst einen QR-Code.": "Aquaticy is linked to your phone like another device. You scan a QR code.",
+"Noch nicht verbunden.": "Not connected yet.",
+"Verbunden.": "Connected.",
+"Die Kopplung wird gelöscht. Entferne Aquaticy am Handy auch unter „Verknüpfte Geräte“.": "The link will be deleted. Also remove Aquaticy on your phone under “Linked devices”.",
+"Die Verbindung startet. Der QR-Code erscheint gleich hier.": "The connection is starting. The QR code will appear here shortly.",
+"Scanne den QR-Code mit deinem Handy. Es klappt von selbst weiter.": "Scan the QR code with your phone. It continues by itself.",
+"Freigegebene Nummern mit Landesvorwahl, eine je Zeile, zum Beispiel +49 151 2345678. Diese Nummern gelten wie du: Aquaticy darf dort deine Dienste nutzen.": "Approved numbers with country code, one per line, for example +49 151 2345678. These numbers count like you: Aquaticy may use your services there.",
+"Hier zählt die echte Nummer des Absenders, mit Landesvorwahl. Namen und Nummern wie 0151 … passen nicht.": "Only the real number of the sender counts here, with country code. Names and numbers like 0151 … don't match.",
+"Die Verbindung steht noch nicht. Warte kurz.": "The connection is not up yet. Wait a moment.",
+"Aquaticy ist direkt mit deinem Handy gekoppelt. Antworten kommen sofort.": "Aquaticy is linked directly to your phone. Replies come right away.",
+"Die Direktverbindung zu WhatsApp braucht das Paket neonize (pip install aquaticy[messenger]) und auf Linux die Bibliothek libmagic. Danach Aquaticy neu starten.": "The direct connection to WhatsApp needs the neonize package (pip install aquaticy[messenger]) and, on Linux, the libmagic library. Then restart Aquaticy.",
+"Signal braucht das Programm signal-cli auf diesem Rechner (github.com/AsamK/signal-cli). Installiere es und starte Aquaticy neu.": "Signal needs the signal-cli program on this computer (github.com/AsamK/signal-cli). Install it and restart Aquaticy.",
+"WhatsApp hat die Kopplung beendet (am Handy abgemeldet).": "WhatsApp ended the link (signed out on the phone).",
+"Das Koppeln hat nicht geklappt. Versuch es erneut.": "Linking didn't work. Try again.",
+"Der QR-Code ist abgelaufen. Verbinde noch einmal.": "The QR code expired. Connect again.",
+"signal-cli wurde beendet.": "signal-cli stopped.",
+"Die gespeicherte Nummer ist ungültig. Verbinde noch einmal.": "The saved number is invalid. Connect again.",
+"Getrennt. Entferne Aquaticy am Handy auch unter „Verknüpfte Geräte“.": "Disconnected. Also remove Aquaticy on your phone under “Linked devices”.",
+"Gespeichert. Die Brücke ist an. Schreib jetzt: Aquaticy antwortet sofort.": "Saved. The bridge is on. Write now: Aquaticy replies right away.",
 "Bild ansehen": "Viewing image"
 };
 const SPRACHEN = ["de", "en"];
@@ -6450,6 +6470,10 @@ const schluessel = text => text.replace(/\s+/g, " ").trim();
 
 
 const EN_MUSTER = [
+  [/^Verbunden mit (.+)\.$/, "Connected to $1."],
+  [/^Von (.+) trennen\?$/, "Disconnect from $1?"],
+  [/^(WhatsApp|Signal) ist gerade nicht erreichbar\. Prüfe die Internetverbindung\.$/,
+   "$1 can't be reached right now. Check your internet connection."],
   [/^alle (\d+) Sekunden$/, "every $1 seconds"],
   [/^alle (\d+) Minuten$/, "every $1 minutes"],
   [/^(.+): Wer darf schreiben\?$/, "$1: Who may write?"],
@@ -7334,7 +7358,7 @@ document.addEventListener("keydown", (e) => {
   if (voiceBox.classList.contains("open")) { closeOverlay(voiceBox); return; }
   if (hoeren) { hoerenStoppen(false); return; }
   if (guardBox.classList.contains("open")) { guardSchliessen(false); return; }
-  if (qrBox.classList.contains("open")) { qrSchliessen(); return; }
+  if (qrBox.classList.contains("open")) { qrDialogSchliessen(); return; }
   if (screenBox.classList.contains("open")) { bildschirmSchliessen(); return; }
   if (addonBox.classList.contains("open")) { addonsSchliessen(); return; }
   if (coworkerBox.classList.contains("open")) { coworkerSchliessen(); return; }
@@ -7919,7 +7943,7 @@ function addonKarte(a){
     kopf.appendChild(schalter);
   }
   karte.appendChild(kopf);
-
+  if (a.native) karte.appendChild(addonNative(a));
 
   const zeile = document.createElement("div");
   zeile.className = "addon-row";
@@ -7977,7 +8001,7 @@ function addonKarte(a){
   if (a.installed && !laeuft && (a.rechte_katalog || []).length)
     karte.appendChild(addonRechte(a));
 
-  if (a.installed && !laeuft && a.bruecke) karte.appendChild(addonBruecke(a));
+  if ((a.installed && !laeuft || a.native?.linked) && a.bruecke) karte.appendChild(addonBruecke(a));
 
   if ((a.inhalt || []).length){
     const mehr = document.createElement("details");
@@ -8124,9 +8148,49 @@ function addonRechte(a){
 
 
 
+function addonNative(a){
+  const n = a.native;
+  const box = document.createElement("div");
+  box.className = "addon-rechte addon-native";
+  const titel = document.createElement("div");
+  titel.className = "how"; titel.innerHTML = "<b></b>";
+  titel.firstChild.textContent = "Ohne virtual machine verbinden";
+  const wie = document.createElement("div");
+  wie.className = "addon-hint";
+  wie.textContent = "Aquaticy wird wie ein weiteres Gerät an dein Handy gekoppelt. Du scannst einen QR-Code.";
+  box.append(titel, wie);
+  const stand = document.createElement("div");
+  stand.className = "note addon-status";
+  const zeile = document.createElement("div");
+  zeile.className = "addon-row";
+  if (!n.available){
+    stand.textContent = n.hinweis;
+  } else if (n.linked){
+    if (n.state === "fehler" && n.error){
+      stand.classList.add("bad"); stand.textContent = n.error;
+    } else {
+      stand.classList.add("ok");
+      stand.textContent = n.who ? `Verbunden mit ${n.who}.` : "Verbunden.";
+    }
+    zeile.appendChild(knopf("Trennen", "", async (b) => {
+      const weiter = await guardDialog({
+        title: `Von ${a.name} trennen?`,
+        text: "Die Kopplung wird gelöscht. Entferne Aquaticy am Handy auch unter „Verknüpfte Geräte“.",
+        ok: "Trennen", cancel: "Abbrechen",
+      });
+      if (weiter) await nativeTrennen(a, b);
+    }));
+  } else {
+    stand.textContent = "Noch nicht verbunden.";
+    zeile.appendChild(knopf("Verbinden", "primary", () => nativeAnmelden(a)));
+  }
+  box.append(stand, zeile);
+  return box;
+}
+
 const brueckenEntwurf = new Map();
 function addonBruecke(a){
-  const b = a.bruecke, st = b.status, an = !!b.config.an;
+  const b = a.bruecke, st = b.status, an = !!b.config.an, direkt = !!b.direkt;
   if (!brueckenEntwurf.has(a.id)){
     const c = b.config;
     brueckenEntwurf.set(a.id, { wer: c.wer, nummern: [...c.nummern], takt: c.takt,
@@ -8166,7 +8230,9 @@ function addonBruecke(a){
   const nummern = document.createElement("div");
   const nummernNote = document.createElement("div");
   nummernNote.className = "addon-hint";
-  nummernNote.textContent = "Freigegebene Nummern oder Namen, eine je Zeile. Diese Chats gelten "
+  nummernNote.textContent = direkt
+    ? "Freigegebene Nummern mit Landesvorwahl, eine je Zeile, zum Beispiel +49 151 2345678. Diese Nummern gelten wie du: Aquaticy darf dort deine Dienste nutzen."
+    : "Freigegebene Nummern oder Namen, eine je Zeile. Diese Chats gelten "
     + "wie du: Aquaticy darf dort deine Dienste nutzen.";
   const nummernFeld = document.createElement("textarea");
   nummernFeld.rows = 3; nummernFeld.value = entwurf.nummern.join("\n");
@@ -8177,7 +8243,9 @@ function addonBruecke(a){
   });
   const nummernWarnung = document.createElement("div");
   nummernWarnung.className = "addon-hint";
-  nummernWarnung.textContent = "Eine Nummer ist sicherer als ein Name. Einen Namen kann sich bei "
+  nummernWarnung.textContent = direkt
+    ? "Hier zählt die echte Nummer des Absenders, mit Landesvorwahl. Namen und Nummern wie 0151 … passen nicht."
+    : "Eine Nummer ist sicherer als ein Name. Einen Namen kann sich bei "
     + "Signal jeder geben.";
   nummern.append(nummernNote, nummernFeld, nummernWarnung);
   box.appendChild(nummern);
@@ -8190,7 +8258,7 @@ function addonBruecke(a){
   box.appendChild(gruppenNote);
   const zeigeWer = () => {
     nummern.hidden = entwurf.wer === "selbst";
-    gruppenNote.hidden = !(entwurf.wer === "gruppen" && a.rechte && a.rechte.wo !== "alle");
+    gruppenNote.hidden = direkt || !(entwurf.wer === "gruppen" && a.rechte && a.rechte.wo !== "alle");
   };
   wer.addEventListener("change", () => { entwurf.wer = wer.value; zeigeWer(); });
   zeigeWer();
@@ -8249,7 +8317,7 @@ function addonBruecke(a){
   takt.value = String(entwurf.takt);
   takt.addEventListener("change", () => { entwurf.takt = Number(takt.value); });
   taktZeile.append(taktName, takt);
-  box.appendChild(taktZeile);
+  if (!direkt) box.appendChild(taktZeile);
 
 
   const stand = document.createElement("div");
@@ -8266,6 +8334,8 @@ function addonBruecke(a){
     const zahlName = document.createElement("span");
     zahlName.textContent = " Antworten in dieser Stunde:";
     stand.append(zahlName, zahl);
+  } else if (an && direkt){
+    stand.textContent = "Die Verbindung steht noch nicht. Warte kurz.";
   } else if (an){
     stand.textContent = "Startet … Beim ersten Blick merkt sich Aquaticy nur, was schon im "
       + "Chat steht. Schreib erst, wenn „Bereit“ dasteht.";
@@ -8295,7 +8365,15 @@ function addonBruecke(a){
   const mehrTitel = document.createElement("summary");
   mehrTitel.textContent = "Gut zu wissen";
   const liste = document.createElement("ul");
-  for (const punkt of [
+  for (const punkt of direkt ? [
+    "Aquaticy ist direkt mit deinem Handy gekoppelt. Antworten kommen sofort.",
+    "Antworten beginnen mit [Aquaticy]. So erkennt Aquaticy seine eigenen Nachrichten.",
+    "In Gruppen antwortet Aquaticy nur, wenn eine Nachricht mit „Aquaticy“ beginnt.",
+    "Rückfragen kann Aquaticy hier nicht stellen. Was eine Bestätigung braucht, machst du "
+      + "in der App.",
+    "Messenger erlauben oft keine Programme, die für dich schreiben. Dein Konto könnte "
+      + "gesperrt werden.",
+  ] : [
     "Aquaticy sieht den Messenger über den Bildschirm der virtual machine. Antworten "
       + "brauchen deshalb etwas Zeit.",
     "Antworten beginnen mit [Aquaticy]. So erkennt Aquaticy seine eigenen Nachrichten.",
@@ -9005,6 +9083,7 @@ function qrSchliessen(){
   closeOverlay(qrBox);
 }
 async function qrAnmelden(addon){
+  nativeSchliessen(false);
   qrSchliessen();
   const generation = qrGeneration;
   qrAddon = addon;
@@ -9084,9 +9163,16 @@ async function qrAktualisieren(){
     if (generation === qrGeneration && weiter) qrTimer = setTimeout(qrAktualisieren, pause);
   }
 }
-$("#qr-close").addEventListener("click", qrSchliessen);
-qrBox.addEventListener("click", e => { if (e.target === qrBox) qrSchliessen(); });
-$("#qr-retry").addEventListener("click", () => { if (qrAddon) qrAnmelden(qrAddon); });
+function qrDialogSchliessen(){
+  if (nativeAddon){ nativeSchliessen(); closeOverlay(qrBox); return; }
+  qrSchliessen();
+}
+$("#qr-close").addEventListener("click", qrDialogSchliessen);
+qrBox.addEventListener("click", e => { if (e.target === qrBox) qrDialogSchliessen(); });
+$("#qr-retry").addEventListener("click", () => {
+  if (nativeAddon) nativeAnmelden(nativeAddon);
+  else if (qrAddon) qrAnmelden(qrAddon);
+});
 $("#qr-screen").addEventListener("click", () => {
   const addon = qrAddon;
   if (!addon) return;
@@ -9105,6 +9191,94 @@ $("#qr-done").addEventListener("click", async () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && qrAddon && qrToken) qrAktualisieren();
 });
+let nativeAddon = null, nativeGeneration = 0, nativeTimer = null;
+async function nativePost(body){
+  const res = await api("/api/messenger/native", {method:"POST", quietErrors:true,
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.ok !== true) throw new Error(data.error || "Das hat nicht geklappt.");
+  return data;
+}
+function nativeSchliessen(abbrechen = true){
+  nativeGeneration++;
+  clearTimeout(nativeTimer);
+  const addon = nativeAddon;
+  nativeAddon = null;
+  if (addon && abbrechen) nativePost({action:"cancel", id:addon.id}).catch(() => {});
+  $("#qr-done").hidden = false;
+}
+async function nativeAnmelden(addon){
+  qrSchliessen();
+  nativeSchliessen(false);
+  const generation = nativeGeneration;
+  nativeAddon = addon;
+  $("#qr-title").textContent = addon.id === "signal" ? "Signal verbinden" : "WhatsApp Web verbinden";
+  $("#qr-help").textContent = addon.id === "signal"
+    ? "Öffne Signal auf deinem Handy. Wähle Einstellungen → Gekoppelte Geräte → +. Scanne dann diesen QR-Code."
+    : "Öffne WhatsApp auf deinem Handy. Wähle Einstellungen → Verknüpfte Geräte → Gerät hinzufügen. Scanne dann diesen QR-Code.";
+  $("#qr-status").textContent = "Die Verbindung startet. Der QR-Code erscheint gleich hier.";
+  $("#qr-image").removeAttribute("src"); $("#qr-image").hidden = true;
+  $("#qr-done").hidden = true; $("#qr-retry").hidden = true; qrAusweg(false);
+  openOverlay(qrBox); $("#qr-close").focus();
+  try {
+    await nativePost({action:"link", id:addon.id});
+  } catch (error){
+    if (generation !== nativeGeneration) return;
+    $("#qr-status").textContent = error.message;
+    $("#qr-retry").hidden = false;
+    return;
+  }
+  if (generation === nativeGeneration) nativeAbfragen(generation);
+}
+async function nativeAbfragen(generation){
+  if (generation !== nativeGeneration || !nativeAddon) return;
+  if (document.hidden){ nativeTimer = setTimeout(() => nativeAbfragen(generation), 2000); return; }
+  const addon = nativeAddon;
+  let weiter = true;
+  try {
+    const d = await nativePost({action:"status", id:addon.id});
+    if (generation !== nativeGeneration) return;
+    const bild = $("#qr-image");
+    if (d.state === "qr" && d.image && d.image.startsWith("data:image/png;base64,")){
+      bild.src = d.image; bild.hidden = false;
+      $("#qr-status").textContent = "Scanne den QR-Code mit deinem Handy. Es klappt von selbst weiter.";
+    } else if (d.state === "verbunden"){
+      bild.removeAttribute("src"); bild.hidden = true;
+      $("#qr-status").textContent = d.who ? `Verbunden mit ${d.who}.` : "Verbunden.";
+      weiter = false;
+      setTimeout(() => {
+        if (generation !== nativeGeneration) return;
+        nativeSchliessen(false); closeOverlay(qrBox); addonsLaden();
+      }, 1500);
+    } else if (d.state === "fehler"){
+      bild.removeAttribute("src"); bild.hidden = true;
+      $("#qr-status").textContent = d.error || "Das hat nicht geklappt.";
+      $("#qr-retry").hidden = false;
+      weiter = false;
+    } else {
+      bild.removeAttribute("src"); bild.hidden = true;
+      $("#qr-status").textContent = "Die Verbindung startet. Der QR-Code erscheint gleich hier.";
+    }
+  } catch (error){
+    if (generation !== nativeGeneration) return;
+    $("#qr-status").textContent = error.message;
+    $("#qr-retry").hidden = false;
+    weiter = false;
+  }
+  if (weiter && generation === nativeGeneration) nativeTimer = setTimeout(() => nativeAbfragen(generation), 2000);
+}
+async function nativeTrennen(addon, knopfEl){
+  if (knopfEl) knopfEl.disabled = true;
+  const note = $("#addon-note");
+  try {
+    const d = await nativePost({action:"unlink", id:addon.id});
+    note.className = "note ok"; note.textContent = d.message || "Getrennt.";
+    await addonsLaden();
+  } catch (error){
+    note.className = "note bad"; note.textContent = error.message;
+  } finally { if (knopfEl) knopfEl.disabled = false; }
+}
+
 
 let bildTakt = null, bildAddon = null;
 

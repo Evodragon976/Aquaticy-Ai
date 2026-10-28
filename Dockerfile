@@ -24,7 +24,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tini libgomp1 libcurl4 \
+    && apt-get install -y --no-install-recommends ca-certificates tini libgomp1 libcurl4 libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -42,7 +42,7 @@ COPY aquaticy ./aquaticy
 COPY docker/workshop-desktop.Dockerfile ./docker/workshop-desktop.Dockerfile
 COPY docker/desktop ./docker/desktop
 
-RUN pip install --no-cache-dir -c constraints.txt .
+RUN pip install --no-cache-dir -c constraints.txt ".[messenger]"
 
 
 

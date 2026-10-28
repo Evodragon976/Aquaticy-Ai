@@ -113,3 +113,15 @@ def qr_image(data: bytes, messenger: str) -> str | None:
                     continue
                 return _render(code.text, str(code.ec_level or ""))
     return None
+
+
+def render_qr(text: str, ec_level: str = "M") -> str:
+    """Zeichnet einen Kopplungscode, den Aquaticy selbst bekommen hat (direkte Kopplung).
+
+    Anders als :func:`qr_image` kommt der Text nicht aus einem Bildschirmfoto, sondern aus dem
+    Protokoll. Er muss trotzdem wie ein Kopplungscode aussehen.
+    """
+    text = str(text or "")
+    if not (pairing_code(text, "whatsapp") or pairing_code(text, "signal")):
+        raise ValueError("Das ist kein Kopplungscode.")
+    return _render(text, ec_level)
