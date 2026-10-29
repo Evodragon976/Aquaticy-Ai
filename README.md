@@ -1,4 +1,4 @@
-# Aquaticy AI 12.7.9 Sol
+# Aquaticy AI 12.8.9 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.7.9 Sol
+aquaticy --version            # 12.8.9 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -672,6 +672,17 @@ Freigegebene Nummern gelten deshalb nur mit Landesvorwahl (`+49 151 …`); Namen
 Add-on „Lesen und schreiben“, ein Vision-Modell. Dann schaltest du unter dem Add-on **Mit
 Aquaticy schreiben** ein. Schreib erst, wenn „Bereit“ dasteht: Beim ersten Blick merkt sich
 Aquaticy nur, was schon im Chat steht.
+
+**Messenger-Befehle (mobile):** `/switch` zeigt installierte Modelle und die Modelle der
+verfügbaren API-Schlüssel. `/switch Modell` wählt eines nur für diesen Messenger-Chat.
+Auch „wechsle bitte dein LLM“ öffnet die Auswahl. Mehrdeutige Namen werden nicht geraten.
+Normal sind höchstens vier Rechercheagenten aktiv, ohne Strukturieren und Gegenprüfen.
+`/pro` aktiviert Pro mit Mannschaft, Strukturieren und Gegenprüfen. `/normal` oder `/pro aus`
+schaltet zurück. Website-Einstellungen ändern sich dadurch nicht. Modellwechsel und Pro
+sind dem Besitzer und freigegebenen Nummern vorbehalten. `/help` kennzeichnet diese Befehle
+mit „mobile“. `/export` gibt den Verlauf dieses Messenger-Chats als Text aus. Lange Verläufe haben Seiten
+(`/export seite 2`).
+Datei- und Desktop-Befehle behalten ihre Grenzen und verweisen bei Bedarf auf die App.
 
 **Wer darf schreiben?**
 

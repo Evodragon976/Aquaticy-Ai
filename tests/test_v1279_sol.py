@@ -550,7 +550,7 @@ def test_help_depends_on_who_asks(b: Befehle) -> None:
     assert "/model" in vertraut and "/memory" not in vertraut
     selbst = b.frage("/help", selbst=True)
     assert "/model" in selbst and "/memory" in selbst and "/forget" in selbst
-    assert "Nur in der App" in selbst and not FakeAgent.gebaut, "ein Befehl fragt kein Modell"
+    assert "/image (mobile)" in selbst and not FakeAgent.gebaut, "ein Befehl fragt kein Modell"
 
 
 def test_help_lists_only_plugins_that_are_on_and_allowed(tmp_path: Path) -> None:
@@ -558,7 +558,8 @@ def test_help_lists_only_plugins_that_are_on_and_allowed(tmp_path: Path) -> None
     b.aktiv("wetter", "github", "code-review")
 
     def namen(**wer: Any) -> set[str]:
-        return {z.split(":")[0] for z in b.frage("/help", **wer).splitlines()}
+        return {z.split(":")[0].removesuffix(" (mobile)")
+                for z in b.frage("/help", **wer).splitlines()}
 
     assert {"/wetter", "/code-review"} <= namen() and "/github" not in namen()
     assert "/github" in namen(vertraut=True), "GitHub braucht einen vertrauten Chat"
@@ -600,12 +601,11 @@ def test_location_is_cleaned_and_bounded(b: Befehle) -> None:
 def test_model_is_shown_to_trusted_chats_only_and_never_changed(b: Befehle) -> None:
     assert b.frage("/model") == "Das geht hier nicht."
     antwort = b.frage("/model", vertraut=True)
-    assert "test/modell" in antwort and "App" in antwort
-    assert "andere/modell" not in b.frage("/model andere/modell", selbst=True)
+    assert "test/modell" in antwort and "/switch" in antwort
     assert b.konto.model == "test/modell"
 
 
-@pytest.mark.parametrize("befehl", ["/export", "/export html", "/image", "/max Frage", "/quit"])
+@pytest.mark.parametrize("befehl", ["/image"])
 def test_these_only_work_in_the_app(b: Befehle, befehl: str) -> None:
     assert b.frage(befehl, selbst=True) == "Das geht nur in der App."
     assert not FakeAgent.gebaut

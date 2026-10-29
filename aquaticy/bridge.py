@@ -561,8 +561,7 @@ PLUGIN_TOOL = {"github": "github", "wetter": "weather", "feeds": "read_feeds",
                "waehrung": "currency", "feiertage": "holidays"}
 #: Nur im eigenen Chat: Sie zeigen oder loeschen Daten des Besitzers.
 OWN_CHAT_COMMANDS = ("memory", "notes", "history", "uploads", "forget")
-#: Gehen nur in der App (Datei, Bild, Modellwechsel, Mannschaft, Bildschirm).
-APP_ONLY_COMMANDS = ("export", "image", "max", "quit", "exit", "q")
+APP_ONLY_COMMANDS = ("image",)
 REVIEW_REPLY_CHARS = 3000
 LOCATION_CHARS = 80
 MAX_LOCATIONS = 64
@@ -916,7 +915,7 @@ def bridge_agent_class() -> type:
             self._erlaubt = frozenset(erlaubt)
             self._zusatz = zusatz
             super().__init__(settings, cache=None, on_event=on_event)
-            self.use_subagents = False
+            self.use_subagents = settings.max_subagents > 0
             self.structured = False
             self.recheck = False
 
@@ -957,6 +956,7 @@ class AgentAnswerer:
         self._clock = clock
         #: Fuehrt /memory, /notes, /history, /uploads, /forget fuer den Besitzer aus (nur dort).
         self._session_command = session_command
+        self._mobile: dict[str, dict[str, Any]] = {}
         self._locations: dict[str, str] = {}
         self._agents: dict[str, tuple[Any, str, float, frozenset[str], tuple[bool, bool],
                                       str]] = {}
@@ -979,6 +979,10 @@ class AgentAnswerer:
 
     def __call__(self, auftrag: str, decision: Decision, config: dict[str, Any], key: str,
                  messenger: str) -> str:
+        from aquaticy.messenger_modes import switch_request
+
+        if switch_request(auftrag):
+            auftrag = "/switch"
         befehl = parse_command(auftrag)
         if befehl is not None:
             ergebnis = self._command(befehl[0], befehl[1], decision, config, key, messenger)
@@ -987,19 +991,29 @@ class AgentAnswerer:
             auftrag = ergebnis.prompt
         base = self._settings()
         settings = effective_settings(base, config, decision)
+        mobile = self._mobile.get(key, {})
+        pro = bool(mobile.get("pro", False)) and decision.trusted
+        settings.max_subagents = (max(1, base.max_subagents) if pro else 4)
+        settings.subagents_auto = config["dienste"].get("web") == "an"
+        if not settings.subagents_auto:
+            settings.max_subagents = 0
+        if mobile.get("model") and decision.trusted:
+            settings.model = mobile["model"]
+            settings.auto_model = False
         ort = self._locations.get(key, "")
         if ort:
             settings.location = ort
         erlaubt = allowed_tools(config, decision.trusted)
+        if settings.max_subagents:
+            erlaubt |= frozenset({"research_subtasks"})
         zusatz = trust_note(decision, config)
-
 
         basis_stand = hashlib.sha256(json.dumps(
             {f.name: getattr(base, f.name) for f in dataclasses.fields(base)},
             sort_keys=True, default=str).encode()).hexdigest()
         stand = hashlib.sha256(json.dumps(
             [sorted(erlaubt), zusatz, decision.trusted, decision.selbst,
-             basis_stand, ort]).encode()).hexdigest()[:16]
+             basis_stand, ort, settings.model, pro]).encode()).hexdigest()[:16]
         jetzt = self._clock()
         for alt in [k for k, wert in self._agents.items()
                     if jetzt - wert[2] > self.IDLE_SECONDS]:
@@ -1019,8 +1033,9 @@ class AgentAnswerer:
         else:
             agent = eintrag[0]
         self._agents[key] = (agent, stand, jetzt, erlaubt, rolle, basis_stand)
-        ergebnis = agent.ask(auftrag, stream=False, structured=False, recheck=False,
-                             mode="normal", online=config["dienste"].get("web") == "an",
+        ergebnis = agent.ask(auftrag, stream=False, structured=pro, recheck=pro,
+                             mode="pro" if pro else "normal",
+                             online=config["dienste"].get("web") == "an",
                              sandbox=False)
         return str(getattr(ergebnis, "answer", "") or "")
 
@@ -1031,6 +1046,13 @@ class AgentAnswerer:
         from aquaticy import plugins
 
         base = self._settings()
+        if name in {"switch", "pro", "normal", "max", "export", "quit", "exit", "q"}:
+            from aquaticy.messenger_modes import command
+
+            while len(self._mobile) >= self.MAX_AGENTS and key not in self._mobile:
+                self._mobile.pop(next(iter(self._mobile)))
+            state = self._mobile.setdefault(key, {})
+            return command(name, argument, decision, base, state, self._agents.get(key))
         if name == "help":
             return self._help(decision, config, base)
         if name == "clear":
@@ -1042,7 +1064,10 @@ class AgentAnswerer:
         if name == "model":
             if not decision.trusted:
                 return "Das geht hier nicht."
-            return f"Modell: {base.model}. Wechseln geht nur in der App."
+            if argument:
+                return self._command("switch", argument, decision, config, key, messenger)
+            model = self._mobile.get(key, {}).get("model", base.model)
+            return f"Modell: {model}. Wechseln: /switch Modell"
         if name in APP_ONLY_COMMANDS:
             return _app_only()
         if name in OWN_CHAT_COMMANDS:
@@ -1075,12 +1100,19 @@ class AgentAnswerer:
     def _help(self, decision: Decision, config: dict[str, Any], base: Any) -> str:
         from aquaticy import plugins
 
-        zeilen = ["Befehle:", "/help: diese Liste", "/clear: das Gespräch hier vergessen",
-                  "/location Ort: Ortsfilter für diesen Chat"]
+        zeilen = ["Befehle (mobile):", "/help (mobile): diese Liste",
+                  "/clear (mobile): das Gespräch hier vergessen",
+                  "/location Ort (mobile): Ortsfilter für diesen Chat",
+                  "/quit, /exit, /q (mobile): Gespräch beenden",
+                  "/export (mobile): dieses Gespräch als Text"]
         if decision.trusted:
-            zeilen.append("/model: zeigt das Modell")
+            zeilen.extend(["/model (mobile): zeigt das Modell",
+                           "/switch Modell (mobile): Modelle anzeigen oder wechseln",
+                           "/pro (mobile): Pro mit Planen und Gegenprüfen einschalten",
+                           "/normal (mobile): normal, höchstens vier Rechercheagenten",
+                           "/max Frage (mobile): Pro mit voller Mannschaft"])
         if decision.selbst:
-            zeilen.append("/memory, /notes, /history, /uploads, /forget: deine Daten")
+            zeilen.append("/memory, /notes, /history, /uploads, /forget (mobile): deine Daten")
         erlaubt = allowed_tools(config, decision.trusted)
         try:
             liste = plugins.commands(base, True)
@@ -1089,8 +1121,8 @@ class AgentAnswerer:
         for eintrag in liste:
             wort = str(eintrag.get("name", ""))
             if wort in MESSENGER_PLUGINS and PLUGIN_TOOL.get(wort, "calculate") in erlaubt:
-                zeilen.append(f"/{wort}: {eintrag.get('label', wort)}")
-        zeilen.append("Nur in der App: /export, /image, /max.")
+                zeilen.append(f"/{wort} (mobile): {eintrag.get('label', wort)}")
+        zeilen.append("/image (mobile): Bilder und Dateien öffnest du sicher in der App.")
         return "\n".join(zeilen)
 
     def _plugin(self, addon: str, name: str, argument: str, decision: Decision,
