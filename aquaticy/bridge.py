@@ -215,6 +215,16 @@ def load_config(settings: Any) -> dict[str, dict[str, Any]]:
     return {name: normalize_config(roh.get(name)) for name in MESSENGERS}
 
 
+def delivery_allowed(settings: Callable[[], Any], messenger: str, config: dict[str, Any],
+                     paused: Callable[[], bool] | None) -> bool:
+    try:
+        return (not (paused is not None and paused())
+                and config.get("an") is True
+                and load_config(settings())[messenger] == config)
+    except Exception:
+        return False
+
+
 def enabled_messengers(settings: Any) -> list[str]:
     return [name for name, konfig in load_config(settings).items() if konfig["an"]]
 
@@ -1049,9 +1059,12 @@ class AgentAnswerer:
         if name in {"switch", "pro", "normal", "max", "export", "quit", "exit", "q"}:
             from aquaticy.messenger_modes import command
 
-            while len(self._mobile) >= self.MAX_AGENTS and key not in self._mobile:
-                self._mobile.pop(next(iter(self._mobile)))
-            state = self._mobile.setdefault(key, {})
+            if decision.trusted:
+                while len(self._mobile) >= self.MAX_AGENTS and key not in self._mobile:
+                    self._mobile.pop(next(iter(self._mobile)))
+                state = self._mobile.setdefault(key, {})
+            else:
+                state = self._mobile.get(key, {})
             return command(name, argument, decision, base, state, self._agents.get(key))
         if name == "help":
             return self._help(decision, config, base)
@@ -1425,6 +1438,10 @@ class Bridge:
         jetzt_titel, jetzt_gruppe = driver.current_title()
         if not same_title(jetzt_titel, titel) or (not entscheidung.group and jetzt_gruppe is True):
             rep.uebersprungen.append(f"{titel}: der Chat hat gewechselt")
+            return
+        if (not delivery_allowed(self._settings, messenger, config, self._paused)
+                or self._ready(self._settings(), messenger)):
+            rep.uebersprungen.append(f"{titel}: Freigabe wurde geändert")
             return
         driver.send(text, protokoll.eingabe)
         rep.beantwortet += 1

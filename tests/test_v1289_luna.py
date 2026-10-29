@@ -77,7 +77,7 @@ def test_normal_pro_and_reset_are_independent(mobile):
 def test_untrusted_cannot_change_model_or_pro(mobile, command):
     assert "freigegebene" in ask(mobile, command, owner=False, trusted=False)
     assert not mobile[2]._agents
-    assert not mobile[2]._mobile["wa:me"]
+    assert not mobile[2]._mobile
 
 
 def test_pro_keeps_private_services_and_offline_restrictions(mobile):

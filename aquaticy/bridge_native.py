@@ -25,6 +25,7 @@ from aquaticy.bridge import (
     chat_key,
     count_reply,
     decide_native,
+    delivery_allowed,
     denial_text,
     is_own_text,
     load_config,
@@ -217,9 +218,13 @@ class NativeResponder:
                 antwort = self._reply(auftrag, decision, config, key, msg)
         except Exception:
             LOG.exception("Die Antwort an einen %s-Chat ist fehlgeschlagen", msg.messenger)
-            if decision.trusted:
+            if decision.trusted and delivery_allowed(
+                    self._settings, msg.messenger, config, self._paused):
                 self._send(transport, msg, FAIL_TEXT)
+                count_reply(store, msg.messenger, self._clock())
             return "fehler"
+        if not delivery_allowed(self._settings, msg.messenger, config, self._paused):
+            return "widerrufen"
         self._send(transport, msg, antwort)
         count_reply(store, msg.messenger, self._clock())
         return "beantwortet"

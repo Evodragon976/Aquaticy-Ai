@@ -1,4 +1,4 @@
-# Aquaticy AI 12.8.9 Luna
+# Aquaticy AI 12.8.9 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.8.9 Luna
+aquaticy --version            # 12.8.9 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -672,6 +672,11 @@ Freigegebene Nummern gelten deshalb nur mit Landesvorwahl (`+49 151 …`); Namen
 Add-on „Lesen und schreiben“, ein Vision-Modell. Dann schaltest du unter dem Add-on **Mit
 Aquaticy schreiben** ein. Schreib erst, wenn „Bereit“ dasteht: Beim ersten Blick merkt sich
 Aquaticy nur, was schon im Chat steht.
+
+Seit **12.8.9 Terra** prüft Aquaticy die Messenger-Freigabe direkt vor dem Versand erneut.
+Bei geänderten Freigaben oder einer Kontosperre verwirft es die laufende Antwort.
+Auch Fehlermeldungen zählen zur Antwortgrenze. Abgelehnte Befehle fremder Kontakte
+verdrängen keine Modelleinstellungen anderer Chats.
 
 **Messenger-Befehle (mobile):** `/switch` zeigt installierte Modelle und die Modelle der
 verfügbaren API-Schlüssel. `/switch Modell` wählt eines nur für diesen Messenger-Chat.
