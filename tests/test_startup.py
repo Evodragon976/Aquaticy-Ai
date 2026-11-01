@@ -155,3 +155,37 @@ def test_failed_update_still_starts_app(monkeypatch):
     monkeypatch.setattr(cli, "app", lambda: calls.append(True))
     cli.main()
     assert calls == [True]
+
+
+@pytest.mark.parametrize("saved", [False, True])
+def test_background_defaults_to_lan_and_shows_both_addresses(monkeypatch, saved):
+    from typer.testing import CliRunner
+
+    from aquaticy import cli
+
+    monkeypatch.setattr("aquaticy.web.lan_address", lambda: "192.168.1.44")
+    monkeypatch.setattr("aquaticy.web.tailscale_address", lambda: "100.81.120.100")
+    monkeypatch.setenv("AQUATICY_BACKGROUND", "true" if saved else "false")
+    calls = []
+    monkeypatch.setattr(startup, "background", lambda args, *rest: calls.append(args))
+    args = ["web", "--no-open"] + ([] if saved else ["--background"])
+    result = CliRunner().invoke(cli.app, args)
+    assert result.exit_code == 0, result.output
+    assert calls[0][calls[0].index("--host") + 1] == "0.0.0.0"
+    assert "--lan" in calls[0] and "--foreground" in calls[0]
+    assert "http://192.168.1.44:8765/" in result.output
+    assert "http://100.81.120.100:8765/" in result.output
+
+
+def test_background_keeps_explicit_loopback_binding(monkeypatch):
+    from typer.testing import CliRunner
+
+    from aquaticy import cli
+
+    calls = []
+    monkeypatch.setattr(startup, "background", lambda args, *rest: calls.append(args))
+    result = CliRunner().invoke(cli.app, ["web", "--background", "--host", "127.0.0.1",
+                                          "--no-open"])
+    assert result.exit_code == 0, result.output
+    assert calls[0][calls[0].index("--host") + 1] == "127.0.0.1"
+    assert "--lan" not in calls[0]

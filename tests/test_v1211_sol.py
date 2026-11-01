@@ -70,6 +70,7 @@ def test_cloud_only_setup_keeps_the_existing_installation_optional(
     assert len(starts) == int(background)
     if background:
         assert starts[0]["background"] is True
+        assert starts[0]["lan"] is True
 
 
 @pytest.mark.parametrize("installed", [True, False])

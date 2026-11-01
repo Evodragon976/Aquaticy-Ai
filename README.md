@@ -676,6 +676,10 @@ Namen, Zitate, URLs und Code behalten ihre Schreibweise.
 Im Setup kannst du den Hintergrundbetrieb der Weboberfläche wählen.
 Wenn du zustimmst, startet die Weboberfläche nach der Einrichtung direkt.
 Mit `aquaticy web --background` schaltest du ihn auch für einen einzelnen Start ein.
+Der Hintergrundbetrieb nutzt automatisch Heimnetz und Tailscale wie `aquaticy web --lan`.
+Beim Start werden die lokale IP-Adresse und die verfügbare Tailscale-Adresse angezeigt.
+Tailscale muss dafür verbunden sein.
+Mit `--host 127.0.0.1` beschränkst du den Zugriff auf diesen Rechner.
 Strg+C schließt dann die Terminalanzeige. Aquaticy läuft als eigener Prozess weiter.
 Die Prozessnummer und das private Protokoll werden beim Start angezeigt.
 Beende diesen Prozess im Betriebssystem, um Aquaticy vollständig anzuhalten.

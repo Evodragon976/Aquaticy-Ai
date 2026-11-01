@@ -287,7 +287,7 @@ def setup_command(
         values["AQUATICY_API_BASE"] = api_base
     values.update(website_values)
     run_background = False if yes else typer.confirm(
-        "Soll die Weboberfläche im Hintergrund weiterlaufen, wenn du Strg+C drückst?",
+        "Soll die Weboberfläche im Hintergrund über Heimnetz und Tailscale erreichbar bleiben?",
         default=False)
     values["AQUATICY_BACKGROUND"] = "true" if run_background else "false"
 
@@ -309,7 +309,7 @@ def setup_command(
     _vm_beim_start(get_settings())
     _messenger_beim_start(get_settings())
     if run_background:
-        web_command(port=8765, host="", lan=False, open_browser=True, token="", background=True)
+        web_command(port=8765, host="", lan=True, open_browser=True, token="", background=True)
 
 
 def _ask_website(*, no_probe: bool = False) -> dict[str, str]:
@@ -897,14 +897,14 @@ def web_command(
         help="Freiwilliges Zugangswort. Ohne kommt jeder rein, der die Adresse erreicht.",
     ),
     background: bool | None = typer.Option(
-        None, "--background/--foreground", help="Im Hintergrund bis zum Herunterfahren laufen."
+        None, "--background/--foreground", help="Im Hintergrund mit Heimnetz und Tailscale laufen."
     ),
 ) -> None:
     """Startet die Weboberfläche – derselbe Agent im Browser.
 
     Mit eigener Domain (aquaticy website setup) ist Aquaticy im Heimnetz, über
     Tailscale und unter der Domain erreichbar. Ohne Domain nur auf diesem
-    Rechner; --lan öffnet es dann fürs Heimnetz.
+    Rechner; --lan oder Hintergrundbetrieb öffnen es dann fürs Heimnetz.
     """
     from aquaticy import website as website_mod
     from aquaticy.web import (
@@ -926,7 +926,9 @@ def web_command(
         seite = None
 
 
-    bind = host or ("0.0.0.0" if (lan or seite) else "127.0.0.1")
+    in_background = background if isinstance(background, bool) else (
+        os.environ.get("AQUATICY_BACKGROUND", "").lower() in {"true", "1", "yes", "on"})
+    bind = host or ("0.0.0.0" if (lan or seite or in_background) else "127.0.0.1")
 
 
     gewuenscht = port
@@ -956,8 +958,6 @@ def web_command(
         lines.append("[dim]Das Zugangswort steckt in der Adresse.[/dim]")
     elif public:
         lines.append("[dim]Kein Zugangswort nötig, die Adresse reicht.[/dim]")
-    in_background = background if isinstance(background, bool) else (
-        os.environ.get("AQUATICY_BACKGROUND", "").lower() in {"true", "1", "yes", "on"})
     if in_background:
         lines.append("[dim]Strg+C schließt die Anzeige. "
                      "Aquaticy läuft im Hintergrund weiter.[/dim]")
@@ -973,6 +973,8 @@ def web_command(
 
         arguments = ["web", "--foreground", "--host", bind, "--port", str(port),
                      "--open" if open_browser else "--no-open"]
+        if not host or lan:
+            arguments.append("--lan")
         if access:
             os.environ["AQUATICY_BACKGROUND_TOKEN"] = access
         try:
