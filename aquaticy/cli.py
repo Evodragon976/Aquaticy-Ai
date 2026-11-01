@@ -6,6 +6,7 @@ import contextlib
 import difflib
 import os
 import re
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -287,8 +288,13 @@ def setup_command(
     if api_base:
         values["AQUATICY_API_BASE"] = api_base
     values.update(website_values)
+    run_background = False if yes else typer.confirm(
+        "Soll die Weboberfläche im Hintergrund weiterlaufen, wenn du Strg+C drückst?",
+        default=False)
+    values["AQUATICY_BACKGROUND"] = "true" if run_background else "false"
 
     written = write_env_file(values, target)
+    load_env(written, override=True)
     reset_settings_cache()
     console.print(
         Panel.fit(
@@ -304,6 +310,8 @@ def setup_command(
 
     _vm_beim_start(get_settings())
     _messenger_beim_start(get_settings())
+    if run_background:
+        web_command(port=8765, host="", lan=False, open_browser=True, token="", background=True)
 
 
 def _ask_website(*, no_probe: bool = False) -> dict[str, str]:
@@ -890,6 +898,9 @@ def web_command(
         "--token",
         help="Freiwilliges Zugangswort. Ohne kommt jeder rein, der die Adresse erreicht.",
     ),
+    background: bool | None = typer.Option(
+        None, "--background/--foreground", help="Im Hintergrund bis zum Herunterfahren laufen."
+    ),
 ) -> None:
     """Startet die Weboberfläche – derselbe Agent im Browser.
 
@@ -924,7 +935,7 @@ def web_command(
     with contextlib.suppress(OSError):
         port = free_port(bind, port)
     public = is_public_host(bind)
-    access = token.strip()
+    access = token.strip() or os.environ.pop("AQUATICY_BACKGROUND_TOKEN", "")
     problem = token_problem(access)
     if problem:
         console.print(f"[red]{problem}[/red]")
@@ -947,11 +958,33 @@ def web_command(
         lines.append("[dim]Das Zugangswort steckt in der Adresse.[/dim]")
     elif public:
         lines.append("[dim]Kein Zugangswort nötig, die Adresse reicht.[/dim]")
-    lines.append("[dim]Einstellungen findest du in der Oberfläche. Beenden: Strg+C.[/dim]")
+    in_background = background if isinstance(background, bool) else (
+        os.environ.get("AQUATICY_BACKGROUND", "").lower() in {"true", "1", "yes", "on"})
+    if in_background:
+        lines.append("[dim]Strg+C schließt die Anzeige. "
+                     "Aquaticy läuft im Hintergrund weiter.[/dim]")
+    else:
+        lines.append("[dim]Einstellungen findest du in der Oberfläche. Beenden: Strg+C.[/dim]")
     if port != gewuenscht:
         lines.append(f"[yellow]Port {gewuenscht} ist belegt – "
                      f"Aquaticy nimmt Port {port}.[/yellow]")
     console.print(Panel.fit("\n".join(line for line in lines if line), border_style="green"))
+
+    if in_background:
+        from aquaticy.startup import background as run_background
+
+        arguments = ["web", "--foreground", "--host", bind, "--port", str(port),
+                     "--open" if open_browser else "--no-open"]
+        if access:
+            os.environ["AQUATICY_BACKGROUND_TOKEN"] = access
+        try:
+            run_background(arguments, settings.data_dir, console)
+        except (OSError, RuntimeError) as exc:
+            console.print(str(exc), markup=False)
+            raise typer.Exit(code=1) from exc
+        finally:
+            os.environ.pop("AQUATICY_BACKGROUND_TOKEN", None)
+        return
 
     problems = settings.missing_requirements()
     if problems:
@@ -2865,6 +2898,20 @@ def main() -> None:
     if argv and argv[0] in ("--version", "-V"):
         console.print(f"aquaticy {VERSION_LABEL}")
         return
+
+    if (not argv or argv[0] in {"web", "chat"} or argv[0] not in COMMANDS) and (
+            not any(arg in {"--help", "-h"} for arg in argv)
+            and os.environ.pop("AQUATICY_UPDATED", "") != "1"):
+        from aquaticy.startup import update_at_start
+
+        try:
+            updated = update_at_start(console)
+        except (OSError, ValueError, SyntaxError, subprocess.SubprocessError):
+            console.print("Update nicht möglich. Aquaticy startet mit der vorhandenen Version.")
+            updated = False
+        if updated:
+            os.environ["AQUATICY_UPDATED"] = "1"
+            os.execv(sys.executable, [sys.executable, "-m", "aquaticy.cli", *argv])
 
 
 

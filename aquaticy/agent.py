@@ -304,22 +304,22 @@ def clean_mode(mode: str) -> str:
 
 
 ANSWER_PROMPT = """\
-Antwortformat -- sei ausfuehrlich:
-- Deutsch, ohne Vorrede und ohne Wiederholung der Frage, aber GROSSZUEGIG im Inhalt. \
-Gib alles wieder, was du gefunden hast und was fuer die Entscheidung des Nutzers zaehlt.
+Antwortformat -- sei ausführlich:
+- Deutsch, ohne Vorrede und ohne Wiederholung der Frage, aber GROSSZÜGIG im Inhalt. \
+Gib alles wieder, was du gefunden hast und was für die Entscheidung des Nutzers zählt.
 - Nummerierte Liste bei mehreren Ergebnissen. Je Eintrag: Name, dann ALLE relevanten \
-Fakten in mehreren Zeilen -- Adresse, Oeffnungszeiten, Preise, Ausstattung, Besonderheiten, \
-Einschraenkungen -- und am Ende eine Zeile "Quelle: ...".
+Fakten in mehreren Zeilen -- Adresse, Öffnungszeiten, Preise, Ausstattung, Besonderheiten, \
+Einschränkungen -- und am Ende eine Zeile "Quelle: ...".
 - Nenne auch Nebenbefunde, die der Nutzer nicht erfragt hat, aber gebrauchen kann: \
-Anfahrt, Alternativen in der Naehe, saisonale Hinweise, bekannte Nachteile.
+Anfahrt, Alternativen in der Nähe, saisonale Hinweise, bekannte Nachteile.
 - Vergleiche die Ergebnisse aktiv miteinander: Was unterscheidet sie, was passt am besten \
-zu den genannten Kriterien, wovon wuerdest du abraten und warum.
-- Schliesse mit einem kurzen Fazit (zwei bis vier Saetze): deine Empfehlung mit \
-Begruendung.
+zu den genannten Kriterien, wovon würdest du abraten und warum.
+- Schließe mit einem kurzen Fazit (zwei bis vier Sätze): deine Empfehlung mit \
+Begründung.
 - Danach ein Abschnitt "Nicht gefunden:" mit allem, was offen blieb, je Punkt eine Zeile \
-samt Grund (blockiert, nicht oeffentlich, nirgends genannt).
-- Lieber zu viel Information als zu wenig. Kuerze nur, wenn du sonst etwas erfinden \
-muesstest -- Vollstaendigkeit ersetzt niemals Genauigkeit.
+samt Grund (blockiert, nicht öffentlich, nirgends genannt).
+- Lieber zu viel Information als zu wenig. Kürze nur, wenn du sonst etwas erfinden \
+müsstest -- Vollständigkeit ersetzt niemals Genauigkeit.
 """
 
 
@@ -327,24 +327,24 @@ muesstest -- Vollstaendigkeit ersetzt niemals Genauigkeit.
 
 
 CHAT_PROMPT = """\
-Antwortformat -- du fuehrst ein Gespraech:
-- Antworte direkt und in normaler Gespraechslaenge. Kein Bericht, keine \
+Antwortformat -- du führst ein Gespräch:
+- Antworte direkt und in normaler Gesprächslänge. Kein Bericht, keine \
 Gliederung, kein Abschnitt "Nicht gefunden", kein Fazit unter jeder Antwort.
-- Was du sicher weisst, sagst du einfach. Du musst nicht fuer jeden Satz suchen.
-- Suchen sollst du, wenn die Frage es verlangt: alles Aktuelle oder Oertliche, \
-Preise, Zahlen, Termine, Versionen, Namen und alles, was sich geaendert haben \
-koennte -- und immer, wenn der Nutzer dich darum bittet ("such mal", "guck nach", \
+- Was du sicher weißt, sagst du einfach. Du musst nicht für jeden Satz suchen.
+- Suchen sollst du, wenn die Frage es verlangt: alles Aktuelle oder Örtliche, \
+Preise, Zahlen, Termine, Versionen, Namen und alles, was sich geändert haben \
+könnte -- und immer, wenn der Nutzer dich darum bittet ("such mal", "guck nach", \
 "stimmt das?"). Dann nutzt du deine Werkzeuge von selbst, ohne vorher um Erlaubnis \
 zu bitten.
 - Hast du gesucht, nennst du die Quelle zu dem, was du von dort hast. Ohne Suche \
 brauchst du keine Quelle -- aber sag dazu, wenn du dir unsicher bist oder dein \
-Wissen alt sein koennte.
-- Erfinden ist auch hier verboten. Weisst du etwas nicht, sagst du das -- lieber \
-"das weiss ich nicht" als eine erfundene Zahl.
+Wissen alt sein könnte.
+- Erfinden ist auch hier verboten. Weißt du etwas nicht, sagst du das -- lieber \
+"das weiß ich nicht" als eine erfundene Zahl.
 - Hast du eine Frage an den Nutzer, stellst du sie mit `ask_user` und NICHT als Text \
-in der Antwort. Eine Frage im Fliesstext liest er vielleicht, vielleicht auch nicht; \
-`ask_user` oeffnet ein Fenster und wartet auf seine Antwort. Auch im Gespraech gilt \
-also: fehlt dir eine Angabe, fragst du ueber das Werkzeug.
+in der Antwort. Eine Frage im Fließtext liest er vielleicht, vielleicht auch nicht; \
+`ask_user` öffnet ein Fenster und wartet auf seine Antwort. Auch im Gespräch gilt \
+also: fehlt dir eine Angabe, fragst du über das Werkzeug.
 """
 
 
@@ -489,6 +489,15 @@ auch Teilergebnisse und Nebenbefunde. Vergleiche, was sich vergleichen laesst, u
 schliesse mit einer Empfehlung, soweit die Datenlage sie traegt. Liste danach unter \
 "Nicht gefunden:" jeden offenen Punkt einzeln auf und weise darauf hin, dass die \
 Recherche am Limit abgebrochen wurde."""
+
+
+GERMAN_ORTHOGRAPHY_PROMPT = """
+Deutsche Rechtschreibung:
+- Schreibe deutschen Fließtext mit ä, ö, ü, Ä, Ö, Ü und ß.
+- Schreibe zum Beispiel „Übung“, „öffnen“, „für“ und „Größe“ mit echten Umlauten.
+- Übernimm die Umschreibungen ae, oe und ue aus internen Anweisungen nicht als Schreibstil.
+- Bewahre Eigennamen, wörtliche Zitate, URLs, Dateipfade, Code und Bezeichner unverändert.
+"""
 
 
 ENGLISH_PROMPT = """
@@ -2721,6 +2730,8 @@ class Agent:
             text += rules_prompt()
         if getattr(self, "answer_language", "de") == "en":
             text += ENGLISH_PROMPT
+        else:
+            text += GERMAN_ORTHOGRAPHY_PROMPT
         return text + self._person_prompt()
 
     def set_answer_language(self, language: str) -> None:

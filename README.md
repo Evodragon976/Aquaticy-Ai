@@ -1,4 +1,4 @@
-# Aquaticy AI 12.8.9 So
+# Aquaticy AI 12.9.9 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.8.9 So
+aquaticy --version            # 12.9.9 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -683,6 +683,23 @@ Die Desktop-Brücke berücksichtigt Gruppenbeschränkungen auch direkt vor dem V
 Der Zahlungsdatenfilter prüft vollständige Coworker-Meldungen,
 einschließlich Titel und aufbereiteter Texte.
 Der PDF-Leser wurde gegen bekannte Endlosschleifen und übermäßigen Speicherverbrauch aktualisiert.
+
+Seit **12.9.9 Luna** verlangen deutsche Antworten ausdrücklich echte Umlaute und ß.
+Namen, Zitate, URLs und Code behalten ihre Schreibweise.
+
+Im Setup kannst du den Hintergrundbetrieb der Weboberfläche wählen.
+Wenn du zustimmst, startet die Weboberfläche nach der Einrichtung direkt.
+Mit `aquaticy web --background` schaltest du ihn auch für einen einzelnen Start ein.
+Strg+C schließt dann die Terminalanzeige. Aquaticy läuft als eigener Prozess weiter.
+Die Prozessnummer und das private Protokoll werden beim Start angezeigt.
+Beende diesen Prozess im Betriebssystem, um Aquaticy vollständig anzuhalten.
+Nach dem Herunterfahren musst du Aquaticy selbst wieder starten.
+`aquaticy web --foreground` startet ausdrücklich im Vordergrund.
+
+Beim Start von Chat oder Weboberfläche prüft Aquaticy den Projekt-Branch auf Updates.
+Neue Versionen werden automatisch installiert und anschließend gestartet.
+Die Updateprüfung braucht Git und eine Internetverbindung.
+Bei lokalen Codeänderungen wird das Update ausgelassen. Bei Fehlern startet die vorhandene Version.
 
 **Messenger-Befehle (mobile):** `/switch` zeigt installierte Modelle und die Modelle der
 verfügbaren API-Schlüssel. `/switch Modell` wählt eines nur für diesen Messenger-Chat.

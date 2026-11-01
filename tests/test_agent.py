@@ -1382,15 +1382,15 @@ def test_the_normal_mode_asks_for_thorough_answers() -> None:
     ein Satz") -- genau das machte die Antworten duenn."""
     from aquaticy.agent import ANSWER_PROMPT
 
-    assert "ausfuehrlich" in ANSWER_PROMPT.lower()
-    assert "GROSSZUEGIG" in ANSWER_PROMPT
+    assert "ausführlich" in ANSWER_PROMPT.lower()
+    assert "GROSSZÜGIG" in ANSWER_PROMPT
     assert "Fazit" in ANSWER_PROMPT
     assert "Nicht gefunden:" in ANSWER_PROMPT
 
     assert "Deutsch, knapp" not in ANSWER_PROMPT
     assert "hoechstens ein Satz" not in ANSWER_PROMPT
 
-    assert "Vollstaendigkeit ersetzt niemals Genauigkeit" in ANSWER_PROMPT
+    assert "Vollständigkeit ersetzt niemals Genauigkeit" in ANSWER_PROMPT
 
 
 def test_budget_prompt_still_wants_everything() -> None:
@@ -2213,12 +2213,12 @@ def test_the_code_mode_replaces_the_verbose_answer_format(
 ) -> None:
     """Eine Seite Prosa vor dem Codeblock ist kein Service."""
     agent = Agent(settings, cache=None, toolbox=toolbox)
-    assert "sei ausfuehrlich" in agent.messages[0]["content"]
+    assert "sei ausführlich" in agent.messages[0]["content"]
 
     agent._apply_mode("code")
     prompt = agent.messages[0]["content"]
     assert "Code-Modus" in prompt
-    assert "sei ausfuehrlich" not in prompt
+    assert "sei ausführlich" not in prompt
     assert "lauffaehiger Code" in prompt
     assert "Erfundene Funktionsnamen" in prompt
 
@@ -2466,12 +2466,12 @@ def test_the_standard_mode_talks_instead_of_reporting(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     agent.ask("", structured=False)
     system = agent.messages[0]["content"]
-    assert "du fuehrst ein Gespraech" in system
+    assert "du führst ein Gespräch" in system
     assert "Nicht gefunden:" not in system
 
     agent.ask("", structured=True)
     system = agent.messages[0]["content"]
-    assert "sei ausfuehrlich" in system
+    assert "sei ausführlich" in system
 
 
 def test_the_system_prompt_only_changes_when_the_situation_does(
@@ -3302,7 +3302,7 @@ def test_the_pro_mode_writes_like_the_standard_mode(
     pro = agent.messages[0]["content"]
 
     assert "Code-Modus" not in pro
-    assert "sei ausfuehrlich" in pro, "der Antwortteil des Standardmodus"
+    assert "sei ausführlich" in pro, "der Antwortteil des Standardmodus"
 
 
     from aquaticy.agent import PRO_PROMPT
@@ -3326,7 +3326,7 @@ def test_without_structuring_the_pro_mode_promises_no_agents(
     agent._apply_mode("pro")
     prompt = agent.messages[0]["content"]
     assert "Pro-Modus" not in prompt
-    assert "du fuehrst ein Gespraech" in prompt
+    assert "du führst ein Gespräch" in prompt
 
 
 def test_the_pro_mode_needs_no_workshop(settings: Settings, toolbox: Toolbox) -> None:

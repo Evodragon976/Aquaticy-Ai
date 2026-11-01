@@ -51,17 +51,25 @@ def test_complete_setup_reuses_ollama_and_persists_it(monkeypatch, tmp_path, loc
         assert "AQUATICY_API_BASE=http://localhost:11434" in target.read_text()
 
 
-def test_cloud_only_setup_keeps_the_existing_installation_optional(monkeypatch, tmp_path):
+@pytest.mark.parametrize("background", [False, True])
+def test_cloud_only_setup_keeps_the_existing_installation_optional(
+        monkeypatch, tmp_path, background):
     monkeypatch.setattr(cli, "_ensure_ollama", lambda **kw: pytest.fail("Kein Ollama angefordert"))
     monkeypatch.setattr(cli, "_ask_website", lambda **kw: {})
     monkeypatch.setattr(cli, "_vm_beim_start", lambda settings: None)
+    starts = []
+    monkeypatch.setattr(cli, "web_command", lambda **kwargs: starts.append(kwargs))
     target = tmp_path / ".env"
     result = CliRunner().invoke(
         cli.app, ["setup", "--no-ollama", "--no-probe", "--env-file", str(target)],
-        input="1\n1\n\ny\n\n\n\n",
+        input="1\n1\n\ny\n\n\n\n" + ("y\n" if background else "n\n"),
     )
     assert result.exit_code == 0, result.output
     assert "OLLAMA_NUM_PARALLEL" not in target.read_text()
+    assert f"AQUATICY_BACKGROUND={'true' if background else 'false'}" in target.read_text()
+    assert len(starts) == int(background)
+    if background:
+        assert starts[0]["background"] is True
 
 
 @pytest.mark.parametrize("installed", [True, False])

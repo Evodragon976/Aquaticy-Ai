@@ -2087,10 +2087,11 @@ def test_a_proxy_is_not_mistaken_for_ollama() -> None:
 
 
 def test_everything_setup_asks_for_is_in_the_web_form() -> None:
-    """Was `aquaticy setup` fragt, muss auch im Browser einstellbar sein.
+    """Kontoeinstellungen aus dem Setup muessen auch im Browser einstellbar sein.
 
     Der Test liest die Schluessel direkt aus dem Setup-Quelltext -- kommt dort
-    eine Frage dazu, faellt er auf, bis das Formular nachzieht.
+    eine Frage dazu, faellt er auf, bis das Formular nachzieht. Die Startoption
+    fuer den Betriebssystemprozess ist nur im Terminal aenderbar.
     """
     import inspect
     import re
@@ -2099,6 +2100,8 @@ def test_everything_setup_asks_for_is_in_the_web_form() -> None:
 
     source = inspect.getsource(cli.setup_command)
     asked = set(re.findall(r'"(AQUATICY_[A-Z_]+)"', source))
+    assert "background" in inspect.signature(cli.web_command).parameters
+    asked.discard("AQUATICY_BACKGROUND")
     html = web.UI_FILE.read_text(encoding="utf-8")
     for key in asked:
         assert f'name="{key}"' in html, f"{key} wird im Terminal gefragt, fehlt aber im Formular"
