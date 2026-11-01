@@ -81,10 +81,10 @@ def setup_command(
     ),
     no_probe: bool = typer.Option(False, "--no-probe", help="Keine Testanfragen schicken."),
     yes: bool = typer.Option(
-        False, "--yes", "-y", help="Lokale Einrichtung ohne Rückfragen, auch beim Dienstneustart."
+        False, "--yes", "-y", help="Lokale Installation und Modellauswahl vorab bestätigen."
     ),
     ollama: bool = typer.Option(
-        True, "--ollama/--no-ollama", help="Ollama mit Parallelbetrieb direkt einrichten."
+        True, "--ollama/--no-ollama", help="Ollama bei Bedarf installieren und starten."
     ),
 ) -> None:
     """Ersteinrichtung: Modell, Schlüssel und auf Wunsch eine eigene Domain."""
@@ -277,8 +277,6 @@ def setup_command(
         "AQUATICY_COUNTRY": country,
         "AQUATICY_SUBAGENTS_AUTO": "true" if subagents_on else "false",
     }
-    if ollama_ready:
-        values["OLLAMA_NUM_PARALLEL"] = os.environ.get("OLLAMA_NUM_PARALLEL", "2")
     if backend_key_name and backend_key:
         values[backend_key_name] = backend_key
     if engines:
@@ -1799,8 +1797,6 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
 
 
     console.print("\n[bold]2. Server[/bold]")
-    if not _configure_ollama_parallel(assume_yes=assume_yes):
-        return False
     with console.status("  starte ollama serve ..."):
         started = lm.start_server()
     if not started:
@@ -1808,32 +1804,7 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
             "  [red]Server startet nicht.[/red] Starte ihn von Hand: [bold]ollama serve[/bold]"
         )
         return False
-    console.print("  [green]Ollama erreichbar, Parallelbetrieb eingerichtet.[/green]")
-    return True
-
-
-def _configure_ollama_parallel(*, assume_yes: bool = False) -> bool:
-    """Bestaetigter Dienstneustart; kein Konto in der Weboberflaeche darf das ausloesen."""
-    from aquaticy import local_model as lm
-    from aquaticy.ollama_setup import SetupError, _parallel, configure_parallel
-
-    console.print("  Mindestens zwei parallele Modellaufrufe; weitere Anfragen warten bei Ollama.")
-    console.print("  [yellow]Ein vorhandener Ollama-Dienst wird neu gestartet. "
-                  "Laufende Antworten können dadurch abbrechen.[/yellow]")
-    if not (assume_yes or typer.confirm("  Parallelbetrieb einrichten?", default=True)):
-        return False
-    try:
-        managed = configure_parallel(running=lm.server_running())
-        if managed and not lm.wait_for_server():
-            raise SetupError("Der konfigurierte Ollama-Dienst antwortet nicht. "
-                             "Bitte den Dienststatus prüfen; es wird kein zweiter gestartet.")
-    except (SetupError, OSError) as exc:
-        console.print(f"  [red]{exc}[/red]")
-        return False
-
-    value = os.environ.get("OLLAMA_NUM_PARALLEL", "")
-    if not _parallel(value):
-        os.environ["OLLAMA_NUM_PARALLEL"] = "2"
+    console.print("  [green]Ollama erreichbar.[/green]")
     return True
 
 

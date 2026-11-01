@@ -338,7 +338,8 @@ def _fake_ollama(monkeypatch: pytest.MonkeyPatch, *, tool_calling: bool = True) 
 
     state: dict[str, Any] = {"pulled": []}
 
-    monkeypatch.setattr(cli, "_configure_ollama_parallel", lambda **kwargs: True)
+    monkeypatch.setattr("aquaticy.ollama_setup.configure_parallel",
+                        lambda **kwargs: pytest.fail("Keine Dienstumstellung"))
     monkeypatch.setattr(lm, "ollama_binary", lambda: "/usr/bin/ollama")
     monkeypatch.setattr(lm, "server_running", lambda *a, **k: True)
     monkeypatch.setattr(lm, "installed_models", lambda *a, **k: [])
