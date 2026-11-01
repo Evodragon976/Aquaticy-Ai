@@ -103,6 +103,8 @@ def test_export_and_quit_are_mobile_commands(mobile):
     ask(mobile, "Hallo")
     assert "user: Hallo" in ask(mobile, "/export")
     assert "eigenen Chat" in ask(mobile, "/export", owner=False)
+    assert "wa:me" not in mobile[2]._agents
+    ask(mobile, "Neuer Verlauf")
     ask(mobile, "/pro")
     assert "Gespräch beendet" in ask(mobile, "/quit")
     assert mobile[2]._mobile["wa:me"] == {}

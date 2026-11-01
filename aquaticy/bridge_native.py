@@ -82,7 +82,10 @@ def coworker_text(name: str, titel: str, text: str, *, frage: bool = False,
         koerper = str(text or "").strip()
         if frage:
             koerper += "\n\nAntworten kannst du in der App."
-    return to_chat_text(f"Coworker {kopf}\n{koerper}", wide=True, limit=COWORKER_REPLY_CHARS)
+    message = to_chat_text(f"Coworker {kopf}\n{koerper}", wide=True, limit=COWORKER_REPLY_CHARS)
+    if payment_data(message):
+        return to_chat_text("Coworker\nDarin stehen Zahlungsdaten. Die sende ich nicht.", wide=True)
+    return message
 
 
 class TypingIndicator:

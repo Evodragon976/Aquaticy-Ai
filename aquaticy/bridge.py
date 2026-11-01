@@ -216,11 +216,15 @@ def load_config(settings: Any) -> dict[str, dict[str, Any]]:
 
 
 def delivery_allowed(settings: Callable[[], Any], messenger: str, config: dict[str, Any],
-                     paused: Callable[[], bool] | None) -> bool:
+                     paused: Callable[[], bool] | None, *, desktop: bool = False) -> bool:
     try:
-        return (not (paused is not None and paused())
-                and config.get("an") is True
-                and load_config(settings())[messenger] == config)
+        if (paused is not None and paused()) or config.get("an") is not True:
+            return False
+        current_settings = settings()
+        current = load_config(current_settings)[messenger]
+        if desktop:
+            current = capped_config(current_settings, messenger, current)
+        return current == config
     except Exception:
         return False
 
@@ -991,6 +995,22 @@ class AgentAnswerer:
                  messenger: str) -> str:
         from aquaticy.messenger_modes import switch_request
 
+        base = self._settings()
+        erlaubt = allowed_tools(config, decision.trusted)
+        if config["dienste"].get("web") == "an":
+            erlaubt |= frozenset({"research_subtasks"})
+        basis_stand = hashlib.sha256(json.dumps(
+            {f.name: getattr(base, f.name) for f in dataclasses.fields(base)},
+            sort_keys=True, default=str).encode()).hexdigest()
+        rolle = (decision.trusted, decision.selbst)
+        jetzt = self._clock()
+        for alt in [k for k, wert in self._agents.items()
+                    if jetzt - wert[2] > self.IDLE_SECONDS]:
+            self._discard(alt)
+        eintrag = self._agents.get(key)
+        if eintrag is not None and (not eintrag[3] <= erlaubt or eintrag[4] != rolle
+                                    or eintrag[5] != basis_stand):
+            self._discard(key)
         if switch_request(auftrag):
             auftrag = "/switch"
         befehl = parse_command(auftrag)
@@ -999,7 +1019,6 @@ class AgentAnswerer:
             if isinstance(ergebnis, str):
                 return ergebnis
             auftrag = ergebnis.prompt
-        base = self._settings()
         settings = effective_settings(base, config, decision)
         mobile = self._mobile.get(key, {})
         pro = bool(mobile.get("pro", False)) and decision.trusted
@@ -1013,25 +1032,14 @@ class AgentAnswerer:
         ort = self._locations.get(key, "")
         if ort:
             settings.location = ort
-        erlaubt = allowed_tools(config, decision.trusted)
-        if settings.max_subagents:
-            erlaubt |= frozenset({"research_subtasks"})
         zusatz = trust_note(decision, config)
 
-        basis_stand = hashlib.sha256(json.dumps(
-            {f.name: getattr(base, f.name) for f in dataclasses.fields(base)},
-            sort_keys=True, default=str).encode()).hexdigest()
         stand = hashlib.sha256(json.dumps(
             [sorted(erlaubt), zusatz, decision.trusted, decision.selbst,
              basis_stand, ort, settings.model, pro]).encode()).hexdigest()[:16]
-        jetzt = self._clock()
-        for alt in [k for k, wert in self._agents.items()
-                    if jetzt - wert[2] > self.IDLE_SECONDS]:
-            self._discard(alt)
         while len(self._agents) >= self.MAX_AGENTS and key not in self._agents:
             self._discard(min(self._agents, key=lambda k: self._agents[k][2]))
         eintrag = self._agents.get(key)
-        rolle = (decision.trusted, decision.selbst)
         if eintrag is None or eintrag[1] != stand:
             agent = self._build(settings, erlaubt, zusatz, decision.trusted)
             if eintrag is not None:
@@ -1439,7 +1447,7 @@ class Bridge:
         if not same_title(jetzt_titel, titel) or (not entscheidung.group and jetzt_gruppe is True):
             rep.uebersprungen.append(f"{titel}: der Chat hat gewechselt")
             return
-        if (not delivery_allowed(self._settings, messenger, config, self._paused)
+        if (not delivery_allowed(self._settings, messenger, config, self._paused, desktop=True)
                 or self._ready(self._settings(), messenger)):
             rep.uebersprungen.append(f"{titel}: Freigabe wurde geändert")
             return

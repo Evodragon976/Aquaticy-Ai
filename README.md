@@ -1,4 +1,4 @@
-# Aquaticy AI 12.8.9 Terra
+# Aquaticy AI 12.8.9 So
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.8.9 Terra
+aquaticy --version            # 12.8.9 So
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -677,6 +677,12 @@ Seit **12.8.9 Terra** prüft Aquaticy die Messenger-Freigabe direkt vor dem Vers
 Bei geänderten Freigaben oder einer Kontosperre verwirft es die laufende Antwort.
 Auch Fehlermeldungen zählen zur Antwortgrenze. Abgelehnte Befehle fremder Kontakte
 verdrängen keine Modelleinstellungen anderer Chats.
+
+Seit **12.8.9 So** prüft auch `/export` die aktuellen Rechte und die Ablaufzeit des Verlaufs.
+Die Desktop-Brücke berücksichtigt Gruppenbeschränkungen auch direkt vor dem Versand.
+Der Zahlungsdatenfilter prüft vollständige Coworker-Meldungen,
+einschließlich Titel und aufbereiteter Texte.
+Der PDF-Leser wurde gegen bekannte Endlosschleifen und übermäßigen Speicherverbrauch aktualisiert.
 
 **Messenger-Befehle (mobile):** `/switch` zeigt installierte Modelle und die Modelle der
 verfügbaren API-Schlüssel. `/switch Modell` wählt eines nur für diesen Messenger-Chat.

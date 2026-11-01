@@ -32,7 +32,7 @@ dependencies = [
     "pydantic-settings>=2.15.0,<3",
     "python-dotenv>=1.2.3,<2",
     "PyYAML>=6.0.3,<7",
-    "pypdf>=6.21.2,<7",
+    "pypdf>=6.21.4,<7",
     "cryptography>=50.0.1,<52",
 
     "Pillow>=13.0.0,<14",
