@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS notes (
     text       TEXT NOT NULL
 );
 
+-- Seit 13.0.0 Luna hat jeder Chat eine Art: "code" (Code-Modus) oder "chat" (Normal und
+-- Pro). Die Art steht mit der ersten Antwort fest; "mode" ist der Modus der letzten Antwort.
+-- Chats von frueher ohne Eintrag sind "chat".
+CREATE TABLE IF NOT EXISTS chat_modes (
+    session_id TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL CHECK(kind IN ('chat', 'code')),
+    mode       TEXT NOT NULL DEFAULT 'normal'
+);
+
 -- Seit 9.5.32 liegen Chats verschluesselt (aquaticy/privacy.py). Steht hier
 -- eine 1, sind auch die alten Zeilen umgeschrieben.
 CREATE TABLE IF NOT EXISTS privacy_state (
@@ -81,9 +90,13 @@ SEALED_COLUMNS = (("history", "question"), ("history", "answer"), ("history", "m
 
 
 
-CHAT_SUMMARIES = """
+CHAT_KINDS = ("chat", "code")
+CHAT_MODES = ("normal", "pro", "code")
+
+_CHAT_SUMMARIES_BASE = """
     SELECT h.session_id, h.turns, h.touched, first.question, title.title,
-           unread.session_id IS NOT NULL AS unread
+           unread.session_id IS NOT NULL AS unread,
+           COALESCE(modes.kind, 'chat') AS kind, modes.mode AS mode
     FROM (
         SELECT session_id, MIN(id) AS first_id, MAX(id) AS last_id,
                COUNT(*) AS turns, MAX(created_at) AS touched
@@ -92,8 +105,21 @@ CHAT_SUMMARIES = """
     JOIN history AS first ON first.id = h.first_id
     LEFT JOIN chat_titles AS title ON title.session_id = h.session_id
     LEFT JOIN chat_unread AS unread ON unread.session_id = h.session_id
-    ORDER BY h.last_id DESC
+    LEFT JOIN chat_modes AS modes ON modes.session_id = h.session_id
 """
+CHAT_SUMMARIES = _CHAT_SUMMARIES_BASE + " ORDER BY h.last_id DESC"
+
+
+def chat_kind_of(mode: str) -> str:
+    """Die Art eines Chats zu einem Modus: Code-Chats und alle anderen (Normal, Pro)."""
+    return "code" if str(mode or "").strip().lower() == "code" else "chat"
+
+
+def _summaries(kind: str | None) -> tuple[str, tuple[Any, ...]]:
+    if kind in CHAT_KINDS:
+        return (_CHAT_SUMMARIES_BASE + " WHERE COALESCE(modes.kind, 'chat') = ?"
+                " ORDER BY h.last_id DESC", (kind,))
+    return CHAT_SUMMARIES, ()
 
 
 def cache_key(kind: str, *parts: Any) -> str:
@@ -438,8 +464,14 @@ class Cache:
         question: str,
         answer: str,
         meta: dict[str, Any] | None = None,
+        mode: str = "",
     ) -> int:
         """Legt einen Austausch ab.
+
+        Args:
+            mode: Der Modus der Antwort ("normal", "pro", "code"). Die erste Antwort legt die
+                Art des Chats fest (Code-Chat oder Chat); danach aendert sich nur der Modus
+                innerhalb dieser Art.
 
         Raises:
             StorageFull: Das Profil hat seine 400 MB erreicht (aquaticy/budget.py).
@@ -464,8 +496,41 @@ class Cache:
                 ),
             )
             nummer = int(cur.lastrowid or 0)
+            modus = str(mode or "").strip().lower()
+            if modus in CHAT_MODES:
+                self._note_mode(cur, session_id, modus)
         note_written(self.db_path.parent, groesse)
         return nummer
+
+    @staticmethod
+    def _note_mode(cur: sqlite3.Cursor, session_id: str, modus: str) -> None:
+        art = chat_kind_of(modus)
+        vorher = cur.execute("SELECT kind FROM chat_modes WHERE session_id = ?",
+                             (session_id,)).fetchone()
+        if vorher is None:
+            (anzahl,) = cur.execute("SELECT COUNT(*) FROM history WHERE session_id = ?",
+                                    (session_id,)).fetchone()
+            # Ein Chat von frueher (schon Antworten, kein Eintrag) bleibt ein Chat.
+            erste = art if int(anzahl) <= 1 else "chat"
+            cur.execute("INSERT INTO chat_modes (session_id, kind, mode) VALUES (?, ?, ?)",
+                        (session_id, erste, modus if erste == art else "normal"))
+        elif str(vorher[0]) == art:
+            cur.execute("UPDATE chat_modes SET mode = ? WHERE session_id = ?",
+                        (modus, session_id))
+
+    def chat_mode(self, session_id: str) -> dict[str, str] | None:
+        """Art und Modus eines Chats -- oder None, wenn es ihn (noch) nicht gibt."""
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return None
+        with self._connect() as conn, closing(conn.cursor()) as cur:
+            row = cur.execute("SELECT kind, mode FROM chat_modes WHERE session_id = ?",
+                              (session_id,)).fetchone()
+            if row is not None:
+                return {"kind": str(row["kind"]), "mode": str(row["mode"])}
+            da = cur.execute("SELECT 1 FROM history WHERE session_id = ? LIMIT 1",
+                             (session_id,)).fetchone()
+        return {"kind": "chat", "mode": "normal"} if da is not None else None
 
     def recent_history(self, limit: int = 20, session_id: str | None = None) -> list[HistoryEntry]:
         query = "SELECT * FROM history"
@@ -522,15 +587,16 @@ class Cache:
             rows = cur.execute("SELECT session_id FROM chat_unread").fetchall()
         return {str(row["session_id"]) for row in rows}
 
-    def recent_chats(self, limit: int = 30) -> list[dict[str, Any]]:
+    def recent_chats(self, limit: int = 30, kind: str | None = None) -> list[dict[str, Any]]:
         """Die letzten Chats, juengster zuerst.
 
         Ein Chat ist eine Sitzung, kein einzelner Austausch. Benannt wird er
         nach der ERSTEN Frage darin -- so wie man einen Ordner nach dem
         benennt, weswegen man ihn angelegt hat.
         """
+        sql, werte = _summaries(kind)
         with self._connect() as conn, closing(conn.execute(
-            CHAT_SUMMARIES + " LIMIT ?", (max(0, int(limit)),),
+            sql + " LIMIT ?", (*werte, max(0, int(limit))),
         )) as rows:
             return [self._chat_summary(row) for row in rows]
 
@@ -543,9 +609,12 @@ class Cache:
             "turns": int(row["turns"]),
             "touched": float(row["touched"] or 0.0),
             "unread": bool(row["unread"]),
+            "kind": str(row["kind"]),
+            "mode": str(row["mode"] or ""),
         }
 
-    def search_chats(self, needle: str, limit: int = 30) -> list[dict[str, Any]]:
+    def search_chats(self, needle: str, limit: int = 30,
+                     kind: str | None = None) -> list[dict[str, Any]]:
         """Chats, in denen *needle* vorkommt -- im Namen oder im Gespraech.
 
         Gesucht wird ueber beides: den Titel und den Wortlaut der Fragen und
@@ -565,7 +634,8 @@ class Cache:
 
         klein = needle.casefold()
         matches: list[dict[str, Any]] = []
-        with self._connect() as conn, closing(conn.execute(CHAT_SUMMARIES)) as chats:
+        sql, werte = _summaries(kind)
+        with self._connect() as conn, closing(conn.execute(sql, werte)) as chats:
             for row in chats:
                 snippet = ""
                 matched = False
@@ -630,6 +700,7 @@ class Cache:
             cur.execute("DELETE FROM chat_titles WHERE session_id = ?", (session_id,))
 
             cur.execute("DELETE FROM chat_unread WHERE session_id = ?", (session_id,))
+            cur.execute("DELETE FROM chat_modes WHERE session_id = ?", (session_id,))
             conn.commit()
         for media_id in bilder:
             if KEEP_MARK not in media_id:

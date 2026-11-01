@@ -69,7 +69,9 @@ class Server:
             [sys.executable, "-c", "from aquaticy.cli import main; main()",
              "web", "--lan", "--no-open",
              "--port", str(self.port)],
-            env={**os.environ, "AQUATICY_DATA_DIR": str(self.root),
+            # Zwei Konten (Admin und User): seit 13.0.0 Luna nur mit eingeschaltetem
+            # Kontensystem, der Standard ist ein einziges Konto.
+            env={**os.environ, "AQUATICY_DATA_DIR": str(self.root), "AQUATICY_ACCOUNTS": "true",
                  "AQUATICY_MODEL": "ollama/unused-connect-test", "PYTHONUNBUFFERED": "1",
                  "LITELLM_LOCAL_MODEL_COST_MAP": "True"},
             stdin=subprocess.DEVNULL, stdout=self.log, stderr=subprocess.STDOUT,

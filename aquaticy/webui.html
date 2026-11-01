@@ -161,6 +161,10 @@ body.collapsed aside{margin-left:-260px}
   cursor:pointer;font:inherit}
 @media (hover:hover){.recent:hover{background:var(--surface);color:var(--text)}}
 .recent.active{background:var(--accent-soft);color:var(--accent-text)}
+.recent .art{flex:0 0 auto;margin-right:2px;padding:1px 7px;border-radius:999px;
+  font-size:calc(10.5px * var(--fs));line-height:1.6;color:var(--text-3);
+  border:1px solid var(--line-2);white-space:nowrap}
+.recent .art.pro{color:var(--accent-text);border-color:var(--accent);background:var(--accent-soft)}
 
 .recent.neu .name{color:var(--text);font-weight:600;padding-left:16px}
 
@@ -1047,6 +1051,7 @@ input:focus,select:focus{border-color:var(--accent)}
 .auth-legal,.legal-links{display:flex;gap:7px 14px;flex-wrap:wrap;font-size:calc(12.5px * var(--fs))}
 .auth-legal a,.legal-links a,.terms-check a{color:var(--accent-text)}
 .terms-check{display:flex!important;align-items:flex-start;gap:9px;color:var(--text-2)}
+.terms-check[hidden]{display:none!important}
 .terms-check input{flex:none;margin-top:5px}
 .auth-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
 .auth-tabs,.plan-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
@@ -1521,7 +1526,7 @@ html.vv,html.vv body{height:var(--app-h)}
   <section class="auth-card" id="login-card" hidden>
     <h1>Willkommen bei Aquaticy</h1>
     <p id="auth-lead">Erstelle dein Konto. Deine Chats und Einstellungen sieht dann nur du.</p>
-    <div class="auth-tabs">
+    <div class="auth-tabs" id="auth-tabs">
       <button type="button" class="active" id="tab-register">Registrieren</button>
       <button type="button" id="tab-login">Anmelden</button>
     </div>
@@ -1534,7 +1539,7 @@ html.vv,html.vv body{height:var(--app-h)}
       <label id="username-row"><span class="lbl">Nutzername</span>
         <input type="text" id="auth-username" required autocomplete="username"
                minlength="2" maxlength="40"></label>
-      <label><span class="lbl">E-Mail-Adresse</span>
+      <label id="email-row"><span class="lbl" id="email-label">E-Mail-Adresse</span>
         <input type="email" id="auth-email" required autocomplete="email" maxlength="254"></label>
       <label><span class="lbl">Passwort <span class="why" id="auth-password-hint">mindestens
           12 Zeichen</span></span>
@@ -1590,8 +1595,9 @@ html.vv,html.vv body{height:var(--app-h)}
     <button class="mode" data-mode="code"
       title="Zum Programmieren: Aquaticy schreibt Code statt langer Texte">Code</button>
   </div>
-  <button class="newchat" id="btn-new"><span class="plus">+</span> Neuer Chat</button>
-  <div class="side-title">Letzte Chats</div>
+  <button class="newchat" id="btn-new"><span class="plus">+</span> <span
+    id="btn-new-label">Neuer Chat</span></button>
+  <div class="side-title" id="side-title">Letzte Chats</div>
   <div class="side-search">
     <span class="lupe" aria-hidden="true">⌕</span>
     <input type="search" id="chatsuche" placeholder="Chats durchsuchen"
@@ -2759,7 +2765,7 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "12.9.9 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "13.0.0 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -2830,6 +2836,15 @@ function merkeZustand(teil){
 const MODI = ["normal", "pro", "code"];
 
 
+const chatArt = (m = mode) => m === "code" ? "code" : "chat";
+function zeigeChatArt(){
+  const code = chatArt() === "code";
+  document.body.classList.toggle("code-liste", code);
+  $("#side-title").textContent = code ? "Code-Chats" : "Letzte Chats";
+  $("#btn-new-label").textContent = code ? "Neuer Code-Chat" : "Neuer Chat";
+}
+
+
 const TEXTE = (typeof window.__AQUATICY_TEXTS__ === "object" && window.__AQUATICY_TEXTS__)
   || { suggestions: {}, greetings: {}, roles: {}, verdicts: {} };
 const PLATZHALTER = {
@@ -2848,6 +2863,7 @@ function setMode(wanted, { merken = true } = {}){
   });
   document.body.classList.toggle("code-mode", mode === "code");
   document.body.classList.toggle("pro-mode", mode === "pro");
+  zeigeChatArt();
   $("#input").placeholder = PLATZHALTER[mode] || PLATZHALTER.normal;
   if (merken) merkeZustand({ mode });
   setAgents(agents, { merken });
@@ -3008,10 +3024,13 @@ document.querySelectorAll("#modes .mode").forEach(button =>
 
 
 
-    const anders = button.dataset.mode !== mode;
+    const artVorher = chatArt();
     setMode(button.dataset.mode);
     greet();
-    if (anders && thread.children.length) neuerChat({ leiste: false });
+    if (chatArt() !== artVorher){
+      if (thread.children.length || currentChat) neuerChat({ leiste: false });
+      else loadRecents();
+    }
 
 
     if (narrow()) document.body.classList.add("collapsed");
@@ -3156,9 +3175,14 @@ function showAuth(card){
   authGate.hidden = false;
   requestAnimationFrame(() => card.querySelector("button, input, a")?.focus());
 }
+let einzelKonto = false, kontoEinrichten = false;
+function anmeldeKarte(){
+  setAuthMode(einzelKonto && !kontoEinrichten ? "login" : "register");
+  showAuth(loginCard);
+}
 function setAuthMode(mode){
-  authMode = mode;
-  const registering = mode === "register";
+  authMode = einzelKonto ? (kontoEinrichten ? "register" : "login") : mode;
+  const registering = authMode === "register";
   $("#tab-register").classList.toggle("active", registering);
   $("#tab-login").classList.toggle("active", !registering);
   $("#plan-choice").hidden = !registering;
@@ -3180,6 +3204,28 @@ function setAuthMode(mode){
   $("#human-check").hidden = true;
   menschAufgabe = null; menschNachweis = null;
   showProCode();
+  if (einzelKonto) einzelKontoZeigen(registering);
+}
+
+function einzelKontoZeigen(registering){
+  $("#auth-tabs").hidden = true;
+  $("#plan-choice").hidden = true;
+  $("#terms-row").hidden = true;
+  $("#auth-terms").required = false;
+  $("#email-row").hidden = registering;
+  const email = $("#auth-email");
+  email.required = !registering;
+  email.type = "text";
+  email.autocomplete = "username";
+  email.maxLength = 40;
+  $("#email-label").textContent = "Nutzername";
+  $("#pro-code-row").hidden = !registering;
+  $("#auth-pro-code").required = registering;
+  $("#pro-code-label").textContent = "Einrichtungscode";
+  $("#auth-lead").textContent = registering
+    ? "Leg dein Konto an. Es ist das einzige hier und hat alle Rechte. Den Einrichtungscode "
+      + "findest du im Terminal, in dem Aquaticy läuft."
+    : "Melde dich mit deinem Nutzernamen und Passwort an.";
 }
 function showProCode(){
   const wahl = document.querySelector('input[name="plan"]:checked')?.value;
@@ -3197,7 +3243,7 @@ $("#tab-login").addEventListener("click", () => setAuthMode("login"));
 $("#consent-yes").addEventListener("click", async () => {
   const res = await api("/api/consent", {method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({accepted:true})});
-  if (res.ok){ showAuth(loginCard); frischerBesuchsNachweis(); }
+  if (res.ok){ anmeldeKarte(); frischerBesuchsNachweis(); }
 });
 $("#consent-no").addEventListener("click", async () => {
   await api("/api/consent", {method:"POST",headers:{"Content-Type":"application/json"},
@@ -3343,10 +3389,12 @@ $("#auth-form").addEventListener("submit", async (event) => {
     username: $("#auth-username").value.trim(),
     email: $("#auth-email").value.trim(),
     password: $("#auth-password").value,
-    plan: document.querySelector('input[name="plan"]:checked')?.value || "normal",
+    plan: einzelKonto ? "ultra"
+      : document.querySelector('input[name="plan"]:checked')?.value || "normal",
 
 
-    pro_code: (document.querySelector('input[name="plan"]:checked')?.value === "ultra"
+    pro_code: (einzelKonto
+      || document.querySelector('input[name="plan"]:checked')?.value === "ultra"
       ? $("#auth-pro-code").value.trim()
       : $("#auth-pro-code").value.trim().toUpperCase()),
     terms_accepted: authMode === "register" && $("#auth-terms").checked,
@@ -3389,9 +3437,11 @@ async function bootAuth(){
   try {
     const state = await (await api("/api/auth/status")).json();
     learningVersion = state.learning_version || "";
+    einzelKonto = state.single === true;
+    kontoEinrichten = state.setup_needed === true;
     if (!state.consent){ showAuth(consentCard); return; }
     if (!state.authenticated){
-      setAuthMode("register"); showAuth(loginCard);
+      anmeldeKarte();
 
       neuerBesuchsNachweis();
       return;
@@ -5590,6 +5640,12 @@ const EN = {
 "Zurück": "Back",
 "Neuer Chat": "New chat",
 "Letzte Chats": "Recent chats",
+"Code-Chats": "Code chats",
+"Neuer Code-Chat": "New code chat",
+"Chat im Pro-Modus": "Chat in Pro mode",
+"Chat im Normal-Modus": "Chat in Normal mode",
+"Das ist ein Code-Chat. Für Normal oder Pro startest du einen neuen Chat.": "This is a code chat. Start a new chat for Normal or Pro.",
+"Das ist ein Chat für Normal und Pro. Für Code startest du einen neuen Code-Chat.": "This is a chat for Normal and Pro. Start a new code chat for code.",
 "Chats durchsuchen": "Search chats",
 "Suche beenden": "End search",
 
@@ -6126,6 +6182,9 @@ const EN = {
 "Bei Normal- und Pro-Konten hat die virtual machine kein Netz: weder Internet noch dein Heimnetz. Rechnen, Code ausführen und Dateien bearbeiten geht trotzdem.": "With Normal and Pro accounts the virtual machine has no network: neither the internet nor your home network. Calculating, running code and editing files still work.",
 "Das ließ sich nicht speichern.": "That couldn't be saved.",
 "Melde dich an, um deine Chats und Einstellungen auf diesem Gerät zu öffnen.": "Sign in to open your chats and settings on this device.",
+"Einrichtungscode": "Setup code",
+"Leg dein Konto an. Es ist das einzige hier und hat alle Rechte. Den Einrichtungscode findest du im Terminal, in dem Aquaticy läuft.": "Create your account. It is the only one here and has all rights. You find the setup code in the terminal where Aquaticy runs.",
+"Melde dich mit deinem Nutzernamen und Passwort an.": "Sign in with your username and password.",
 "Als Datei": "As file",
 "Ging nicht": "Didn't work",
 "KI-Bild": "AI image",
@@ -6794,6 +6853,14 @@ function drawRecents(){
       name.appendChild(stelle);
     }
     name.setAttribute("aria-label", `Chat öffnen: ${label}`);
+    if ((chat.kind || "chat") === "chat" && (chat.mode === "normal" || chat.mode === "pro")){
+      const pro = chat.mode === "pro";
+      const art = document.createElement("span");
+      art.className = "art" + (pro ? " pro" : "");
+      art.textContent = pro ? "Pro" : "Normal";
+      art.title = pro ? "Chat im Pro-Modus" : "Chat im Normal-Modus";
+      row.insertBefore(art, row.querySelector(".more"));
+    }
     name.addEventListener("click", () => openChat(chat.session_id));
     row.querySelector(".more").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -6812,11 +6879,12 @@ async function loadRecents(){
   const gesucht = chatQuery;
   const view = chatView;
   try {
-    const pfad = gesucht ? `/api/chats?q=${encodeURIComponent(gesucht)}` : "/api/chats";
+    const art = chatArt();
+    const pfad = `/api/chats?kind=${art}` + (gesucht ? `&q=${encodeURIComponent(gesucht)}` : "");
     const data = await (await api(pfad)).json();
 
 
-    if (chatQuery !== gesucht || view !== chatView) return;
+    if (chatQuery !== gesucht || view !== chatView || art !== chatArt()) return;
     currentChat = data.current || "";
     chats = data.chats || [];
 
@@ -6876,11 +6944,12 @@ function noteChat(question){
 
   if (chatQuery) return;
   const known = chats.find(chat => chat.session_id === currentChat);
-  if (known){ known.turns += 1; known.touched = Date.now() / 1000; }
+  if (known){ known.turns += 1; known.touched = Date.now() / 1000; known.mode = mode; }
   else {
     chats.unshift({
       session_id: currentChat || "neu",
       title: question, turns: 1, touched: Date.now() / 1000,
+      kind: chatArt(), mode,
     });
   }
   chats.sort((a, b) => (b.touched || 0) - (a.touched || 0));
@@ -7039,6 +7108,10 @@ async function openChat(sessionId){
   if (!data.ok){ toast(data.error || "Der Chat ließ sich nicht öffnen."); return; }
   detachChat();
   currentChat = sessionId;
+  const artVorher = chatArt();
+  if (data.kind === "code" && mode !== "code") setMode("code");
+  else if (data.kind !== "code" && (mode === "code" || mode !== data.mode))
+    setMode(data.mode === "pro" ? "pro" : "normal");
   thread.innerHTML = "";
   leaveStart();
 
@@ -7056,6 +7129,7 @@ async function openChat(sessionId){
   offeneFragen = (data.turns || []).map((turn) => String(turn.question || ""));
   stagger(thread.querySelectorAll(".msg"), 30, 8);
   setTimeout(() => thread.classList.remove("fresh"), 900);
+  if (chatArt() !== artVorher) chats = [];
   loadRecents();
   restoreDraft();
   wiederAufnehmen();

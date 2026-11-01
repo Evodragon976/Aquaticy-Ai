@@ -43,7 +43,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from aquaticy import INTERNAL, VERSION_LABEL, __version__, botguard, cluster, webview
 from aquaticy.auth import Account, AuthStore, RateLimiter, pro_code_for
-from aquaticy.cache import Cache
+from aquaticy.cache import CHAT_KINDS, Cache, chat_kind_of
 from aquaticy.config import (
     DEFAULT_ENV_PATH,
     SEARCH_BACKEND_KEYS,
@@ -130,6 +130,7 @@ class Run:
 
 
         self.chat = ""
+        self.mode = ""
         self.started = time.time()
         self.finished = 0.0
         self.events: list[dict[str, Any]] = []
@@ -640,6 +641,7 @@ ACCOUNT_ROUTES = frozenset({
 })
 
 DELETE_WORD = "LÖSCHEN"
+WRONG_LOGIN_SINGLE = "Nutzername oder Passwort stimmt nicht."
 AUTH_LIMIT = RateLimiter(attempts=8, window_seconds=60)
 
 
@@ -5244,6 +5246,9 @@ class Handler(BaseHTTPRequestHandler):
                         {"email": account.email, "username": account.username,
                          "plan": account.plan} if account else None
                     ),
+                    "single": bool(AUTH is not None and AUTH.single),
+                    "setup_needed": bool(AUTH is not None and AUTH.single
+                                         and account is None and AUTH.owner() is None),
                 }
             )
         elif route == "/api/auth/challenge":
@@ -5377,8 +5382,13 @@ class Handler(BaseHTTPRequestHandler):
             cache = Cache(settings.db_path, settings.cache_ttl_hours)
 
 
-            suche = (parse_qs(urlsplit(self.path).query).get("q") or [""])[0].strip()
-            chats = cache.search_chats(suche, limit=40) if suche else cache.recent_chats(limit=40)
+            frage = parse_qs(urlsplit(self.path).query)
+            suche = (frage.get("q") or [""])[0].strip()
+            # Seit 13.0.0 Luna: Code-Chats und Chats (Normal, Pro) stehen in eigenen Listen.
+            art = (frage.get("kind") or [""])[0].strip().lower()
+            art = art if art in CHAT_KINDS else ""
+            chats = (cache.search_chats(suche, limit=40, kind=art or None) if suche
+                     else cache.recent_chats(limit=40, kind=art or None))
             for session in SESSION.chat_sessions():
                 book = session.runs if session.account is not None or (
                     session._owner._chat_sessions) else RUNS
@@ -5386,11 +5396,14 @@ class Handler(BaseHTTPRequestHandler):
                 if run is not None and not run.done:
                     chat_id = session.chat_id()
                     found = next((c for c in chats if c["session_id"] == chat_id), None)
+                    laufart = chat_kind_of(run.mode or "normal")
                     if found is not None:
                         found["running"] = True
-                    elif not suche or suche.casefold() in run.question.casefold():
+                    elif (not art or laufart == art) and (
+                            not suche or suche.casefold() in run.question.casefold()):
                         chats.insert(0, {"session_id": chat_id, "title": run.question,
-                                         "turns": 0, "touched": run.started, "running": True})
+                                         "turns": 0, "touched": run.started, "running": True,
+                                         "kind": laufart, "mode": run.mode or "normal"})
             self._json(
                 {
 
@@ -5647,7 +5660,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not str(payload.get("username", "")).strip():
                     self._json({"ok": False, "error": "Bitte wähle einen Nutzernamen."}, 400)
                     return
-                if payload.get("terms_accepted") is not True:
+                if payload.get("terms_accepted") is not True and not AUTH.single:
                     self._json(
                         {
                             "ok": False,
@@ -5697,13 +5710,14 @@ class Handler(BaseHTTPRequestHandler):
                         "Zu viele falsche Passwörter für dieses Konto. Bitte warte "
                         "eine Viertelstunde.")}, 429)
                     return
-                account = AUTH.authenticate(
+                account = AUTH.login(
                     str(payload.get("email", "")), str(payload.get("password", ""))
                 )
                 if account is None:
                     LOGIN_FAILS.allow(konto_schluessel)
                     BOT_FAILS.add(*self._bot_keys(geraet, neue_kennung))
-                    self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
+                    self._json({"ok": False, "error": WRONG_LOGIN_SINGLE if AUTH.single
+                                else "E-Mail oder Passwort stimmt nicht."}, 401)
                     return
 
 
@@ -5714,13 +5728,14 @@ class Handler(BaseHTTPRequestHandler):
                 if AIGUARD.is_banned(ip=self._client_ip()) is not None:
                     self._json({"ok": False, "error": BANNED_MESSAGE, "code": "banned"}, 403)
                     return
+            falsch = WRONG_LOGIN_SINGLE if AUTH.single else "E-Mail oder Passwort stimmt nicht."
             if account is None:  # pragma: no cover
-                self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
+                self._json({"ok": False, "error": falsch}, 401)
                 return
             try:
                 token = AUTH.create_session(account, self._device(), self._client_ip())
             except ValueError:
-                self._json({"ok": False, "error": "E-Mail oder Passwort stimmt nicht."}, 401)
+                self._json({"ok": False, "error": falsch}, 401)
                 return
             AUTH.note_seen(account.id, self._client_ip())
 
@@ -5804,7 +5819,12 @@ class Handler(BaseHTTPRequestHandler):
                 settings = SESSION.settings()
                 Cache(settings.db_path, settings.cache_ttl_hours).clear_unread(wanted)
             selected, data = SESSION.switch_chat(wanted)
-            self._json({"ok": True, **data, "session_id": selected.chat_id()})
+            art = None
+            with contextlib.suppress(Exception):
+                settings = SESSION.settings()
+                art = Cache(settings.db_path, settings.cache_ttl_hours).chat_mode(wanted)
+            self._json({"ok": True, **data, "session_id": selected.chat_id(),
+                        **(art or {"kind": "chat", "mode": "normal"})})
         elif route == "/api/ha":
             if not SESSION.ultra:
                 self._json({"ok": False, "error": "Home Assistant gibt es nur mit Ultra."},
@@ -6550,6 +6570,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         from aquaticy.uistate import clean as clean_state
 
         gewuenscht = str(clean_state(wunsch, base=ui_state().read())["mode"])
+        konflikt = chat_kind_conflict(
+            SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION, gewuenscht)
+        if konflikt:
+            self._json({"error": konflikt, "code": "chat_kind"}, 409)
+            return
         if gewuenscht == "code":
             wunsch.pop("online", None)
             wunsch.pop("visual_sources", None)
@@ -6626,6 +6651,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         except RunCapacityError as exc:
             self._json({"error": str(exc), "code": "busy"}, 429)
             return
+        lauf.mode = mode
         if session.chat_id():
             lauf.chat = session.chat_id()
             lauf.add({"type": "chat", "session_id": session.chat_id()})
@@ -7503,6 +7529,47 @@ def serve(
                                  *sys.argv[1:]])
 
 
+CODE_CHAT_ONLY = "Das ist ein Code-Chat. Für Normal oder Pro startest du einen neuen Chat."
+CHAT_NOT_CODE = "Das ist ein Chat für Normal und Pro. Für Code startest du einen neuen Code-Chat."
+
+
+def chat_kind_conflict(session: Any, mode: str) -> str:
+    """Passt der Modus zum offenen Chat? Returns: "" -- oder warum nicht (13.0.0 Luna).
+
+    Ein Chat bleibt, was er ist: Code-Chats und Chats (Normal, Pro) mischen sich nicht.
+    Zwischen Normal und Pro darf man im selben Chat wechseln.
+    """
+    try:
+        settings = session.settings()
+        art = Cache(settings.db_path, settings.cache_ttl_hours).chat_mode(session.chat_id())
+    except Exception:
+        return ""
+    if art is None or art["kind"] == chat_kind_of(mode):
+        return ""
+    return CODE_CHAT_ONLY if art["kind"] == "code" else CHAT_NOT_CODE
+
+
+def auth_banner(store: AuthStore) -> list[str]:
+    """Was beim Start ueber die Konten im Terminal steht (13.0.0 Luna).
+
+    Einzelkonto: das Konto -- oder, solange es keins gibt, der Einrichtungscode, mit dem man es
+    im Browser anlegt. Kontensystem: Pro- und Ultra-Code wie bisher.
+    """
+    if not store.single:
+        return [f"  Pro-Code:   {store.pro_code} (9 Zeichen, geheim halten)",
+                f"  Ultra-Code: {store.ultra_code} (14 Zeichen, geheim halten)"]
+    eins = store.ensure_owner_ultra()
+    if eins is None:
+        return ["  Konto:      noch keins. Leg es im Browser an.",
+                f"  Einrichtungscode: {store.ultra_code} (geheim halten; oder: aquaticy account)"]
+    zeilen = [f"  Konto:      {eins.username} (Ultra, Einzelkonto)"]
+    weitere = len(store.accounts()) - 1
+    if weitere > 0:
+        zeilen.append(f"  Hinweis:    {weitere} weitere Konten können sich nicht anmelden, solange "
+                      "das Kontensystem aus ist (aquaticy setup).")
+    return zeilen
+
+
 def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     global AUTH, TOKEN
 
@@ -7513,13 +7580,14 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     from aquaticy.auth import ultra_code_for
 
     ultra = ultra_code_for(data_dir)
-    AUTH = AuthStore(data_dir, code, ultra)
+    einzeln = not bool(getattr(get_settings(), "accounts", False))
+    AUTH = AuthStore(data_dir, code, ultra, single=einzeln)
     global AIGUARD
     from aquaticy.aiguard import guard_for
 
     AIGUARD = guard_for(data_dir)
-    print(f"  Pro-Code:   {code} (9 Zeichen, geheim halten)")
-    print(f"  Ultra-Code: {ultra} (14 Zeichen, geheim halten)")
+    for zeile in auth_banner(AUTH):
+        print(zeile)
 
 
     try:
@@ -7536,7 +7604,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
 
         COWORKER_SCHEDULER = coworker_mod.Scheduler(SESSION.settings, plan=lambda: "ultra")
         COWORKER_SCHEDULER.start()
-        for account in AUTH.accounts():
+        for account in AUTH.active_accounts():
             start_user_scheduler(account)
 
         with contextlib.suppress(Exception):

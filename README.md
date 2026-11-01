@@ -1,4 +1,4 @@
-# Aquaticy AI 12.9.9 Terra
+# Aquaticy AI 13.0.0 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 12.9.9 Terra
+aquaticy --version            # 13.0.0 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -315,6 +315,7 @@ aquaticy install-model          # lokales Modell einrichten
 aquaticy install-vm             # Podman für die virtual machine einrichten
 aquaticy install-messenger      # WhatsApp und Signal direkt verbinden (ohne virtual machine)
 aquaticy install-browser        # echter Browser für schwierige Seiten
+aquaticy account                # dein Konto (ohne Kontensystem): anlegen, Passwort neu setzen
 aquaticy google                 # Gmail und Kalender verbinden (--aendern: auch schreiben)
 aquaticy connect-ha             # Home Assistant verbinden
 aquaticy lan                    # Geräte im eigenen Netz
@@ -352,6 +353,14 @@ Beim Start stehen alle Adressen im Terminal.
 🎤 Mikrofon und Senden. Während einer Recherche kannst du in einen anderen Chat wechseln. Die
 Recherche läuft weiter. Auf dem Handy liegt die Seitenleiste hinter ☰, Fenster füllen den
 ganzen Bildschirm.
+
+**Code-Chats für sich (seit 13.0.0 Luna).** Ein Chat ist entweder ein Code-Chat oder ein
+Chat für Normal und Pro – wie bei Claude. Ein Klick auf **Code** zeigt links nur die
+Code-Chats und beginnt einen neuen Code-Chat. Normal und Pro zeigen die anderen Chats; jeder
+trägt ein Schild „Normal“ oder „Pro“. Zwischen Normal und Pro wechselst du im selben Chat.
+Zwischen Code und Normal/Pro nicht: Dafür beginnt ein neuer Chat. Öffnest du einen Chat aus
+der Liste, stellt sich der Modus darauf ein. Auch der Server mischt nichts: Eine Code-Frage in
+einem Normal-Chat (oder umgekehrt) lehnt er ab.
 
 **Spracheingabe.** Tipp auf 🎤 und sprich. Sobald du aufhörst, geht das Gesagte als Frage los;
 nochmal tippen beendet das Zuhören, Esc bricht ab. Die Sprache erkennt dein Browser, nicht
@@ -480,8 +489,30 @@ Ohne Domain bleibt alles wie bisher: `aquaticy web` läuft nur auf diesem Rechne
 
 ## Konten: Normal, Pro und Ultra
 
-Wer die Weboberfläche öffnet, legt zuerst ein Konto an. Jedes Konto hat eigene Chats,
-Einstellungen, Speicher und Schlüssel.
+**Standard: ein Konto (seit 13.0.0 Luna).** Ohne Kontensystem gibt es auf deinem Rechner genau
+ein Konto: deins, mit allen Rechten (Ultra). Du meldest dich mit **Nutzername und Passwort**
+an – so kommt niemand sonst an deine Chats, auch nicht im Heimnetz. Eine E-Mail-Adresse
+brauchst du nicht.
+
+- **Anlegen:** am Ende von `aquaticy setup` im Terminal, mit `aquaticy account` oder beim
+  ersten Öffnen im Browser. Im Browser brauchst du dafür den **Einrichtungscode**. Er steht im
+  Terminal, in dem `aquaticy web` läuft, solange es noch kein Konto gibt. So kann niemand
+  anderes im Netz dein Konto zuerst anlegen.
+- **Passwort vergessen:** `aquaticy account` am Rechner setzt Nutzername und Passwort neu und
+  meldet alle Geräte ab.
+- **Kontensystem für mehrere Nutzer:** In `aquaticy setup` einschalten (Frage „Kontensystem
+  für mehrere Nutzer einschalten?“, Standard: nein) oder `aquaticy setup --accounts`. Dann gilt
+  alles unten: Registrieren mit E-Mail, Normal, Pro und Ultra. Gespeichert ist das als
+  `AQUATICY_ACCOUNTS=true` in der `.env`.
+- **Umstieg von früher:** Gab es schon mehrere Konten und das Kontensystem ist aus, gilt das
+  älteste Ultra-Konto (sonst das älteste Konto, es wird Ultra). Ein anderes wählst du mit
+  `aquaticy account --use NAME`. Die anderen Konten bleiben gespeichert, können sich aber
+  nicht anmelden, bis das Kontensystem wieder an ist. Im Terminal steht beim Start, welches
+  Konto gilt und wie viele andere es gibt. Löschst du das eine Konto, rückt kein anderes
+  nach: Ein neues legst du mit dem Einrichtungscode oder `aquaticy account` an.
+
+**Mit Kontensystem.** Wer die Weboberfläche öffnet, legt zuerst ein Konto an. Jedes Konto hat
+eigene Chats, Einstellungen, Speicher und Schlüssel.
 
 **Gleichzeitige Chats mit Ollama.** Verschiedene Konten können gleichzeitig Fragen stellen
 und Antworten empfangen; im Test sind es zehn Konten mit zehn offenen Antwortstreams.
@@ -1309,6 +1340,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_HA_URL` / `AQUATICY_HA_CONTROL` | Home Assistant / schalten erlaubt (Ultra) | – / `false` |
 | `AQUATICY_HA_DIRECT` | auf Befehl ohne Rückfrage schalten, braucht `AQUATICY_HA_CONTROL` (Ultra) | `false` |
 | `AQUATICY_LAN_ENABLED` / `AQUATICY_LAN_SUBNET` | Heimnetz ansehen (Ultra) | `true` / automatisch |
+| `AQUATICY_ACCOUNTS` | Kontensystem für mehrere Nutzer (sonst ein Konto, Ultra) | `false` |
 | `AQUATICY_STORAGE_URL` / `AQUATICY_STORAGE_ACCESS` | Lagerverwaltung: Adresse / `off`, `read`, `write` (Ultra) | – / `read` |
 | `AQUATICY_DOMAIN` | eigene Domain (siehe [Website](#eigene-website-mit-domain)) | – |
 | `AQUATICY_CLOUDFLARE_TOKEN` | API-Token von Cloudflare für Tunnel, DNS und Zertifikat | – |
@@ -1332,6 +1364,7 @@ Daten liegen unter `~/.aquaticy/` (Konten in `accounts.sqlite3`, je Konto ein Or
 ## Konten verwalten (Betreiber)
 
 ```bash
+aquaticy account               # ohne Kontensystem: dein Konto anlegen oder Passwort neu setzen
 aquaticy list                  # alle Konten: Typ, Kürzel (#…), Geräte, Nutzung, Ai-guard
 aquaticy pro-code              # Code für neue Pro-Konten
 aquaticy ultra-code            # Code für neue Ultra-Konten

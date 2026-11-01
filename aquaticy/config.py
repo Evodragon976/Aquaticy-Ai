@@ -531,6 +531,10 @@ class Settings:
 
     lan_enabled: bool = True
 
+    #: Kontensystem fuer mehrere Nutzer (13.0.0 Luna). Aus (Standard): genau ein Konto, Ultra,
+    #: Anmeldung mit Nutzername und Passwort. Wird in ``aquaticy setup`` gewaehlt.
+    accounts: bool = False
+
 
 
 
@@ -1027,6 +1031,7 @@ def get_settings() -> Settings:
         memory_enabled=_env_bool("AQUATICY_MEMORY", True),
         memory_key=_env_str("AQUATICY_MEMORY_KEY"),
         lan_enabled=_env_bool("AQUATICY_LAN_ENABLED", True),
+        accounts=_env_bool("AQUATICY_ACCOUNTS", False),
         legal_guard=guard_on(_env_str("AQUATICY_LEGAL_GUARD")),
         answer_check=_env_bool("AQUATICY_ANSWER_CHECK", True),
         auto_model=_env_bool("AQUATICY_AUTO_MODEL", False),

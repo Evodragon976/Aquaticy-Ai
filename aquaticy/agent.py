@@ -4372,6 +4372,7 @@ class Agent:
                     question=question,
                     answer=result.answer,
                     meta=meta,
+                    mode=str(getattr(self, "mode", "") or ""),
                 )
             except OSError as exc:
 

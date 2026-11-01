@@ -2091,7 +2091,9 @@ def test_everything_setup_asks_for_is_in_the_web_form() -> None:
 
     Der Test liest die Schluessel direkt aus dem Setup-Quelltext -- kommt dort
     eine Frage dazu, faellt er auf, bis das Formular nachzieht. Die Startoption
-    fuer den Betriebssystemprozess ist nur im Terminal aenderbar.
+    fuer den Betriebssystemprozess ist nur im Terminal aenderbar. Ebenso das
+    Kontensystem (13.0.0 Luna): Ob sich Fremde registrieren koennen, entscheidet,
+    wer am Rechner sitzt -- nie eine Sitzung im Browser.
     """
     import inspect
     import re
@@ -2102,6 +2104,8 @@ def test_everything_setup_asks_for_is_in_the_web_form() -> None:
     asked = set(re.findall(r'"(AQUATICY_[A-Z_]+)"', source))
     assert "background" in inspect.signature(cli.web_command).parameters
     asked.discard("AQUATICY_BACKGROUND")
+    asked.discard("AQUATICY_ACCOUNTS")
+    assert 'name="AQUATICY_ACCOUNTS"' not in web.UI_FILE.read_text(encoding="utf-8")
     html = web.UI_FILE.read_text(encoding="utf-8")
     for key in asked:
         assert f'name="{key}"' in html, f"{key} wird im Terminal gefragt, fehlt aber im Formular"
@@ -3316,7 +3320,8 @@ def test_the_sidebar_has_a_search_field() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert 'id="chatsuche"' in html
     assert "Chats durchsuchen" in html
-    assert "/api/chats?q=" in html
+    # Seit 13.0.0 Luna sucht die Liste nur in den Chats ihrer Art (Code oder Normal/Pro).
+    assert "/api/chats?kind=${art}" in html and "&q=${encodeURIComponent(gesucht)}" in html
 
 
 def test_every_answer_can_be_copied_and_saved() -> None:
@@ -3541,15 +3546,19 @@ def test_the_reading_along_text_says_where_the_thoughts_are() -> None:
 
 
 def test_switching_the_mode_opens_a_new_chat() -> None:
+    """Seit 13.0.0 Luna: Zwischen Code und Normal/Pro beginnt ein neuer Chat."""
     html = web.UI_FILE.read_text(encoding="utf-8")
     assert "async function neuerChat(" in html
-    assert "if (anders && thread.children.length) neuerChat(" in html
+    assert ("if (chatArt() !== artVorher){\n"
+            "      if (thread.children.length || currentChat) neuerChat({ leiste: false });"
+            ) in html
 
 
 def test_switching_to_the_same_mode_changes_nothing() -> None:
-    """Zweimal auf „Normal" darf den Chat nicht wegwerfen."""
+    """Zweimal auf „Normal" -- und seit 13.0.0 Luna auch Normal zu Pro -- behaelt den Chat."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "const anders = button.dataset.mode !== mode;" in html
+    assert "const artVorher = chatArt();" in html
+    assert "const chatArt = (m = mode) => m === \"code\" ? \"code\" : \"chat\";" in html
 
 
 

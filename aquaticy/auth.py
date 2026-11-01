@@ -36,6 +36,12 @@ PRO_CODE_IN_TEXT_RE = re.compile(r"(?<![A-Z0-9])[A-Z0-9]{9}(?![A-Z0-9])", re.IGN
 ULTRA_SPECIALS = "!@#$%&*+-=?"
 ULTRA_CODE_LEN = 14
 
+#: Einzelkonto (13.0.0 Luna): Das eine Konto braucht keine E-Mail. Es bekommt eine Adresse unter
+#: dieser Domain, die nie verschickt wird -- sie haelt nur die Tabelle zusammen.
+LOCAL_EMAIL_DOMAIN = "konto.aquaticy.lokal"
+SINGLE_TAKEN = ("Auf diesem Rechner gibt es schon ein Konto. Melde dich damit an. "
+                "Weitere Konten gibt es nur mit dem Kontensystem (aquaticy setup).")
+
 
 
 USERS_COLUMNS = (
@@ -414,8 +420,12 @@ class RateLimiter:
 class AuthStore:
     """SQLite-Ablage für Konten und undurchsichtige Browser-Sitzungen."""
 
-    def __init__(self, data_dir: Path, pro_code: str, ultra_code: str = "") -> None:
+    def __init__(self, data_dir: Path, pro_code: str, ultra_code: str = "", *,
+                 single: bool = False) -> None:
         self.data_dir = Path(data_dir)
+        #: Einzelkonto (Standard seit 13.0.0 Luna): genau ein Konto, Ultra, Anmeldung mit
+        #: Nutzername und Passwort. Mit dem Kontensystem (single=False) wie bisher.
+        self.single = bool(single)
         self.db_path = self.data_dir / "accounts.sqlite3"
         self.users_dir = self.data_dir / "users"
         self.pro_code = pro_code
@@ -460,6 +470,12 @@ class AuthStore:
         with self._connect() as conn:
             conn.executescript(
                 """
+                -- Einzelkonto (13.0.0 Luna): welches Konto das eine ist. Fest gemerkt, damit
+                -- nach dem Loeschen kein altes Konto (aus der Zeit mit Kontensystem) nachrueckt.
+                CREATE TABLE IF NOT EXISTS single_owner (
+                    slot INTEGER PRIMARY KEY CHECK(slot = 1),
+                    user_id TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     email TEXT NOT NULL UNIQUE,
@@ -741,7 +757,21 @@ class AuthStore:
         terms_version: str = "",
         ip: str = "",
         device: Any = None,
+        trusted: bool = False,
     ) -> Account:
+        """Legt ein Konto an.
+
+        Im Einzelkonto-Modus nur, solange es noch keins gibt: immer Ultra und nur mit dem
+        Einrichtungscode (dem Ultra-Code aus dem Terminal) -- ausser *trusted* (die
+        Kommandozeile am Rechner selbst). Eine E-Mail-Adresse braucht es dann nicht.
+        """
+        if self.single:
+            plan = "ultra"
+            if trusted:
+                pro_code = self.ultra_code
+            if not str(email or "").strip():
+                email = f"{secrets.token_hex(8)}@{LOCAL_EMAIL_DOMAIN}"
+            terms_accepted, terms_version = True, terms_version or "einzelkonto"
         email = normalize_email(email)
         fallback_username = email.split("@", 1)[0]
         if len(fallback_username) < 2:
@@ -763,7 +793,8 @@ class AuthStore:
         if plan == "ultra" and not hmac.compare_digest(
                 (pro_code or "").strip().encode("utf-8", "surrogatepass"),
                 self.ultra_code.encode("utf-8")):
-            raise ValueError("Der Ultra-Code stimmt nicht.")
+            raise ValueError("Der Einrichtungscode stimmt nicht. Er steht im Terminal, in dem "
+                             "Aquaticy läuft." if self.single else "Der Ultra-Code stimmt nicht.")
         salt = secrets.token_bytes(16)
         password_hash = _argon_hash(password, salt, self._pepper)
         user_id = secrets.token_hex(16)
@@ -791,6 +822,8 @@ class AuthStore:
 
 
                 conn.execute("BEGIN IMMEDIATE")
+                if self.single and self._owner_row(conn) is not None:
+                    raise ValueError(SINGLE_TAKEN)
 
 
                 if any(str(row[0]).casefold() == username.casefold() for row in
@@ -839,6 +872,9 @@ class AuthStore:
                     ),
                 )
                 self._store_device(conn, user_id, device, now)
+                if self.single:
+                    conn.execute("INSERT OR REPLACE INTO single_owner (slot, user_id) "
+                                 "VALUES (1, ?)", (user_id,))
         except sqlite3.IntegrityError as exc:
 
 
@@ -1030,6 +1066,8 @@ class AuthStore:
             if current is None or not hmac.compare_digest(
                     account._credential, self._credential_for(current)):
                 raise ValueError("Das Passwort wurde inzwischen geändert. Bitte melde dich neu an.")
+            if self.single and self._owner_id(conn) != account.id:
+                raise ValueError("Mit dem Einzelkonto meldet sich nur das eine Konto an.")
             conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
             conn.execute(
                 "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)",
@@ -1065,6 +1103,8 @@ class AuthStore:
                 "WHERE token_hash=? AND device_hash=? AND expires_at>=?",
                 (_secret_hash(token, self._pepper), _secret_hash(device, self._pepper), now),
             ).fetchone()
+            if row is not None and self.single and self._owner_id(conn) != str(row["id"]):
+                row = None  # Kontensystem aus: andere Konten bleiben, kommen aber nicht hinein
         if row is None:
             return None
         if ip is not None and SESSION_IP_MODE != "aus":
@@ -1117,6 +1157,114 @@ class AuthStore:
         with self._connect() as conn:
             rows = conn.execute("SELECT * FROM users ORDER BY created_at").fetchall()
         return [account for row in rows if (account := self._account(row)) is not None]
+
+    # -- Einzelkonto (13.0.0 Luna) -------------------------------------------------------------
+    @staticmethod
+    def _owner_row(conn: sqlite3.Connection) -> sqlite3.Row | None:
+        """Das eine Konto -- oder None.
+
+        Beim ersten Mal (Umstieg vom Kontensystem) wird es bestimmt und fest gemerkt: das
+        aelteste Ultra-Konto, sonst das aelteste. Danach gilt nur noch das gemerkte. Ist es
+        geloescht, gibt es keins mehr: Ein neues legt nur an, wer den Einrichtungscode hat
+        oder am Rechner sitzt -- nie rueckt ein anderes altes Konto nach.
+        """
+        gemerkt = conn.execute("SELECT user_id FROM single_owner WHERE slot = 1").fetchone()
+        if gemerkt is not None:
+            return conn.execute("SELECT * FROM users WHERE id = ?", (str(gemerkt[0]),)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users ORDER BY plan = 'ultra' DESC, created_at, id LIMIT 1").fetchone()
+        if row is not None:
+            conn.execute("INSERT OR IGNORE INTO single_owner (slot, user_id) VALUES (1, ?)",
+                         (str(row["id"]),))
+            gemerkt = conn.execute("SELECT user_id FROM single_owner WHERE slot = 1").fetchone()
+            if gemerkt is not None and str(gemerkt[0]) != str(row["id"]):
+                return conn.execute("SELECT * FROM users WHERE id = ?",
+                                    (str(gemerkt[0]),)).fetchone()
+        return row
+
+    def _owner_id(self, conn: sqlite3.Connection) -> str:
+        row = self._owner_row(conn)
+        return str(row["id"]) if row is not None else ""
+
+    def owner(self) -> Account | None:
+        with self._connect() as conn:
+            return self._account(self._owner_row(conn))
+
+    def active_accounts(self) -> list[Account]:
+        """Die Konten, die arbeiten duerfen: beim Einzelkonto nur das eine."""
+        if not self.single:
+            return self.accounts()
+        eins = self.owner()
+        return [eins] if eins is not None else []
+
+    def ensure_owner_ultra(self) -> Account | None:
+        """Einzelkonto: Das eine Konto ist Ultra -- der Betreiber hat alle Rechte."""
+        with self._lock, self._connect() as conn:
+            row = self._owner_row(conn)
+            if row is not None and str(row["plan"]) != "ultra":
+                conn.execute("UPDATE users SET plan='ultra' WHERE id=?", (str(row["id"]),))
+                row = conn.execute("SELECT * FROM users WHERE id=?", (str(row["id"]),)).fetchone()
+        return self._account(row)
+
+    def login(self, name: str, password: str) -> Account | None:
+        """Anmelden. Einzelkonto: mit Nutzername (oder E-Mail) -- nur das eine Konto.
+
+        Mit dem Kontensystem wie bisher mit der E-Mail-Adresse.
+        """
+        if not self.single:
+            return self.authenticate(name, password)
+        wanted = " ".join(str(name or "").split())
+        eins = self.owner()
+        passt = eins is not None and bool(wanted) and (
+            wanted.casefold() == eins.username.casefold()
+            or wanted.casefold() == eins.email.casefold())
+        if eins is None or not passt:
+            _argon_hash(str(password or "")[:128], b"\0" * 16, self._pepper)  # gleiche Dauer
+            return None
+        konto = self.authenticate(eins.email, password)
+        return konto if konto is not None and konto.id == eins.id else None
+
+    def choose_owner(self, name: str) -> Account:
+        """Kommandozeile am Rechner: Ein vorhandenes Konto wird das eine Konto (Ultra).
+
+        Fuer den Umstieg vom Kontensystem, wenn nicht das aelteste Ultra-Konto gemeint ist.
+        """
+        konto = self.account_by_name(name)
+        if konto is None:
+            raise ValueError("Dieses Konto gibt es nicht. aquaticy list zeigt alle.")
+        with self._lock, self._connect() as conn:
+            conn.execute("INSERT OR REPLACE INTO single_owner (slot, user_id) VALUES (1, ?)",
+                         (konto.id,))
+            conn.execute("UPDATE users SET plan='ultra' WHERE id=?", (konto.id,))
+            row = conn.execute("SELECT * FROM users WHERE id=?", (konto.id,)).fetchone()
+        neu = self._account(row)
+        assert neu is not None
+        return neu
+
+    def reset_owner(self, username: str, password: str) -> Account:
+        """Kommandozeile am Rechner: Nutzername und Passwort des einen Kontos neu setzen.
+
+        Meldet alle Geraete ab. Gibt es noch kein Konto, wird es angelegt (Ultra).
+        """
+        validate_password(password)
+        username = normalize_username(username)
+        eins = self.owner()
+        if eins is None:
+            return self.register("", password, "ultra", username=username, trusted=True)
+        salt = secrets.token_bytes(16)
+        password_hash = _argon_hash(password, salt, self._pepper)
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if any(str(row[0]).casefold() == username.casefold() and str(row[1]) != eins.id
+                   for row in conn.execute("SELECT username, id FROM users")):
+                raise ValueError("Diesen Nutzernamen hat schon ein anderes Konto.")
+            conn.execute("UPDATE users SET username=?, password_hash=?, password_salt=?, "
+                         "plan='ultra' WHERE id=?", (username, password_hash, salt, eins.id))
+            conn.execute("DELETE FROM sessions WHERE user_id=?", (eins.id,))
+            row = conn.execute("SELECT * FROM users WHERE id=?", (eins.id,)).fetchone()
+        konto = self._account(row)
+        assert konto is not None
+        return konto
 
     def note_seen(self, user_id: str, ip: str) -> None:
         """Haelt die zuletzt gesehene Adresse eines Kontos fest.

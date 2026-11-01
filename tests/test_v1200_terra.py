@@ -365,5 +365,5 @@ def test_the_login_route_stays_on_this_server_and_needs_no_session() -> None:
     assert "/api/auth/challenge" in web.CLUSTER_LOCAL
     quelle = web.Path(web.__file__).read_text(encoding="utf-8")
     assert quelle.index("if not self._bot_gate(payload, geraet, neue_kennung):") \
-        < quelle.index("account = AUTH.authenticate("), "vor dem Passwort"
+        < quelle.index("account = AUTH.login("), "vor dem Passwort"  # seit 13.0.0 Luna
     assert FETCH == {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors"}

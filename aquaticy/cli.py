@@ -86,6 +86,10 @@ def setup_command(
     ollama: bool = typer.Option(
         True, "--ollama/--no-ollama", help="Ollama bei Bedarf installieren und starten."
     ),
+    accounts: bool | None = typer.Option(
+        None, "--accounts/--no-accounts",
+        help="Kontensystem für mehrere Nutzer. Standard: aus (ein Konto, Ultra)."
+    ),
 ) -> None:
     """Ersteinrichtung: Modell, Schlüssel und auf Wunsch eine eigene Domain."""
     load_env()
@@ -286,6 +290,13 @@ def setup_command(
     if api_base:
         values["AQUATICY_API_BASE"] = api_base
     values.update(website_values)
+    if accounts is None:
+        console.print("\n[bold]Konten[/bold]")
+        console.print("  [dim]Ohne Kontensystem gibt es genau ein Konto: deins, mit allen Rechten "
+                      "(Ultra).\n  Du meldest dich mit Nutzername und Passwort an.[/dim]")
+        accounts = False if yes else typer.confirm(
+            "  Kontensystem für mehrere Nutzer einschalten?", default=False)
+    values["AQUATICY_ACCOUNTS"] = "true" if accounts else "false"
     run_background = False if yes else typer.confirm(
         "Soll die Weboberfläche im Hintergrund über Heimnetz und Tailscale erreichbar bleiben?",
         default=False)
@@ -306,11 +317,92 @@ def setup_command(
         )
     )
 
+    if not accounts:
+        _einzelkonto_einrichten(get_settings())
     _vm_beim_start(get_settings())
     _messenger_beim_start(get_settings())
     if run_background:
         web_command(port=8765, host="", lan=True, open_browser=True, token="", background=True)
 
+
+def _einzelkonto_store(settings: Any) -> Any:
+    from aquaticy.auth import AuthStore, pro_code_for, ultra_code_for
+
+    ordner = Path(settings.data_dir)
+    return AuthStore(ordner, pro_code_for(ordner), ultra_code_for(ordner), single=True)
+
+
+def _konto_abfragen(store: Any, vorschlag: str = "") -> Any:
+    """Fragt Nutzername und Passwort ab und speichert sie. Returns: das Konto oder None."""
+    for _ in range(3):
+        name = typer.prompt("  Nutzername", default=vorschlag or None).strip()
+        passwort = typer.prompt("  Passwort (mindestens 12 Zeichen)", hide_input=True,
+                                confirmation_prompt="  Passwort noch einmal")
+        try:
+            return store.reset_owner(name, passwort)
+        except ValueError as exc:
+            console.print(f"  [red]{exc}[/red]")
+    return None
+
+
+def _einzelkonto_einrichten(settings: Any) -> None:
+    """Nach dem Setup ohne Kontensystem: Gibt es das eine Konto? Sonst jetzt anlegen.
+
+    Nur mit einem Menschen am Terminal. Sonst steht da, wie es geht: ``aquaticy account``
+    oder beim ersten Öffnen im Browser mit dem Einrichtungscode.
+    """
+    try:
+        store = _einzelkonto_store(settings)
+        eins = store.ensure_owner_ultra()
+    except Exception as exc:  # pragma: no cover - kaputte Datenbank: das Setup bleibt gültig
+        console.print(f"[yellow]Konto:[/yellow] {type(exc).__name__}: {exc}")
+        return
+    if eins is not None:
+        console.print(f"[green]Konto:[/green] {eins.username} (Ultra). "
+                      "Neues Passwort: [bold]aquaticy account[/bold]")
+        return
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        console.print("[yellow]Konto:[/yellow] noch keins. Leg es mit "
+                      "[bold]aquaticy account[/bold] an – oder beim ersten Öffnen im Browser "
+                      "mit dem Einrichtungscode aus dem Terminal.")
+        return
+    console.print("\n[bold]Dein Konto[/bold]")
+    konto = _konto_abfragen(store)
+    if konto is not None:
+        console.print(f"[green]Konto angelegt:[/green] {konto.username} (Ultra)")
+
+
+@app.command("account")
+def account_command(
+    use: str = typer.Option("", "--use", help="Ein vorhandenes Konto wird das eine Konto "
+                            "(Name oder E-Mail; nach dem Umstieg vom Kontensystem)."),
+) -> None:
+    """Das eine Konto (ohne Kontensystem): anlegen oder Nutzername und Passwort neu setzen."""
+    load_env()
+    settings = get_settings()
+    if getattr(settings, "accounts", False):
+        console.print("[yellow]Das Kontensystem ist an.[/yellow] Jedes Konto ändert sein "
+                      "Passwort im Browser. [bold]aquaticy list[/bold] zeigt alle Konten.")
+        raise typer.Exit(code=1)
+    store = _einzelkonto_store(settings)
+    if use.strip():
+        try:
+            gewaehlt = store.choose_owner(use)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from None
+        console.print(f"[green]Das eine Konto ist jetzt:[/green] {gewaehlt.username} (Ultra)")
+        return
+    eins = store.owner()
+    if eins is None:
+        console.print("Noch kein Konto. Leg es jetzt an – es hat alle Rechte (Ultra).")
+    else:
+        console.print(f"Konto: [bold]{eins.username}[/bold]. Neues Passwort setzen – danach "
+                      "sind alle Geräte abgemeldet.")
+    konto = _konto_abfragen(store, eins.username if eins is not None else "")
+    if konto is None:
+        raise typer.Exit(code=1)
+    console.print(f"[green]Gespeichert:[/green] {konto.username} (Ultra)")
 
 def _ask_website(*, no_probe: bool = False) -> dict[str, str]:
     """Fragt nach Domain und Cloudflare-Token und richtet alles ein.
@@ -2235,6 +2327,7 @@ HELP_TEXT = """\
   aquaticy install-browser      Browser einrichten
   aquaticy install-model        Lokales Modell einrichten
   aquaticy install-vm           Podman für die virtual machine einrichten
+  aquaticy account              Dein Konto: anlegen oder Passwort neu setzen
   aquaticy install-messenger    WhatsApp und Signal direkt verbinden (ohne virtual machine)
   aquaticy export               Recherchen exportieren
   aquaticy cluster              Server-Verbund: Anfrage annehmen (yes/no)

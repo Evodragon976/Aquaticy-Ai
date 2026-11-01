@@ -305,6 +305,9 @@ def starte_server(agent: FakeAgent) -> int:
     """Startet die Oberflaeche mit dem gestellten Agenten."""
     os.environ.setdefault("AQUATICY_DATA_DIR", tempfile.mkdtemp(prefix="rundgang-"))
     os.environ.setdefault("AQUATICY_MODEL", "mistral/mistral-large-latest")
+    # Der Rundgang prueft Registrieren, mehrere Konten und Stufen: das Kontensystem. Seit
+    # 13.0.0 Luna ist es nicht mehr Standard (Einzelkonto: tests/test_v1300_luna.py).
+    os.environ.setdefault("AQUATICY_ACCOUNTS", "true")
     from aquaticy import linked, web
 
 
