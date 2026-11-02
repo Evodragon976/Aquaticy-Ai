@@ -1,4 +1,4 @@
-# Aquaticy AI 13.0.1 Luna
+# Aquaticy AI 14.0.0 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,47 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.0.0 Luna:** lokale Sprachnachrichten und die freiwillige Netzprüfung Secure Pro.
+
+`aquaticy setup --voice --secure-pro` richtet beide Funktionen ein.
+Bestehende Installationen können `aquaticy voice` oder `aquaticy secure-pro` einzeln aufrufen.
+Die Einrichtung erfolgt am Rechner im Terminal, mit den Rechten seines Betreibers.
+
+**Sprachnachrichten:** Aktiviere die WhatsApp-/Signal-Brücke und gib nur vertrauenswürdige
+Einzelkontakte frei. Eigener Chat und freigegebene Nummern dürfen Audios bis 90 Sekunden
+und 12 MiB schicken. Gruppen und fremde Kontakte werden nicht transkribiert.
+Antworten auf Audio kommen als kurze Sprachnachricht und zusätzlich als Text.
+Bei Textfragen kannst du „Antworte als Sprachnachricht“ ergänzen.
+Der vollständige Antworttext bleibt im Chat; Audioantworten sind auf 90 Sekunden begrenzt.
+Alle Transkripte durchlaufen die normalen Werkzeugberechtigungen und Sicherheitsprüfungen.
+Whisper verarbeitet eingehende Sprache lokal, eSpeak erzeugt die deutsche Stimme.
+Die Einrichtung lädt einmalig das Whisper-Modell und bei Bedarf Python-Pakete herunter.
+Unter Linux kann sie FFmpeg und eSpeak NG nach Bestätigung über apt installieren.
+Andere Systeme benötigen FFmpeg und eSpeak NG im Programmpfad.
+Während der Transkription werden keine Audios an einen Sprach-Cloudanbieter gesendet.
+Der Antworttext geht wie bei normalen Chats an das gewählte Sprachmodell.
+Temporäre Aquaticy-Audiodateien werden gelöscht; Transkripte gehören zum normalen Chatverlauf.
+Signal-cli verwaltet empfangene Originalanhänge in seinem eigenen lokalen Speicher.
+`aquaticy voice --disable` schaltet die Sprachverarbeitung aus.
+Telefonate, Anrufannahme und automatisches Anrufen sind nicht enthalten.
+
+**Secure Pro:** Du bestätigst ein eigenes privates Netz mit höchstens 256 Adressen.
+Aquaticy prüft alle 15 Minuten erreichbare Geräte und ausgewählte offene Dienste.
+Neue Geräte und riskante Dienste sind Prüfhinweise, keine nachgewiesenen CVEs oder Infektionen.
+Es gibt keine Passwortversuche, Exploits, automatischen Reparaturen oder Löschungen.
+Optional prüft ein installiertes ClamAV einen ausdrücklich ausgewählten lokalen Ordner.
+Installiere dafür ClamAV und aktuelle Signaturen, etwa mit `sudo apt install clamav`
+und `sudo freshclam`. Ohne diesen Schritt gibt es keine Malware-Prüfung von Dateien.
+Andere Gerätefestplatten und verschlüsselter Netzwerkverkehr werden nicht untersucht.
+Malwarefunde und Scannerfehler werden klar unterschieden; Fehler bedeuten kein sauberes Ergebnis.
+Der lokale Bericht `secure-pro-report.json` liegt geschützt im Aquaticy-Datenordner.
+Im Einzelkonto-Modus gehen Warnungen ausschließlich in den eigenen Chat des Besitzers.
+Messenger müssen dafür gekoppelt und eingeschaltet sein. Im Mehrkonten-Modus erfolgt kein Versand.
+Nicht zugestellte Hinweise werden beim nächsten Prüflauf erneut versucht.
+Starte eine bereits laufende Weboberfläche nach dem Aktivieren neu.
+`aquaticy secure-pro --disable` beendet weitere Prüfungen und Warnungen.
+Beide Funktionen sind standardmäßig ausgeschaltet.
 
 - [Was Aquaticy kann](#was-aquaticy-kann)
 - [Quickstart](#quickstart)
@@ -120,7 +161,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 13.0.1 Luna
+aquaticy --version            # 14.0.0 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

@@ -1033,6 +1033,13 @@ class AgentAnswerer:
         if ort:
             settings.location = ort
         zusatz = trust_note(decision, config)
+        if decision.trusted:
+            from aquaticy import voice
+
+            if voice.enabled():
+                zusatz += ("\nSprachnachrichten sind eingerichtet. Deine Antwort wird bei einer "
+                           "Audiofrage oder auf Wunsch zusätzlich als kurze Sprachnachricht "
+                           "gesendet. Beantworte die Frage direkt; der Versand erfolgt im Code.")
 
         stand = hashlib.sha256(json.dumps(
             [sorted(erlaubt), zusatz, decision.trusted, decision.selbst,

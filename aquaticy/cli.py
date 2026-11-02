@@ -90,6 +90,8 @@ def setup_command(
         None, "--accounts/--no-accounts",
         help="Kontensystem für mehrere Nutzer. Standard: aus (ein Konto, Ultra)."
     ),
+    voice: bool = typer.Option(False, "--voice", help="Lokale Sprachnachrichten einrichten."),
+    secure_pro: bool = typer.Option(False, "--secure-pro", help="Secure Pro einrichten."),
 ) -> None:
     """Ersteinrichtung: Modell, Schlüssel und auf Wunsch eine eigene Domain."""
     load_env()
@@ -305,6 +307,11 @@ def setup_command(
     written = write_env_file(values, target)
     load_env(written, override=True)
     reset_settings_cache()
+    if voice is True:
+        _setup_voice(assume_yes=yes)
+    if secure_pro is True:
+        _setup_secure_pro()
+    console.print("Optional: aquaticy setup --voice --secure-pro für Sprache und Netzüberwachung.")
     console.print(
         Panel.fit(
             f"Gespeichert in [cyan]{written}[/cyan]\n\n"
@@ -323,6 +330,80 @@ def setup_command(
     _messenger_beim_start(get_settings())
     if run_background:
         web_command(port=8765, host="", lan=True, open_browser=True, token="", background=True)
+
+
+def _setup_voice(*, assume_yes: bool = False) -> None:
+    import importlib.util
+    import shutil
+
+    from aquaticy import voice
+
+    console.print("Sprache bleibt lokal. Das Whisper-Modell wird einmalig heruntergeladen.")
+    console.print("Sprachnachrichten: höchstens 90 Sekunden, nur freigegebene Einzelchats.")
+    if not (assume_yes or typer.confirm("Lokale Sprachverarbeitung einrichten?", default=False)):
+        return
+    missing = [name for name in ("ffmpeg", "espeak-ng") if not shutil.which(name)]
+    if missing:
+        apt = shutil.which("apt-get")
+        if not apt:
+            raise typer.BadParameter("Installiere ffmpeg und espeak-ng und starte erneut.")
+        if hasattr(os, "geteuid") and os.geteuid() != 0 and not shutil.which("sudo"):
+            raise typer.BadParameter("Installiere ffmpeg und espeak-ng als Administrator.")
+        command = (["sudo"] if hasattr(os, "geteuid") and os.geteuid() != 0 else [])
+        command += [apt, "install", "-y", "ffmpeg", "espeak-ng"]
+        console.print("Installationsbefehl: " + " ".join(command), markup=False)
+        if not (assume_yes or typer.confirm("Programme installieren?", default=False)):
+            return
+        subprocess.run(command, check=True)
+    if importlib.util.find_spec("faster_whisper") is None:
+        uv = shutil.which("uv")
+        command = ([uv, "pip", "install", "--python", sys.executable] if uv else
+                   [sys.executable, "-m", "pip", "install"])
+        subprocess.run([*command, "faster-whisper>=1.2,<2", "numpy>=1.24,<2.4", "av>=18,<19"],
+                       check=True, timeout=600)
+    voice.configure(get_settings().data_dir, True)
+    console.print("Sprachnachrichten sind an. Verbinde WhatsApp/Signal und aktiviere die Brücke.")
+
+
+def _setup_secure_pro() -> None:
+    from aquaticy import lan, secure_pro
+
+    console.print("Secure Pro prüft alle 15 Minuten dein freigegebenes Heimnetz.")
+    console.print("Es meldet neue Geräte und riskante offene Dienste. Es nutzt keine Lücken aus.")
+    subnet = typer.prompt("Eigenes Netz (CIDR)", default=lan.own_subnet() or "192.168.1.0/24")
+    if not typer.confirm("Gehört dir dieses Netz oder darfst du es ausdrücklich prüfen?",
+                         default=False):
+        return
+    folder = typer.prompt("Lokaler Ordner für ClamAV (leer: keine Dateiprüfung)", default="")
+    try:
+        secure_pro.configure(get_settings().data_dir, subnet, folder)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    console.print("Secure Pro ist an. Warnungen gehen im Einzelkonto-Modus an deinen eigenen Chat.")
+    console.print("Die Messenger-Brücke muss an sein. Keine Prüfung fremder Festplatten.")
+    console.print("Starte eine bereits laufende Weboberfläche neu, um Secure Pro zu starten.")
+
+
+@app.command("voice")
+def voice_command(disable: bool = typer.Option(False, "--disable", help="Sprache ausschalten.")):
+    """Lokale Sprachnachrichten einrichten oder ausschalten."""
+    from aquaticy import voice
+
+    if disable:
+        voice.configure(get_settings().data_dir, False)
+    else:
+        _setup_voice()
+
+
+@app.command("secure-pro")
+def secure_pro_command(disable: bool = typer.Option(False, "--disable", help="Überwachung aus.")):
+    """Defensive Netzueberwachung fuer den eigenen Rechner einrichten."""
+    if disable:
+        path = get_settings().data_dir / "secure-pro.json"
+        path.unlink(missing_ok=True)
+        console.print("Secure Pro ist aus.")
+    else:
+        _setup_secure_pro()
 
 
 def _einzelkonto_store(settings: Any) -> Any:
@@ -2332,6 +2413,8 @@ HELP_TEXT = """\
   aquaticy export               Recherchen exportieren
   aquaticy cluster              Server-Verbund: Anfrage annehmen (yes/no)
   aquaticy website              eigene Domain: Stand, setup, remove
+  aquaticy voice                lokale Sprachnachrichten einrichten; --disable schaltet sie aus
+  aquaticy secure-pro           defensive Netzprüfung einrichten; --disable schaltet sie aus
 """
 
 

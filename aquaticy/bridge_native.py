@@ -173,6 +173,11 @@ class NativeResponder:
                                  number=msg.sender)
         if not decision.allow:
             return f"abgelehnt: {decision.why}", None, ""
+        if msg.audio is not None:
+            from aquaticy import voice
+
+            if not decision.trusted or decision.group or not voice.enabled():
+                return "Sprachnachrichten nicht freigegeben", None, ""
         auftrag = strip_trigger(text, decision.group)
         if not auftrag:
             return "keine Aufgabe", None, ""
@@ -205,6 +210,8 @@ class NativeResponder:
             transport.mark_read(msg)
 
     def __call__(self, msg: Incoming, transport: Any) -> str:
+        from aquaticy import voice
+
         settings = self._settings()
         config = load_config(settings)[msg.messenger]
         store = StateStore(settings)
@@ -218,7 +225,9 @@ class NativeResponder:
         self._mark_read(msg, transport)
         try:
             with TypingIndicator(transport, msg):
-                antwort = self._reply(auftrag, decision, config, key, msg)
+                antwort = self._reply(auftrag, decision, config, key, msg, transport)
+                if antwort is None:
+                    return "eigene"
         except Exception:
             LOG.exception("Die Antwort an einen %s-Chat ist fehlgeschlagen", msg.messenger)
             if decision.trusted and delivery_allowed(
@@ -228,7 +237,10 @@ class NativeResponder:
             return "fehler"
         if not delivery_allowed(self._settings, msg.messenger, config, self._paused):
             return "widerrufen"
-        self._send(transport, msg, antwort)
+        if not self._send(transport, msg, antwort, config=config,
+                          audio=decision.trusted and (msg.audio is not None or
+                          voice.requested(auftrag))):
+            return "widerrufen"
         count_reply(store, msg.messenger, self._clock())
         return "beantwortet"
 
@@ -247,8 +259,20 @@ class NativeResponder:
         return bool(neu and neu[0])
 
     def _reply(self, auftrag: str, decision: Any, config: dict[str, Any], key: str,
-               msg: Incoming) -> str:
+               msg: Incoming, transport: Any = None) -> str | None:
         from aquaticy.ownservices import own_sources
+
+        if msg.audio is not None:
+            from aquaticy import voice
+
+            data = transport.voice_download(msg)
+            if (msg.from_me and hashlib.sha256(data).digest()
+                    in getattr(transport, "_sent_audio", ())):
+                return None
+            auftrag = voice.transcribe(data)
+            if not voice.enabled() or not delivery_allowed(
+                    self._settings, msg.messenger, config, self._paused):
+                raise ValueError("Freigabe geändert.")
 
         # Ein Befehl ("/code-review ...") hat eigene Regeln; Codeschnipsel sind keine Mailfrage.
         befehl = parse_command(auftrag) is not None
@@ -265,6 +289,29 @@ class NativeResponder:
             return f"{SIGNATURE} Darin stehen Zahlungsdaten. Die sende ich nicht."
         return text
 
-    @staticmethod
-    def _send(transport: Any, msg: Incoming, text: str) -> None:
+    def _send(self, transport: Any, msg: Incoming, text: str, *,
+              config: dict[str, Any] | None = None, audio: bool = False) -> bool:
+        data = b""
+        if audio:
+            from aquaticy import voice
+
+            if voice.enabled():
+                try:
+                    data = voice.synthesize(text)
+                except Exception:
+                    LOG.warning("Sprachausgabe fehlgeschlagen; sende Text.")
+        if config is not None and not delivery_allowed(
+                self._settings, msg.messenger, config, self._paused):
+            return False
         transport.send(msg.chat, text)
+        if data and config is not None and delivery_allowed(
+                self._settings, msg.messenger, config, self._paused):
+            from aquaticy import voice
+
+            if not voice.enabled():
+                return True
+            try:
+                transport.voice_send(msg.chat, data)
+            except Exception:
+                LOG.warning("Sprachnachricht konnte nicht gesendet werden; Text wurde gesendet.")
+        return True

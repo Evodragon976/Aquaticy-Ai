@@ -103,3 +103,9 @@ protobuf==7.36.2
 python-magic==0.4.27
 segno==1.6.6
 soupsieve==3.0.4
+av==18.1.0
+ctranslate2==4.8.5
+faster-whisper==1.2.1
+flatbuffers==25.12.19
+numpy==2.3.5
+onnxruntime==1.31.1

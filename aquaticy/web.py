@@ -7625,6 +7625,19 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     global SERVER, CLUSTER, UPGRADE_DIR, UPGRADER, SHARDING
     research_stop: threading.Event | None = None
     research_worker: threading.Thread | None = None
+    from aquaticy.secure_pro import Watcher
+
+    def security_notice(text: str) -> bool:
+        if AUTH is None or not AUTH.single:
+            return False
+        owner = AUTH.ensure_owner_ultra()
+        if owner is None or _native_paused(owner):
+            return False
+        hub = _native_hub(SESSIONS.get(owner))
+        hub.ensure_running()
+        return bool(hub.notify_owner(text))
+
+    security_watcher = Watcher(data_dir, security_notice)
 
 
 
@@ -7681,10 +7694,12 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
 
             local = urls_for(host, port, token)[-1]
             threading.Timer(0.6, lambda: webbrowser.open(local)).start()
+        security_watcher.start()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        security_watcher.stop()
         server.server_close()
         if PUBLIC_SERVER is not None:
             with contextlib.suppress(Exception):

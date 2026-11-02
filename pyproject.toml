@@ -1,6 +1,6 @@
 [project]
 name = "aquaticy"
-version = "13.0.1"
+version = "14.0.0"
 description = "Ein KI-Agent fuer Kommandozeile und Browser, der eigenstaendig das Web durchsucht, Seiten liest und die Ergebnisse ausgewertet zurueckgibt."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+voice = ["faster-whisper>=1.2,<2", "numpy>=1.24,<2.4", "av>=18,<19"]
 browser = ["playwright>=1.62.0,<2"]
 # Seit 12.7.8 Terra v2 ist neonize eine feste Abhaengigkeit; der Name bleibt fuer alte Befehle.
 messenger = []
@@ -93,7 +94,7 @@ warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
 
-module = ["yaml", "term_image", "term_image.*", "neonize", "neonize.*"]
+module = ["yaml", "term_image", "term_image.*", "neonize", "neonize.*", "faster_whisper.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

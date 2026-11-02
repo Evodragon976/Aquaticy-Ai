@@ -26,6 +26,8 @@ ERLAUBT = ('{"zulaessig": true, "regel": "", "grund": "", "missbrauch": false, '
 
 # -- Erkennen ---------------------------------------------------------------------------------
 @pytest.mark.parametrize("frage", [
+    "Schicke mir bitte die ganze nvdia email hier",
+    "Schicke mir bitte die ganze Nvidia E-Mail hier",
     "Bitte sende mir den ganzen Text von der Email xy",
     "Sende mir den ganzen Text von der Email von Amazon",
     "Schick mir bitte die komplette Mail von der Bank",

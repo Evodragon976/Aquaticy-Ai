@@ -75,6 +75,8 @@ class Incoming:
     #: Nur fuer "gelesen": WhatsApp-Kennung des Absenders (in Gruppen) und Signal-Zeitstempel.
     sender_id: str = field(default="", compare=False)
     stamp: int = field(default=0, compare=False)
+    audio: Any = field(default=None, repr=False, compare=False)
+    audio_hash: bytes = field(default=b"", repr=False, compare=False)
 
 
 @dataclass
@@ -200,6 +202,10 @@ def parse_whatsapp(event: Any, own: set[str]) -> Incoming | None:
         return None
     nachricht = event.Message
     text = str(nachricht.conversation or nachricht.extendedTextMessage.text or "")
+    audio = getattr(nachricht, "audioMessage", None)
+    audio = nachricht if audio and 0 < audio.fileLength <= 12 * 1024 * 1024 else None
+    if audio is not None:
+        text = text or "[Sprachnachricht]"
     if not text.strip():
         return None
     gruppe = bool(quelle.IsGroup) or server == "g.us"
@@ -222,7 +228,8 @@ def parse_whatsapp(event: Any, own: set[str]) -> Incoming | None:
         messenger="whatsapp", chat=chat_id, text=text, id=str(info.ID or ""),
         ts=_seconds(info.Timestamp), sender=nummer, group=gruppe, from_me=von_mir,
         self_chat=eigener_chat, name=str(info.Pushname or "")[:60],
-        sender_id=sender_id if JID_RE.fullmatch(sender_id) else "")
+        sender_id=sender_id if JID_RE.fullmatch(sender_id) else "", audio=audio,
+        audio_hash=bytes(audio.audioMessage.fileSHA256) if audio is not None else b"")
 
 
 def parse_signal(params: Any, own_number: str) -> Incoming | None:
@@ -245,6 +252,13 @@ def parse_signal(params: Any, own_number: str) -> Incoming | None:
     else:
         return None
     text = str(inhalt.get("message") or "")
+    attachments = inhalt.get("attachments")
+    audio = next((a for a in attachments if isinstance(a, dict)
+                  and str(a.get("contentType", "")).startswith("audio/")
+                  and isinstance(a.get("size"), int) and 0 < a["size"] <= 12 * 1024 * 1024),
+                 None) if isinstance(attachments, list) else None
+    if audio is not None:
+        text = text or "[Sprachnachricht]"
     if not text.strip():
         return None
     gruppe_info = inhalt.get("groupInfo")
@@ -268,7 +282,8 @@ def parse_signal(params: Any, own_number: str) -> Incoming | None:
         messenger="signal", chat=chat, text=text, id=f"{zeit}:{nummer}",
         ts=_seconds(zeit), sender=nummer, group=bool(gruppe_id), from_me=von_mir,
         self_chat=eigener, name=str(huelle.get("sourceName") or "")[:60],
-        stamp=zeit if isinstance(zeit, int) and not isinstance(zeit, bool) and zeit > 0 else 0)
+        stamp=zeit if isinstance(zeit, int) and not isinstance(zeit, bool) and zeit > 0 else 0,
+        audio=audio)
 
 
 #: Jeder Teil einer geteilten Antwort beginnt mit der Kennung (bridge.SIGNATURE). Sonst hielte
@@ -315,6 +330,7 @@ class Transport:
         self._status = LinkStatus(since=clock())
         self._stopping = threading.Event()
         self._thread: threading.Thread | None = None
+        self._sent_audio: collections.deque[bytes] = collections.deque(maxlen=100)
 
     # -- Zustand -----------------------------------------------------------
     def status(self) -> LinkStatus:
@@ -381,6 +397,9 @@ class Transport:
         """Zeigt dem Chat "schreibt ..." (an) oder nimmt es weg (aus). Nur ein Versuch."""
 
     def _deliver(self, nachricht: Incoming | None) -> None:
+        if (nachricht is not None and nachricht.from_me and nachricht.audio_hash
+                and nachricht.audio_hash in self._sent_audio):
+            return
         if nachricht is not None:
             try:
                 self._on_message(nachricht)
@@ -568,6 +587,30 @@ class WhatsAppTransport(Transport):
         nummer = clean_number(self.store.who("whatsapp"))
         return f"{digits(nummer)}@s.whatsapp.net" if nummer else ""
 
+    def voice_download(self, msg: Incoming) -> bytes:
+        from urllib.parse import urlsplit
+
+        if msg.audio is None or msg.audio.audioMessage.seconds > 90:
+            raise ValueError("Sprachnachricht zu lang.")
+        media = msg.audio.audioMessage
+        if not media.URL and str(media.directPath).startswith("/v/"):
+            media.URL = "https://mmg.whatsapp.net" + media.directPath
+        url = urlsplit(media.URL)
+        if (url.scheme != "https" or not (url.hostname or "").endswith(".whatsapp.net")
+                or url.username or url.password or url.port not in (None, 443)):
+            raise ValueError("Ungültige WhatsApp-Medienadresse.")
+        return bytes(self._client.download_any(msg.audio))
+
+    def voice_send(self, chat: str, data: bytes) -> None:
+        if self._ready_client() is None:
+            raise RuntimeError("WhatsApp ist nicht verbunden.")
+        message = self._client.build_audio_message(data, ptt=True)
+        digest = bytes(message.audioMessage.fileSHA256)
+        if len(digest) != 32:
+            raise ValueError("Audio-Kennung fehlt; verhindere eine Antwortschleife.")
+        self._sent_audio.append(digest)
+        self._client.send_message(self._jid(chat), message)
+
     @staticmethod
     def _jid(text: str) -> Any:
         from neonize.utils.jid import build_jid
@@ -622,6 +665,7 @@ class SignalTransport(Transport):
         self._proc: Any = None
         self._next_id = 0
         self._send_lock = threading.Lock()
+        self._pending_rpc: dict[int, tuple[threading.Event, list[Any]]] = {}
 
     def _program(self) -> str:
         if self._binary:
@@ -738,6 +782,13 @@ class SignalTransport(Transport):
                 continue
             if isinstance(meldung, dict) and meldung.get("method") == "receive":
                 self._deliver(parse_signal(meldung.get("params"), nummer))
+            elif isinstance(meldung, dict):
+                with self._send_lock:
+                    reply_id = meldung.get("id")
+                    pending = self._pending_rpc.get(reply_id) if isinstance(reply_id, int) else None
+                if pending:
+                    pending[1].append(meldung)
+                    pending[0].set()
         proc.wait()
         return "signal-cli wurde beendet." if not self._stopping.is_set() else ""
 
@@ -760,16 +811,64 @@ class SignalTransport(Transport):
     def own_chat(self) -> str:
         return "self" if clean_number(self.store.who("signal")) else ""
 
-    def _rpc(self, methode: str, parameter: dict[str, Any]) -> None:
+    def _rpc(self, methode: str, parameter: dict[str, Any], *, wait: bool = False) -> None:
         proc = self._proc
         if proc is None or proc.poll() is not None or self.status().state != CONNECTED:
             raise RuntimeError("Signal ist nicht verbunden.")
         with self._send_lock:
             self._next_id += 1
+            request_id = self._next_id
+            done = threading.Event()
+            result: list[Any] = []
+            if wait:
+                self._pending_rpc[request_id] = (done, result)
             anfrage = {"jsonrpc": "2.0", "method": methode, "id": self._next_id,
                        "params": parameter}
-            proc.stdin.write(json.dumps(anfrage) + "\n")
-            proc.stdin.flush()
+            try:
+                proc.stdin.write(json.dumps(anfrage) + "\n")
+                proc.stdin.flush()
+            except BaseException:
+                self._pending_rpc.pop(request_id, None)
+                raise
+        if wait:
+            try:
+                if (not done.wait(60) or not result or "error" in result[0]
+                        or "result" not in result[0]):
+                    raise RuntimeError("Signal hat die Sprachnachricht nicht bestätigt.")
+            finally:
+                with self._send_lock:
+                    self._pending_rpc.pop(request_id, None)
+
+    def voice_download(self, msg: Incoming) -> bytes:
+        name = str((msg.audio or {}).get("id", ""))
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,160}", name):
+            raise ValueError("Ungültiger Anhang.")
+        root = self.directory_for_session.resolve()
+        for folder in (root / "attachments", root / "data/attachments"):
+            path = folder / name
+            if not path.resolve().is_relative_to(root):
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+            except FileNotFoundError:
+                continue
+            with os.fdopen(fd, "rb") as source:
+                return source.read(12 * 1024 * 1024 + 1)
+        raise ValueError("Signal-Sprachnachricht ist noch nicht verfügbar.")
+
+    def voice_send(self, chat: str, data: bytes) -> None:
+        import hashlib
+        import tempfile
+
+        if chat != "self" and not NUMBER_RE.fullmatch(chat):
+            raise ValueError("Sprachnachrichten nur in freigegebenen Einzelchats.")
+        with tempfile.TemporaryDirectory(prefix="aquaticy-signal-voice-") as temp:
+            path = Path(temp) / "speech.ogg"
+            path.write_bytes(data)
+            self._sent_audio.append(hashlib.sha256(data).digest())
+            target = {"noteToSelf": True} if chat == "self" else {"recipient": [chat]}
+            self._rpc("send", {**target, "message": "[Aquaticy] Sprachnachricht",
+                               "attachments": [str(path)], "voiceNote": True}, wait=True)
 
     def send(self, chat: str, text: str) -> None:
         if chat == "self":
