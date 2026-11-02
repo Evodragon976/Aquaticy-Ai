@@ -77,6 +77,39 @@ _LAGER = re.compile(
     re.IGNORECASE,
 )
 
+# "Bitte sende mir den ganzen Text von der Email xy" (13.0.1 Luna): Ein Befehl, der eine Mail
+# zeigen, vorlesen oder schicken soll -- mit Bitte davor und etwas mehr Platz bis zum Mail-Wort.
+_MAIL_BEFEHL = re.compile(
+    r"^\s*(?:(?:bitte|please|kannst\s+du|k(?:ö|oe)nntest\s+du|can\s+you|could\s+you)\s+)?"
+    r"(?:lies|lese|zeig|zeige|sende|send|schick|schicke|gib|give|show|read|open|"
+    r"(?:ö|oe)ffne|kopier\w*|copy|fass|fasse)\s+(?:mir\s+|me\s+)?(?:[\w'-]+\s+){0,6}"
+    rf"{_MAIL_WORT}\b",
+    re.IGNORECASE,
+)
+
+# "Kannst du mir die letzte Mail vorlesen?" -- das Verb steht am Ende.
+_MAIL_BITTE = re.compile(
+    r"\b(?:kannst|k(?:ö|oe)nntest|w(?:ü|ue)rdest)\s+du\s+(?:mir\s+)?(?:[\w'-]+\s+){0,4}"
+    rf"{_MAIL_WORT}\s+(?:[\w'-]+\s+){{0,3}}(?:vor)?(?:lesen|zeigen|schicken|senden|geben|"
+    r"(?:ö|oe)ffnen|kopieren)\b",
+    re.IGNORECASE,
+)
+
+# Nach einer Antwort aus dem eigenen Postfach: "lies mir die zweite vor", "zeig den ganzen
+# Text", "und die Nachricht von Anna?" -- gemeint ist dieselbe Post.
+_POST_FOLGE = re.compile(
+    # bestimmt: "die Mail von Anna", "diese Nachricht" -- nicht "eine gute E-Mail" und nicht
+    # "die Nachrichten" (Neuigkeiten)
+    r"\b(?:die|der|den|dem|diese\w*|jene\w*|the|that|this)\s+(?:[\w'-]+\s+){0,2}"
+    r"(?:e-?mail|mail|nachricht|message)\b(?!en)"
+    r"|\b(?:die|der|den|the)\s+(?:erste|zweite|dritte|vierte|f(?:ü|ue)nfte|letzte|neueste|"
+    r"oberste|untere|first|second|third|fourth|fifth|last|latest|top)\b"
+    r"|\b(?:ganzen?|vollst(?:ä|ae)ndig\w*|komplett\w*|full|whole|entire)\s+"
+    r"(?:text|inhalt|content|wortlaut|body)\b"
+    r"|\bvor(?:lesen)?\s*[.!?]?\s*$",
+    re.IGNORECASE,
+)
+
 _MUSTER = {"home": _HAUS, "storage": _LAGER, "calendar": _KALENDER, "mail": _MAIL}
 
 
@@ -113,12 +146,29 @@ def own_sources(text: str) -> tuple[str, ...]:
         return ()
     treffer = []
     for quelle in SOURCES:
-        if not _MUSTER[quelle].search(roh):
+        if not _MUSTER[quelle].search(roh) and not (
+                quelle == "mail" and (_MAIL_BEFEHL.search(roh) or _MAIL_BITTE.search(roh))):
             continue
         if quelle == "home" and _HAUS_NICHT.search(roh):
             continue
         treffer.append(quelle)
     return tuple(treffer)
+
+
+def followup_sources(text: str, previous: tuple[str, ...] | list[str] = ()) -> tuple[str, ...]:
+    """Wie :func:`own_sources` -- und eine Folgefrage zur eigenen Post (13.0.1 Luna).
+
+    Kam die vorige Antwort aus dem eigenen Postfach, meint "lies mir die zweite vor" oder
+    "schick mir den ganzen Text" dieselbe Post. Ohne so eine vorige Antwort bleibt es eine
+    normale Frage.
+    """
+    eigene = own_sources(text)
+    if eigene or "mail" not in tuple(previous or ()):
+        return eigene
+    roh = " ".join(str(text or "").split())
+    if not roh or len(roh) > 300:
+        return ()
+    return ("mail",) if _POST_FOLGE.search(roh) else ()
 
 
 def calendar_days(text: str) -> int:

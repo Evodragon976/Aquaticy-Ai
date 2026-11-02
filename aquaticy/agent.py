@@ -2305,6 +2305,8 @@ class Agent:
         self.toolbox.untrusted_seen = False
 
         self.clarified: list[tuple[str, str]] = []
+        # Ein neuer Chat beginnt ohne "vorher ging es um Mails" (13.0.1 Luna).
+        self._eigene_davor: tuple[str, ...] = ()
         if new_chat:
             self.session_id = new_session_id()
 
@@ -2328,6 +2330,12 @@ class Agent:
                 self.messages.append({"role": "user", "content": question})
             if answer:
                 self.messages.append({"role": "assistant", "content": answer})
+        # Ging die letzte Frage an das eigene Postfach, gilt eine Folgefrage auch nach dem
+        # Wiederoeffnen dafuer ("lies mir die zweite vor").
+        from aquaticy.ownservices import own_sources
+
+        letzte = next((q for q, _ in reversed(turns) if q), "")
+        self._eigene_davor = own_sources(letzte)
 
     def remember_clarified(self, pairs: Any) -> None:
         """Nimmt geklaerte Angaben auf: (Rueckfrage, Antwort des Nutzers) (11.4.0 Luna).
@@ -3279,9 +3287,13 @@ class Agent:
         question = question.strip()
         self._plugin_turn = str(plugin_prompt or "").strip()
 
-        from aquaticy.ownservices import own_sources
+        from aquaticy.ownservices import followup_sources
 
-        self._eigene: tuple[str, ...] = () if self._plugin_turn else own_sources(question)
+        # Folgefragen zur eigenen Post (13.0.1 Luna): "schick mir den ganzen Text der zweiten".
+        davor = tuple(getattr(self, "_eigene_davor", ()) or ())
+        self._eigene: tuple[str, ...] = (
+            () if self._plugin_turn else followup_sources(question, davor))
+        self._eigene_davor = self._eigene
         self._ausweich_model = ""
         learning = getattr(self, "learning", None)
         self.toolbox.learning_ticket = ""
@@ -3679,6 +3691,9 @@ class Agent:
             kontext = self._recent_context(include_last=True)
             if absage is not None:
                 kontext += refused_note(absage[0], absage[1])
+            from aquaticy.guardrails import own_service_note
+
+            kontext += own_service_note(getattr(self, "_eigene", ()))
             verdict = self.guard.check_request(question, kontext)
             self._model_ready()
         if verdict.abuse:

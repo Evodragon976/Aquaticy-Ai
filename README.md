@@ -1,4 +1,4 @@
-# Aquaticy AI 13.0.0 Luna
+# Aquaticy AI 13.0.1 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -120,7 +120,7 @@ $ aquaticy
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 13.0.0 Luna
+aquaticy --version            # 13.0.1 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -925,7 +925,15 @@ zurücksetzt. Im Server-Verbund arbeitet er nur auf dem Heimserver seines Kontos
 ## Gmail und Kalender
 
 Aquaticy liest Termine und Mails. Mit „Ändern erlaubt“ legt es auch Termine an und schreibt
-Mail-**Entwürfe**. **Verschickt und gelöscht wird nichts.** Aquaticy bietet dafür keine
+Mail-**Entwürfe**.
+
+**Ganze Mails lesen (seit 13.0.1 Luna).** Nach „Was sind meine neusten Mails?“ kannst du
+nachfragen: „Sende mir den ganzen Text der Mail von Amazon“, „Lies mir die zweite vor“,
+„Kannst du mir die Mail von der Bank zeigen?“. Aquaticy erkennt das als Frage an dein eigenes
+Postfach, auch ohne „meine“. Der Rechtsprüfer erfährt das: Die eigene Post ganz zu lesen ist
+erlaubt, auch Post von anderen Personen. Er prüft die Anfrage trotzdem selbst, etwa auf
+Beleidigungen oder fremde Konten. Aquaticy liest eine Mail bis 6.000 Zeichen; was länger ist,
+kommt gekürzt an. **Verschickt und gelöscht wird nichts.** Aquaticy bietet dafür keine
 Werkzeuge an und verwendet feste API-Pfade. Googles Recht `gmail.compose` wird für Entwürfe
 benötigt und erlaubt technisch auch Senden; die Begrenzung auf Entwürfe liegt daher im Code.
 
