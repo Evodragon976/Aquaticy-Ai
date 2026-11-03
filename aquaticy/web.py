@@ -2593,15 +2593,20 @@ def feature_view(session: Any) -> dict[str, Any]:
 
     directory = get_settings().data_dir
     config = secure_pro.read(directory)
+    report = SECURE_WATCHER.snapshot() if SECURE_WATCHER else {
+        "findings": [], "positives": [], "checked": 0, "scanning": False, "error": ""}
+    if report.get("scope", "") != config.get("subnet", ""):
+        report.update(findings=[], positives=[], checked=0)
     return {"allowed": True, "voice": voice.enabled(), "voice_ready": voice.ready(directory),
             "secure": config.get("enabled") is True, "subnet": config.get("subnet", ""),
-            "findings": list(SECURE_WATCHER.last_findings) if SECURE_WATCHER else [],
-            "checked": SECURE_WATCHER.last_checked if SECURE_WATCHER else 0}
+            "router": config.get("router", ""),
+            **report}
 
 
 def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     if not host_feature_owner(session):
         return {"error": "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus."}, 403
+    from aquaticy import network_router as router
     from aquaticy import secure_pro, voice
 
     with FEATURE_LOCK:
@@ -2609,7 +2614,26 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
         settings = session.settings()
         cache = Cache(settings.db_path, settings.cache_ttl_hours)
         action = payload.get("action")
-        if action == "voice":
+        if action == "detect" or action == "router_test":
+            if not cache.is_secure_chat(session.chat_id()):
+                return {"error": "Öffne zuerst einen Secure-Pro-Chat."}, 409
+            if action == "detect":
+                return {"ok": True, **router.detect()}, 200
+            if payload.get("consent") is not True:
+                return {"error": "Bestätige die Netzfreigabe im Secure-Pro-Chat."}, 400
+            try:
+                tested = router.test(str(payload.get("router", "")),
+                                     str(payload.get("subnet", "")))
+                secure_pro.configure(directory, str(tested["subnet"]),
+                                     secure_pro.read(directory).get("folder", ""),
+                                     router=str(tested["router"]))
+            except (ValueError, OSError) as exc:
+                return {"error": str(exc)}, 400
+            if SECURE_WATCHER:
+                SECURE_WATCHER.wake.set()
+                SECURE_WATCHER.start()
+            return {"ok": True, "tested": tested, **feature_view(session)}, 200
+        elif action == "voice":
             if not isinstance(payload.get("enabled"), bool):
                 return {"error": "Wähle an oder aus."}, 400
             try:
@@ -2649,6 +2673,15 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
             else:
                 state = feature_view(session)
                 answer = ("Secure Pro ist an." if state["secure"] else "Secure Pro ist aus.")
+                if state["scanning"]:
+                    answer += "\nDie Prüfung läuft. Die Anzeige aktualisiert sich automatisch."
+                if state["error"]:
+                    answer += "\n" + state["error"]
+                if state["checked"]:
+                    answer += "\nLetzte abgeschlossene Prüfung: " + time.strftime(
+                        "%Y-%m-%d %H:%M:%S UTC", time.gmtime(state["checked"]))
+                if state["positives"]:
+                    answer += "\n\nPositiv beobachtet:\n- " + "\n- ".join(state["positives"])
                 answer += "\n" + ("\n".join(state["findings"]) or
                                    "Noch keine Prüfhinweise vorhanden. "
                                    "Das ist kein Sicherheitsnachweis.")

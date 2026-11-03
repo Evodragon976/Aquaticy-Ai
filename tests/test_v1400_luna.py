@@ -249,7 +249,7 @@ def test_secure_pro_reports_changes_without_calling_them_malware(tmp_path, monke
 def test_clamav_findings_and_errors_are_distinct(tmp_path, monkeypatch, status, word):
     monkeypatch.setattr(secure_pro.shutil, "which", lambda name: "/bin/clamscan")
     secure_pro.configure(tmp_path, "192.168.1.0/24", str(tmp_path))
-    monkeypatch.setattr(lan, "scan", lambda *a, **kw: [])
+    monkeypatch.setattr(lan, "scan", lambda *a, **kw: [lan.Device("192.168.1.2", ports=[443])])
     commands = []
 
     def run(args, **kwargs):

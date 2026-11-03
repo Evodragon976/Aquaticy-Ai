@@ -1752,9 +1752,14 @@ html.vv,html.vv body{height:var(--app-h)}
     </div>
     <section id="secure-panel" hidden aria-label="Secure Pro">
       <h2>Secure Pro</h2>
+      <label for="secure-router">Router-IP</label>
+      <input id="secure-router" placeholder="192.168.1.1" maxlength="15" inputmode="decimal">
+      <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
+      <p id="secure-router-hint" role="status"></p>
       <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
       <input id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
       <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf es prüfen.</label>
+      <button id="secure-test" type="button" class="btn">Router testen und starten</button>
       <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
       <button id="secure-check" type="button" class="btn">Prüfen</button>
       <button id="secure-status" type="button" class="btn">Status</button>
@@ -1762,6 +1767,12 @@ html.vv,html.vv body{height:var(--app-h)}
       <p>Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.</p>
       <p>Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.</p>
       <p id="secure-note" role="status"></p>
+      <p id="secure-checked"></p>
+      <h3>Positiv beobachtet</h3>
+      <ul id="secure-positive"></ul>
+      <h3>Prüfhinweise</h3>
+      <ul id="secure-findings"></ul>
+      <p>Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.</p>
     </section>
     <div class="thread" id="thread" role="log" aria-live="polite"
          aria-relevant="additions text"></div>
@@ -2797,7 +2808,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.1 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.1 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5499,6 +5510,33 @@ try {
 
 
 const EN = {
+"Bestätige die Netzfreigabe im Secure-Pro-Chat.": "Confirm network authorization in the Secure Pro chat.",
+"Öffne zuerst einen Secure-Pro-Chat.": "Open a Secure Pro chat first.",
+"Gib eine private IPv4-Adresse für den Router ein.": "Enter a private IPv4 address for the router.",
+"Der Router muss im freigegebenen Netz mit höchstens 256 Adressen liegen.": "The router must be within the authorized network of at most 256 addresses.",
+"Der Router muss im freigegebenen Netz liegen.": "The router must be within the authorized network.",
+"Keine Antwort auf TCP 443, 80 oder 53. Prüfe Router-IP und Erreichbarkeit. Ein gesperrter Port bedeutet nicht, dass der Router unsicher ist.": "No response on TCP 443, 80 or 53. Check the router IP and reachability. A blocked port does not mean the router is unsafe.",
+
+"Die erreichbaren Geräte sind seit der letzten Prüfung unverändert.": "Reachable devices are unchanged since the last check.",
+"Bei den erreichbaren Geräten antworten weder FTP noch Telnet.": "Neither FTP nor Telnet responded on the reachable devices.",
+"Keine Geräte über die geprüften TCP-Ports erreichbar. Prüfe Netz, Router und Container-Anbindung. Das ist kein sauberes Ergebnis.": "No devices responded on the checked TCP ports. Check the network, router and container access. This is not a clean result.",
+"ClamAV meldet in den geprüften lokalen Dateien keinen Fund. Dateien außerhalb der Scan-Grenzen wurden nicht geprüft.": "ClamAV reported no findings in the checked local files. Files beyond the scan limits were not checked.",
+
+"Router-IP": "Router IP",
+"Router automatisch erkennen": "Detect router automatically",
+"Router testen und starten": "Test router and start",
+"Positiv beobachtet": "Positive observations",
+"Prüfhinweise": "Findings to review",
+"Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.": "Results apply to the Aquaticy server network. They are not a complete security assessment.",
+"Vorschlag aus der Standardroute des Aquaticy-Servers. Prüfe, ob es dein Heimnetz ist.": "Suggested by the Aquaticy server default route. Check that this is your home network.",
+"Keinen Router erkannt. Trage die private Router-IP und dein Netz ein.": "No router detected. Enter the private router IP and your network.",
+"Aquaticy läuft in einem Container. Die Route kann zum Container-Netz gehören.": "Aquaticy runs in a container. The route may belong to the container network.",
+"Die Prüfung läuft.": "The check is running.",
+"Die erste Prüfung steht noch aus.": "The first check is pending.",
+"Noch keine abgeschlossene Prüfung.": "No completed check yet.",
+"Router antwortet. Secure Pro wurde gestartet.": "Router responded. Secure Pro has started.",
+"Die Prüfung ist fehlgeschlagen. Es liegt kein sauberes Ergebnis vor.": "The check failed. There is no clean result.",
+
 "Eigenes Netz (CIDR, höchstens 256 Adressen)": "Your network (CIDR, up to 256 addresses)",
 "Dieses Netz gehört mir oder ich darf es prüfen.": "I own this network or have permission to check it.",
 "Netz freigeben": "Authorize network",
@@ -6584,6 +6622,12 @@ const schluessel = text => text.replace(/\s+/g, " ").trim();
 
 
 const EN_MUSTER = [
+  [/^Der Prüfbereich bleibt privat und umfasst (\d+) Adressen\.$/,
+   "The check stays within a private range of $1 addresses."],
+  [/^Bei (\d+) erreichbaren Geräten antwortet keiner der geprüften Risikodienste\.$/,
+   "None of the checked risk services responded on $1 reachable devices."],
+  [/^Bei (\d+) Geräten antwortet Port 443 oder 8443\. Dort sind oft verschlüsselte Weboberflächen erreichbar\. TLS und Zertifikate wurden nicht geprüft\.$/,
+   "$1 devices responded on port 443 or 8443, often used for encrypted web interfaces. TLS and certificates were not checked."],
   [/^Verbunden mit (.+)\.$/, "Connected to $1."],
   [/^Von (.+) trennen\?$/, "Disconnect from $1?"],
   [/^(WhatsApp|Signal) ist gerade nicht erreichbar\. Prüfe die Internetverbindung\.$/,
@@ -7166,7 +7210,7 @@ async function openChat(sessionId, {force = false} = {}){
   currentChat = sessionId;
   secureChat = data.secure_pro === true;
   $("#secure-panel").hidden = !secureChat;
-  if (secureChat) featureLoad();
+  if (secureChat) loadSecureChat();
   const artVorher = chatArt();
   if (data.kind === "code" && mode !== "code") setMode("code");
   else if (data.kind !== "code" && (mode === "code" || mode !== data.mode))
@@ -9697,6 +9741,61 @@ async function featureRequest(payload){
   if (!response.ok) throw new Error(data.error || "Das hat nicht geklappt.");
   return data;
 }
+let secureRefreshTimer = null, secureRefreshPending = false;
+function secureRender(data, fill = false){
+  if (!secureChat) return;
+  if (fill){
+    for (const id of ["subnet", "router"]){
+      const field = $("#secure-" + id);
+      if (document.activeElement !== field) field.value = data[id] || "";
+    }
+  }
+  let note = data.secure ? sp("Secure Pro ist an.", "Secure Pro is on.")
+    : sp("Secure Pro ist aus.", "Secure Pro is off.");
+  if (data.scanning) note += " " + sp("Die Prüfung läuft.", "The check is running.");
+  else if (data.secure && !data.checked)
+    note += " " + sp("Die erste Prüfung steht noch aus.", "The first check is pending.");
+  if (data.error) note += " " + enOderDe(data.error);
+  $("#secure-note").textContent = note;
+  $("#secure-checked").textContent = data.checked
+    ? sp("Letzte abgeschlossene Prüfung: ", "Last completed check: ")
+      + new Date(data.checked * 1000).toLocaleString()
+    : sp("Noch keine abgeschlossene Prüfung.", "No completed check yet.");
+  for (const [id, items] of [["secure-positive", data.positives], ["secure-findings", data.findings]]){
+    const list = $("#" + id); list.replaceChildren();
+    for (const item of items || []){
+      const li = document.createElement("li"); li.textContent = item; list.appendChild(li);
+    }
+    uebersetze(list);
+  }
+}
+function secureSchedule(){
+  clearTimeout(secureRefreshTimer);
+  if (!secureChat || document.hidden) return;
+  secureRefreshTimer = setTimeout(async () => {
+    if (!secureChat || document.hidden) return;
+    const chat = currentChat;
+    if (!secureRefreshPending){
+      secureRefreshPending = true;
+      try {
+        const response = await api("/api/features", {quietErrors:true});
+        const data = await response.json();
+        if (chat === currentChat && secureChat){
+          if (response.ok && data.allowed) secureRender(data);
+          else $("#secure-note").textContent = data.error || sp(
+            "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.",
+            "Only the owner in single-account mode can manage these features.");
+        }
+      } catch {
+        if (chat === currentChat && secureChat)
+          $("#secure-note").textContent = sp("Aquaticy ist gerade nicht erreichbar.",
+                                           "Aquaticy is currently unreachable.");
+      } finally { secureRefreshPending = false; }
+    }
+    secureSchedule();
+  }, 5000);
+}
+document.addEventListener("visibilitychange", secureSchedule);
 async function featureLoad(){
   try {
     const response = await api("/api/features", {quietErrors:true});
@@ -9709,12 +9808,46 @@ async function featureLoad(){
     $("#secure-setting").checked = !!data.secure;
     $("#feature-note").textContent = allowed ? ""
       : "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.";
-    if (allowed && secureChat){
-      $("#secure-subnet").value = data.subnet || "";
-      $("#secure-note").textContent = data.secure ? "Secure Pro ist an." : "Secure Pro ist aus.";
-    }
+    if (allowed && secureChat) secureRender(data, true);
   } catch { $("#feature-note").textContent = "Aquaticy ist gerade nicht erreichbar."; }
 }
+async function secureDetect(replace = false){
+  const chat = currentChat, button = $("#secure-detect"); button.disabled = true;
+  try {
+    const data = await featureRequest({action:"detect"});
+    if (!secureChat || chat !== currentChat) return;
+    for (const id of ["router", "subnet"]){
+      const field = $("#secure-" + id);
+      if (replace || !field.value) field.value = data[id] || "";
+    }
+    $("#secure-router-hint").textContent = data.hint || "";
+    uebersetze($("#secure-router-hint"));
+  } catch(error){
+    if (secureChat && chat === currentChat) $("#secure-router-hint").textContent = error.message;
+  } finally { button.disabled = false; }
+}
+async function loadSecureChat(){
+  const chat = currentChat;
+  await featureLoad();
+  if (!secureChat || chat !== currentChat) return;
+  if (!$("#secure-router").value) await secureDetect();
+  secureSchedule();
+}
+$("#secure-detect").addEventListener("click", () => secureDetect(true));
+$("#secure-test").addEventListener("click", async event => {
+  const button = event.target, chat = currentChat; button.disabled = true;
+  try {
+    const data = await featureRequest({action:"router_test", router:$("#secure-router").value.trim(),
+      subnet:$("#secure-subnet").value.trim(), consent:$("#secure-consent").checked});
+    if (!secureChat || chat !== currentChat) return;
+    secureRender(data);
+    $("#secure-router-hint").textContent = sp("Router antwortet. Secure Pro wurde gestartet.",
+                                            "Router responded. Secure Pro has started.");
+    secureSchedule();
+  } catch(error){
+    if (secureChat && chat === currentChat) $("#secure-note").textContent = error.message;
+  } finally { button.disabled = false; }
+});
 async function openSecureChat(){
   try {
     const data = await featureRequest({action:"open"});

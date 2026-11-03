@@ -26,12 +26,20 @@ def read(directory: Path) -> dict[str, Any]:
         return {}
 
 
-def configure(directory: Path, subnet: str, folder: str = "") -> None:
+def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "") -> None:
     from aquaticy.lan import parse_subnet
 
     network = parse_subnet(subnet)
     if network.num_addresses > 256:
         raise ValueError("Secure Pro prüft höchstens 256 Adressen.")
+    if router:
+        import ipaddress
+
+        from aquaticy.network_router import private_address
+
+        router = private_address(router)
+        if ipaddress.IPv4Address(router) not in network:
+            raise ValueError("Der Router muss im freigegebenen Netz liegen.")
     target = Path(folder).expanduser().resolve() if folder else None
     if target is not None and (not target.is_dir() or not shutil.which("clamscan")):
         raise ValueError("Für lokale Dateien braucht Secure Pro einen Ordner und ClamAV.")
@@ -40,7 +48,7 @@ def configure(directory: Path, subnet: str, folder: str = "") -> None:
                  | getattr(os, "O_NOFOLLOW", 0), 0o600)
     with os.fdopen(fd, "w") as output:
         json.dump({"enabled": True, "subnet": str(network),
-                   "folder": str(target) if target else ""}, output)
+                   "router": router, "folder": str(target) if target else ""}, output)
 
 
 class Watcher:
@@ -54,8 +62,19 @@ class Watcher:
         self.wake = threading.Event()
         self.last_findings: list[str] = []
         self.last_checked = 0.0
+        self.positives: list[str] = []
+        self.error = ""
+        self.scanning = False
+        self._network = ""
+        self._result_subnet = ""
         self._requested = 0.0
         self._lock = threading.Lock()
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {"findings": list(self.last_findings), "positives": list(self.positives),
+                    "checked": self.last_checked, "scanning": self.scanning, "error": self.error,
+                    "scope": self._result_subnet}
 
     def start(self) -> None:
         with self._lock:
@@ -91,12 +110,34 @@ class Watcher:
         network = lan.parse_subnet(config.get("subnet", ""))
         if network.num_addresses > 256:
             raise ValueError("Netz zu groß.")
-        devices = lan.scan(str(network), quick=False, with_titles=False)
+        if str(network) != self._network:
+            self.known = None
+            self.announced.clear()
+            self._network = str(network)
+        devices = lan.scan(str(network), quick=False, with_titles=False, with_names=False)
         findings: set[str] = set()
+        positives = [f"Der Prüfbereich bleibt privat und umfasst {network.num_addresses} Adressen."]
         current = {d.address for d in devices}
         if self.known is not None:
             findings.update(f"Neues Gerät: {ip}" for ip in current - self.known)
-        self.known = current
+            if current and current == self.known:
+                positives.append("Die erreichbaren Geräte sind seit der letzten Prüfung "
+                                 "unverändert.")
+        if devices:
+            if not any(set(device.ports) & set(RISK_PORTS) for device in devices):
+                positives.append(f"Bei {len(devices)} erreichbaren Geräten antwortet keiner der "
+                                 "geprüften Risikodienste.")
+            if not any(set(device.ports) & {21, 23} for device in devices):
+                positives.append("Bei den erreichbaren Geräten antworten weder FTP noch Telnet.")
+            tls_ports = sum(bool(set(device.ports) & {443, 8443}) for device in devices)
+            if tls_ports:
+                positives.append(f"Bei {tls_ports} Geräten antwortet Port 443 oder 8443. "
+                                 "Dort sind oft verschlüsselte Weboberflächen erreichbar. "
+                                 "TLS und Zertifikate wurden nicht geprüft.")
+        else:
+            findings.add("Keine Geräte über die geprüften TCP-Ports erreichbar. "
+                         "Prüfe Netz, Router und Container-Anbindung. "
+                         "Das ist kein sauberes Ergebnis.")
         for device in devices:
             for port in device.ports:
                 if port in RISK_PORTS:
@@ -123,9 +164,19 @@ class Watcher:
                              "lokalen Ordner. Öffne das lokale Secure-Pro-Protokoll.")
             elif result.returncode != 0:
                 findings.add("ClamAV-Prüfung fehlgeschlagen. Es liegt kein sauberes Ergebnis vor.")
+            else:
+                positives.append("ClamAV meldet in den geprüften lokalen Dateien keinen Fund. "
+                                 "Dateien außerhalb der Scan-Grenzen wurden nicht geprüft.")
+        if self.stop_event.is_set() or read(self.directory) != config:
+            return []
+        self.known = current
         self.announced.intersection_update(findings)
-        self.last_findings = sorted(findings)[:200]
-        self.last_checked = time.time()
+        with self._lock:
+            self.last_findings = sorted(findings)[:200]
+            self.positives = positives
+            self.last_checked = time.time()
+            self._result_subnet = str(network)
+            self.error = ""
         new = sorted(findings - self.announced)[:20]
         if new and not self.stop_event.is_set() and read(self.directory) == config:
             message = "[Aquaticy] Secure Pro\n" + "\n".join(new)
@@ -142,10 +193,15 @@ class Watcher:
                 self.wake.wait()
                 continue
             try:
+                with self._lock:
+                    self.scanning = True
                 findings = self.tick()
                 if findings:
                     LOG.warning("Secure Pro: %s", "; ".join(findings))
             except Exception:
+                with self._lock:
+                    self.error = ("Die Prüfung ist fehlgeschlagen. "
+                                  "Es liegt kein sauberes Ergebnis vor.")
                 LOG.warning("Secure-Pro-Prüfung fehlgeschlagen; kein sauberes Ergebnis.")
                 if (not self.stop_event.is_set()
                         and read(self.directory).get("enabled") is True):
@@ -155,4 +211,7 @@ class Watcher:
                                     "Prüfe das lokale Protokoll.")
                     except Exception:
                         LOG.warning("Secure-Pro-Warnung konnte nicht versendet werden.")
+            finally:
+                with self._lock:
+                    self.scanning = False
             self.wake.wait(900)

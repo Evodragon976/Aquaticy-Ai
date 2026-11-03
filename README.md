@@ -1,4 +1,4 @@
-# Aquaticy AI 14.0.1 Luna
+# Aquaticy AI 14.0.1 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,18 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.0.1 Terra:** Secure Pro schlägt die Router-IP und einen privaten Prüfbereich vor.
+Öffne den Secure-Pro-Chat, kontrolliere den Vorschlag und bestätige deine Berechtigung für dieses Netz.
+Mit **Router testen und starten** prüfst du die Erreichbarkeit und startest die Überwachung.
+Die Route stammt vom Aquaticy-Server; bei VPNs oder Containern kann es ein anderes Netz sein.
+Du kannst Router-IP und Prüfbereich ändern oder das Netz weiterhin von Hand freigeben.
+Die Anzeige aktualisiert sich während des geöffneten Chats und pausiert in versteckten Tabs.
+Sie zeigt Fortschritt, letzte abgeschlossene Prüfung, Fehler, positive Beobachtungen und Prüfhinweise.
+Keine Antwort bedeutet keinen Sicherheitsnachweis. Ein antwortender HTTPS-Port belegt
+weder TLS noch gültige Zertifikate.
+Secure Pro führt keine Anmeldung, Passwortversuche oder Angriffe durch.
+Es verändert keine Router-Einstellungen.
 
 **Neu in 14.0.1 Luna:** Der Besitzer findet Secure Pro und Sprachnachrichten unter
 **Einstellungen → Dev settings**. Secure Pro öffnet einen eigenen, dauerhaft markierten Chat.
@@ -171,7 +183,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.0.1 Luna
+aquaticy --version            # 14.0.1 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

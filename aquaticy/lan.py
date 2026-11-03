@@ -277,7 +277,8 @@ def web_title(address: str, port: int, timeout: float = 1.5) -> str:
 
 
 def check_host(
-    address: str, ports: tuple[int, ...] = FULL_PORTS, *, with_title: bool = True
+    address: str, ports: tuple[int, ...] = FULL_PORTS, *, with_title: bool = True,
+    with_names: bool = True,
 ) -> Device | None:
     """Prueft ein einzelnes Geraet. `None`, wenn kein Port antwortet."""
     with ThreadPoolExecutor(max_workers=min(len(ports), 32)) as pool:
@@ -292,7 +293,7 @@ def check_host(
         return None
     device = Device(
         address=address,
-        name=hostname_of(address),
+        name=hostname_of(address) if with_names else "",
         ports=found,
         services=[KNOWN_PORTS[port] for port in found if port in KNOWN_PORTS],
     )
@@ -310,6 +311,7 @@ def scan(
     *,
     quick: bool = True,
     with_titles: bool = True,
+    with_names: bool = True,
     on_device: object = None,
 ) -> list[Device]:
     """Durchsucht *subnet* (leer = das eigene Netz) nach erreichbaren Geraeten.
@@ -333,20 +335,28 @@ def scan(
 
 
     pairs = [(address, port) for address in addresses for port in ports]
+    observed: dict[str, list[int]] = {}
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         answered = pool.map(lambda pair: port_open(*pair), pairs)
-        living = list(
-            dict.fromkeys(
-                address
-                for (address, _), is_open in zip(pairs, answered, strict=True)
-                if is_open
-            )
-        )
+        for (address, port), is_open in zip(pairs, answered, strict=True):
+            if is_open:
+                observed.setdefault(address, []).append(port)
+    living = list(observed)
+    if not with_names and not with_titles:
+        observed_devices = [Device(address=address, ports=found,
+                                   services=[KNOWN_PORTS[p] for p in found if p in KNOWN_PORTS])
+                            for address, found in observed.items()]
+        if callable(on_device):
+            for observed_device in observed_devices:
+                on_device(observed_device)
+        observed_devices.sort(key=lambda item: tuple(int(part) for part in item.address.split(".")))
+        return observed_devices
 
     devices: list[Device] = []
     with ThreadPoolExecutor(max_workers=min(max(len(living), 1), 32)) as pool:
         for device in pool.map(
-            lambda address: check_host(address, ports, with_title=with_titles), living
+            lambda address: check_host(address, ports, with_title=with_titles,
+                                       with_names=with_names), living
         ):
             if device is None:
                 continue
