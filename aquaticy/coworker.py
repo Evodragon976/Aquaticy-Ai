@@ -116,7 +116,7 @@ CATEGORY_OF = {tool: kat for kat in CATEGORIES for tool in kat.tools}
 
 FORBIDDEN = frozenset({
     "change_setting", "ask_user", "create_image", "blender_run", "remember",
-    "research_subtasks", "inspect_public_visual",
+    "research_subtasks", "inspect_public_visual", "lan_ssh",
 })
 
 

@@ -235,6 +235,7 @@ OUTBOUND: dict[str, dict[str, str]] = {
     "desktop_type": {"text": "text"},
     "desktop_open": {"target": "text", "url": "url", "app": "text"},
     "vm_run": {"command": "code", "code": "code", "script": "code"},
+    "lan_ssh": {"command": "code", "host": "text", "user": "text"},
 
 
     "vm_write": {"text": "code", "path": "text"},

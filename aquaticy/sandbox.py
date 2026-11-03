@@ -625,6 +625,19 @@ def ensure_image(runtime: Runtime, image: str, *, build: bool = False,
     raise SandboxUnavailable(missing_image_text(runtime, image))
 
 
+def ensure_ssh_image(runtime: Runtime) -> None:
+    def ready() -> bool:
+        inspected = _runs(runtime.binary, "image", "inspect", "--format",
+                          '{{index .Config.Labels "org.aquaticy.openssh"}}', DESKTOP_IMAGE)
+        return inspected.returncode == 0 and inspected.stdout.strip() == "1"
+
+    if ready():
+        return
+    with _BUILD_LOCK:
+        if not ready():
+            build_desktop_image(runtime)
+
+
 def ensure_addon_volume(runtime: Runtime, volume: str, image: str) -> None:
     """Legt den Datentraeger eines Add-ons an (falls noetig) und gibt ihn 1000.
 
@@ -800,6 +813,9 @@ class Sandbox:
                 )
             self.runtime = runtime
             self._check_nested_network()
+            if self.lan and self.image == DESKTOP_IMAGE:
+                self._emit("vm_ssh_setup")
+                ensure_ssh_image(runtime)
             token = uuid.uuid4().hex[:12]
             self._name = f"aquaticy-werkstatt-{token}"
             self._volume = f"aquaticy-werkstatt-{token}"

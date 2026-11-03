@@ -1,4 +1,4 @@
-# Aquaticy AI 14.0.1 Sol
+# Aquaticy AI 14.0.2 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,26 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.0.2 Sol:** OpenSSH aus der aktivierten VM zu eigenen Geräten im Heimnetz.
+Aktiviere im Code-Chat die VM und unter Einstellungen sowohl die Netzsuche als auch
+**Auch ins lokale Netz** (Ultra). Aquaticy erhält dann das Werkzeug `lan_ssh`.
+Mit `action=key` erstellt es ein Schlüsselpaar in der VM und zeigt nur den öffentlichen Teil.
+Diesen gibst du am Zielgerät frei. Private Schlüssel oder Passwörter gehören nicht in den Chat.
+`action=inspect` zeigt die öffentlichen Hostschlüssel des genannten Geräts, ohne Anmeldung.
+Vergleiche den SHA256-Fingerabdruck direkt am Gerät, etwa mit
+`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` auf dem Zielgerät.
+`action=run` führt einen Befehl mit dem bestätigten Hostschlüssel und deiner Freigabe aus.
+SSH-Ausgaben gelten als fremder Inhalt. Das SSH-Werkzeug nutzt keine Passwortversuche
+oder automatische Weiterleitungen.
+Ein Zeitlimit beendet die Verbindung; es macht bereits erfolgte Änderungen am Gerät nicht rückgängig.
+
+Das Standardabbild bekommt `openssh-client` beim nächsten VM-Start automatisch.
+Laufende VMs werden dafür nicht gelöscht. Eine alte VM ohne OpenSSH muss zuvor beendet werden.
+Dabei und nach 20 Minuten Ruhe verschwinden ihre Dateien und Schlüssel wie bisher.
+Für eigene Abbilder muss `openssh-client` selbst enthalten sein. Aquaticy startet keinen SSH-Server
+und übernimmt keine Schlüssel oder SSH-Konfiguration vom Host. Coworker erhalten dieses Werkzeug nicht.
+Die allgemeine VM-Netzfreigabe erlaubt weiterhin auch eigenen Programmen Zugriff auf das Heimnetz.
 
 **Neu in 14.0.1 Sol:** Die Dateiprüfung meldet fehlendes ClamAV ausdrücklich.
 Verschobene Ordner und nachträglich eingesetzte symbolische Verknüpfungen erweitern die Freigabe nicht.
@@ -191,7 +211,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.0.1 Sol
+aquaticy --version            # 14.0.2 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

@@ -34,7 +34,7 @@ RUN (grep -rqs universe /etc/apt/sources.list /etc/apt/sources.list.d/ \
             >> /etc/apt/sources.list) \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        tini python3 ca-certificates iptables locales \
+        tini python3 ca-certificates iptables locales openssh-client \
         xvfb x11-xserver-utils xdotool wmctrl openbox tint2 imagemagick dbus-x11 \
         fonts-dejavu-core fonts-liberation2 \
         falkon \
@@ -72,5 +72,6 @@ RUN chmod 0755 /usr/local/bin/aquaticy-desktop /usr/local/bin/aquaticy-addons \
     && chmod 0700 /usr/local/sbin/aquaticy-netz
 
 LABEL org.aquaticy.werkstatt="desktop"
+LABEL org.aquaticy.openssh="1"
 USER 1000
 WORKDIR /work

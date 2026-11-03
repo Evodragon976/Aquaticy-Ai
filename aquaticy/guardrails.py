@@ -264,6 +264,7 @@ SENSITIVE_TOOLS: dict[str, str] = {
     "vm_run": "führt in der virtual machine (Linux-Container) einen Befehl aus oder "
               "installiert etwas",
     "vm_write": "schreibt in der virtual machine eine Datei, etwa ein Programm oder Skript",
+    "lan_ssh": "führt über OpenSSH in der VM Befehle auf einem freigegebenen Heimnetzgerät aus",
     "blender_run": "führt in der virtual machine ein Blender-Python-Skript aus",
 }
 
@@ -1000,7 +1001,7 @@ def event_payload(verdict: Verdict, stage: str, tool: str = "") -> dict[str, Any
 
 
 
-BASELINE_VM_TOOLS = frozenset({"vm_run", "vm_write", "blender_run", "desktop_type"})
+BASELINE_VM_TOOLS = frozenset({"vm_run", "vm_write", "blender_run", "desktop_type", "lan_ssh"})
 BASELINE_IMAGE_RULES = frozenset({"menschenwuerde", "persoenlichkeit", "ruf"})
 BASELINE_TOOLS = BASELINE_VM_TOOLS | {"create_image"}
 

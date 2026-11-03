@@ -2543,6 +2543,9 @@ html.vv,html.vv body{height:var(--app-h)}
         </div>
         <label><span class="lbl">Dein Netz (leer lassen = automatisch)</span>
           <input type="text" name="AQUATICY_LAN_SUBNET" placeholder="192.168.1.0/24"></label>
+        <p class="note">Mit eingeschalteter VM und „Auch ins lokale Netz“ kann Aquaticy OpenSSH nutzen.
+          Der öffentliche VM-Schlüssel wird am eigenen Gerät freigegeben. Prüfe dessen Fingerabdruck
+          direkt dort. Jeder Befehl über das SSH-Werkzeug braucht dein Ja. Keine Passwörter oder privaten Schlüssel im Chat.</p>
 
         <div class="sub-title">Lagerverwaltung</div>
         <div class="inline">
@@ -2808,7 +2811,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.1 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.2 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -4620,6 +4623,9 @@ async function verfolge(hole, steps, bubble, text){
                `Double-checked — ${ev.checked} partial results against other sources, `
                + "nothing contradicted"));
         break;
+      case "vm_ssh_setup":
+        step(steps, "[virtual machine]", sp("Prüft OpenSSH; alte Abbilder werden aktualisiert.",
+          "Checking OpenSSH; old images are updated.")); break;
       case "vm_start":
         step(steps, "[virtual machine]", sp(`wird gestartet (${ev.runtime})`,
                                             `starting (${ev.runtime})`)); break;
@@ -5510,6 +5516,9 @@ try {
 
 
 const EN = {
+"Prüft OpenSSH; alte Abbilder werden aktualisiert.": "Checking OpenSSH; old images are updated.",
+"Mit eingeschalteter VM und „Auch ins lokale Netz“ kann Aquaticy OpenSSH nutzen. Der öffentliche VM-Schlüssel wird am eigenen Gerät freigegeben. Prüfe dessen Fingerabdruck direkt dort. Jeder Befehl über das SSH-Werkzeug braucht dein Ja. Keine Passwörter oder privaten Schlüssel im Chat.": "With the VM and “Also into the local network” enabled, Aquaticy can use OpenSSH. Authorize the public VM key on your own device. Verify its fingerprint directly there. Every command through the SSH tool needs your approval. No passwords or private keys in chat.",
+
 "ClamAV fehlt. Die freigegebene Dateiprüfung ist nicht erfolgt. Installiere ClamAV erneut.": "ClamAV is missing. The authorized file check did not run. Install ClamAV again.",
 "Der freigegebene Dateiordner wurde verschoben oder ersetzt. Die Dateiprüfung ist nicht erfolgt. Gib den Ordner erneut frei.": "The authorized folder was moved or replaced. The file check did not run. Authorize the folder again.",
 "Einstellungen dürfen keine symbolische Verknüpfung sein.": "Settings must not be symbolic links.",

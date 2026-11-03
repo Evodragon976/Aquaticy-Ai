@@ -92,6 +92,7 @@ def test_the_lock_is_set_up_unless_lan_is_on(monkeypatch: pytest.MonkeyPatch, la
     monkeypatch.setattr(box, "_create_volume", lambda: None)
     monkeypatch.setattr(box, "_start_container", lambda: None)
     monkeypatch.setattr(box, "_check_nested_network", lambda: None)
+    monkeypatch.setattr(sandbox, "ensure_ssh_image", lambda runtime: None)
     monkeypatch.setattr(box, "_touch_locked", lambda: None)
     box.ensure()
     assert bool(aufrufe) is gesperrt

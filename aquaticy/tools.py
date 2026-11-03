@@ -1032,7 +1032,7 @@ WORK_TOOLS: dict[str, str] = {
     "fetch_page": "seite", "inspect_public_visual": "seite", "read_feeds": "seite",
     "news_tagesschau": "suche", "wikipedia": "suche", "currency": "suche",
     "holidays": "suche",
-    "vm_run": "werkstatt", "blender_run": "werkstatt",
+    "vm_run": "werkstatt", "blender_run": "werkstatt", "lan_ssh": "werkstatt",
     "vm_write": "datei", "vm_read": "datei", "vm_files": "datei",
     "desktop_look": "desktop", "desktop_click": "desktop", "desktop_type": "desktop",
     "desktop_key": "desktop", "desktop_open": "desktop", "desktop_scroll": "desktop",
@@ -1050,7 +1050,7 @@ UNTRUSTED_SOURCES = frozenset({
 
 
 
-    "vm_run", "vm_read", "vm_files", "blender_run", "ha_states",
+    "vm_run", "vm_read", "vm_files", "blender_run", "ha_states", "lan_ssh",
 })
 
 
@@ -1069,6 +1069,37 @@ CONFIRM_AFTER_UNTRUSTED: dict[str, str] = {
     "lan_scan": "das Heimnetz durchsuchen",
     "lan_check": "ein Gerät im Heimnetz abfragen",
 }
+
+SSH_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "lan_ssh",
+        "description": (
+            "OpenSSH in der freigegebenen VM zum eigenen Heimnetz. action=key erzeugt "
+            "einen VM-Schluessel und zeigt nur den oeffentlichen Teil. Der Nutzer traegt "
+            "ihn am Zielgeraet ein. action=inspect liest oeffentliche Hostschluessel ohne "
+            "Anmeldung. action=run braucht host, user, command und server_key aus inspect. "
+            "Der Nutzer prueft den SHA256-Fingerabdruck am Geraet und bestaetigt jeden Befehl. "
+            "Keine Passwoerter oder privaten Schluessel im Chat. Nur private IPv4-Adressen."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["key", "inspect", "run"]},
+                "host": {"type": "string", "description": "Private IPv4-Adresse aus lan_check."},
+                "user": {"type": "string", "description": "SSH-Nutzer am eigenen Geraet."},
+                "command": {"type": "string", "description": "Genau ein freizugebender Befehl."},
+                "server_key": {"type": "string", "description": "Oeffentlicher Hostschluessel."},
+                "key_file": {"type": "string",
+                             "description": "VM-Datei, Standard /work/.ssh/id_ed25519."},
+                "port": {"type": "integer", "description": "Standard 22."},
+                "timeout": {"type": "integer", "description": "1 bis 120 Sekunden, Standard 30."},
+            },
+            "required": ["action"],
+        },
+    },
+}
+
 
 VM_SCHEMAS: tuple[dict[str, Any], ...] = (
     VM_RUN_SCHEMA,
@@ -1241,6 +1272,8 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
 
 
     schemas = list(copy.deepcopy(VM_SCHEMAS + (DESKTOP_SCHEMAS if user_mode else ())))
+    if getattr(settings, "vm_lan", False) and getattr(settings, "lan_enabled", False):
+        schemas.append(copy.deepcopy(SSH_SCHEMA))
     from aquaticy import addons
 
     aktiv = addons.active_ids(settings) if getattr(settings, "data_dir", None) else []
@@ -1610,6 +1643,7 @@ class Toolbox:
         self.subagent_runner: Callable[[list[str]], list[dict[str, Any]]] | None = None
 
         self.ask_handler: AskHandler | None = None
+        self.ssh_allowed: Callable[[], bool] | None = None
 
 
         self.untrusted_seen = False
@@ -2455,6 +2489,51 @@ class Toolbox:
         self.stats.vm_calls += 1
         return result.as_dict()
 
+    def lan_ssh(self, **arguments: Any) -> dict[str, Any]:
+        from aquaticy import vm_ssh
+        from aquaticy.sandbox import SandboxUnavailable
+
+        def allowed() -> bool:
+            return bool(self.ssh_allowed and self.ssh_allowed()
+                        and self.settings.lan_enabled and self.settings.vm_lan)
+
+        if not allowed():
+            return {"error": "SSH braucht eine eingeschaltete VM und beide Heimnetz-Freigaben."}
+        try:
+            data = vm_ssh.prepare(**arguments)
+            box = self._sandbox()
+            if not box.lan or not box.netz_offen:
+                return {"error": "Diese VM hat keine Heimnetz-Freigabe."}
+            name = box.ensure()
+            if data["action"] == "run":
+                if self.ask_handler is None:
+                    return {"error": "Ohne persönliche Bestätigung wird kein SSH-Befehl "
+                                     "ausgeführt."}
+                question = (
+                    f"Gehört {data['user']}@{data['host']}:{data['port']} zu deinem freigegebenen "
+                    f"Gerät? Prüfe dessen Hostschlüssel dort selbst: {data['fingerprint']}. "
+                    f"Diesen SSH-Befehl ausführen?\n{data['command']}")
+                refusal = self._confirm(question)
+                if refusal:
+                    return {"error": refusal}
+                if not allowed() or box.name != name or not box.alive or not box.lan:
+                    return {"error": "Die VM oder ihre Freigabe hat sich geändert. "
+                                     "Erneut anfragen."}
+            result = box.run(vm_ssh.vm_command(data), timeout=min(120, data["timeout"] + 10))
+            self.stats.vm_calls += 1
+            payload = result.as_dict()
+            if result.exit_code == 127:
+                payload["error"] = ("OpenSSH fehlt im VM-Abbild. Beende die alte VM. "
+                                    "Das Standardabbild wird beim nächsten Start aktualisiert. "
+                                    "Eigene Abbilder brauchen openssh-client.")
+            if data["action"] == "inspect":
+                payload["keys"] = vm_ssh.inspected_keys(result.stdout)
+                payload["note"] = ("Diese Schlüssel sind noch nicht vertrauenswürdig. "
+                                   "Vergleiche den Fingerabdruck direkt am Zielgerät.")
+            return payload
+        except (ValueError, TypeError, SandboxUnavailable) as exc:
+            return {"error": str(exc)}
+
     def vm_write(self, path: str, text: str) -> dict[str, Any]:
         """Legt eine Datei in der virtual machine an."""
         from aquaticy.sandbox import SandboxUnavailable
@@ -3009,6 +3088,8 @@ class Toolbox:
                 where=str(arguments.get("where") or ""),
                 radius_km=radius,
             )
+        if name == "lan_ssh":
+            return self.lan_ssh(**arguments)
         if name == "vm_run":
             return self.vm_run(
                 command=str(arguments.get("command", "")),

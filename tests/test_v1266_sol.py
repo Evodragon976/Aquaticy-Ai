@@ -284,6 +284,10 @@ def test_qr_popup_opens_early_and_discards_late_frames(parallel_site, messenger,
             assert frames
             if finish in ("confirm", "already_linked"):
                 page.click("#qr-done")
+                for _ in range(50):
+                    if held:
+                        break
+                    page.wait_for_timeout(20)
                 assert held and held[0].request.post_data_json == {
                     "action": "login_done", "id": messenger, "token": "test-token"}
                 held.pop().fulfill(status=200, json={**data, "ok": True})

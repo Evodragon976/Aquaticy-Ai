@@ -1499,6 +1499,7 @@ class Agent:
             spec_extractor=self.extract_specs,
             visual_inspector=self.inspect_public_visual,
         )
+        self.toolbox.ssh_allowed = lambda: self._vm_ready() and not self.stopped
 
 
 
@@ -2728,6 +2729,16 @@ class Agent:
             }
             if user_mode:
                 text += USER_MODE_PROMPT
+            if self.settings.lan_enabled and self.settings.vm_lan:
+                text += ("\nOpenSSH steht mit lan_ssh bereit: erst action=key fuer den "
+                         "oeffentlichen VM-Schluessel, dann action=inspect am genannten Geraet. "
+                         "Der Nutzer traegt den oeffentlichen Schluessel selbst am Ziel ein "
+                         "und prueft dessen Host-Fingerabdruck direkt dort. action=run braucht "
+                         "Nutzername, Befehl und den bestaetigten server_key. Jeder Befehl "
+                         "wird persoenlich freigegeben. Nie Passwoerter oder private Schluessel "
+                         "im Chat erfragen, keine Hostschluesselpruefung umgehen. Fuer SSH "
+                         "lan_ssh verwenden; Absagen nicht ueber vm_run oder den Desktop umgehen. "
+                         "Fehlgeschlagene Remote-Befehle nicht blind wiederholen.\n")
         self._addon_prompt_seen = self._addon_prompt()
         text += self._addon_prompt_seen
         if not self.online:
