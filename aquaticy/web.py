@@ -2595,8 +2595,8 @@ def feature_view(session: Any) -> dict[str, Any]:
     config = secure_pro.read(directory)
     report = SECURE_WATCHER.snapshot() if SECURE_WATCHER else {
         "findings": [], "positives": [], "checked": 0, "scanning": False, "error": ""}
-    if report.get("scope", "") != config.get("subnet", ""):
-        report.update(findings=[], positives=[], checked=0)
+    if report.get("configuration", "") != secure_pro.config_token(config):
+        report.update(findings=[], positives=[], checked=0, error="")
     return {"allowed": True, "voice": voice.enabled(), "voice_ready": voice.ready(directory),
             "secure": config.get("enabled") is True, "subnet": config.get("subnet", ""),
             "router": config.get("router", ""),

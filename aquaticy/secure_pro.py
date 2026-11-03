@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-import os
 import shutil
 import subprocess
 import threading
@@ -13,6 +13,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from aquaticy import private_json
+
 LOG = logging.getLogger(__name__)
 RISK_PORTS = {21: "FTP", 23: "Telnet", 3389: "Fernwartung", 5900: "VNC",
               6379: "Redis", 3306: "MySQL", 5432: "PostgreSQL"}
@@ -20,10 +22,14 @@ RISK_PORTS = {21: "FTP", 23: "Telnet", 3389: "Fernwartung", 5900: "VNC",
 
 def read(directory: Path) -> dict[str, Any]:
     try:
-        value = json.loads((directory / "secure-pro.json").read_text())
+        value = json.loads((directory / "secure-pro.json").read_text(encoding="utf-8"))
         return value if isinstance(value, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def config_token(config: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
 
 
 def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "") -> None:
@@ -43,12 +49,9 @@ def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "
     target = Path(folder).expanduser().resolve() if folder else None
     if target is not None and (not target.is_dir() or not shutil.which("clamscan")):
         raise ValueError("Für lokale Dateien braucht Secure Pro einen Ordner und ClamAV.")
-    directory.mkdir(parents=True, exist_ok=True)
-    fd = os.open(directory / "secure-pro.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-                 | getattr(os, "O_NOFOLLOW", 0), 0o600)
-    with os.fdopen(fd, "w") as output:
-        json.dump({"enabled": True, "subnet": str(network),
-                   "router": router, "folder": str(target) if target else ""}, output)
+    private_json.write(directory / "secure-pro.json", {
+        "enabled": True, "subnet": str(network), "router": router,
+        "folder": str(target) if target else ""})
 
 
 class Watcher:
@@ -67,6 +70,7 @@ class Watcher:
         self.scanning = False
         self._network = ""
         self._result_subnet = ""
+        self._configuration = ""
         self._requested = 0.0
         self._lock = threading.Lock()
 
@@ -74,7 +78,7 @@ class Watcher:
         with self._lock:
             return {"findings": list(self.last_findings), "positives": list(self.positives),
                     "checked": self.last_checked, "scanning": self.scanning, "error": self.error,
-                    "scope": self._result_subnet}
+                    "scope": self._result_subnet, "configuration": self._configuration}
 
     def start(self) -> None:
         with self._lock:
@@ -107,6 +111,15 @@ class Watcher:
         config = read(self.directory)
         if config.get("enabled") is not True or self.stop_event.is_set():
             return []
+        token = config_token(config)
+        with self._lock:
+            if self._configuration != token:
+                self._configuration = token
+                self.announced.clear()
+                self.last_findings = []
+                self.positives = []
+                self.last_checked = 0
+                self.error = ""
         network = lan.parse_subnet(config.get("subnet", ""))
         if network.num_addresses > 256:
             raise ValueError("Netz zu groß.")
@@ -145,20 +158,23 @@ class Watcher:
                                  f"(Port {port}). "
                                  "Offen heißt nicht verwundbar oder infiziert.")
         folder = config.get("folder", "")
-        if folder and shutil.which("clamscan"):
+        target = Path(folder) if folder else None
+        if target and (not target.is_dir() or target.resolve() != target):
+            findings.add("Der freigegebene Dateiordner wurde verschoben oder ersetzt. "
+                         "Die Dateiprüfung ist nicht erfolgt. Gib den Ordner erneut frei.")
+        elif folder and not shutil.which("clamscan"):
+            findings.add("ClamAV fehlt. Die freigegebene Dateiprüfung ist nicht erfolgt. "
+                         "Installiere ClamAV erneut.")
+        elif target:
             result = subprocess.run(
                 ["clamscan", "--recursive", "--infected", "--no-summary",
                  "--follow-dir-symlinks=0", "--follow-file-symlinks=0",
                  "--max-filesize=20M", "--max-scansize=100M", "--max-files=10000",
-                 str(Path(folder).resolve())], capture_output=True, text=True,
+                 str(target)], capture_output=True, text=True,
                 timeout=120, check=False)
-            fd = os.open(self.directory / "secure-pro-report.json",
-                         os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-                         | getattr(os, "O_NOFOLLOW", 0), 0o600)
-            with os.fdopen(fd, "w") as report:
-                json.dump({"status": result.returncode, "scanned_at": int(time.time()),
-                           "truncated": len(result.stdout) > 50000,
-                           "findings": result.stdout[:50000]}, report)
+            private_json.write(self.directory / "secure-pro-report.json", {
+                "status": result.returncode, "scanned_at": int(time.time()),
+                "truncated": len(result.stdout) > 50000, "findings": result.stdout[:50000]})
             if result.returncode == 1:
                 findings.add("ClamAV meldet mindestens einen Malwarefund im freigegebenen "
                              "lokalen Ordner. Öffne das lokale Secure-Pro-Protokoll.")
@@ -180,8 +196,12 @@ class Watcher:
         new = sorted(findings - self.announced)[:20]
         if new and not self.stop_event.is_set() and read(self.directory) == config:
             message = "[Aquaticy] Secure Pro\n" + "\n".join(new)
-            if self.notify(message[:2900]):
-                self.announced.update(new)
+            try:
+                if self.notify(message[:2900]):
+                    self.announced.update(new)
+            except Exception:
+                LOG.warning("Secure-Pro-Hinweis konnte nicht versendet werden; "
+                            "die Prüfergebnisse bleiben verfügbar.")
         return new
 
     def _run(self) -> None:

@@ -71,9 +71,16 @@ def detect() -> dict[str, str]:
         try:
             result = subprocess.run(command, capture_output=True, text=True, timeout=3,
                                     check=False)
-            pattern = (r"^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+([\d.]+)"
-                       if system == "Windows" else r"^\s*gateway:\s*([\d.]+)")
-            matches = re.findall(pattern, result.stdout, re.M) if result.returncode == 0 else []
+            matches: list[str] = []
+            if result.returncode == 0:
+                if system == "Windows":
+                    pattern = (r"^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+([\d.]+)"
+                               r"\s+[\d.]+\s+(\d+)\s*$")
+                    routes = re.findall(pattern, result.stdout, re.M)
+                    matches = [address for address, _ in sorted(routes,
+                                                               key=lambda row: int(row[1]))]
+                else:
+                    matches = re.findall(r"^\s*gateway:\s*([\d.]+)", result.stdout, re.M)
             for candidate in matches:
                 try:
                     gateway = private_address(candidate)

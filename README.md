@@ -1,4 +1,4 @@
-# Aquaticy AI 14.0.1 Terra
+# Aquaticy AI 14.0.1 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,14 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.0.1 Sol:** Die Dateiprüfung meldet fehlendes ClamAV ausdrücklich.
+Verschobene Ordner und nachträglich eingesetzte symbolische Verknüpfungen erweitern die Freigabe nicht.
+Nach geänderter Freigabe zeigt Secure Pro erst wieder Ergebnisse aus der aktuellen Konfiguration.
+Einstellungen und Prüfberichte werden vollständig und mit privaten Dateirechten ersetzt.
+Ein Schreibfehler lässt den bisherigen Stand erhalten.
+Unter Windows berücksichtigt die Router-Erkennung die Priorität der Standardrouten.
+Fehler beim Zugriff auf Sprachmodelle legen die Einstellungen nicht mehr lahm.
 
 **Neu in 14.0.1 Terra:** Secure Pro schlägt die Router-IP und einen privaten Prüfbereich vor.
 Öffne den Secure-Pro-Chat, kontrolliere den Vorschlag und bestätige deine Berechtigung für dieses Netz.
@@ -183,7 +191,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.0.1 Terra
+aquaticy --version            # 14.0.1 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

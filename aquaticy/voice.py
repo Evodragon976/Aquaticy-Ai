@@ -15,6 +15,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from aquaticy import private_json
+
 MAX_BYTES = 12 * 1024 * 1024
 MAX_SECONDS = 90
 _slot = threading.BoundedSemaphore(1)
@@ -38,7 +40,7 @@ def root() -> Path:
 
 def enabled() -> bool:
     try:
-        return json.loads((root() / "voice.json").read_text())["enabled"] is True
+        return json.loads((root() / "voice.json").read_text(encoding="utf-8"))["enabled"] is True
     except (OSError, ValueError, KeyError, TypeError):
         return False
 
@@ -62,21 +64,19 @@ def configure(directory: Path, enable: bool) -> None:
 
 
 def ready(directory: Path) -> bool:
-    return bool(shutil.which("ffmpeg") and shutil.which("espeak-ng")
-                and importlib.util.find_spec("faster_whisper")
-                and next((p for p in (directory / "voice-models").rglob("model.bin")
-                          if p.is_file() and p.stat().st_size > 0), None))
+    try:
+        return bool(shutil.which("ffmpeg") and shutil.which("espeak-ng")
+                    and importlib.util.find_spec("faster_whisper")
+                    and next((p for p in (directory / "voice-models").rglob("model.bin")
+                              if p.is_file() and p.stat().st_size > 0), None))
+    except (OSError, ImportError, ValueError):
+        return False
 
 
 def set_enabled(directory: Path, enable: bool) -> None:
     if enable and not ready(directory):
         raise ValueError("Sprachnachrichten zuerst im Terminal mit aquaticy voice einrichten.")
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / "voice.json"
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-                 | getattr(os, "O_NOFOLLOW", 0), 0o600)
-    with os.fdopen(fd, "w") as stream:
-        json.dump({"enabled": enable}, stream)
+    private_json.write(directory / "voice.json", {"enabled": enable})
 
 
 def transcribe(data: bytes) -> str:
