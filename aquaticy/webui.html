@@ -2566,9 +2566,9 @@ html.vv,html.vv body{height:var(--app-h)}
         <div class="note" id="lager-note"></div>
         <div class="note">Löschen darf Aquaticy nie. Das machst nur du. Die Lagerverwaltung hat kein
           Passwort. „Nur lesen“ gilt nur für Aquaticy, nicht für andere in deinem Netz.</div>
-      </fieldset>
 
-      <fieldset id="secure-section"><legend>Secure Pro</legend>
+        <div id="secure-section">
+        <div class="sub-title">Secure Pro</div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="secure-setting">
           <label for="secure-setting" style="margin:0">Secure Pro
@@ -2607,15 +2607,21 @@ html.vv,html.vv body{height:var(--app-h)}
             </div>
             <label><span class="lbl">Wie oft</span>
               <select id="secure-interval">
-                <option value="5">alle 5 Minuten</option>
-                <option value="15">alle 15 Minuten</option>
-                <option value="30">alle 30 Minuten</option>
-                <option value="60">stündlich</option>
-                <option value="180">alle 3 Stunden</option>
-                <option value="360">alle 6 Stunden</option>
-                <option value="720">alle 12 Stunden</option>
-                <option value="1440">täglich</option>
+                <option value="0">die ganze Zeit</option>
+                <option value="30">alle 30 Sekunden</option>
+                <option value="60">jede Minute</option>
+                <option value="120">alle 2 Minuten</option>
+                <option value="300">alle 5 Minuten</option>
+                <option value="900">alle 15 Minuten</option>
+                <option value="1800">alle 30 Minuten</option>
+                <option value="3600">stündlich</option>
+                <option value="10800">alle 3 Stunden</option>
+                <option value="21600">alle 6 Stunden</option>
+                <option value="43200">alle 12 Stunden</option>
+                <option value="86400">täglich</option>
               </select></label>
+            <p class="note">Die ganze Zeit und kurze Abstände belasten Heimnetz und Geräte
+              stärker. Eine Prüfung dauert oft länger als 30 Sekunden.</p>
             <p id="secure-next" class="note" role="status"></p>
             <div class="check">
               <input type="checkbox" role="switch" class="schalter" id="secure-packets">
@@ -2627,6 +2633,15 @@ html.vv,html.vv body{height:var(--app-h)}
                   Verkehr und Rundrufe.</span></label>
             </div>
             <p id="secure-packet-note" class="note" role="status"></p>
+            <div class="check">
+              <input type="checkbox" role="switch" class="schalter" id="secure-nmap">
+              <label for="secure-nmap" style="margin:0">nmap für Schwachstellen nutzen
+                <span class="why">nmap liest Dienste und Versionen und führt nur sichere
+                  Prüfskripte aus. Nichts davon geht ins Internet. Secure Pro prüft neue oder
+                  geänderte Geräte, sonst jedes Gerät einmal am Tag. Im Chat kannst du gezielt
+                  prüfen lassen.</span></label>
+            </div>
+            <p id="secure-nmap-note" class="note" role="status"></p>
             <div class="check">
               <input type="checkbox" role="switch" class="schalter" id="secure-vm">
               <label for="secure-vm" style="margin:0">VM für Abwehr nutzen
@@ -2653,6 +2668,8 @@ html.vv,html.vv body{height:var(--app-h)}
           <p id="secure-checked"></p>
           <h3>Wichtig</h3>
           <ul id="secure-important"></ul>
+          <h3>Tipps für dein Heimnetz</h3>
+          <ul id="secure-tips"></ul>
           <h3>Prüfhinweise</h3>
           <ul id="secure-findings"></ul>
           <h3>Positiv beobachtet</h3>
@@ -2665,6 +2682,7 @@ html.vv,html.vv body{height:var(--app-h)}
           <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
         </div>
         <p id="feature-note" class="note" role="status"></p>
+        </div>
       </fieldset>
 
       <fieldset id="workshop-settings"><legend>virtual machine</legend>
@@ -2888,7 +2906,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.1.3 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.1.3 Terra";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5592,6 +5610,18 @@ try {
 
 
 const EN = {
+"Die ganze Zeit und kurze Abstände belasten Heimnetz und Geräte stärker. Eine Prüfung dauert oft länger als 30 Sekunden.": "All the time and short intervals put more load on your home network and devices. A check often takes longer than 30 seconds.",
+"nmap für Schwachstellen nutzen": "Use nmap for vulnerabilities",
+"nmap liest Dienste und Versionen und führt nur sichere Prüfskripte aus. Nichts davon geht ins Internet. Secure Pro prüft neue oder geänderte Geräte, sonst jedes Gerät einmal am Tag. Im Chat kannst du gezielt prüfen lassen.": "nmap reads services and versions and only runs safe check scripts. None of it goes to the internet. Secure Pro checks new or changed devices, otherwise each device once a day. In the chat you can ask for targeted checks.",
+"Tipps für dein Heimnetz": "Tips for your home network",
+"alle 30 Sekunden": "every 30 seconds",
+"alle 2 Minuten": "every 2 minutes",
+"nmap findet eine Schwachstelle.": "nmap finds a vulnerability.",
+"nmap prüft nur das freigegebene private Netz.": "nmap only checks the authorized private network.",
+"Nenne eine IP-Adresse aus deinem freigegebenen Netz.": "Name an IP address from your authorized network.",
+"nmap hat zu lange gebraucht. Prüfe weniger Geräte auf einmal.": "nmap took too long. Check fewer devices at once.",
+"nmap ist fehlgeschlagen. Es liegt kein Ergebnis vor.": "nmap failed. There is no result.",
+"Höchstens zwei nmap-Prüfungen je Nachricht.": "At most two nmap checks per message.",
 "Schützt dein Heimnetz. Secure Pro sucht Malware-Zeichen, Angriffe und riskante Dienste. Es meldet sich im eigenen Chat, wenn etwas Wichtiges passiert.": "Protects your home network. Secure Pro looks for signs of malware, attacks and risky services. It reports in its own chat when something important happens.",
 "Cloud-Modelle bekommen deine Nachrichten und ausgewählte Netzbefunde. Für lokale Verarbeitung wähle ein lokales Modell.": "Cloud models receive your messages and selected network findings. For local processing, choose a local model.",
 "Neue Werte gelten erst nach deiner bestätigten Netzfreigabe. Lokale Dateiordner gibst du mit aquaticy secure-pro im Terminal frei.": "New values apply only after you confirm network authorization. Authorize local folders with aquaticy secure-pro in the terminal.",
@@ -7864,7 +7894,9 @@ async function loadAccount(account){
   const section = $("#pro-features");
   section.classList.toggle("locked-feature", !ultra);
   $("#pro-lock").hidden = ultra;
-  section.querySelectorAll("input,select,button").forEach(field => { field.disabled = !ultra; });
+  section.querySelectorAll("input,select,button").forEach(field => {
+    if (!field.closest("#secure-section")) field.disabled = !ultra;
+  });
 
   const system = $("#pro-system");
   system.hidden = !ultra;
@@ -9893,7 +9925,7 @@ function secureOptionen(data){
   if (!data.secure) return;
   $("#secure-watch").checked = data.watch !== false;
   if (document.activeElement !== $("#secure-interval"))
-    $("#secure-interval").value = String(data.interval || 15);
+    $("#secure-interval").value = String(data.seconds ?? 900);
   $("#secure-interval").disabled = data.watch === false;
   $("#secure-packets").checked = !!data.packets;
   $("#secure-vm").checked = !!data.vm;
@@ -9904,6 +9936,11 @@ function secureOptionen(data){
       ? sp("Nächste Prüfung: ", "Next check: ") + new Date(data.next_check * 1000).toLocaleString()
       : "";
   $("#secure-packet-note").textContent = data.packets ? enOderDe(data.packet_status || "") : "";
+  $("#secure-nmap").checked = !!data.nmap;
+  $("#secure-nmap-note").textContent = !data.nmap_ready
+    ? sp("nmap fehlt. Installiere es mit aquaticy secure-pro oder sudo apt install nmap.",
+         "nmap is missing. Install it with aquaticy secure-pro or sudo apt install nmap.")
+    : data.nmap ? enOderDe(data.nmap_status || "") : "";
   $("#secure-vm-note").textContent = data.vm && !data.vm_network
     ? sp("Schalte dafür „Auch ins lokale Netz“ (virtual machine) und „Ins eigene Netz sehen dürfen“ (Zuhause & Netz) ein.",
          "For this, turn on “Also into the local network” (virtual machine) and “May look into your own network” (Home & network).")
@@ -9962,6 +9999,7 @@ function secureRender(data, fill = false){
     : [sp("Nichts Wichtiges.", "Nothing important.")]);
   secureListe("secure-findings", (data.findings || []).filter(item => !wichtig.includes(item)));
   secureListe("secure-positive", data.positives);
+  secureListe("secure-tips", data.tips);
   secureOptionen(data);
   // Neue wichtige Meldung, waehrend der Secure-Pro-Chat offen ist: Verlauf neu laden.
   const kennung = wichtig.join("\n");
@@ -10003,7 +10041,8 @@ async function featureLoad(){
     const data = await response.json();
     const allowed = response.ok && data.allowed;
     for (const id of ["voice-setting", "secure-setting", "secure-open", "secure-watch",
-                      "secure-interval", "secure-packets", "secure-vm", "secure-task-add"]){
+                      "secure-interval", "secure-packets", "secure-vm", "secure-nmap",
+                      "secure-task-add"]){
       $("#" + id).disabled = !allowed;
     }
     $("#voice-setting").checked = !!data.voice;
@@ -10142,7 +10181,8 @@ async function secureOption(werte, feld){
 }
 $("#secure-watch").addEventListener("change", e => secureOption({watch:e.target.checked}, e.target));
 $("#secure-interval").addEventListener("change", e =>
-  secureOption({interval:Number(e.target.value)}, e.target));
+  secureOption({seconds:Number(e.target.value)}, e.target));
+$("#secure-nmap").addEventListener("change", e => secureOption({nmap:e.target.checked}, e.target));
 $("#secure-packets").addEventListener("change", e =>
   secureOption({packets:e.target.checked}, e.target));
 $("#secure-vm").addEventListener("change", e => secureOption({vm:e.target.checked}, e.target));

@@ -92,22 +92,24 @@ def test_stored_tasks_are_checked_again() -> None:
 # -- Einstellungen in secure-pro.json -----------------------------------------------------------
 def test_options_have_safe_defaults_and_are_validated(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Netz"):
-        secure_pro.set_options(tmp_path, {"interval": 5})
+        secure_pro.set_options(tmp_path, {"seconds": 300})
     secure_pro.configure(tmp_path, NETZ)
+    # 14.1.3 Terra: der Abstand steht in Sekunden ("seconds"), dazu der nmap-Schalter.
     assert secure_pro.options(secure_pro.read(tmp_path)) == {
-        "watch": True, "interval": 15, "packets": False, "vm": False, "tasks": []}
-    for falsch in ({"interval": 7}, {"interval": "5"}, {"interval": True},
-                   {"packets": "ja"}, {"vm": 1}, {"watch": None}):
+        "watch": True, "seconds": 900, "packets": False, "vm": False, "nmap": False,
+        "tasks": []}
+    for falsch in ({"seconds": 7}, {"seconds": "60"}, {"seconds": True},
+                   {"packets": "ja"}, {"vm": 1}, {"watch": None}, {"nmap": "an"}):
         with pytest.raises(ValueError):
             secure_pro.set_options(tmp_path, falsch)
     token = secure_pro.config_token(secure_pro.read(tmp_path))
-    neu = secure_pro.set_options(tmp_path, {"interval": 60, "packets": True, "vm": True,
+    neu = secure_pro.set_options(tmp_path, {"seconds": 3600, "packets": True, "vm": True,
                                             "watch": False})
-    assert neu["interval"] == 60 and neu["packets"] and neu["vm"] and not neu["watch"]
+    assert neu["seconds"] == 3600 and neu["packets"] and neu["vm"] and not neu["watch"]
     assert secure_pro.config_token(secure_pro.read(tmp_path)) == token, \
         "Zeitplan und Schalter verwerfen keine Ergebnisse"
     secure_pro.configure(tmp_path, NETZ, router="192.168.1.1")
-    assert secure_pro.options(secure_pro.read(tmp_path))["interval"] == 60, "bleibt erhalten"
+    assert secure_pro.options(secure_pro.read(tmp_path))["seconds"] == 3600, "bleibt erhalten"
 
 
 def test_tasks_are_added_and_removed(tmp_path: Path) -> None:
@@ -128,7 +130,7 @@ def test_the_schedule_follows_the_settings(tmp_path: Path) -> None:
     watcher = secure_pro.Watcher(tmp_path, lambda text: True)
     secure_pro.configure(tmp_path, NETZ)
     assert watcher._wait_seconds() == 15 * 60
-    secure_pro.set_options(tmp_path, {"interval": 1440})
+    secure_pro.set_options(tmp_path, {"seconds": 86400})
     assert watcher._wait_seconds() == 1440 * 60
     secure_pro.set_options(tmp_path, {"watch": False})
     assert watcher._wait_seconds() is None, "aus: nur auf Anfrage"
@@ -453,10 +455,10 @@ def test_defense_tools_are_offered_only_when_allowed(settings, monkeypatch) -> N
 def test_owner_sets_schedule_and_tasks(owner) -> None:  # noqa: F811
     session, settings = owner
     secure_pro.configure(settings.data_dir, NETZ)
-    daten, status = web.feature_action(session, {"action": "options", "interval": 60,
+    daten, status = web.feature_action(session, {"action": "options", "seconds": 3600,
                                                  "packets": True})
-    assert status == 200 and daten["interval"] == 60 and daten["packets"]
-    assert web.feature_action(session, {"action": "options", "interval": 2})[1] == 400
+    assert status == 200 and daten["seconds"] == 3600 and daten["packets"]
+    assert web.feature_action(session, {"action": "options", "seconds": 2})[1] == 400
     assert web.feature_action(session, {"action": "options"})[1] == 400
     daten, status = web.feature_action(session, {"action": "task_add",
                                                  "text": "Melde neue Geräte"})
@@ -527,16 +529,19 @@ def test_settings_are_grouped() -> None:
     assert legenden == ["Konto", "Nutzung", "Speicher", "Gemeinsames Lernen", "Mitlesen",
                         "Auslastung · Ultra", "Ort &amp; Sprache", "Suche",
                         "Helfer &amp; Grenzen", "Gmail &amp; Kalender", "Zuhause &amp; Netz",
-                        "Secure Pro", "virtual machine", "Messenger", "Dev settings"]
+                        "virtual machine", "Messenger", "Dev settings"]
 
     def abschnitt(legende: str) -> str:
         start = formular.index(f"<legend>{legende}</legend>")
         return formular[start:formular.index("</fieldset>", start)]
 
-    assert 'id="secure-setting"' in abschnitt("Secure Pro")
-    for feld in ("secure-interval", "secure-watch", "secure-packets", "secure-vm",
-                 "secure-task-text", "secure-important"):
-        assert f'id="{feld}"' in abschnitt("Secure Pro"), feld
+    # 14.1.3 Terra: Secure Pro ist ein Unterpunkt von "Zuhause & Netz".
+    netz = abschnitt("Zuhause &amp; Netz")
+    assert netz.index('id="lanon"') < netz.index('id="secure-section"')
+    for feld in ("secure-setting", "secure-interval", "secure-watch", "secure-packets",
+                 "secure-vm", "secure-nmap", "secure-task-text", "secure-important",
+                 "secure-tips"):
+        assert f'id="{feld}"' in netz, feld
     assert 'id="secure-status"' not in html, "Status zeigt die Seite ohnehin laufend"
     assert 'id="voice-setting"' in abschnitt("Messenger")
     assert 'id="pw"' in abschnitt("Suche")
@@ -576,7 +581,7 @@ def test_schedule_and_tasks_in_real_browser(server, monkeypatch):  # noqa: F811
         page = context.new_page()
         page.goto(f"http://127.0.0.1:{server}")
         page.locator("#btn-settings").click()
-        page.locator('#secnav button:has-text("Secure Pro")').click()
+        page.locator('#secnav button:has-text("Zuhause & Netz")').click()
         page.locator("#secure-setting").check()
         playwright.expect(page.locator("#secure-more")).to_be_hidden()
         page.locator("#secure-subnet").fill("192.168.1.0/24")
@@ -584,7 +589,7 @@ def test_schedule_and_tasks_in_real_browser(server, monkeypatch):  # noqa: F811
         page.locator("#secure-apply").click()
         playwright.expect(page.locator("#secure-more")).to_be_visible()
         playwright.expect(page.locator("#secure-watch")).to_be_checked()
-        page.locator("#secure-interval").select_option("60")
+        page.locator("#secure-interval").select_option("30")
         page.locator("#secure-task-text").fill("Melde dich, wenn ein neues Gerät ins Netz kommt")
         page.locator("#secure-task-add").click()
         playwright.expect(page.locator("#secure-task-note")).to_contain_text("Verstanden")
@@ -595,7 +600,7 @@ def test_schedule_and_tasks_in_real_browser(server, monkeypatch):  # noqa: F811
         page.locator("#secure-vm").check()
         playwright.expect(page.locator("#secure-vm-note")).to_contain_text("Auch ins lokale Netz")
         daten = json.loads(_req(server, "GET", "/api/features", cookie=cookie)[2])
-        assert daten["interval"] == 60 and daten["vm"] and len(daten["tasks"]) == 1
+        assert daten["seconds"] == 30 and daten["vm"] and len(daten["tasks"]) == 1
         if os.environ.get("AQUATICY_SCREENSHOT"):
             page.locator("#secure-section").screenshot(path=os.environ["AQUATICY_SCREENSHOT"])
         page.locator("#secure-tasks li button").click()

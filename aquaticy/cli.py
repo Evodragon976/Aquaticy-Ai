@@ -372,10 +372,42 @@ def _setup_secure_pro() -> None:
         secure_pro.configure(get_settings().data_dir, subnet, folder)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
+    _install_nmap()
     console.print("Secure Pro ist an. Wichtiges steht im Secure-Pro-Chat und kommt per "
                   "WhatsApp/Signal.")
-    console.print("Zeitplan, Paketprüfung, VM und Aufgaben: Einstellungen → Secure Pro.")
+    console.print("Zeitplan, Paketprüfung, nmap, VM und Aufgaben: Einstellungen → Zuhause & "
+                  "Netz → Secure Pro.")
     console.print("Läuft die Weboberfläche schon, starte sie neu.")
+
+
+def _install_nmap(*, assume_yes: bool = False) -> bool:
+    """Bietet nmap fuer die Schwachstellenpruefung von Secure Pro an (14.1.3 Terra)."""
+    import shutil
+
+    if shutil.which("nmap"):
+        console.print("nmap ist da. Schalte es unter Einstellungen → Zuhause & Netz → Secure Pro "
+                      "ein.")
+        return True
+    apt = shutil.which("apt-get")
+    if not apt:
+        console.print("nmap fehlt. Installiere es mit deinem Paketverwalter, zum Beispiel: "
+                      "brew install nmap", markup=False)
+        return False
+    command = ([] if not hasattr(os, "geteuid") or os.geteuid() == 0 else ["sudo"])
+    command += [apt, "install", "-y", "nmap"]
+    if command[0] == "sudo" and not shutil.which("sudo"):
+        console.print("nmap fehlt. Installiere es als Administrator: apt-get install nmap")
+        return False
+    console.print("Installationsbefehl: " + " ".join(command), markup=False)
+    if not (assume_yes or typer.confirm("nmap für die Schwachstellenprüfung installieren?",
+                                        default=False)):
+        return False
+    try:
+        subprocess.run(command, check=True, timeout=900)
+    except (OSError, subprocess.SubprocessError) as exc:
+        console.print(f"[red]nmap ließ sich nicht installieren:[/red] {exc}", markup=False)
+        return False
+    return shutil.which("nmap") is not None
 
 
 @app.command("voice")

@@ -28,9 +28,14 @@ RISK_PORTS = {21: "FTP", 23: "Telnet", 1433: "Microsoft SQL", 2375: "Docker-API"
               3389: "Fernwartung", 5900: "VNC", 6379: "Redis", 3306: "MySQL",
               5432: "PostgreSQL", 9200: "Elasticsearch", 11211: "Memcached",
               27017: "MongoDB"}
-# Wie oft Secure Pro prueft, in Minuten (wie bei den Coworkern waehlbar).
-INTERVALS = (5, 15, 30, 60, 180, 360, 720, 1440)
-DEFAULT_INTERVAL = 15
+# Wie oft Secure Pro prueft, in Sekunden (wie bei den Coworkern waehlbar). 0 = die ganze
+# Zeit: nach jeder Pruefung nur eine kurze Pause (14.1.3 Terra).
+INTERVALS = (0, 30, 60, 120, 300, 900, 1800, 3600, 10800, 21600, 43200, 86400)
+DEFAULT_INTERVAL = 900
+CONTINUOUS_PAUSE = 5.0
+# nmap prueft ein Geraet erneut, wenn es neu ist, neue Ports hat oder nach einem Tag.
+NMAP_AGAIN = 86400.0
+NMAP_PER_CHECK = 4
 PACKET_SECONDS = 15.0
 SCOPE = ("enabled", "subnet", "router", "folder")
 WICHTIG, HINWEIS = "wichtig", "hinweis"
@@ -57,12 +62,17 @@ def options(config: dict[str, Any]) -> dict[str, Any]:
     """Zeitplan, Paketpruefung, VM und Aufgaben -- mit sicheren Standardwerten."""
     from aquaticy import secure_tasks
 
-    interval = config.get("interval", DEFAULT_INTERVAL)
+    sekunden = config.get("seconds")
+    if type(sekunden) is not int or sekunden not in INTERVALS:
+        # Bis 14.1.3 Luna stand der Abstand in Minuten unter "interval".
+        alt = config.get("interval")
+        sekunden = alt * 60 if type(alt) is int and alt * 60 in INTERVALS else DEFAULT_INTERVAL
     return {
         "watch": config.get("watch", True) is not False,
-        "interval": interval if interval in INTERVALS else DEFAULT_INTERVAL,
+        "seconds": sekunden,
         "packets": config.get("packets") is True,
         "vm": config.get("vm") is True,
+        "nmap": config.get("nmap") is True,
         "tasks": secure_tasks.clean(config.get("tasks", [])),
     }
 
@@ -92,7 +102,7 @@ def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "
 
 
 def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
-    """Aendert Zeitplan, Paketpruefung und VM-Nutzung.
+    """Aendert Zeitplan, Paketpruefung, nmap und VM-Nutzung.
 
     Raises:
         ValueError: Secure Pro ist aus, oder ein Wert ist ungueltig.
@@ -101,16 +111,16 @@ def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
     if config.get("enabled") is not True:
         raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
     neu = options(config)
-    for key in ("watch", "packets", "vm"):
+    for key in ("watch", "packets", "vm", "nmap"):
         if key in payload:
             if not isinstance(payload[key], bool):
                 raise ValueError("Wähle an oder aus.")
             neu[key] = payload[key]
-    if "interval" in payload:
-        wert = payload["interval"]
+    if "seconds" in payload:
+        wert = payload["seconds"]
         if type(wert) is not int or wert not in INTERVALS:
             raise ValueError("Wähle einen der angebotenen Abstände.")
-        neu["interval"] = wert
+        neu["seconds"] = wert
     private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
     return neu
 
@@ -184,6 +194,12 @@ class Watcher:
         self._inventory: dict[str, dict[str, Any]] | None = None
         self._offline: set[str] = set()
         self._requested = 0.0
+        self._fehler_gemeldet = False
+        self._nmap_seen: dict[str, tuple[float, tuple[int, ...]]] = {}
+        self._nmap_services: dict[str, list[str]] = {}
+        self._nmap_hosts: dict[str, dict[str, Any]] = {}
+        self._nmap_events: list[dict[str, Any]] = []
+        self.nmap_status = ""
         self._lock = threading.Lock()
 
     def snapshot(self) -> dict[str, Any]:
@@ -193,7 +209,7 @@ class Watcher:
                     "events": [dict(item) for item in self.events],
                     "checked": self.last_checked, "next_check": self.next_check,
                     "scanning": self.scanning, "error": self.error,
-                    "packet_status": self.packet_status,
+                    "packet_status": self.packet_status, "nmap_status": self.nmap_status,
                     "scope": self._result_subnet, "configuration": self._configuration,
                     "devices": [{**item, "ports": list(item["ports"])} for item in self.devices]}
 
@@ -244,6 +260,57 @@ class Watcher:
             self.packet_status = secure_packets.summary(records, PACKET_SECONDS)
         return events
 
+    def _nmap(self, config: dict[str, Any], network: str,
+              devices: list[Any]) -> list[dict[str, Any]]:
+        """nmap-Schwachstellenpruefung fuer neue oder geaenderte Geraete (14.1.3 Terra).
+
+        Je Pruefung hoechstens NMAP_PER_CHECK Geraete; jedes hoechstens einmal am Tag, ausser
+        es hat neue Ports. Ergebnisse alter Laeufe bleiben als Befund, bis das Geraet wieder
+        geprueft wurde.
+        """
+        from aquaticy import secure_nmap
+
+        if not options(config)["nmap"]:
+            with self._lock:
+                self.nmap_status = ""
+            return []
+        if not secure_nmap.available():
+            with self._lock:
+                self.nmap_status = "nmap fehlt. Installiere es mit: sudo apt install nmap"
+            return []
+        jetzt = time.time()
+        faellig = []
+        for device in devices:
+            ports = tuple(sorted(device.ports))
+            zuletzt = self._nmap_seen.get(device.address)
+            if zuletzt is None or zuletzt[1] != ports or jetzt - zuletzt[0] > NMAP_AGAIN:
+                faellig.append((zuletzt[0] if zuletzt else 0.0, device.address, ports))
+        faellig.sort()
+        ziele = faellig[:NMAP_PER_CHECK]
+        if ziele:
+            try:
+                ergebnis = secure_nmap.run(network, [z[1] for z in ziele], "schwachstellen")
+            except (secure_nmap.NmapError, ValueError) as exc:
+                with self._lock:
+                    self.nmap_status = str(exc)
+                return self._nmap_events
+            gefunden = {host["address"]: host for host in ergebnis["hosts"]}
+            for _, address, ports in ziele:
+                self._nmap_seen[address] = (jetzt, ports)
+                host = gefunden.get(address, {"address": address, "ports": []})
+                self._nmap_services[address] = [
+                    f"{p['port']}/{p['proto']} " + " ".join(
+                        x for x in (p["service"], p["product"], p["version"]) if x)
+                    for p in host["ports"]][:30]
+                self._nmap_hosts[address] = host
+        aktiv = {device.address for device in devices}
+        self._nmap_hosts = {a: h for a, h in self._nmap_hosts.items() if a in aktiv}
+        self._nmap_events = secure_nmap.events(list(self._nmap_hosts.values()))
+        with self._lock:
+            self.nmap_status = (f"nmap: {len(self._nmap_hosts)} Geräte mit sicheren "
+                                "Prüfskripten untersucht. Kein Treffer heißt nicht sicher.")
+        return self._nmap_events
+
     def tick(self) -> list[str]:
         from aquaticy import lan, secure_tasks
         from aquaticy.secure_knowledge import MALWARE_PORTS
@@ -266,6 +333,10 @@ class Watcher:
                 self.devices = []
                 self._inventory = None
                 self._offline = set()
+                self._nmap_seen = {}
+                self._nmap_services = {}
+                self._nmap_hosts = {}
+                self._nmap_events = []
         network = lan.parse_subnet(config.get("subnet", ""))
         if network.num_addresses > 256:
             raise ValueError("Netz zu groß.")
@@ -387,6 +458,11 @@ class Watcher:
                            device.address, port)
         for event in packet_events:
             befund(event["text"], event["kind"], event["level"], event["host"], event["port"])
+        for event in self._nmap(config, str(network), devices):
+            befund(event["text"], event["kind"], event["level"], event["host"], event["port"])
+        for address, dienste in self._nmap_services.items():
+            if address in inventory:
+                inventory[address]["services"] = list(dienste)
         folder = config.get("folder", "")
         target = Path(folder) if folder else None
         if target and (not target.is_dir() or target.resolve() != target):
@@ -453,7 +529,8 @@ class Watcher:
                if text not in self.announced][:20]
         if new and not self.stop_event.is_set() and config_token(read(self.directory)) == token:
             abwehr = any(befunde.get(text, {}).get("kind") in (
-                "malware", "arp_spoof", "port_scan", "brute_force", "risk_port") for text in new)
+                "malware", "arp_spoof", "port_scan", "brute_force", "risk_port",
+                "vulnerability") for text in new)
             if self._deliver(new, abwehr):
                 self.announced.update(new)
         return new
@@ -481,7 +558,7 @@ class Watcher:
         gewaehlt = options(config)
         if not gewaehlt["watch"]:
             return None
-        return float(gewaehlt["interval"] * 60)
+        return float(gewaehlt["seconds"]) or CONTINUOUS_PAUSE
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
@@ -496,6 +573,7 @@ class Watcher:
                 with self._lock:
                     self.scanning = True
                 findings = self.tick()
+                self._fehler_gemeldet = False
                 if findings:
                     LOG.warning("Secure Pro: %s", "; ".join(findings))
             except Exception:
@@ -503,8 +581,11 @@ class Watcher:
                     self.error = ("Die Prüfung ist fehlgeschlagen. "
                                   "Es liegt kein sauberes Ergebnis vor.")
                 LOG.warning("Secure-Pro-Prüfung fehlgeschlagen; kein sauberes Ergebnis.")
-                if (not self.stop_event.is_set()
+                # Nur einmal melden, bis eine Pruefung wieder klappt -- sonst kaeme bei
+                # "die ganze Zeit" alle paar Sekunden dieselbe Warnung.
+                if (not self.stop_event.is_set() and not self._fehler_gemeldet
                         and read(self.directory).get("enabled") is True):
+                    self._fehler_gemeldet = True
                     try:
                         self.notify("[Aquaticy] Secure Pro: Die Prüfung ist fehlgeschlagen. "
                                     "Es liegt kein sauberes Ergebnis vor. "

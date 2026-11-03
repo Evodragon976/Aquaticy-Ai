@@ -3343,6 +3343,7 @@ class Agent:
             self.learning = None
             self.toolbox.secure_mode = True
             self.toolbox._secure_checks = 0
+            self.toolbox._secure_nmaps = 0
             self.toolbox._secure_sources.clear()
         self._plugin_turn = str(plugin_prompt or "").strip()
 

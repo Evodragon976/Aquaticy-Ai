@@ -1054,7 +1054,7 @@ UNTRUSTED_SOURCES = frozenset({
 
     "vm_run", "vm_read", "vm_files", "blender_run", "ha_states", "lan_ssh",
     "secure_status", "secure_scan", "secure_inspect", "secure_advisories", "secure_read_advisory",
-    "secure_devices", "secure_findings", "secure_ssh", "secure_defend",
+    "secure_devices", "secure_findings", "secure_ssh", "secure_defend", "secure_nmap",
 })
 
 
@@ -1653,6 +1653,7 @@ class Toolbox:
         self.secure_provider: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None
         self._secure_sources: set[str] = set()
         self._secure_checks = 0
+        self._secure_nmaps = 0
 
 
         self.untrusted_seen = False
@@ -3683,6 +3684,14 @@ class Toolbox:
             return secure_knowledge.lookup(str(arguments.get("query", "")))
         if name in DEFENSE:
             return self._secure_defense(name, arguments)
+        if name == "secure_nmap":
+            # nmap dauert Minuten und belastet das Netz: hoechstens zwei Laeufe je Nachricht.
+            if self._secure_nmaps >= 2:
+                return {"error": "Höchstens zwei nmap-Prüfungen je Nachricht."}
+            self._secure_nmaps += 1
+            self._emit("note", text="nmap prüft. Das kann einige Minuten dauern.",
+                       text_en="nmap is checking. This can take a few minutes.")
+            return self.secure_provider(name, arguments)
         if name in LOCAL:
             if name == "secure_inspect":
                 if self._secure_checks >= 6:

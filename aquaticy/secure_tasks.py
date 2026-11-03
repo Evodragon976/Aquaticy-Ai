@@ -21,6 +21,7 @@ TRIGGERS: dict[str, str] = {
     "device_online": "Ein Gerät ist wieder erreichbar.",
     "new_port": "Ein Gerät öffnet einen neuen Dienst.",
     "malware": "Ein Malware-Verdacht taucht auf.",
+    "vulnerability": "nmap findet eine Schwachstelle.",
     "attack": "Ein Angriff wird erkannt (Portscan, ARP-Spoofing, Passwort-Angriffe).",
     "any": "Es gibt einen neuen Prüfhinweis.",
 }
@@ -33,6 +34,8 @@ _REGELN: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("malware", re.compile(r"malware|virus|viren|trojaner|schadsoftware|schadprogramm|"
                            r"miner|ransomware|erpress|hintert(?:ü|ue)r|backdoor|botnet",
                            re.I)),
+    ("vulnerability", re.compile(r"schwachstelle|sicherheitsl(?:ü|ue)cke|\bl(?:ü|ue)cke|"
+                                 r"\bcve\b|vulnerab|nmap", re.I)),
     ("attack", re.compile(r"angriff|attack|attacke|portscan|port-scan|\bscan\w*|spoof|"
                           r"eindring|hack|brute|passwort-?versuch|einbruch|intrusion",
                           re.I)),

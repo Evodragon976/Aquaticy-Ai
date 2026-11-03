@@ -1,4 +1,4 @@
-# Aquaticy AI 14.1.3 Luna
+# Aquaticy AI 14.1.3 Terra
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -27,8 +27,29 @@ $ aquaticy
 
 ## Inhalt
 
+**Neu in 14.1.3 Terra:** Secure Pro steht jetzt als Unterpunkt unter **Einstellungen → Zuhause &
+Netz**. Heimnetz, Home Assistant, Lager und Secure Pro sind ein Abschnitt.
+
+- **Wie oft:** neu sind **die ganze Zeit**, **alle 30 Sekunden**, **jede Minute** und **alle 2
+  Minuten**. „Die ganze Zeit“ startet nach jeder Prüfung mit 5 Sekunden Pause die nächste. Eine
+  Prüfung des ganzen Netzes dauert oft länger als 30 Sekunden. Kurze Abstände belasten Heimnetz
+  und Geräte stärker. Schlägt eine Prüfung dauerhaft fehl, kommt die Warnung nur einmal.
+- **nmap für Schwachstellen nutzen** (aus ab Werk): nmap liest Dienste mit Versionen und führt
+  nur Prüfskripte aus, die als sicher gelten (`vuln and safe`, ohne `external`, `intrusive`,
+  `dos`, `brute` und `exploit`). Nichts davon geht ins Internet. Secure Pro prüft neue oder
+  geänderte Geräte, sonst jedes Gerät einmal am Tag, höchstens vier je Prüfung. Gefundene
+  Lücken melden sich wie andere wichtige Befunde. Im Secure-Pro-Chat kann das Modell mit
+  `secure_nmap` ein Gerät gezielt prüfen (ganze Netze nur im Modus „dienste“). Der Befehl ist
+  fest, Ziele liegen immer im freigegebenen Netz. `aquaticy secure-pro` bietet an, nmap zu
+  installieren. Eine neue Aufgabe passt dazu: „Melde jede Sicherheitslücke.“
+- **Tipps für dein Heimnetz:** Neben dem festen Wissen nennt Secure Pro Tipps für genau dein
+  Netz: welches Gerät welchen riskanten Dienst offen hat und was du tun kannst, Updates bei
+  nmap-Befunden, Weboberflächen ohne Verschlüsselung, SSH nur mit Schlüssel, den Router und was
+  in Secure Pro noch aus ist. Die Tipps stehen in den Einstellungen und gehen an das Modell im
+  Secure-Pro-Chat.
+
 **Neu in 14.1.3 Luna:** Secure Pro überwacht dein Heimnetz wie ein Coworker.
-Alles stellst du unter **Einstellungen → Secure Pro** ein, nachdem du dein Netz freigegeben hast:
+Alles stellst du unter **Einstellungen → Zuhause & Netz → Secure Pro** ein, nachdem du dein Netz freigegeben hast:
 
 - **Immer überwachen** und **Wie oft**: alle 5 Minuten bis täglich (ab Werk alle 15 Minuten).
   Aus heißt: Secure Pro prüft nur, wenn du „Prüfen“ drückst.
@@ -63,7 +84,7 @@ der VM. `aquaticy setup` fragt nicht mehr nach den Agenten: Sie sind an. Ausscha
 sie unter **Einstellungen → Helfer & Grenzen → Fragen automatisch aufteilen**.
 
 **Neu in 14.0.3 Sol:** Secure Pro hat einen eigenen LLM-Chat mit defensiven Werkzeugen.
-Die Einrichtung liegt unter **Einstellungen → Secure Pro** und erscheint nach dem Einschalten.
+Die Einrichtung liegt unter **Einstellungen → Zuhause & Netz → Secure Pro** und erscheint nach dem Einschalten.
 Router und Prüfbereich werden vorgeschlagen. Bestätige dort dein eigenes Netz, bevor die Prüfung startet.
 Linux-Hostrouten mit `/32` verdrängen den Netzbereich nicht mehr. Alte Freigaben werden nicht still erweitert:
 Wenn bisher nur eine Adresse erlaubt war, bestätigst du den größeren Vorschlag in den Einstellungen erneut.
@@ -270,7 +291,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.1.3 Luna
+aquaticy --version            # 14.1.3 Terra
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

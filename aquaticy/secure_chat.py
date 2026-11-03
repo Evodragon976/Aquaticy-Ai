@@ -14,11 +14,19 @@ secure_scan fordert eine
 begrenzte Pruefung an. secure_inspect liest nur Dienst-Banner und prueft TLS an einer
 freigegebenen IPv4-Adresse. Keine Anmeldungen, Angriffe, Exploits, Passwortversuche oder
 Systemaenderungen ohne das Ja des Besitzers. Netzfreigaben und Ordner aenderst du niemals
-selbst. Die Einrichtung liegt unter Einstellungen > Secure Pro und braucht die Bestaetigung
-des Besitzers. Dort stellt er auch ein, wie oft du pruefst, ob du Paket-Kopfdaten liest, ob
-du die VM nutzen darfst und welche Aufgaben du hast ("Melde dich bei neuen Geraeten").
+selbst. Die Einrichtung liegt unter Einstellungen > Zuhause & Netz > Secure Pro und braucht
+die Bestaetigung des Besitzers. Dort stellt er auch ein, wie oft du pruefst (bis "die ganze
+Zeit"), ob du Paket-Kopfdaten liest, ob du nmap und die VM nutzen darfst und welche Aufgaben
+du hast ("Melde dich bei neuen Geraeten").
 secure_knowledge kennt Malware-Ports, Malware-Familien, Schwachstellen und Abwehrschritte.
 Nutze es, bevor du einen Port oder Befund erklaerst.
+secure_status.tips sind Tipps fuer genau dieses Heimnetz aus den Messwerten. Gib neben
+allgemeinen Tipps immer auch individuelle: welches Geraet, welcher Dienst, was der Besitzer
+konkret tun soll, das Wichtigste zuerst.
+secure_nmap (nur wenn der Besitzer nmap eingeschaltet hat) zeigt Dienste mit Versionen und
+fuehrt sichere Schwachstellen-Skripte aus. Pruefe damit gezielt einzelne Geraete; ganze Netze
+nur im Modus dienste. Ein nmap-Treffer ist ein starker Hinweis, keine Gewissheit; Versionen
+sind selbst gemeldet. Pruefe passende CVEs mit secure_advisories.
 Abwehr (nur wenn secure_defend angeboten wird): Erst secure_ssh mit action=key fuer den
 oeffentlichen VM-Schluessel, den der Besitzer am Geraet eintraegt; dann action=inspect fuer
 den Hostschluessel. secure_defend baut feste Befehle: listeners (nur lesen), block_port,
@@ -106,9 +114,18 @@ DEFENSE_SCHEMAS: tuple[dict[str, Any], ...] = (
 )
 SCHEMAS = (*SCHEMAS, schema(
     "secure_knowledge", "Festes Sicherheitswissen: Port, Dienst, Malware oder Stichwort.",
-    "query"))
+    "query"), {"type": "function", "function": {
+        "name": "secure_nmap",
+        "description": ("nmap im freigegebenen Netz: Dienste und Versionen (dienste) oder "
+                        "zusaetzlich sichere Schwachstellen-Skripte ohne Internet "
+                        "(schwachstellen). Dauert Minuten. host ist eine IP oder 'netz'."),
+        "parameters": {"type": "object", "properties": {
+            "host": {"type": "string"},
+            "mode": {"type": "string", "enum": ["dienste", "schwachstellen"]}},
+            "required": ["host"]}}})
 LOCAL = frozenset({"secure_status", "secure_scan", "secure_inspect", "secure_devices",
-                   "secure_findings", "secure_knowledge", "secure_ssh", "secure_defend"})
+                   "secure_findings", "secure_knowledge", "secure_ssh", "secure_defend",
+                   "secure_nmap"})
 DEFENSE = frozenset({"secure_ssh", "secure_defend"})
 ALLOWED = LOCAL | {"secure_advisories", "secure_read_advisory", "ask_user", "calculate"}
 

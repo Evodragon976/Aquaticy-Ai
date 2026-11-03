@@ -195,3 +195,67 @@ def topics() -> dict[str, Any]:
     return {"malware_ports": sorted(MALWARE_PORTS), "risk_ports": sorted(RISK_SERVICES),
             "malware": [f["name"] for f in MALWARE_FAMILIES],
             "weaknesses": [w["name"] for w in WEAKNESSES]}
+
+
+def _liste(adressen: list[str]) -> str:
+    adressen = sorted(set(adressen), key=lambda a: tuple(int(t) for t in a.split(".")))
+    mehr = len(adressen) - 4
+    return ", ".join(adressen[:4]) + (f" und {mehr} weitere" if mehr > 0 else "")
+
+
+def network_tips(devices: list[dict[str, Any]], events: list[dict[str, Any]],
+                 opts: dict[str, Any], *, router: str = "",
+                 nmap_ready: bool = False) -> list[str]:
+    """Tipps fuer genau dieses Heimnetz (14.1.3 Terra).
+
+    Aus den Messwerten: offene Dienste je Geraet, nmap-Befunde, Router und die eigenen
+    Secure-Pro-Einstellungen. Nur feste Saetze mit Adressen und Ports -- kein Text von Geraeten.
+    """
+    aktiv = [d for d in devices if d.get("active")]
+    je_port: dict[int, list[str]] = {}
+    for device in aktiv:
+        for port in device.get("ports", []):
+            je_port.setdefault(int(port), []).append(str(device["address"]))
+    tipps: list[str] = []
+    for event in events:
+        if event.get("kind") == "vulnerability" and len(tipps) < 4:
+            tipps.append(f"Aktualisiere {event['host']}: nmap meldet dort eine Schwachstelle "
+                         f"auf Port {event['port']}. Suche beim Hersteller nach einem Update.")
+    for port in sorted(je_port):
+        if port in MALWARE_PORTS:
+            name = MALWARE_PORTS[port][0]
+            tipps.append(f"Prüfe {_liste(je_port[port])}: Port {port} ({name}) antwortet. "
+                         "Finde das Programm dahinter. Kennst du es nicht, nimm das Gerät vom "
+                         "Netz.")
+    for port in sorted(je_port):
+        if port in RISK_SERVICES:
+            name, _, abhilfe = RISK_SERVICES[port]
+            tipps.append(f"{name} ist offen bei {_liste(je_port[port])}. {abhilfe}")
+    nur_http = [str(d["address"]) for d in aktiv
+                if set(d.get("ports", [])) & {80, 8080}
+                and not set(d.get("ports", [])) & {443, 8443}]
+    if nur_http:
+        tipps.append(f"{_liste(nur_http)} zeigt eine Weboberfläche nur ohne Verschlüsselung "
+                     "(HTTP). Melde dich dort nur im Heimnetz an, mit eigenem Passwort.")
+    if je_port.get(22):
+        tipps.append(f"SSH ist offen bei {_liste(je_port[22])}. Erlaube dort nur Anmeldung mit "
+                     "Schlüssel und schalte die Passwort-Anmeldung aus.")
+    if router:
+        tipps.append(f"Prüfe deinen Router ({router}): automatische Updates an, UPnP und "
+                     "Fernzugriff aus, WLAN mit WPA2-AES oder WPA3, WPS aus.")
+    if len(aktiv) > 15:
+        tipps.append(f"In deinem Heimnetz antworten {len(aktiv)} Geräte. Lege Kameras, "
+                     "Steckdosen und TV-Boxen in ein Gast-WLAN.")
+    if opts.get("watch") is False:
+        tipps.append("Schalte „Immer überwachen“ ein. Sonst prüft Secure Pro nur auf Knopfdruck.")
+    if not opts.get("packets"):
+        tipps.append("Schalte „Pakete prüfen“ ein. Dann erkennt Secure Pro auch Portscans und "
+                     "ARP-Spoofing.")
+    if not opts.get("nmap"):
+        tipps.append("Schalte „nmap für Schwachstellen nutzen“ ein. Dann findet Secure Pro "
+                     "bekannte Lücken in Diensten." + ("" if nmap_ready else
+                                                       " Installiere vorher nmap."))
+    if not opts.get("tasks"):
+        tipps.append("Lege eine Aufgabe an, zum Beispiel: „Melde dich, wenn ein neues Gerät "
+                     "ins Netz kommt.“")
+    return tipps[:12]

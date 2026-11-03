@@ -2608,16 +2608,18 @@ def host_feature_owner(session: Any) -> bool:
 def feature_view(session: Any) -> dict[str, Any]:
     if not host_feature_owner(session):
         return {"allowed": False}
-    from aquaticy import secure_pro, voice
+    from aquaticy import secure_knowledge, secure_nmap, secure_pro, voice
 
     directory = get_settings().data_dir
     config = secure_pro.read(directory)
-    report = SECURE_WATCHER.snapshot() if SECURE_WATCHER else {
+    report: dict[str, Any] = SECURE_WATCHER.snapshot() if SECURE_WATCHER else {
         "findings": [], "positives": [], "checked": 0, "scanning": False, "error": "",
-        "devices": [], "important": [], "events": [], "packet_status": "", "next_check": 0}
+        "devices": [], "important": [], "events": [], "packet_status": "", "next_check": 0,
+        "nmap_status": ""}
     if report.get("configuration", "") != secure_pro.config_token(config):
         report.update(findings=[], positives=[], checked=0, error="", devices=[], scope="",
-                      important=[], events=[], packet_status="", next_check=0)
+                      important=[], events=[], packet_status="", next_check=0,
+                      nmap_status="")
     an = config.get("enabled") is True
     gewaehlt = secure_pro.options(config if an else {})
     settings = session.settings()
@@ -2625,9 +2627,15 @@ def feature_view(session: Any) -> dict[str, Any]:
     return {"allowed": True, "voice": voice.enabled(), "voice_ready": voice.ready(directory),
             "secure": an, "subnet": config.get("subnet", ""),
             "router": config.get("router", ""),
-            "watch": gewaehlt["watch"], "interval": gewaehlt["interval"],
+            "watch": gewaehlt["watch"], "seconds": gewaehlt["seconds"],
             "intervals": list(secure_pro.INTERVALS), "packets": gewaehlt["packets"],
-            "vm": gewaehlt["vm"], "vm_network": netz,
+            "vm": gewaehlt["vm"], "vm_network": netz, "nmap": gewaehlt["nmap"],
+            "nmap_ready": secure_nmap.available(),
+            # Eigene Tipps fuer dieses Heimnetz (14.1.3 Terra), aus den Messwerten.
+            "tips": secure_knowledge.network_tips(
+                report.get("devices", []), report.get("events", []), gewaehlt,
+                router=str(config.get("router") or ""),
+                nmap_ready=secure_nmap.available()) if an else [],
             "tasks": [{"id": t["id"], "text": t["text"], "label": t["label"],
                        "host": t["host"], "port": t["port"]} for t in gewaehlt["tasks"]],
             **report}
@@ -2671,7 +2679,8 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                     **feature_view(session)}, 200
         elif action == "options":
             werte: dict[str, Any] = {key: payload[key] for key in
-                                     ("watch", "interval", "packets", "vm") if key in payload}
+                                     ("watch", "seconds", "packets", "vm", "nmap")
+                                     if key in payload}
             if not werte:
                 return {"error": "Nichts zu ändern."}, 400
             try:
@@ -2803,6 +2812,25 @@ def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> d
                                           "eigene Netz sehen dürfen“."}
         return {"ok": True, "subnet": str(config.get("subnet", "")),
                 "router": str(config.get("router", ""))}
+    if name == "secure_nmap":
+        # nmap im Chat (14.1.3 Terra): nur mit dem Schalter, nur im freigegebenen Netz.
+        from aquaticy import secure_nmap
+
+        if not secure_pro.options(config)["nmap"]:
+            return {"error": "Schalte „nmap für Schwachstellen nutzen“ in den "
+                             "Secure-Pro-Einstellungen ein."}
+        ziel = str(arguments.get("host", "")).strip()
+        ziel = str(config.get("subnet", "")) if ziel.lower() in ("netz", "net", "") else ziel
+        modus = str(arguments.get("mode") or "schwachstellen")
+        try:
+            ergebnis = secure_nmap.run(str(config.get("subnet", "")), [ziel], modus)
+        except (secure_nmap.NmapError, ValueError) as exc:
+            return {"error": str(exc)}
+        if (not host_feature_owner(session) or secure_pro.config_token(
+                secure_pro.read(directory)) != secure_pro.config_token(config)):
+            return {"error": "Die Freigabe hat sich während der Prüfung geändert."}
+        ergebnis["findings"] = [e["text"] for e in secure_nmap.events(ergebnis["hosts"])]
+        return ergebnis
     if name == "secure_scan":
         if SECURE_WATCHER is None:
             return {"error": "Der Prüfungsdienst ist nicht verfügbar. Starte Aquaticy neu."}
@@ -6071,8 +6099,8 @@ class Handler(BaseHTTPRequestHandler):
                                   "Secure Pro: Hier besprichst du Befunde und sichere "
                                   "Einstellungen mit deinem Modell. Wichtiges meldet Secure "
                                   "Pro hier von selbst. Netz, Zeitplan und Aufgaben stellst "
-                                  "du unter Einstellungen → Secure Pro ein. Ohne Netzfreigabe "
-                                  "wird nicht geprüft.",
+                                  "du unter Einstellungen → Zuhause & Netz → Secure Pro ein. "
+                                  "Ohne Netzfreigabe wird nicht geprüft.",
                                   mode="normal")
                 cache.rename_chat(selected.chat_id(), "Secure Pro")
                 self._json({"ok": True, "session_id": selected.chat_id()})
