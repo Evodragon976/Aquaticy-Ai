@@ -1028,6 +1028,7 @@ BLENDER_SCHEMA: dict[str, Any] = {
 
 WORK_TOOLS: dict[str, str] = {
     "secure_advisories": "suche", "secure_read_advisory": "seite",
+    "secure_ssh": "werkstatt", "secure_defend": "werkstatt",
     "web_search": "suche", "search_news": "suche", "local_places": "suche",
     "find_profiles": "suche", "weather": "suche", "github": "suche",
     "fetch_page": "seite", "inspect_public_visual": "seite", "read_feeds": "seite",
@@ -1053,7 +1054,7 @@ UNTRUSTED_SOURCES = frozenset({
 
     "vm_run", "vm_read", "vm_files", "blender_run", "ha_states", "lan_ssh",
     "secure_status", "secure_scan", "secure_inspect", "secure_advisories", "secure_read_advisory",
-    "secure_devices", "secure_findings",
+    "secure_devices", "secure_findings", "secure_ssh", "secure_defend",
 })
 
 
@@ -3669,13 +3670,19 @@ class Toolbox:
 
 
     def secure_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        from aquaticy.secure_chat import LOCAL, public_query
+        from aquaticy.secure_chat import DEFENSE, LOCAL, public_query
 
         if not getattr(self, "secure_mode", False) or self.secure_provider is None:
             return {"error": "Kein freigegebener Secure-Pro-Chat."}
         access = self.secure_provider("secure_status", {})
         if access.get("error"):
             return access
+        if name == "secure_knowledge":
+            from aquaticy import secure_knowledge
+
+            return secure_knowledge.lookup(str(arguments.get("query", "")))
+        if name in DEFENSE:
+            return self._secure_defense(name, arguments)
         if name in LOCAL:
             if name == "secure_inspect":
                 if self._secure_checks >= 6:
@@ -3701,6 +3708,53 @@ class Toolbox:
                 return {"error": "Lies nur öffentliche Treffer aus der Sicherheitssuche."}
             return self.fetch_page(url)
         return {"error": "Unbekanntes Secure-Pro-Werkzeug."}
+
+    def _secure_defense(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """SSH und Abwehr im Secure-Pro-Chat (14.1.3 Luna).
+
+        Nur mit dem VM-Schalter in den Secure-Pro-Einstellungen, nur im freigegebenen Netz.
+        Die Befehle baut aquaticy/secure_defense.py aus festen Vorlagen; lan_ssh fragt vor
+        jedem Befehl nach dem Ja des Besitzers und prueft den Hostschluessel.
+        """
+        import ipaddress
+
+        from aquaticy import secure_defense
+        from aquaticy.secure_pro import own_addresses
+
+        assert self.secure_provider is not None
+        vm = self.secure_provider("secure_vm", {})
+        if vm.get("ok") is not True:
+            return {"error": str(vm.get("error") or "Secure Pro darf die VM nicht nutzen.")}
+        subnet, router = str(vm.get("subnet", "")), str(vm.get("router", ""))
+        host = str(arguments.get("host", "")).strip()
+        if name == "secure_ssh":
+            action = arguments.get("action")
+            if action not in ("key", "inspect"):
+                return {"error": "secure_ssh: action key oder inspect."}
+            if action == "key":
+                return self.lan_ssh(action="key")
+            try:
+                if ipaddress.IPv4Address(host) not in ipaddress.IPv4Network(subnet):
+                    raise ValueError
+            except ValueError:
+                return {"error": "Das Gerät liegt außerhalb des freigegebenen Netzes."}
+            return self.lan_ssh(action="inspect", host=host, port=arguments.get("port", 22))
+        try:
+            data = secure_defense.build(
+                str(arguments.get("action", "")), system=str(arguments.get("system") or "linux"),
+                host=host, port=arguments.get("port", 0),
+                proto=str(arguments.get("proto") or "tcp"),
+                address=str(arguments.get("address", "")),
+                service=str(arguments.get("service", "")), subnet=subnet, router=router,
+                own=own_addresses(router))
+        except ValueError as exc:
+            return {"error": str(exc)}
+        result = self.lan_ssh(action="run", host=data["host"], user=str(arguments.get("user", "")),
+                              command=data["command"],
+                              server_key=str(arguments.get("server_key", "")),
+                              port=arguments.get("ssh_port", 22))
+        result["measure"] = data["label"]
+        return result
 
     def lan_scan(self, subnet: str = "", thorough: bool = False) -> dict[str, Any]:
         """Sieht nach, welche Geraete im Heimnetz erreichbar sind."""

@@ -53,6 +53,10 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
     (richtet libmagic und signal-cli ein; Befehl `aquaticy install-messenger`),
     `addons.py` (Add-ons, Rechte).
   - Plugins: `plugins.py`, Vorprüfung für Code- und Security-Review in `review_scan.py`.
+  - Secure Pro: `secure_pro.py` (Überwachung, Zeitplan, Aufgaben), `secure_tasks.py`
+    (Aufgaben fest auswerten), `secure_packets.py` (nur Paket-Kopfdaten),
+    `secure_knowledge.py` (Malware-Wissen), `secure_defense.py` (feste Abwehr-Befehle, laufen
+    über `vm_ssh.py` und brauchen immer ein Ja), `secure_chat.py` (Rolle und Werkzeuge).
 - `tests/` – je Fassung eine Datei (`test_v1122.py` für 11.2.2), dazu Dateien je Thema.
   `tests/ollama_nachbau.py` ist ein nachgebautes Ollama: Damit lassen sich lokale Modelle
   (ohne Denk-Modus, ohne Werkzeuge, zu wenig Speicher) ohne echtes Ollama prüfen.

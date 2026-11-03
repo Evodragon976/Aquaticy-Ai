@@ -313,6 +313,7 @@ def scan(
     with_titles: bool = True,
     with_names: bool = True,
     on_device: object = None,
+    ports: tuple[int, ...] | None = None,
 ) -> list[Device]:
     """Durchsucht *subnet* (leer = das eigene Netz) nach erreichbaren Geraeten.
 
@@ -325,7 +326,10 @@ def scan(
         ValueError: Wenn kein Netz erkennbar ist.
     """
     network = parse_subnet(subnet or own_subnet())
-    ports = QUICK_PORTS if quick else FULL_PORTS
+    if ports is None:
+        ports = QUICK_PORTS if quick else FULL_PORTS
+    elif not ports or len(ports) > 128 or not all(1 <= int(p) <= 65535 for p in ports):
+        raise ValueError("Höchstens 128 gültige Ports je Scan.")
     addresses = [str(host) for host in network.hosts()] or [str(network.network_address)]
 
 

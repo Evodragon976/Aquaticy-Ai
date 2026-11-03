@@ -238,9 +238,16 @@ def test_secure_pro_reports_changes_without_calling_them_malware(tmp_path, monke
     assert "Malwarefund" not in messages[0]
     watcher.tick()
     assert len(messages) == 1
+    # Seit 14.1.3 Luna meldet Secure Pro neue Geraete nur, wenn eine Aufgabe das verlangt;
+    # sonst stehen sie im Status (nur Wichtiges geht an Chat und Messenger).
     devices.append(lan.Device("192.168.1.3"))
     watcher.tick()
-    assert "Neues Gerät: 192.168.1.3" in messages[-1]
+    assert len(messages) == 1
+    assert "Neues Gerät: 192.168.1.3" in watcher.last_findings
+    secure_pro.add_task(tmp_path, "Melde dich, wenn ein neues Gerät ins Netz kommt")
+    devices.append(lan.Device("192.168.1.4"))
+    watcher.tick()
+    assert "Neues Gerät: 192.168.1.4" in messages[-1]
     if os.name != "nt":
         assert (tmp_path / "secure-pro.json").stat().st_mode & 0o777 == 0o600
 

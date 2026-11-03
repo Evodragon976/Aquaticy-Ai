@@ -2289,6 +2289,34 @@ html.vv,html.vv body{height:var(--app-h)}
           </div>
         </div>
       </fieldset>
+
+      <fieldset id="sec-nutzung"><legend>Nutzung</legend>
+        <p class="lead">Wie viel du fragen kannst, zählt in zwei Zeiträumen: einer
+          <b>Sitzung</b> von fünf Stunden ab deiner ersten Nachricht und einer <b>Woche</b>,
+          die zur Uhrzeit deiner Kontoerstellung neu beginnt. Pro hat deutlich mehr als
+          Normal. Ultra hat kein Limit.</p>
+        <div class="limits" id="limits"></div>
+        <div class="zaehler" id="zaehler"></div>
+        <div class="note" id="usage-detail"></div>
+      </fieldset>
+
+      <fieldset><legend>Speicher</legend>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="memon" name="AQUATICY_MEMORY">
+          <label for="memon" style="margin:0">Aquaticy darf sich Dinge merken
+            <span class="why">Zum Beispiel, wo du wohnst, was du magst oder woran du arbeitest. Nur
+              Text, verschlüsselt, höchstens 400 MB.</span></label>
+        </div>
+        <div class="inline">
+          <div class="meter" id="storage-meter"><span></span></div>
+        </div>
+        <div class="note" id="storage-note"></div>
+        <div class="actions section">
+          <span class="note">Nachsehen, was Aquaticy weiß, und einzelne Dinge löschen.</span>
+          <button type="button" class="btn" id="btn-memory">Was weißt du über mich?</button>
+        </div>
+      </fieldset>
+
       <fieldset><legend>Gemeinsames Lernen</legend>
         <p class="note">Ist Auto-Upgrading an, können mehrfach bestätigte Auszüge auch in lokale
           Ollama-Modelltexte kommen (dort unverschlüsselt). Ist Wissen abgelaufen oder nicht mehr
@@ -2308,80 +2336,7 @@ html.vv,html.vv body{height:var(--app-h)}
         <p class="note">Damit wir deine Beiträge löschen können, speichern wir eine Kennung ohne
           deinen Namen. Ausschalten nimmt deine Zustimmung zurück und löscht deine Beiträge. Gleiche
           Stellen von anderen Konten bleiben.</p>
-        <a href="/privacy" target="_blank" rel="noopener">Details zum Datenschutz</a>
         <p class="note" id="learning-status" role="status" aria-live="polite"></p>
-      </fieldset>
-      <fieldset id="workshop-settings"><legend>virtual machine</legend>
-        <div class="pro-lock" id="vm-plus-lock" hidden>„Plus“ gibt es nur mit Ultra. „Normal“ kannst
-          du nutzen.</div>
-        <label><span class="lbl">Größe <span class="why">Gilt ab der nächsten virtual machine. Eine
-          laufende bleibt, wie sie ist</span></span>
-          <select name="AQUATICY_VM_SIZE">
-            <option value="normal">Normal — 2 Kerne, 3 GB Arbeitsspeicher, 4 GB Speicher</option>
-            <option value="plus">Plus — 4 Kerne, 6 GB Arbeitsspeicher, 20 GB Speicher</option>
-          </select></label>
-        <div class="note">Normal reicht für fast alles. Plus lohnt sich für schwere Arbeit, zum
-          Beispiel 3D mit Blender.</div>
-        <div class="check usermode-row">
-          <input type="checkbox" role="switch" class="schalter" id="usermode"
-                 name="AQUATICY_VM_USER_MODE">
-          <label for="usermode" style="margin:0">User mode — Aquaticy bedient die virtual machine
-            wie ein Mensch <span class="ultra-tag">Ultra</span>
-            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
-            <span class="why">Die virtual machine wird ein Computer mit Internet. Aquaticy bedient
-              ihn wie ein Mensch. Dein Heimnetz bleibt gesperrt. Absenden, Kaufen und Löschen nur
-              mit deinem Ja. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“ fasst
-              Aquaticy nie an.</span></label>
-          <button type="button" class="btn addon-btn" id="btn-addons"
-                  title="Add-ons: NVIDIA NIM, Mistral, GitHub, WhatsApp Web, Blender …">Add-ons</button>
-        </div>
-        <div class="check usermode-row">
-          <input type="checkbox" role="switch" class="schalter" id="vminternet"
-                 name="AQUATICY_VM_INTERNET">
-          <label for="vminternet" style="margin:0">Internet für die virtual machine
-            <span class="ultra-tag">Ultra</span>
-            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
-            <span class="why">Im Code-Modus darf die virtual machine dann ins Internet, etwa für pip
-              install oder um eine Seite zu laden. Dein Heimnetz bleibt gesperrt. Bei Normal- und
-              Pro-Konten hat sie gar kein Netz.</span></label>
-        </div>
-        <div class="check usermode-row">
-          <input type="checkbox" role="switch" class="schalter" id="vmlan"
-                 name="AQUATICY_VM_LAN">
-          <label for="vmlan" style="margin:0">Auch ins lokale Netz
-            <span class="ultra-tag">Ultra</span>
-            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
-            <span class="why">Nur mit Ultra: Die virtual machine erreicht dann auch Geräte in deinem
-              Heimnetz (Router, Lager, Home Assistant …), nicht nur das Internet. Die Sperre fällt
-              weg. Schalte das nur ein, wenn du es brauchst.</span></label>
-        </div>
-        <div class="login-apps" id="login-apps">
-          <div><b>Login-Apps</b> — hier meldest du dich selbst an. Du siehst den Bildschirm, klickst
-            hinein und tippst Name, Passwort oder Code selbst. Aquaticy tippt nie ein Passwort und
-            liest nicht mit.</div>
-          <button type="button" class="btn" id="btn-loginapps">⌨ Selbst anmelden</button>
-        </div>
-        <div class="note" id="usermode-note">Dafür braucht Aquaticy ein Modell, das Bilder versteht
-          (siehe Modell). Und der Computer muss einmal eingerichtet werden:
-          <code>docker build -f docker/workshop-desktop.Dockerfile -t aquaticy-werkstatt-desktop:local .</code>
-          Für den Browser reicht „Normal“. Für Browser und Office zusammen ist „Plus“ viel besser.</div>
-      </fieldset>
-
-      <fieldset><legend>Speicher</legend>
-        <div class="check">
-          <input type="checkbox" role="switch" class="schalter" id="memon" name="AQUATICY_MEMORY">
-          <label for="memon" style="margin:0">Aquaticy darf sich Dinge merken
-            <span class="why">Zum Beispiel, wo du wohnst, was du magst oder woran du arbeitest. Nur
-              Text, verschlüsselt, höchstens 400 MB.</span></label>
-        </div>
-        <div class="inline">
-          <div class="meter" id="storage-meter"><span></span></div>
-        </div>
-        <div class="note" id="storage-note"></div>
-        <div class="actions section">
-          <span class="note">Nachsehen, was Aquaticy weiß, und einzelne Dinge löschen.</span>
-          <button type="button" class="btn" id="btn-memory">Was weißt du über mich?</button>
-        </div>
       </fieldset>
 
       <fieldset><legend>Mitlesen</legend>
@@ -2405,14 +2360,82 @@ html.vv,html.vv body{height:var(--app-h)}
         <div class="note" id="usage-note"></div>
       </fieldset>
 
-      <fieldset id="sec-nutzung"><legend>Nutzung</legend>
-        <p class="lead">Wie viel du fragen kannst, zählt in zwei Zeiträumen: einer
-          <b>Sitzung</b> von fünf Stunden ab deiner ersten Nachricht und einer <b>Woche</b>,
-          die zur Uhrzeit deiner Kontoerstellung neu beginnt. Pro hat deutlich mehr als
-          Normal. Ultra hat kein Limit.</p>
-        <div class="limits" id="limits"></div>
-        <div class="zaehler" id="zaehler"></div>
-        <div class="note" id="usage-detail"></div>
+      <fieldset><legend>Ort &amp; Sprache</legend>
+        <div class="row">
+          <label><span class="lbl">Standard-Ort</span>
+            <input type="text" name="AQUATICY_LOCATION" placeholder="Mönchengladbach"></label>
+          <label><span class="lbl">Sprache / Land</span>
+            <div class="row">
+              <input type="text" name="AQUATICY_LANG" placeholder="de">
+              <input type="text" name="AQUATICY_COUNTRY" placeholder="de">
+            </div></label>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Suche</legend>
+        <div class="row">
+          <label><span class="lbl">Suchmaschine</span>
+            <select name="AQUATICY_SEARCH_BACKEND">
+              <option value="duckduckgo">Offene Suche (kostenlos, ohne Schlüssel)</option>
+              <option value="searxng">SearXNG (dein eigener Suchserver)</option>
+              <option value="brave">Brave Search (Schlüssel vom Betreiber)</option>
+              <option value="tavily">Tavily (Schlüssel vom Betreiber)</option>
+            </select></label>
+          <label><span class="lbl">Suchdienste <span class="why">Leer lassen nutzt alle</span></span>
+            <input type="text" name="AQUATICY_SEARCH_ENGINES" placeholder="duckduckgo,mojeek"></label>
+        </div>
+        <label><span class="lbl">SearXNG-Adresse</span>
+          <input type="text" name="AQUATICY_SEARXNG_URL" placeholder="http://localhost:8080"></label>
+        <div class="row">
+          <div class="note search-key-note">Brave und Tavily gehen nur, wenn der Betreiber dafür
+            einen Schlüssel eingetragen hat.</div>
+          <label><span class="lbl">Formulierungen je Suche
+            <span class="why">Aquaticy stellt dieselbe Frage auf verschiedene Arten. So findet es
+              mehr. 2 oder 3 ist gut. 1 schaltet es aus.</span></span>
+            <input type="number" name="AQUATICY_SEARCH_VARIANTS" min="1" max="3"></label>
+        </div>
+        <div class="inline">
+          <button type="button" class="btn" id="probe">Verbindung testen</button>
+          <span class="note" id="probe-note"></span>
+        </div>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="pw" name="AQUATICY_ENABLE_PLAYWRIGHT">
+          <label for="pw" style="margin:0">Seiten mit echtem Browser laden
+            <span class="why">Für Seiten, die ihren Inhalt erst später nachladen. Dafür
+              muss einmal <code>aquaticy install-browser</code> ausgeführt werden.</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Helfer &amp; Grenzen</legend>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="auto" name="AQUATICY_SUBAGENTS_AUTO">
+          <label for="auto" style="margin:0">Fragen automatisch aufteilen
+            <span class="why">Große Fragen teilt Aquaticy auf und lässt Helfer die Teile
+              gleichzeitig suchen. Das ist schneller, braucht aber mehr von deiner Grenze. Ab
+              Werk an.</span></label>
+        </div>
+        <div class="row">
+          <label><span class="lbl">Suchen je Helfer <span class="why">Wie oft ein Helfer suchen oder eine Seite lesen darf</span></span>
+            <input type="text" name="AQUATICY_SUBAGENT_BUDGET"></label>
+        </div>
+        <div class="row">
+          <label><span class="lbl">Suchen je Anfrage <span class="why">Höchstzahl für Suchen und gelesene Seiten zusammen</span></span>
+            <input type="text" name="AQUATICY_MAX_TOOL_CALLS"></label>
+          <label><span class="lbl">Gedächtnis im Gespräch <span class="why">Wie viel vom Gespräch das Modell im Blick behält. Nur für lokale Modelle</span></span>
+            <input type="text" name="AQUATICY_CONTEXT_TOKENS"></label>
+        </div>
+        <div class="row">
+          <label><span class="lbl">Zeit fürs Planen <span class="why">Wie lange das Aufteilen einer Frage dauern darf (Sekunden)</span></span>
+            <input type="text" name="AQUATICY_PLANNER_TIMEOUT"></label>
+          <label><span class="lbl">Gleichzeitig <span class="why">Wie viele Helfer gleichzeitig arbeiten. 0 = Aquaticy entscheidet</span></span>
+            <input type="text" name="AQUATICY_SUBAGENT_PARALLEL"></label>
+        </div>
+        <div class="row">
+          <label><span class="lbl">Anfragen pro Minute <span class="why">Wie viele Anfragen pro Minute dein KI-Anbieter erlaubt. Gilt für deine eigenen Schlüssel. Leer lassen = kostenloser Tarif (NVIDIA 40, Mistral 240)</span></span>
+            <input type="text" name="AQUATICY_RPM" placeholder="leer lassen = kostenloser Tarif"></label>
+          <label><span class="lbl">Gleichzeitige Anfragen <span class="why">Mehr auf einmal macht jede Antwort langsamer. Leer lassen = NVIDIA 4, Mistral 8</span></span>
+            <input type="text" name="AQUATICY_PARALLEL_CALLS" placeholder="leer lassen = kostenloser Tarif"></label>
+        </div>
       </fieldset>
 
       <fieldset><legend>Gmail &amp; Kalender</legend>
@@ -2524,9 +2547,6 @@ html.vv,html.vv body{height:var(--app-h)}
         </div>
         <label><span class="lbl">Dein Netz (leer lassen = automatisch)</span>
           <input type="text" name="AQUATICY_LAN_SUBNET" placeholder="192.168.1.0/24"></label>
-        <p class="note">Mit eingeschalteter VM und „Auch ins lokale Netz“ kann Aquaticy OpenSSH nutzen.
-          Der öffentliche VM-Schlüssel wird am eigenen Gerät freigegeben. Prüfe dessen Fingerabdruck
-          direkt dort. Jeder Befehl über das SSH-Werkzeug braucht dein Ja. Keine Passwörter oder privaten Schlüssel im Chat.</p>
 
         <div class="sub-title">Lagerverwaltung</div>
         <div class="inline">
@@ -2548,128 +2568,174 @@ html.vv,html.vv body{height:var(--app-h)}
           Passwort. „Nur lesen“ gilt nur für Aquaticy, nicht für andere in deinem Netz.</div>
       </fieldset>
 
-      <fieldset><legend>Suche</legend>
-        <div class="row">
-          <label><span class="lbl">Suchmaschine</span>
-            <select name="AQUATICY_SEARCH_BACKEND">
-              <option value="duckduckgo">Offene Suche (kostenlos, ohne Schlüssel)</option>
-              <option value="searxng">SearXNG (dein eigener Suchserver)</option>
-              <option value="brave">Brave Search (Schlüssel vom Betreiber)</option>
-              <option value="tavily">Tavily (Schlüssel vom Betreiber)</option>
-            </select></label>
-          <label><span class="lbl">Suchdienste <span class="why">Leer lassen nutzt alle</span></span>
-            <input type="text" name="AQUATICY_SEARCH_ENGINES" placeholder="duckduckgo,mojeek"></label>
-        </div>
-        <label><span class="lbl">SearXNG-Adresse</span>
-          <input type="text" name="AQUATICY_SEARXNG_URL" placeholder="http://localhost:8080"></label>
-        <div class="row">
-          <div class="note search-key-note">Brave und Tavily gehen nur, wenn der Betreiber dafür
-            einen Schlüssel eingetragen hat.</div>
-          <label><span class="lbl">Formulierungen je Suche
-            <span class="why">Aquaticy stellt dieselbe Frage auf verschiedene Arten. So findet es
-              mehr. 2 oder 3 ist gut. 1 schaltet es aus.</span></span>
-            <input type="number" name="AQUATICY_SEARCH_VARIANTS" min="1" max="3"></label>
-        </div>
-        <div class="inline">
-          <button type="button" class="btn" id="probe">Verbindung testen</button>
-          <span class="note" id="probe-note"></span>
-        </div>
-      </fieldset>
-
-      <fieldset><legend>Ort &amp; Sprache</legend>
-        <div class="row">
-          <label><span class="lbl">Standard-Ort</span>
-            <input type="text" name="AQUATICY_LOCATION" placeholder="Mönchengladbach"></label>
-          <label><span class="lbl">Sprache / Land</span>
-            <div class="row">
-              <input type="text" name="AQUATICY_LANG" placeholder="de">
-              <input type="text" name="AQUATICY_COUNTRY" placeholder="de">
-            </div></label>
-        </div>
-      </fieldset>
-
-      <fieldset><legend>Helfer &amp; Grenzen</legend>
-        <div class="check">
-          <input type="checkbox" role="switch" class="schalter" id="auto" name="AQUATICY_SUBAGENTS_AUTO">
-          <label for="auto" style="margin:0">Fragen automatisch aufteilen
-            <span class="why">Große Fragen teilt Aquaticy auf und sucht die Teile gleichzeitig. Das
-              ist schneller, braucht aber mehr von deiner Grenze.</span></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Suchen je Helfer <span class="why">Wie oft ein Helfer suchen oder eine Seite lesen darf</span></span>
-            <input type="text" name="AQUATICY_SUBAGENT_BUDGET"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Suchen je Anfrage <span class="why">Höchstzahl für Suchen und gelesene Seiten zusammen</span></span>
-            <input type="text" name="AQUATICY_MAX_TOOL_CALLS"></label>
-          <label><span class="lbl">Gedächtnis im Gespräch <span class="why">Wie viel vom Gespräch das Modell im Blick behält. Nur für lokale Modelle</span></span>
-            <input type="text" name="AQUATICY_CONTEXT_TOKENS"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Zeit fürs Planen <span class="why">Wie lange das Aufteilen einer Frage dauern darf (Sekunden)</span></span>
-            <input type="text" name="AQUATICY_PLANNER_TIMEOUT"></label>
-          <label><span class="lbl">Gleichzeitig <span class="why">Wie viele Helfer gleichzeitig arbeiten. 0 = Aquaticy entscheidet</span></span>
-            <input type="text" name="AQUATICY_SUBAGENT_PARALLEL"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Anfragen pro Minute <span class="why">Wie viele Anfragen pro Minute dein KI-Anbieter erlaubt. Gilt für deine eigenen Schlüssel. Leer lassen = kostenloser Tarif (NVIDIA 40, Mistral 240)</span></span>
-            <input type="text" name="AQUATICY_RPM" placeholder="leer lassen = kostenloser Tarif"></label>
-          <label><span class="lbl">Gleichzeitige Anfragen <span class="why">Mehr auf einmal macht jede Antwort langsamer. Leer lassen = NVIDIA 4, Mistral 8</span></span>
-            <input type="text" name="AQUATICY_PARALLEL_CALLS" placeholder="leer lassen = kostenloser Tarif"></label>
-        </div>
-        <div class="check">
-          <input type="checkbox" role="switch" class="schalter" id="pw" name="AQUATICY_ENABLE_PLAYWRIGHT">
-          <label for="pw" style="margin:0">Seiten mit echtem Browser laden
-            <span class="why">Für Seiten, die ihren Inhalt erst später nachladen. Dafür
-              muss einmal <code>aquaticy install-browser</code> ausgeführt werden.</span></label>
-        </div>
-      </fieldset>
-
-      <fieldset id="dev-settings"><legend>Dev settings</legend>
+      <fieldset id="secure-section"><legend>Secure Pro</legend>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="secure-setting">
-          <label for="secure-setting">Secure Pro
-            <span class="why">Zeigt die Einrichtung. Im eigenen Chat erklärt dein Modell Befunde und sichere Einstellungen.</span>
-          </label>
-
+          <label for="secure-setting" style="margin:0">Secure Pro
+            <span class="why">Schützt dein Heimnetz. Secure Pro sucht Malware-Zeichen, Angriffe
+              und riskante Dienste. Es meldet sich im eigenen Chat, wenn etwas Wichtiges
+              passiert.</span></label>
         </div>
         <div id="secure-controls" class="cluster-box" hidden>
-          <p>Cloud-Modelle erhalten deine Nachrichten und ausgewählte Netzbefunde. Für lokale Verarbeitung wähle ein lokales Modell.</p>
-          <p>Neue Werte gelten erst nach deiner bestätigten Netzfreigabe.</p>
-<h3>Secure Pro einrichten</h3>
-      <label for="secure-router">Router-IP</label>
-      <input type="text" id="secure-router" placeholder="192.168.1.1" maxlength="15" inputmode="decimal">
-      <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
-      <p id="secure-router-hint" role="status"></p>
-      <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
-      <input type="text" id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
-      <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf es prüfen.</label>
-      <button id="secure-test" type="button" class="btn">Router testen und starten</button>
-      <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
-      <button id="secure-check" type="button" class="btn">Prüfen</button>
-      <button id="secure-status" type="button" class="btn">Status</button>
-      <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
-      <p>Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.</p>
-      <p>Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.</p>
-      <p id="secure-scope-note" role="status"></p>
-      <p id="secure-note" role="status"></p>
-      <p id="secure-checked"></p>
-      <h3>Geräte im freigegebenen Netz</h3>
-      <ul id="secure-devices"></ul>
-      <h3>Positiv beobachtet</h3>
-      <ul id="secure-positive"></ul>
-      <h3>Prüfhinweise</h3>
-      <ul id="secure-findings"></ul>
-      <p>Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.</p>
-    <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
+          <p class="note">Cloud-Modelle bekommen deine Nachrichten und ausgewählte Netzbefunde.
+            Für lokale Verarbeitung wähle ein lokales Modell.</p>
+          <div class="sub-title">Netz freigeben</div>
+          <label for="secure-router">Router-IP</label>
+          <input type="text" id="secure-router" placeholder="192.168.1.1" maxlength="15"
+                 inputmode="decimal">
+          <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
+          <p id="secure-router-hint" class="note" role="status"></p>
+          <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
+          <input type="text" id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
+          <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf
+            es prüfen.</label>
+          <div class="actions">
+            <button id="secure-test" type="button" class="btn">Router testen und starten</button>
+            <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
+            <button id="secure-check" type="button" class="btn">Prüfen</button>
+            <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
+          </div>
+          <p class="note">Neue Werte gelten erst nach deiner bestätigten Netzfreigabe. Lokale
+            Dateiordner gibst du mit aquaticy secure-pro im Terminal frei.</p>
+          <div id="secure-more" hidden>
+            <div class="sub-title">Überwachung</div>
+            <div class="check">
+              <input type="checkbox" role="switch" class="schalter" id="secure-watch">
+              <label for="secure-watch" style="margin:0">Immer überwachen
+                <span class="why">Wie ein Coworker: Secure Pro prüft im gewählten Abstand. Aus:
+                  nur wenn du „Prüfen“ drückst.</span></label>
+            </div>
+            <label><span class="lbl">Wie oft</span>
+              <select id="secure-interval">
+                <option value="5">alle 5 Minuten</option>
+                <option value="15">alle 15 Minuten</option>
+                <option value="30">alle 30 Minuten</option>
+                <option value="60">stündlich</option>
+                <option value="180">alle 3 Stunden</option>
+                <option value="360">alle 6 Stunden</option>
+                <option value="720">alle 12 Stunden</option>
+                <option value="1440">täglich</option>
+              </select></label>
+            <p id="secure-next" class="note" role="status"></p>
+            <div class="check">
+              <input type="checkbox" role="switch" class="schalter" id="secure-packets">
+              <label for="secure-packets" style="margin:0">Pakete prüfen
+                <span class="why">Liest bei jeder Prüfung 15 Sekunden lang Kopfdaten: Adressen,
+                  Ports und DNS-Namen. Nie Inhalte. Nichts wird gespeichert. So erkennt Secure
+                  Pro Portscans, ARP-Spoofing, Passwort-Angriffe und Malware-Verkehr. Braucht
+                  Linux und Root-Rechte. Mit Switch sieht dieser Rechner nur seinen eigenen
+                  Verkehr und Rundrufe.</span></label>
+            </div>
+            <p id="secure-packet-note" class="note" role="status"></p>
+            <div class="check">
+              <input type="checkbox" role="switch" class="schalter" id="secure-vm">
+              <label for="secure-vm" style="margin:0">VM für Abwehr nutzen
+                <span class="why">Secure Pro darf über SSH aus der VM Ports schließen, Geräte
+                  sperren und Dienste stoppen. Jeder Befehl braucht dein Ja im
+                  Secure-Pro-Chat. Den Router, Aquaticy und SSH sperrt es nie.</span></label>
+            </div>
+            <p id="secure-vm-note" class="note" role="status"></p>
+            <div class="sub-title">Aufgaben</div>
+            <p class="note">Sag Secure Pro, wann es sich melden soll. Zum Beispiel: „Melde dich,
+              wenn ein neues Gerät ins Netz kommt.“ oder „Sag Bescheid, wenn 192.168.1.20
+              offline geht.“</p>
+            <ul class="device-list" id="secure-tasks"></ul>
+            <div class="inline">
+              <label style="flex:1"><input type="text" id="secure-task-text" maxlength="300"
+                     placeholder="Melde dich, wenn ein neues Gerät ins Netz kommt"
+                     aria-label="Neue Aufgabe für Secure Pro"></label>
+              <button type="button" class="btn" id="secure-task-add">Hinzufügen</button>
+            </div>
+            <p id="secure-task-note" class="note" role="status"></p>
+          </div>
+          <p id="secure-scope-note" role="status"></p>
+          <p id="secure-note" role="status"></p>
+          <p id="secure-checked"></p>
+          <h3>Wichtig</h3>
+          <ul id="secure-important"></ul>
+          <h3>Prüfhinweise</h3>
+          <ul id="secure-findings"></ul>
+          <h3>Positiv beobachtet</h3>
+          <ul id="secure-positive"></ul>
+          <h3>Geräte im freigegebenen Netz</h3>
+          <ul id="secure-devices"></ul>
+          <p class="note">Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.
+            Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige
+            Sicherheitsprüfung.</p>
+          <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
         </div>
+        <p id="feature-note" class="note" role="status"></p>
+      </fieldset>
+
+      <fieldset id="workshop-settings"><legend>virtual machine</legend>
+        <div class="pro-lock" id="vm-plus-lock" hidden>„Plus“ gibt es nur mit Ultra. „Normal“ kannst
+          du nutzen.</div>
+        <label><span class="lbl">Größe <span class="why">Gilt ab der nächsten virtual machine. Eine
+          laufende bleibt, wie sie ist</span></span>
+          <select name="AQUATICY_VM_SIZE">
+            <option value="normal">Normal — 2 Kerne, 3 GB Arbeitsspeicher, 4 GB Speicher</option>
+            <option value="plus">Plus — 4 Kerne, 6 GB Arbeitsspeicher, 20 GB Speicher</option>
+          </select></label>
+        <div class="note">Normal reicht für fast alles. Plus lohnt sich für schwere Arbeit, zum
+          Beispiel 3D mit Blender.</div>
+        <div class="check usermode-row">
+          <input type="checkbox" role="switch" class="schalter" id="usermode"
+                 name="AQUATICY_VM_USER_MODE">
+          <label for="usermode" style="margin:0">User mode — Aquaticy bedient die virtual machine
+            wie ein Mensch <span class="ultra-tag">Ultra</span>
+            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
+            <span class="why">Die virtual machine wird ein Computer mit Internet. Aquaticy bedient
+              ihn wie ein Mensch. Dein Heimnetz bleibt gesperrt. Absenden, Kaufen und Löschen nur
+              mit deinem Ja. Passwörter, Zahlungsdaten, Captchas und „Alle akzeptieren“ fasst
+              Aquaticy nie an.</span></label>
+          <button type="button" class="btn addon-btn" id="btn-addons"
+                  title="Add-ons: NVIDIA NIM, Mistral, GitHub, WhatsApp Web, Blender …">Add-ons</button>
+        </div>
+        <div class="check usermode-row">
+          <input type="checkbox" role="switch" class="schalter" id="vminternet"
+                 name="AQUATICY_VM_INTERNET">
+          <label for="vminternet" style="margin:0">Internet für die virtual machine
+            <span class="ultra-tag">Ultra</span>
+            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
+            <span class="why">Im Code-Modus darf die virtual machine dann ins Internet, etwa für pip
+              install oder um eine Seite zu laden. Dein Heimnetz bleibt gesperrt. Bei Normal- und
+              Pro-Konten hat sie gar kein Netz.</span></label>
+        </div>
+        <div class="check usermode-row">
+          <input type="checkbox" role="switch" class="schalter" id="vmlan"
+                 name="AQUATICY_VM_LAN">
+          <label for="vmlan" style="margin:0">Auch ins lokale Netz
+            <span class="ultra-tag">Ultra</span>
+            <span class="lock-tag" data-lock hidden>Mit Ultra verfügbar</span>
+            <span class="why">Nur mit Ultra: Die virtual machine erreicht dann auch Geräte in deinem
+              Heimnetz (Router, Lager, Home Assistant …), nicht nur das Internet. Die Sperre fällt
+              weg. Schalte das nur ein, wenn du es brauchst.</span></label>
+        </div>
+        <p class="note">Mit „Auch ins lokale Netz“ und „Ins eigene Netz sehen dürfen“ nutzt Aquaticy OpenSSH aus der VM. Du trägst den öffentlichen VM-Schlüssel an deinem Gerät ein und prüfst dort den Fingerabdruck. Jeder SSH-Befehl braucht dein Ja. Passwörter und private Schlüssel gehören nie in den Chat.</p>
+        <div class="login-apps" id="login-apps">
+          <div><b>Login-Apps</b> — hier meldest du dich selbst an. Du siehst den Bildschirm, klickst
+            hinein und tippst Name, Passwort oder Code selbst. Aquaticy tippt nie ein Passwort und
+            liest nicht mit.</div>
+          <button type="button" class="btn" id="btn-loginapps">⌨ Selbst anmelden</button>
+        </div>
+        <div class="note" id="usermode-note">Dafür braucht Aquaticy ein Modell, das Bilder versteht
+          (siehe Modell). Und der Computer muss einmal eingerichtet werden:
+          <code>docker build -f docker/workshop-desktop.Dockerfile -t aquaticy-werkstatt-desktop:local .</code>
+          Für den Browser reicht „Normal“. Für Browser und Office zusammen ist „Plus“ viel besser.</div>
+      </fieldset>
+
+      <fieldset id="messenger-section"><legend>Messenger</legend>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="voice-setting">
           <label for="voice-setting">Sprachnachrichten an oder aus
             <span class="why">Lokale Programme und Modell richtest du einmalig mit aquaticy voice ein.</span>
           </label>
         </div>
-        <p id="feature-note" class="note" role="status"></p>
+        <p id="voice-note" class="note" role="status"></p>
+        <p class="note">WhatsApp und Signal verbindest du unter Add-ons.</p>
+      </fieldset>
+
+      <fieldset id="dev-settings"><legend>Dev settings</legend>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="legalguard"
                  name="AQUATICY_LEGAL_GUARD">
@@ -2677,6 +2743,12 @@ html.vv,html.vv body{height:var(--app-h)}
             <span class="why">Aquaticy prüft jede Frage, Personensuche, jedes Kamerabild und jeden
               Mail-Entwurf gegen Grundgesetz und BGB. Im Chat kannst du das nie abschalten.</span></label>
         </div>
+        <details class="note" id="legal-rules"><summary>Welche Regeln gelten?</summary>
+          <ul id="legal-rule-list"></ul></details>
+        <div class="note">Gilt nur für die Rechts-Leitplanken und dein Konto. Immer bleibt: keine
+          Bezahlschranken, Logins oder Captchas umgehen, robots.txt beachten, nur ins eigene Netz
+          schauen, im Haus erst nach Rückfrage schalten, bei Google nie senden oder löschen, keine
+          Schadsoftware in der virtual machine, keine Bilder, die echte Menschen bloßstellen.</div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="automodel"
                  name="AQUATICY_AUTO_MODEL">
@@ -2759,12 +2831,6 @@ html.vv,html.vv body{height:var(--app-h)}
               Daten. Tipp dort im Terminal „yes“. Gib dann hier den Code ein, den er zeigt.</div>
           </div>
         </div>
-        <details class="note" id="legal-rules"><summary>Welche Regeln gelten?</summary>
-          <ul id="legal-rule-list"></ul></details>
-        <div class="note">Gilt nur für die Rechts-Leitplanken und dein Konto. Immer bleibt: keine
-          Bezahlschranken, Logins oder Captchas umgehen, robots.txt beachten, nur ins eigene Netz
-          schauen, im Haus erst nach Rückfrage schalten, bei Google nie senden oder löschen, keine
-          Schadsoftware in der virtual machine, keine Bilder, die echte Menschen bloßstellen.</div>
       </fieldset>
 
 
@@ -2822,7 +2888,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.3 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.1.3 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5526,12 +5592,50 @@ try {
 
 
 const EN = {
+"Schützt dein Heimnetz. Secure Pro sucht Malware-Zeichen, Angriffe und riskante Dienste. Es meldet sich im eigenen Chat, wenn etwas Wichtiges passiert.": "Protects your home network. Secure Pro looks for signs of malware, attacks and risky services. It reports in its own chat when something important happens.",
+"Cloud-Modelle bekommen deine Nachrichten und ausgewählte Netzbefunde. Für lokale Verarbeitung wähle ein lokales Modell.": "Cloud models receive your messages and selected network findings. For local processing, choose a local model.",
+"Neue Werte gelten erst nach deiner bestätigten Netzfreigabe. Lokale Dateiordner gibst du mit aquaticy secure-pro im Terminal frei.": "New values apply only after you confirm network authorization. Authorize local folders with aquaticy secure-pro in the terminal.",
+"Überwachung": "Monitoring",
+"Immer überwachen": "Always monitor",
+"Wie ein Coworker: Secure Pro prüft im gewählten Abstand. Aus: nur wenn du „Prüfen“ drückst.": "Like a coworker: Secure Pro checks at the chosen interval. Off: only when you press “Check”.",
+"Wie oft": "How often",
+"alle 3 Stunden": "every 3 hours",
+"alle 6 Stunden": "every 6 hours",
+"alle 12 Stunden": "every 12 hours",
+"Pakete prüfen": "Check packets",
+"Liest bei jeder Prüfung 15 Sekunden lang Kopfdaten: Adressen, Ports und DNS-Namen. Nie Inhalte. Nichts wird gespeichert. So erkennt Secure Pro Portscans, ARP-Spoofing, Passwort-Angriffe und Malware-Verkehr. Braucht Linux und Root-Rechte. Mit Switch sieht dieser Rechner nur seinen eigenen Verkehr und Rundrufe.": "Reads headers for 15 seconds on every check: addresses, ports and DNS names. Never contents. Nothing is stored. This lets Secure Pro spot port scans, ARP spoofing, password attacks and malware traffic. Needs Linux and root rights. With a switch, this computer only sees its own traffic and broadcasts.",
+"VM für Abwehr nutzen": "Use the VM for defense",
+"Secure Pro darf über SSH aus der VM Ports schließen, Geräte sperren und Dienste stoppen. Jeder Befehl braucht dein Ja im Secure-Pro-Chat. Den Router, Aquaticy und SSH sperrt es nie.": "Secure Pro may close ports, block devices and stop services over SSH from the VM. Every command needs your yes in the Secure Pro chat. It never blocks the router, Aquaticy or SSH.",
+"Aufgaben": "Tasks",
+"Sag Secure Pro, wann es sich melden soll. Zum Beispiel: „Melde dich, wenn ein neues Gerät ins Netz kommt.“ oder „Sag Bescheid, wenn 192.168.1.20 offline geht.“": "Tell Secure Pro when to report. For example: “Tell me when a new device joins the network.” or “Let me know when 192.168.1.20 goes offline.”",
+"Melde dich, wenn ein neues Gerät ins Netz kommt": "Tell me when a new device joins the network",
+"Neue Aufgabe für Secure Pro": "New task for Secure Pro",
+"Hinzufügen": "Add",
+"Wichtig": "Important",
+"Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen. Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.": "Open services are review hints, not confirmed infections. Results apply to the Aquaticy server network. They are not a complete security assessment.",
+"Mit „Auch ins lokale Netz“ und „Ins eigene Netz sehen dürfen“ nutzt Aquaticy OpenSSH aus der VM. Du trägst den öffentlichen VM-Schlüssel an deinem Gerät ein und prüfst dort den Fingerabdruck. Jeder SSH-Befehl braucht dein Ja. Passwörter und private Schlüssel gehören nie in den Chat.": "With “Also into the local network” and “May look into your own network”, Aquaticy uses OpenSSH from the VM. You add the public VM key on your device and check the fingerprint there. Every SSH command needs your yes. Passwords and private keys never belong in the chat.",
+"WhatsApp und Signal verbindest du unter Add-ons.": "You connect WhatsApp and Signal under Add-ons.",
+"Ein neues Gerät kommt ins Netz.": "A new device joins the network.",
+"Ein Gerät ist nicht mehr erreichbar.": "A device is no longer reachable.",
+"Ein Gerät ist wieder erreichbar.": "A device is reachable again.",
+"Ein Gerät öffnet einen neuen Dienst.": "A device opens a new service.",
+"Ein Malware-Verdacht taucht auf.": "A malware suspicion comes up.",
+"Ein Angriff wird erkannt (Portscan, ARP-Spoofing, Passwort-Angriffe).": "An attack is detected (port scan, ARP spoofing, password attacks).",
+"Es gibt einen neuen Prüfhinweis.": "There is a new review hint.",
+"Beschreib die Aufgabe in einem Satz mit höchstens 300 Zeichen.": "Describe the task in one sentence with at most 300 characters.",
+"Das verstehe ich nicht. Beispiele: „Melde dich, wenn ein neues Gerät ins Netz kommt.“ „Sag Bescheid, wenn 192.168.1.20 offline geht.“ „Melde jeden Malware-Verdacht.“": "I don't understand that. Examples: “Tell me when a new device joins the network.” “Let me know when 192.168.1.20 goes offline.” “Report every malware suspicion.”",
+"Aufgaben gelten nur für Geräte in deinem Heimnetz.": "Tasks only apply to devices in your home network.",
+"Nenne die IP-Adresse des Geräts, zum Beispiel 192.168.1.20.": "Name the device's IP address, for example 192.168.1.20.",
+"Höchstens 20 Aufgaben.": "At most 20 tasks.",
+"Die Paketprüfung braucht Root-Rechte oder CAP_NET_RAW.": "Packet checking needs root rights or CAP_NET_RAW.",
+"Die Paketprüfung gibt es nur unter Linux.": "Packet checking is only available on Linux.",
+"Die Paketprüfung konnte nicht starten.": "Packet checking could not start.",
+"Secure Pro darf die VM nicht nutzen. Schalte das in den Secure-Pro-Einstellungen ein.": "Secure Pro may not use the VM. Turn that on in the Secure Pro settings.",
+"Wähle einen der angebotenen Abstände.": "Choose one of the offered intervals.",
+"Diese Aufgabe gibt es nicht mehr.": "This task no longer exists.",
 "Secure-Pro-Einstellungen": "Secure Pro settings",
 "Secure Pro einrichten": "Set up Secure Pro",
 "Geräte im freigegebenen Netz": "Devices in the authorized network",
-"Cloud-Modelle erhalten deine Nachrichten und ausgewählte Netzbefunde. Für lokale Verarbeitung wähle ein lokales Modell.": "Cloud models receive your messages and selected network findings. Choose a local model for local processing.",
-"Neue Werte gelten erst nach deiner bestätigten Netzfreigabe.": "New values apply only after you confirm network authorization.",
-"Zeigt die Einrichtung. Im eigenen Chat erklärt dein Modell Befunde und sichere Einstellungen.": "Shows setup options. In its own chat, your model explains findings and safe settings.",
 "Nur eine Adresse ist freigegeben. Bestätige einen größeren Prüfbereich für weitere Geräte.": "Only one address is authorized. Confirm a larger range to check more devices.",
 "Bestätige die Netzfreigabe in den Secure-Pro-Einstellungen.": "Confirm network authorization in Secure Pro settings.",
 "Der Prüfbereich bleibt privat und umfasst 1 Adresse.": "The check stays within a private range of one address.",
@@ -5539,7 +5643,6 @@ const EN = {
 "Bei einem Gerät antwortet Port 443 oder 8443. Dort sind oft verschlüsselte Weboberflächen erreichbar. TLS und Zertifikate wurden nicht geprüft.": "One device responded on port 443 or 8443, often used for encrypted web interfaces. TLS and certificates were not checked.",
 
 "Prüft OpenSSH; alte Abbilder werden aktualisiert.": "Checking OpenSSH; old images are updated.",
-"Mit eingeschalteter VM und „Auch ins lokale Netz“ kann Aquaticy OpenSSH nutzen. Der öffentliche VM-Schlüssel wird am eigenen Gerät freigegeben. Prüfe dessen Fingerabdruck direkt dort. Jeder Befehl über das SSH-Werkzeug braucht dein Ja. Keine Passwörter oder privaten Schlüssel im Chat.": "With the VM and “Also into the local network” enabled, Aquaticy can use OpenSSH. Authorize the public VM key on your own device. Verify its fingerprint directly there. Every command through the SSH tool needs your approval. No passwords or private keys in chat.",
 
 "ClamAV fehlt. Die freigegebene Dateiprüfung ist nicht erfolgt. Installiere ClamAV erneut.": "ClamAV is missing. The authorized file check did not run. Install ClamAV again.",
 "Der freigegebene Dateiordner wurde verschoben oder ersetzt. Die Dateiprüfung ist nicht erfolgt. Gib den Ordner erneut frei.": "The authorized folder was moved or replaced. The file check did not run. Authorize the folder again.",
@@ -5561,7 +5664,6 @@ const EN = {
 "Router testen und starten": "Test router and start",
 "Positiv beobachtet": "Positive observations",
 "Prüfhinweise": "Findings to review",
-"Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.": "Results apply to the Aquaticy server network. They are not a complete security assessment.",
 "Vorschlag aus der Standardroute des Aquaticy-Servers. Prüfe, ob es dein Heimnetz ist.": "Suggested by the Aquaticy server default route. Check that this is your home network.",
 "Keinen Router erkannt. Trage die private Router-IP und dein Netz ein.": "No router detected. Enter the private router IP and your network.",
 "Aquaticy läuft in einem Container. Die Route kann zum Container-Netz gehören.": "Aquaticy runs in a container. The route may belong to the container network.",
@@ -5576,8 +5678,6 @@ const EN = {
 "Netz freigeben": "Authorize network",
 "Prüfen": "Check",
 "Secure Pro ausschalten": "Turn off Secure Pro",
-"Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.": "Open services are review hints, not confirmed infections.",
-"Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.": "Authorize local folders with aquaticy secure-pro in the terminal.",
 "Secure-Pro-Chat öffnen": "Open Secure Pro chat",
 "Sprachnachrichten an oder aus": "Turn voice messages on or off",
 "Lokale Programme und Modell richtest du einmalig mit aquaticy voice ein.": "Set up local programs and the model once with aquaticy voice.",
@@ -5634,7 +5734,6 @@ const EN = {
 "Ich bin einverstanden mit dem gemeinsamen Lernen und meinen Stichpunkten aus öffentlichen Seiten.": "I agree to shared learning and my notes from public pages.",
 "Aquaticy nimmt nur kurze Stellen aus öffentlichen Sachtexten. Nie deine Fragen, Antworten, Dateien oder Erinnerungen. Die Stellen helfen allen Konten auf diesem Server, höchstens 30 Tage lang. Sie können Fehler enthalten. Das Modell selbst wird damit nicht trainiert.": "Aquaticy only takes short parts of public factual texts. Never your questions, answers, files or memories. These parts help all accounts on this server for up to 30 days. They may contain mistakes. The model itself is not trained with them.",
 "Damit wir deine Beiträge löschen können, speichern wir eine Kennung ohne deinen Namen. Ausschalten nimmt deine Zustimmung zurück und löscht deine Beiträge. Gleiche Stellen von anderen Konten bleiben.": "So we can delete your contributions, we keep an ID without your name. Turning this off takes back your consent and deletes your contributions. The same parts from other accounts stay.",
-"Details zum Datenschutz": "Privacy details",
 "Gemeinsames Lernen geht gerade nicht.": "Shared learning isn't working right now.",
 "Gespeichert. Ab jetzt helfen nur neue Chats mit.": "Saved. From now on, only new chats help.",
 "Zustimmung zurückgenommen. Deine Beiträge sind gelöscht.": "Consent taken back. Your contributions are deleted.",
@@ -6100,7 +6199,7 @@ const EN = {
 "Sprache / Land": "Language / country",
 "Helfer & Grenzen": "Helpers & limits",
 "Fragen automatisch aufteilen": "Split questions automatically",
-"Große Fragen teilt Aquaticy auf und sucht die Teile gleichzeitig. Das ist schneller, braucht aber mehr von deiner Grenze.": "Aquaticy splits big questions and searches the parts at the same time. That's faster, but uses more of your limit.",
+"Große Fragen teilt Aquaticy auf und lässt Helfer die Teile gleichzeitig suchen. Das ist schneller, braucht aber mehr von deiner Grenze. Ab Werk an.": "Aquaticy splits big questions and lets helpers search the parts at the same time. That's faster, but uses more of your limit. On by default.",
 "Suchen je Helfer": "Searches per helper",
 "Wie oft ein Helfer suchen oder eine Seite lesen darf": "How often a helper may search or read a page",
 "Suchen je Anfrage": "Searches per request",
@@ -9776,6 +9875,57 @@ async function featureRequest(payload){
   return data;
 }
 let secureRefreshTimer = null, secureRefreshPending = false, secureSetup = false;
+let secureWichtigVorher = null;
+function secureListe(id, items){
+  const list = $("#" + id); list.replaceChildren();
+  for (const item of items || []){
+    const li = document.createElement("li"); li.textContent = item; list.appendChild(li);
+  }
+  uebersetze(list);
+}
+function secureAufgabeText(task){
+  return enOderDe(task.label) + (task.host ? " " + sp("Gerät: ", "Device: ") + task.host : "")
+    + (task.port ? " · Port " + task.port : "");
+}
+function secureOptionen(data){
+  // Zeitplan, Paketpruefung, VM und Aufgaben (14.1.3 Luna) -- erst nach der Netzfreigabe.
+  $("#secure-more").hidden = !data.secure;
+  if (!data.secure) return;
+  $("#secure-watch").checked = data.watch !== false;
+  if (document.activeElement !== $("#secure-interval"))
+    $("#secure-interval").value = String(data.interval || 15);
+  $("#secure-interval").disabled = data.watch === false;
+  $("#secure-packets").checked = !!data.packets;
+  $("#secure-vm").checked = !!data.vm;
+  $("#secure-next").textContent = data.watch === false
+    ? sp("Secure Pro prüft nur, wenn du „Prüfen“ drückst.",
+         "Secure Pro only checks when you press “Check”.")
+    : data.next_check
+      ? sp("Nächste Prüfung: ", "Next check: ") + new Date(data.next_check * 1000).toLocaleString()
+      : "";
+  $("#secure-packet-note").textContent = data.packets ? enOderDe(data.packet_status || "") : "";
+  $("#secure-vm-note").textContent = data.vm && !data.vm_network
+    ? sp("Schalte dafür „Auch ins lokale Netz“ (virtual machine) und „Ins eigene Netz sehen dürfen“ (Zuhause & Netz) ein.",
+         "For this, turn on “Also into the local network” (virtual machine) and “May look into your own network” (Home & network).")
+    : "";
+  const liste = $("#secure-tasks"); liste.replaceChildren();
+  for (const task of data.tasks || []){
+    const li = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = task.text;
+    const was = document.createElement("small");
+    was.className = "note"; was.textContent = " · " + secureAufgabeText(task);
+    const weg = document.createElement("button");
+    weg.type = "button"; weg.className = "btn"; weg.textContent = sp("Löschen", "Delete");
+    weg.addEventListener("click", async () => {
+      weg.disabled = true;
+      try { secureRender(await featureRequest({action:"task_remove", id:task.id})); }
+      catch(error){ $("#secure-task-note").textContent = error.message; weg.disabled = false; }
+    });
+    li.append(text, was, weg);
+    liste.appendChild(li);
+  }
+}
 function secureRender(data, fill = false){
   if (fill){
     for (const id of ["subnet", "router"]){
@@ -9807,13 +9957,18 @@ function secureRender(data, fill = false){
     ? sp("Letzte abgeschlossene Prüfung: ", "Last completed check: ")
       + new Date(data.checked * 1000).toLocaleString()
     : sp("Noch keine abgeschlossene Prüfung.", "No completed check yet.");
-  for (const [id, items] of [["secure-positive", data.positives], ["secure-findings", data.findings]]){
-    const list = $("#" + id); list.replaceChildren();
-    for (const item of items || []){
-      const li = document.createElement("li"); li.textContent = item; list.appendChild(li);
-    }
-    uebersetze(list);
-  }
+  const wichtig = data.important || [];
+  secureListe("secure-important", wichtig.length ? wichtig
+    : [sp("Nichts Wichtiges.", "Nothing important.")]);
+  secureListe("secure-findings", (data.findings || []).filter(item => !wichtig.includes(item)));
+  secureListe("secure-positive", data.positives);
+  secureOptionen(data);
+  // Neue wichtige Meldung, waehrend der Secure-Pro-Chat offen ist: Verlauf neu laden.
+  const kennung = wichtig.join("\n");
+  if (secureChat && secureWichtigVorher !== null && kennung !== secureWichtigVorher && !busy
+      && wichtig.length)
+    openChat(currentChat, {force:true});
+  secureWichtigVorher = kennung;
 }
 function secureSchedule(){
   clearTimeout(secureRefreshTimer);
@@ -9847,7 +10002,8 @@ async function featureLoad(){
     const response = await api("/api/features", {quietErrors:true});
     const data = await response.json();
     const allowed = response.ok && data.allowed;
-    for (const id of ["voice-setting", "secure-setting", "secure-open"]){
+    for (const id of ["voice-setting", "secure-setting", "secure-open", "secure-watch",
+                      "secure-interval", "secure-packets", "secure-vm", "secure-task-add"]){
       $("#" + id).disabled = !allowed;
     }
     $("#voice-setting").checked = !!data.voice;
@@ -9856,13 +10012,17 @@ async function featureLoad(){
     $("#secure-setting").setAttribute("aria-expanded", String(!$("#secure-controls").hidden));
     $("#feature-note").textContent = allowed ? ""
       : "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.";
+    $("#voice-note").textContent = $("#feature-note").textContent;
     if (allowed){
       secureRender(data, true);
       if (!$("#secure-controls").hidden && (!data.router || (data.subnet || "").endsWith("/32")))
         await secureDetect();
       secureSchedule();
     }
-  } catch { $("#feature-note").textContent = "Aquaticy ist gerade nicht erreichbar."; }
+  } catch {
+    $("#feature-note").textContent = "Aquaticy ist gerade nicht erreichbar.";
+    $("#voice-note").textContent = $("#feature-note").textContent;
+  }
 }
 async function secureDetect(replace = false){
   const chat = currentChat, button = $("#secure-detect");
@@ -9924,7 +10084,7 @@ function secureSettingsVisible(){
 }
 $("#secure-settings-open").addEventListener("click", async () => {
   await showSettings();
-  $("#dev-settings").scrollIntoView({behavior:"smooth", block:"start"});
+  $("#secure-section").scrollIntoView({behavior:"smooth", block:"start"});
 });
 $("#secure-open").addEventListener("click", openSecureChat);
 $("#secure-setting").addEventListener("change", async event => {
@@ -9945,7 +10105,7 @@ for (const id of ["secure-router", "secure-subnet"])
 $("#voice-setting").addEventListener("change", async event => {
   const field = event.target; field.disabled = true;
   try { await featureRequest({action:"voice", enabled:field.checked}); }
-  catch(error){ $("#feature-note").textContent = error.message; field.checked = !field.checked; }
+  catch(error){ $("#voice-note").textContent = error.message; field.checked = !field.checked; }
   finally { field.disabled = false; }
 });
 $("#secure-apply").addEventListener("click", async () => {
@@ -9969,7 +10129,45 @@ $("#secure-check").addEventListener("click", async () => {
     secureSchedule();
   } catch(error){ $("#secure-note").textContent = error.message; }
 });
-$("#secure-status").addEventListener("click", featureLoad);
+async function secureOption(werte, feld){
+  const chat = currentChat;
+  if (feld) feld.disabled = true;
+  try {
+    const data = await featureRequest({action:"options", ...werte});
+    if (chat === currentChat) secureRender(data);
+  } catch(error){
+    $("#secure-note").textContent = error.message;
+    featureLoad();
+  } finally { if (feld) feld.disabled = false; }
+}
+$("#secure-watch").addEventListener("change", e => secureOption({watch:e.target.checked}, e.target));
+$("#secure-interval").addEventListener("change", e =>
+  secureOption({interval:Number(e.target.value)}, e.target));
+$("#secure-packets").addEventListener("change", e =>
+  secureOption({packets:e.target.checked}, e.target));
+$("#secure-vm").addEventListener("change", e => secureOption({vm:e.target.checked}, e.target));
+async function secureAufgabe(){
+  const feld = $("#secure-task-text"), knopf = $("#secure-task-add");
+  const text = feld.value.trim();
+  if (!text){
+    $("#secure-task-note").textContent = sp("Beschreib die Aufgabe in einem Satz.",
+                                            "Describe the task in one sentence.");
+    return;
+  }
+  knopf.disabled = true;
+  try {
+    const data = await featureRequest({action:"task_add", text});
+    feld.value = "";
+    $("#secure-task-note").textContent = sp("Verstanden: ", "Understood: ")
+      + secureAufgabeText(data.task);
+    secureRender(data);
+  } catch(error){ $("#secure-task-note").textContent = enOderDe(error.message); }
+  finally { knopf.disabled = false; }
+}
+$("#secure-task-add").addEventListener("click", secureAufgabe);
+$("#secure-task-text").addEventListener("keydown", e => {
+  if (e.key === "Enter"){ e.preventDefault(); secureAufgabe(); }
+});
 
 
 let verbundTakt = null;

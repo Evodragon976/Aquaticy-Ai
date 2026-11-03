@@ -1,11 +1,19 @@
-"""Freiwillige defensive Heimnetzpruefung und lokale ClamAV-Befunde."""
+"""Freiwillige defensive Heimnetzpruefung und lokale ClamAV-Befunde.
+
+Seit 14.1.3 Luna: Secure Pro ueberwacht nach Zeitplan (wie ein Coworker), liest auf Wunsch
+Paket-Kopfdaten, kennt Malware-Ports und erfuellt Aufgaben wie "Melde dich bei neuen
+Geraeten". In den Chat und an den Messenger geht nur Wichtiges und was eine Aufgabe
+verlangt. Alles andere steht im Status, wenn du fragst.
+"""
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
 import shutil
+import socket
 import subprocess
 import threading
 import time
@@ -16,8 +24,16 @@ from typing import Any
 from aquaticy import private_json
 
 LOG = logging.getLogger(__name__)
-RISK_PORTS = {21: "FTP", 23: "Telnet", 3389: "Fernwartung", 5900: "VNC",
-              6379: "Redis", 3306: "MySQL", 5432: "PostgreSQL"}
+RISK_PORTS = {21: "FTP", 23: "Telnet", 1433: "Microsoft SQL", 2375: "Docker-API",
+              3389: "Fernwartung", 5900: "VNC", 6379: "Redis", 3306: "MySQL",
+              5432: "PostgreSQL", 9200: "Elasticsearch", 11211: "Memcached",
+              27017: "MongoDB"}
+# Wie oft Secure Pro prueft, in Minuten (wie bei den Coworkern waehlbar).
+INTERVALS = (5, 15, 30, 60, 180, 360, 720, 1440)
+DEFAULT_INTERVAL = 15
+PACKET_SECONDS = 15.0
+SCOPE = ("enabled", "subnet", "router", "folder")
+WICHTIG, HINWEIS = "wichtig", "hinweis"
 
 
 def read(directory: Path) -> dict[str, Any]:
@@ -28,8 +44,27 @@ def read(directory: Path) -> dict[str, Any]:
         return {}
 
 
+def scope(config: dict[str, Any]) -> dict[str, Any]:
+    """Nur was festlegt, WAS geprueft wird. Zeitplan und Aufgaben gehoeren nicht dazu."""
+    return {key: config.get(key) for key in SCOPE}
+
+
 def config_token(config: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+    return hashlib.sha256(json.dumps(scope(config), sort_keys=True).encode()).hexdigest()
+
+
+def options(config: dict[str, Any]) -> dict[str, Any]:
+    """Zeitplan, Paketpruefung, VM und Aufgaben -- mit sicheren Standardwerten."""
+    from aquaticy import secure_tasks
+
+    interval = config.get("interval", DEFAULT_INTERVAL)
+    return {
+        "watch": config.get("watch", True) is not False,
+        "interval": interval if interval in INTERVALS else DEFAULT_INTERVAL,
+        "packets": config.get("packets") is True,
+        "vm": config.get("vm") is True,
+        "tasks": secure_tasks.clean(config.get("tasks", [])),
+    }
 
 
 def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "") -> None:
@@ -49,23 +84,97 @@ def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "
     target = Path(folder).expanduser().resolve() if folder else None
     if target is not None and (not target.is_dir() or not shutil.which("clamscan")):
         raise ValueError("Für lokale Dateien braucht Secure Pro einen Ordner und ClamAV.")
+    vorher = read(directory)
     private_json.write(directory / "secure-pro.json", {
+        **(options(vorher) if vorher.get("enabled") is True else {}),
         "enabled": True, "subnet": str(network), "router": router,
         "folder": str(target) if target else ""})
 
 
+def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    """Aendert Zeitplan, Paketpruefung und VM-Nutzung.
+
+    Raises:
+        ValueError: Secure Pro ist aus, oder ein Wert ist ungueltig.
+    """
+    config = read(directory)
+    if config.get("enabled") is not True:
+        raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
+    neu = options(config)
+    for key in ("watch", "packets", "vm"):
+        if key in payload:
+            if not isinstance(payload[key], bool):
+                raise ValueError("Wähle an oder aus.")
+            neu[key] = payload[key]
+    if "interval" in payload:
+        wert = payload["interval"]
+        if type(wert) is not int or wert not in INTERVALS:
+            raise ValueError("Wähle einen der angebotenen Abstände.")
+        neu["interval"] = wert
+    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+    return neu
+
+
+def add_task(directory: Path, text: str) -> dict[str, Any]:
+    """Neue Aufgabe. Raises ValueError, wenn sie nicht verstaendlich ist."""
+    from aquaticy import secure_tasks
+
+    config = read(directory)
+    if config.get("enabled") is not True:
+        raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
+    neu = options(config)
+    if len(neu["tasks"]) >= secure_tasks.MAX_TASKS:
+        raise ValueError("Höchstens 20 Aufgaben.")
+    aufgabe = secure_tasks.parse(text)
+    neu["tasks"].append(aufgabe)
+    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+    return aufgabe
+
+
+def remove_task(directory: Path, task_id: str) -> bool:
+    config = read(directory)
+    if config.get("enabled") is not True:
+        return False
+    neu = options(config)
+    rest = [task for task in neu["tasks"] if task["id"] != str(task_id)]
+    if len(rest) == len(neu["tasks"]):
+        return False
+    neu["tasks"] = rest
+    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+    return True
+
+
+def own_addresses(router: str = "") -> frozenset[str]:
+    """Adressen dieses Rechners -- seine eigenen Pruefungen sind kein Angriff."""
+    adressen: set[str] = set()
+    with contextlib.suppress(OSError):
+        adressen.update(socket.gethostbyname_ex(socket.gethostname())[2])
+    if router:
+        with contextlib.suppress(OSError), socket.socket(socket.AF_INET,
+                                                         socket.SOCK_DGRAM) as probe:
+            probe.connect((router, 9))
+            adressen.add(probe.getsockname()[0])
+    return frozenset(a for a in adressen if not a.startswith("127."))
+
+
 class Watcher:
-    def __init__(self, directory: Path, notify: Callable[[str], bool]) -> None:
+    def __init__(self, directory: Path, notify: Callable[[str], bool],
+                 report: Callable[[str], bool] | None = None) -> None:
         self.directory = directory
         self.notify = notify
+        self.report = report
         self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
         self.known: set[str] | None = None
         self.announced: set[str] = set()
         self.wake = threading.Event()
         self.last_findings: list[str] = []
+        self.important: list[str] = []
+        self.events: list[dict[str, Any]] = []
         self.last_checked = 0.0
+        self.next_check = 0.0
         self.positives: list[str] = []
+        self.packet_status = ""
         self.error = ""
         self.scanning = False
         self._network = ""
@@ -73,13 +182,18 @@ class Watcher:
         self._configuration = ""
         self.devices: list[dict[str, Any]] = []
         self._inventory: dict[str, dict[str, Any]] | None = None
+        self._offline: set[str] = set()
         self._requested = 0.0
         self._lock = threading.Lock()
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {"findings": list(self.last_findings), "positives": list(self.positives),
-                    "checked": self.last_checked, "scanning": self.scanning, "error": self.error,
+                    "important": list(self.important),
+                    "events": [dict(item) for item in self.events],
+                    "checked": self.last_checked, "next_check": self.next_check,
+                    "scanning": self.scanning, "error": self.error,
+                    "packet_status": self.packet_status,
                     "scope": self._result_subnet, "configuration": self._configuration,
                     "devices": [{**item, "ports": list(item["ports"])} for item in self.devices]}
 
@@ -108,8 +222,32 @@ class Watcher:
         if self.thread:
             self.thread.join(timeout=3)
 
+    def _packets(self, config: dict[str, Any], network: str,
+                 known: dict[str, str]) -> list[dict[str, Any]]:
+        """Liest kurz Kopfdaten und sucht Angriffe. Fehlt das Recht, steht das im Status."""
+        from aquaticy import secure_packets
+
+        if not options(config)["packets"]:
+            with self._lock:
+                self.packet_status = ""
+            return []
+        router = str(config.get("router") or "")
+        try:
+            records = secure_packets.capture(PACKET_SECONDS)
+        except secure_packets.Unavailable as exc:
+            with self._lock:
+                self.packet_status = str(exc)
+            return []
+        events = secure_packets.analyze(records, network, router=router, known_macs=known,
+                                        own=own_addresses(router))
+        with self._lock:
+            self.packet_status = secure_packets.summary(records, PACKET_SECONDS)
+        return events
+
     def tick(self) -> list[str]:
-        from aquaticy import lan
+        from aquaticy import lan, secure_tasks
+        from aquaticy.secure_knowledge import MALWARE_PORTS
+        from aquaticy.secure_packets import STRONG_PORTS
 
         config = read(self.directory)
         if config.get("enabled") is not True or self.stop_event.is_set():
@@ -120,11 +258,14 @@ class Watcher:
                 self._configuration = token
                 self.announced.clear()
                 self.last_findings = []
+                self.important = []
+                self.events = []
                 self.positives = []
                 self.last_checked = 0
                 self.error = ""
                 self.devices = []
                 self._inventory = None
+                self._offline = set()
         network = lan.parse_subnet(config.get("subnet", ""))
         if network.num_addresses > 256:
             raise ValueError("Netz zu groß.")
@@ -132,38 +273,78 @@ class Watcher:
             self.known = None
             self.announced.clear()
             self._network = str(network)
-        devices = lan.scan(str(network), quick=False, with_titles=False, with_names=False)
         from aquaticy.secure_network import neighbours
 
+        vorher_macs: dict[str, str] = {}
+        if options(config)["packets"]:
+            vorher_macs = {address: str(item.get("mac") or "") for address, item in
+                           (self._inventory or {}).items() if item.get("mac")}
+            if not vorher_macs:
+                vorher_macs = {item["address"]: item["mac"]
+                               for item in neighbours(str(network))}
+        packet_events = self._packets(config, str(network), vorher_macs)
+        ports = tuple(sorted(set(lan.FULL_PORTS) | set(RISK_PORTS) | set(MALWARE_PORTS)))
+        devices = lan.scan(str(network), quick=False, with_titles=False, with_names=False,
+                           ports=ports)
         inventory = {item["address"]: item for item in neighbours(str(network))}
         for device in devices:
             item = inventory.setdefault(device.address, {"address": device.address, "mac": ""})
             item.update(ports=list(device.ports), active=True, source="TCP-Antwort")
-        findings: set[str] = set()
+        # Jeder Befund hat eine Stufe: Wichtiges geht in Chat und Messenger, Hinweise
+        # stehen nur im Status.
+        befunde: dict[str, dict[str, Any]] = {}
+
+        def befund(text: str, kind: str, level: str, host: str = "", port: int = 0) -> None:
+            alt = befunde.get(text)
+            if alt is None or (level == WICHTIG and alt["level"] != WICHTIG):
+                befunde[text] = {"kind": kind, "level": level, "text": text, "host": host,
+                                 "port": port}
+
+        ereignisse: list[dict[str, Any]] = []
         positives = [("Der Prüfbereich bleibt privat und umfasst 1 Adresse."
                       if network.num_addresses == 1 else
                       "Der Prüfbereich bleibt privat und umfasst "
                       f"{network.num_addresses} Adressen.")]
         changed = False
+        router = str(config.get("router") or "")
         if self._inventory is not None:
             for address, item in inventory.items():
                 old = self._inventory.get(address)
                 if old is None:
-                    findings.add(f"Neu in der lokalen Beobachtung: {address}. "
-                                 "Das kann ein eigenes Gerät oder ein alter Nachbareintrag sein.")
+                    befund(f"Neu in der lokalen Beobachtung: {address}. "
+                           "Das kann ein eigenes Gerät oder ein alter Nachbareintrag sein.",
+                           "new_device", HINWEIS, address)
                 elif old.get("mac") and item.get("mac") and old["mac"] != item["mac"]:
                     changed = True
-                    findings.add(f"Geänderte Geräteadresse bei {address}. "
-                                 "Prüfe DHCP und das Gerät; das allein belegt keinen Angriff.")
+                    if address == router:
+                        befund(f"Die Hardware-Adresse des Routers {address} hat sich "
+                               f"geändert. Das kann ARP-Spoofing sein. Prüfe, ob du den "
+                               "Router getauscht hast.", "arp_spoof", WICHTIG, address)
+                    befund(f"Geänderte Geräteadresse bei {address}. "
+                           "Prüfe DHCP und das Gerät; das allein belegt keinen Angriff.",
+                           "mac_change", HINWEIS, address)
                 if old and old.get("active") and item.get("active"):
                     added = sorted(set(item["ports"]) - set(old["ports"]))
                     if added:
                         changed = True
-                        findings.add(f"Neue antwortende Dienste bei {address}: {added}. "
-                                     "Prüfe, ob du diese Änderung erwartet hast.")
+                        riskant = any(p in RISK_PORTS or p in MALWARE_PORTS for p in added)
+                        befund(f"Neue antwortende Dienste bei {address}: {added}. "
+                               "Prüfe, ob du diese Änderung erwartet hast.",
+                               "new_port", WICHTIG if riskant else HINWEIS, address, added[0])
+                        ereignisse.extend({"kind": "new_port", "level": HINWEIS, "text": "",
+                                           "host": address, "port": port} for port in added)
         current = {d.address for d in devices}
         if self.known is not None:
-            findings.update(f"Neues Gerät: {ip}" for ip in current - self.known)
+            for ip in sorted(current - self.known):
+                befund(f"Neues Gerät: {ip}", "new_device", HINWEIS, ip)
+            for ip in sorted(self.known - current):
+                self._offline.add(ip)
+                ereignisse.append({"kind": "device_offline", "level": HINWEIS, "host": ip,
+                                   "port": 0, "text": f"{ip} antwortet nicht mehr."})
+            for ip in sorted(current & self._offline):
+                self._offline.discard(ip)
+                ereignisse.append({"kind": "device_online", "level": HINWEIS, "host": ip,
+                                   "port": 0, "text": f"{ip} antwortet wieder."})
             if current and current == self.known and not changed:
                 positives.append("Die erreichbaren Geräte sind seit der letzten Prüfung "
                                  "unverändert.")
@@ -176,6 +357,8 @@ class Watcher:
                     "geprüften Risikodienste.")
             if not any(set(device.ports) & {21, 23} for device in devices):
                 positives.append("Bei den erreichbaren Geräten antworten weder FTP noch Telnet.")
+            if not any(set(device.ports) & set(MALWARE_PORTS) for device in devices):
+                positives.append("Kein Gerät antwortet auf einem der bekannten Malware-Ports.")
             tls_ports = sum(bool(set(device.ports) & {443, 8443}) for device in devices)
             if tls_ports:
                 positives.append(
@@ -186,23 +369,33 @@ class Watcher:
                      "Dort sind oft verschlüsselte Weboberflächen erreichbar. "
                      "TLS und Zertifikate wurden nicht geprüft."))
         else:
-            findings.add("Keine Geräte über die geprüften TCP-Ports erreichbar. "
-                         "Prüfe Netz, Router und Container-Anbindung. "
-                         "Das ist kein sauberes Ergebnis.")
+            befund("Keine Geräte über die geprüften TCP-Ports erreichbar. "
+                   "Prüfe Netz, Router und Container-Anbindung. "
+                   "Das ist kein sauberes Ergebnis.", "error", WICHTIG)
         for device in devices:
             for port in device.ports:
                 if port in RISK_PORTS:
-                    findings.add(f"Prüfhinweis: {device.address}, {RISK_PORTS[port]} "
-                                 f"(Port {port}). "
-                                 "Offen heißt nicht verwundbar oder infiziert.")
+                    befund(f"Prüfhinweis: {device.address}, {RISK_PORTS[port]} "
+                           f"(Port {port}). "
+                           "Offen heißt nicht verwundbar oder infiziert.",
+                           "risk_port", WICHTIG, device.address, port)
+                elif port in MALWARE_PORTS:
+                    name = MALWARE_PORTS[port][0]
+                    befund(f"Verdacht: {device.address} antwortet auf Port {port} ({name}). "
+                           "Das kann auch ein harmloses Programm sein. Prüfe, was dort läuft.",
+                           "malware", WICHTIG if port in STRONG_PORTS else HINWEIS,
+                           device.address, port)
+        for event in packet_events:
+            befund(event["text"], event["kind"], event["level"], event["host"], event["port"])
         folder = config.get("folder", "")
         target = Path(folder) if folder else None
         if target and (not target.is_dir() or target.resolve() != target):
-            findings.add("Der freigegebene Dateiordner wurde verschoben oder ersetzt. "
-                         "Die Dateiprüfung ist nicht erfolgt. Gib den Ordner erneut frei.")
+            befund("Der freigegebene Dateiordner wurde verschoben oder ersetzt. "
+                   "Die Dateiprüfung ist nicht erfolgt. Gib den Ordner erneut frei.",
+                   "error", WICHTIG)
         elif folder and not shutil.which("clamscan"):
-            findings.add("ClamAV fehlt. Die freigegebene Dateiprüfung ist nicht erfolgt. "
-                         "Installiere ClamAV erneut.")
+            befund("ClamAV fehlt. Die freigegebene Dateiprüfung ist nicht erfolgt. "
+                   "Installiere ClamAV erneut.", "error", WICHTIG)
         elif target:
             result = subprocess.run(
                 ["clamscan", "--recursive", "--infected", "--no-summary",
@@ -214,36 +407,81 @@ class Watcher:
                 "status": result.returncode, "scanned_at": int(time.time()),
                 "truncated": len(result.stdout) > 50000, "findings": result.stdout[:50000]})
             if result.returncode == 1:
-                findings.add("ClamAV meldet mindestens einen Malwarefund im freigegebenen "
-                             "lokalen Ordner. Öffne das lokale Secure-Pro-Protokoll.")
+                befund("ClamAV meldet mindestens einen Malwarefund im freigegebenen "
+                       "lokalen Ordner. Öffne das lokale Secure-Pro-Protokoll.",
+                       "malware", WICHTIG)
             elif result.returncode != 0:
-                findings.add("ClamAV-Prüfung fehlgeschlagen. Es liegt kein sauberes Ergebnis vor.")
+                befund("ClamAV-Prüfung fehlgeschlagen. Es liegt kein sauberes Ergebnis vor.",
+                       "error", WICHTIG)
             else:
                 positives.append("ClamAV meldet in den geprüften lokalen Dateien keinen Fund. "
                                  "Dateien außerhalb der Scan-Grenzen wurden nicht geprüft.")
-        if self.stop_event.is_set() or read(self.directory) != config:
+        if self.stop_event.is_set() or config_token(read(self.directory)) != token:
             return []
+        findings = set(befunde)
+        # Eine TCP-Antwort ("Neues Gerät") sagt mehr als ein Eintrag der Nachbartabelle.
+        alle = sorted(list(befunde.values()) + ereignisse,
+                      key=lambda item: not str(item["text"]).startswith("Neues Gerät"))
+        # Aufgaben: "Melde dich, wenn ...". Jede passende Beobachtung wird gemeldet.
+        aufgaben: list[str] = []
+        gemeldet: set[tuple[str, str, str, int]] = set()
+        for task in options(read(self.directory))["tasks"]:
+            for event in alle:
+                schluessel = (task["id"], event["kind"], event["host"], int(event["port"]))
+                if schluessel in gemeldet or not secure_tasks.matches(task, event):
+                    continue
+                gemeldet.add(schluessel)
+                was = event["text"] or (f"{event['host']}: neuer Dienst auf Port "
+                                        f"{event['port']}.")
+                aufgaben.append(f"Aufgabe „{task['text']}“: {was}")
         self.known = current
         self._inventory = inventory
-        self.announced.intersection_update(findings)
+        wichtig = sorted(text for text, item in befunde.items() if item["level"] == WICHTIG)
+        self.announced.intersection_update(findings | set(aufgaben))
         with self._lock:
             self.last_findings = sorted(findings)[:200]
+            self.important = wichtig[:200]
+            self.events = sorted(befunde.values(), key=lambda item: (
+                item["level"] != WICHTIG, item["text"]))[:200]
             self.positives = positives
             self.last_checked = time.time()
             self._result_subnet = str(network)
             self.error = ""
             self.devices = sorted(inventory.values(), key=lambda item: tuple(
                 int(part) for part in item["address"].split(".")))[:256]
-        new = sorted(findings - self.announced)[:20]
-        if new and not self.stop_event.is_set() and read(self.directory) == config:
-            message = "[Aquaticy] Secure Pro\n" + "\n".join(new)
-            try:
-                if self.notify(message[:2900]):
-                    self.announced.update(new)
-            except Exception:
-                LOG.warning("Secure-Pro-Hinweis konnte nicht versendet werden; "
-                            "die Prüfergebnisse bleiben verfügbar.")
+        new = [text for text in dict.fromkeys(wichtig + aufgaben)
+               if text not in self.announced][:20]
+        if new and not self.stop_event.is_set() and config_token(read(self.directory)) == token:
+            abwehr = any(befunde.get(text, {}).get("kind") in (
+                "malware", "arp_spoof", "port_scan", "brute_force", "risk_port") for text in new)
+            if self._deliver(new, abwehr):
+                self.announced.update(new)
         return new
+
+    def _deliver(self, lines: list[str], abwehr: bool) -> bool:
+        """Meldet Wichtiges an Messenger und Secure-Pro-Chat. True, wenn es ankam."""
+        message = "[Aquaticy] Secure Pro\n" + "\n".join(lines)
+        if abwehr:
+            message += ("\nSchreib im Secure-Pro-Chat, was ich tun soll, zum Beispiel "
+                        "„Sperre Port 4444 auf 192.168.1.20“. Jede Abwehr braucht dein Ja.")
+        angekommen = False
+        for weg, name in ((self.notify, "Messenger"), (self.report, "Chat")):
+            if weg is None:
+                continue
+            try:
+                angekommen = bool(weg(message[:2900])) or angekommen
+            except Exception:
+                LOG.warning("Secure-Pro-Hinweis (%s) konnte nicht zugestellt werden; "
+                            "die Prüfergebnisse bleiben verfügbar.", name)
+        return angekommen
+
+    def _wait_seconds(self) -> float | None:
+        """Wie lange bis zur naechsten Pruefung -- None: nur auf Anfrage."""
+        config = read(self.directory)
+        gewaehlt = options(config)
+        if not gewaehlt["watch"]:
+            return None
+        return float(gewaehlt["interval"] * 60)
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
@@ -251,6 +489,7 @@ class Watcher:
             if self.stop_event.is_set():
                 break
             if read(self.directory).get("enabled") is not True:
+                self.next_check = 0.0
                 self.wake.wait()
                 continue
             try:
@@ -275,4 +514,9 @@ class Watcher:
             finally:
                 with self._lock:
                     self.scanning = False
-            self.wake.wait(900)
+            pause = self._wait_seconds()
+            self.next_check = time.time() + pause if pause else 0.0
+            if pause is None:
+                self.wake.wait()
+            else:
+                self.wake.wait(pause)

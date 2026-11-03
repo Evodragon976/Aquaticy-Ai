@@ -200,10 +200,7 @@ def setup_command(
     searxng_url = ""
 
     if backend == "duckduckgo":
-        console.print(
-            "  [dim]Fragt mehrere offene Suchmaschinen an und mischt die Treffer. "
-            "Fällt eine aus, übernehmen die anderen.[/dim]"
-        )
+        console.print("  [dim]Mischt die Treffer mehrerer offener Suchmaschinen.[/dim]")
         engines = typer.prompt(
             f"  Engines einschränken? ({', '.join(OPEN_ENGINES)}) – leer = alle",
             default="",
@@ -227,26 +224,20 @@ def setup_command(
         ).strip()
 
 
-    console.print("\n[bold]3. Subagenten[/bold]")
-    console.print(
-        "  [dim]Aquaticy AI kann jede Anfrage in Teilfragen zerlegen und parallel "
-        "recherchieren.\n  Das ist gründlicher, kostet aber mehr Aufrufe.[/dim]"
-    )
-    subagents_on = typer.confirm("  Subagenten automatisch nutzen?", default=True)
-
-
-    console.print("\n[bold]4. Voreinstellungen[/bold]")
+    # Die Agenten (Fragen aufteilen) sind ab 14.1.3 Luna immer an. Ausschalten geht in der
+    # Weboberflaeche unter Einstellungen -> Helfer & Grenzen.
+    console.print("\n[bold]3. Voreinstellungen[/bold]")
     location = typer.prompt("Standard-Ort (optional, z.B. Mönchengladbach)", default="").strip()
     lang = typer.prompt("Sprache (ISO-Code)", default="de").strip() or "de"
     country = typer.prompt("Land (ISO-Code)", default="de").strip() or "de"
 
 
-    console.print("\n[bold]5. Eigene Website[/bold] [dim](optional)[/dim]")
+    console.print("\n[bold]4. Eigene Website[/bold] [dim](optional)[/dim]")
     website_values = _ask_website(no_probe=no_probe)
 
 
     if not no_probe:
-        console.print("\n[bold]6. Verbindungstest[/bold]")
+        console.print("\n[bold]5. Verbindungstest[/bold]")
         if api_key:
             os.environ[key_name] = api_key
         if backend_key:
@@ -269,9 +260,8 @@ def setup_command(
 
         if not (llm_ok and search_ok):
             console.print(
-                "\n[yellow]Mindestens ein Test ist fehlgeschlagen.[/yellow] "
-                "Die Konfiguration wird trotzdem gespeichert – du kannst sie jederzeit "
-                "mit [bold]aquaticy setup[/bold] korrigieren."
+                "\n[yellow]Ein Test ist fehlgeschlagen.[/yellow] Gespeichert wird trotzdem. "
+                "Ändern: [bold]aquaticy setup[/bold]."
             )
 
 
@@ -281,7 +271,7 @@ def setup_command(
         "AQUATICY_LOCATION": location,
         "AQUATICY_LANG": lang,
         "AQUATICY_COUNTRY": country,
-        "AQUATICY_SUBAGENTS_AUTO": "true" if subagents_on else "false",
+        "AQUATICY_SUBAGENTS_AUTO": "true",
     }
     if backend_key_name and backend_key:
         values[backend_key_name] = backend_key
@@ -294,8 +284,8 @@ def setup_command(
     values.update(website_values)
     if accounts is None:
         console.print("\n[bold]Konten[/bold]")
-        console.print("  [dim]Ohne Kontensystem gibt es genau ein Konto: deins, mit allen Rechten "
-                      "(Ultra).\n  Du meldest dich mit Nutzername und Passwort an.[/dim]")
+        console.print("  [dim]Ohne Kontensystem gibt es ein Konto: deins, mit allen Rechten "
+                      "(Ultra).[/dim]")
         accounts = False if yes else typer.confirm(
             "  Kontensystem für mehrere Nutzer einschalten?", default=False)
     values["AQUATICY_ACCOUNTS"] = "true" if accounts else "false"
@@ -311,7 +301,9 @@ def setup_command(
         _setup_voice(assume_yes=yes)
     if secure_pro is True:
         _setup_secure_pro()
-    console.print("Optional: aquaticy setup --voice --secure-pro für Sprache und Netzüberwachung.")
+    if not (voice or secure_pro):
+        console.print("[dim]Später: aquaticy voice (Sprache), aquaticy secure-pro "
+                      "(Netzschutz).[/dim]")
     console.print(
         Panel.fit(
             f"Gespeichert in [cyan]{written}[/cyan]\n\n"
@@ -368,8 +360,9 @@ def _setup_voice(*, assume_yes: bool = False) -> None:
 def _setup_secure_pro() -> None:
     from aquaticy import lan, secure_pro
 
-    console.print("Secure Pro prüft alle 15 Minuten dein freigegebenes Heimnetz.")
-    console.print("Es meldet neue Geräte und riskante offene Dienste. Es nutzt keine Lücken aus.")
+    console.print("Secure Pro prüft dein freigegebenes Heimnetz, ab Werk alle 15 Minuten.")
+    console.print("Es meldet Malware-Zeichen, Angriffe und riskante Dienste. Es nutzt keine "
+                  "Lücken aus.")
     subnet = typer.prompt("Eigenes Netz (CIDR)", default=lan.own_subnet() or "192.168.1.0/24")
     if not typer.confirm("Gehört dir dieses Netz oder darfst du es ausdrücklich prüfen?",
                          default=False):
@@ -379,9 +372,10 @@ def _setup_secure_pro() -> None:
         secure_pro.configure(get_settings().data_dir, subnet, folder)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    console.print("Secure Pro ist an. Warnungen gehen im Einzelkonto-Modus an deinen eigenen Chat.")
-    console.print("Die Messenger-Brücke muss an sein. Keine Prüfung fremder Festplatten.")
-    console.print("Starte eine bereits laufende Weboberfläche neu, um Secure Pro zu starten.")
+    console.print("Secure Pro ist an. Wichtiges steht im Secure-Pro-Chat und kommt per "
+                  "WhatsApp/Signal.")
+    console.print("Zeitplan, Paketprüfung, VM und Aufgaben: Einstellungen → Secure Pro.")
+    console.print("Läuft die Weboberfläche schon, starte sie neu.")
 
 
 @app.command("voice")
@@ -492,11 +486,8 @@ def _ask_website(*, no_probe: bool = False) -> dict[str, str]:
     """
     from aquaticy import website as website_mod
 
-    console.print(
-        "  [dim]Mit eigener Domain ist Aquaticy eine richtige Website: erreichbar im\n"
-        "  Heimnetz, über Tailscale und unter deiner Domain. Die Domain muss bei\n"
-        "  Cloudflare liegen. Am Router musst du nichts freigeben.[/dim]"
-    )
+    console.print("  [dim]Mit eigener Domain ist Aquaticy auch im Internet erreichbar. Die Domain "
+                  "muss bei Cloudflare liegen.[/dim]")
     jetzt = os.environ.get(website_mod.DOMAIN_ENV, "")
     while True:
         roh = typer.prompt("  Domain (leer = keine)", default=jetzt, show_default=bool(jetzt))

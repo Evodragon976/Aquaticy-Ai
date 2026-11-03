@@ -43,7 +43,8 @@ def test_complete_setup_reuses_ollama_and_persists_it(monkeypatch, tmp_path, loc
     target = tmp_path / ".env"
     result = CliRunner().invoke(
         cli.app, ["setup", "--yes", "--no-probe", "--env-file", str(target)],
-        input=("3\n" if local else "1\n") + "1\n\ny\n\n\n\n",
+        # 14.1.3 Luna: keine Frage mehr nach den Agenten (immer an).
+        input=("3\n" if local else "1\n") + "1\n\n\n\n\n",
     )
     assert result.exit_code == 0, result.output
     assert calls == (["ollama", "model"] if local else ["ollama"])
@@ -65,7 +66,8 @@ def test_cloud_only_setup_keeps_the_existing_installation_optional(
     result = CliRunner().invoke(
         cli.app, ["setup", "--no-ollama", "--no-probe", "--env-file", str(target)],
         # 13.0.0 Luna: vor dem Hintergrund die Frage nach dem Kontensystem (leer = aus).
-        input="1\n1\n\ny\n\n\n\n\n" + ("y\n" if background else "n\n"),
+        # 14.1.3 Luna: keine Frage mehr nach den Agenten (immer an).
+        input="1\n1\n\n\n\n\n\n" + ("y\n" if background else "n\n"),
     )
     assert result.exit_code == 0, result.output
     assert "OLLAMA_NUM_PARALLEL" not in target.read_text()

@@ -538,6 +538,15 @@ class Cache:
         with self._connect() as conn:
             conn.execute("INSERT OR IGNORE INTO secure_chats VALUES (?)", (session_id,))
 
+    def latest_secure_chat(self) -> str:
+        """Der zuletzt benutzte Secure-Pro-Chat -- oder "" (14.1.3 Luna)."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT s.session_id FROM secure_chats s LEFT JOIN history h "
+                "ON h.session_id = s.session_id GROUP BY s.session_id "
+                "ORDER BY COALESCE(MAX(h.created_at), 0) DESC LIMIT 1").fetchone()
+        return str(row[0]) if row is not None else ""
+
     def is_secure_chat(self, session_id: str) -> bool:
         with self._connect() as conn:
             return conn.execute("SELECT 1 FROM secure_chats WHERE session_id = ?",

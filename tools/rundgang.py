@@ -1699,13 +1699,22 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
                      "AQUATICY_LAN_SUBNET", "AQUATICY_STORAGE_URL"):
             log.pruefe(pg.locator(f'[name="{feld}"]').count() == 1, f"{feld} im Formular")
         pg.click('#secnav button:has-text("Suche")')
-        pg.wait_for_timeout(900)
+        # Seit 14.1.3 Luna steht "Suche" weiter oben: Von weit unten dauert das sanfte
+        # Scrollen laenger. Warten, bis die Seite stillsteht (hoechstens 4 Sekunden).
+        vorher = -1.0
+        for _ in range(20):
+            pg.wait_for_timeout(200)
+            jetzt = pg.eval_on_selector("#overlay .sheet", "e => e.scrollTop")
+            if jetzt == vorher:
+                break
+            vorher = jetzt
         kopf = pg.eval_on_selector("#overlay .sheet-head", "e => e.getBoundingClientRect().bottom")
         ziel = pg.eval_on_selector(
             '#settings fieldset:has(legend:text-is("Suche"))',
             "e => e.getBoundingClientRect().top",
         )
-        log.pruefe(ziel >= kopf - 4, "der Sprung landet unter dem stehenden Kopf")
+        log.pruefe(ziel >= kopf - 4,
+                   f"der Sprung landet unter dem stehenden Kopf ({ziel:.0f} / {kopf:.0f})")
         for knopf, notiz in (
             ("#probe", "#probe-note"),
             ("#storage-test", "#lager-note"),

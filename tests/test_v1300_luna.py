@@ -358,11 +358,11 @@ def test_setup_writes_accounts_off_by_default(monkeypatch: pytest.MonkeyPatch,
     monkeypatch.setattr(cli, "_einzelkonto_einrichten", eingerichtet.append)
     ziel = tmp_path / ".env"
     ergebnis = CliRunner().invoke(cli.app, ["setup", "--yes", "--no-probe", "--env-file",
-                                            str(ziel)], input="1\n1\n\ny\n\n\n\n")
+                                            str(ziel)], input="1\n1\n\n\n\n\n")
     assert ergebnis.exit_code == 0, ergebnis.output
     assert "AQUATICY_ACCOUNTS=false" in ziel.read_text() and len(eingerichtet) == 1
     ergebnis = CliRunner().invoke(cli.app, ["setup", "--yes", "--no-probe", "--accounts",
-                                            "--env-file", str(ziel)], input="1\n1\n\ny\n\n\n\n")
+                                            "--env-file", str(ziel)], input="1\n1\n\n\n\n\n")
     assert "AQUATICY_ACCOUNTS=true" in ziel.read_text() and len(eingerichtet) == 1
 
 

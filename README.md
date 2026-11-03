@@ -1,4 +1,4 @@
-# Aquaticy AI 14.0.3 Sol
+# Aquaticy AI 14.1.3 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -27,8 +27,43 @@ $ aquaticy
 
 ## Inhalt
 
+**Neu in 14.1.3 Luna:** Secure Pro überwacht dein Heimnetz wie ein Coworker.
+Alles stellst du unter **Einstellungen → Secure Pro** ein, nachdem du dein Netz freigegeben hast:
+
+- **Immer überwachen** und **Wie oft**: alle 5 Minuten bis täglich (ab Werk alle 15 Minuten).
+  Aus heißt: Secure Pro prüft nur, wenn du „Prüfen“ drückst.
+- **Nur Wichtiges meldet sich.** Malware-Verdacht, Angriffe und neu offene Risikodienste
+  erscheinen im Secure-Pro-Chat und kommen per WhatsApp/Signal. Alles andere steht im Status,
+  wenn du fragst.
+- **Aufgaben** wie „Melde dich, wenn ein neues Gerät ins Netz kommt.“ oder „Sag Bescheid, wenn
+  192.168.1.20 offline geht.“ Aquaticy wertet den Satz fest aus und zeigt, wie es ihn verstanden
+  hat. Eine Aufgabe meldet nur. Sie schaltet und sperrt nichts.
+- **Malware-Zeichen im Netz:** Secure Pro prüft auch bekannte Malware- und Hintertür-Ports
+  (zum Beispiel 4444, 31337, Mining-Pools) und riskante Datenbanken und Docker-APIs.
+- **Pakete prüfen** (aus ab Werk): Bei jeder Prüfung liest Secure Pro 15 Sekunden lang nur
+  Kopfdaten: Adressen, Ports und DNS-Namen. Nie Inhalte, nichts wird gespeichert. So erkennt es
+  Portscans, ARP-Spoofing, Passwort-Angriffe, Spam-Versand, Malware-Ports und zufällige
+  DNS-Namen (DGA). Das braucht Linux und Root-Rechte oder `CAP_NET_RAW`. In einem Netz mit
+  Switch sieht der Rechner nur seinen eigenen Verkehr und Rundrufe. Ein Treffer ist ein
+  Verdacht, kein Beweis.
+- **Mehr Wissen:** Das Modell schlägt im festen Sicherheitswissen nach (`secure_knowledge`):
+  Malware-Ports, Malware-Familien wie Mirai, Emotet, Ransomware, Krypto-Miner und RATs,
+  häufige Schwachstellen und was man dagegen tut.
+- **Abwehr per SSH** (aus ab Werk): Mit **VM für Abwehr nutzen** darf Secure Pro über die VM
+  Ports sperren, Geräte aus dem Heimnetz aussperren, Dienste stoppen und das wieder aufheben.
+  Die Befehle kommen aus festen Vorlagen (ufw, firewalld, iptables oder Windows-Firewall).
+  Jeder Befehl braucht dein Ja im Secure-Pro-Chat, mit Fingerabdruck des Geräts. Den Router,
+  Aquaticy, das Gerät selbst und SSH (Port 22) sperrt Secure Pro nie. Die VM braucht dafür
+  „Auch ins lokale Netz“ und „Ins eigene Netz sehen dürfen“. Ohne dein Ja handelt Secure Pro
+  nie, auch nicht bei einem Angriff: Es meldet sich und schlägt die Abwehr vor.
+
+Die Einstellungen sind aufgeräumt: Secure Pro und Messenger haben eigene Abschnitte, die
+Rechts-Leitplanken stehen bei ihren Regeln, der echte Browser bei der Suche, der SSH-Hinweis bei
+der VM. `aquaticy setup` fragt nicht mehr nach den Agenten: Sie sind an. Ausschalten kannst du
+sie unter **Einstellungen → Helfer & Grenzen → Fragen automatisch aufteilen**.
+
 **Neu in 14.0.3 Sol:** Secure Pro hat einen eigenen LLM-Chat mit defensiven Werkzeugen.
-Die Einrichtung liegt unter **Einstellungen → Dev settings → Secure Pro** und erscheint nach dem Einschalten.
+Die Einrichtung liegt unter **Einstellungen → Secure Pro** und erscheint nach dem Einschalten.
 Router und Prüfbereich werden vorgeschlagen. Bestätige dort dein eigenes Netz, bevor die Prüfung startet.
 Linux-Hostrouten mit `/32` verdrängen den Netzbereich nicht mehr. Alte Freigaben werden nicht still erweitert:
 Wenn bisher nur eine Adresse erlaubt war, bestätigst du den größeren Vorschlag in den Einstellungen erneut.
@@ -235,7 +270,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.0.3 Sol
+aquaticy --version            # 14.1.3 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

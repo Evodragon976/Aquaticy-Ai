@@ -1500,7 +1500,7 @@ class Agent:
             spec_extractor=self.extract_specs,
             visual_inspector=self.inspect_public_visual,
         )
-        self.toolbox.ssh_allowed = lambda: self._vm_ready() and not self.stopped
+        self.toolbox.ssh_allowed = lambda: self._ssh_ready() and not self.stopped
 
 
 
@@ -1537,7 +1537,7 @@ class Agent:
         sollen weder Notizen anlegen noch weitere Subagenten starten.
         """
         if self.secure_pro:
-            from aquaticy.secure_chat import LOCAL, SCHEMAS
+            from aquaticy.secure_chat import DEFENSE_SCHEMAS, LOCAL, SCHEMAS
 
             if not self._model_can_use_tools():
                 return []
@@ -1545,6 +1545,10 @@ class Agent:
                        if self.online or schema["function"]["name"] in LOCAL]
             if self.toolbox.ask_handler is not None:
                 schemas.append(ASK_SCHEMA)
+                # Abwehr per SSH nur mit Rueckfrage -- und nur, wenn der Besitzer Secure Pro
+                # die VM in den Secure-Pro-Einstellungen erlaubt hat (14.1.3 Luna).
+                if self._ssh_ready():
+                    schemas.extend(DEFENSE_SCHEMAS)
             return schemas
         extra: list[dict[str, Any]] = []
         if self.cache is not None:
@@ -2508,6 +2512,23 @@ class Agent:
         except Exception:
             return True
         return laufzeit is not None or not bekannt
+
+    def _ssh_ready(self) -> bool:
+        """Darf lan_ssh laufen? Im Secure-Pro-Chat entscheidet dessen VM-Schalter."""
+        if not getattr(self, "secure_pro", False):
+            return self._vm_ready()
+        provider = self.toolbox.secure_provider
+        if provider is None or self.toolbox.ask_handler is None:
+            return False
+        try:
+            erlaubt = provider("secure_vm", {}).get("ok") is True
+        except Exception:
+            return False
+        if not (erlaubt and self.settings.lan_enabled and self.settings.vm_lan):
+            return False
+        da = getattr(self, "_vm_da", None)
+        return (self._vm_can_start() if da is None else bool(da)) and \
+            self._model_can_use_tools()
 
     def _vm_ready(self) -> bool:
         """Mit virtual machine -- und kann sie hier starten? Je Frage einmal entschieden."""

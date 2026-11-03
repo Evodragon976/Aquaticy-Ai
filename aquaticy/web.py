@@ -2614,12 +2614,22 @@ def feature_view(session: Any) -> dict[str, Any]:
     config = secure_pro.read(directory)
     report = SECURE_WATCHER.snapshot() if SECURE_WATCHER else {
         "findings": [], "positives": [], "checked": 0, "scanning": False, "error": "",
-        "devices": []}
+        "devices": [], "important": [], "events": [], "packet_status": "", "next_check": 0}
     if report.get("configuration", "") != secure_pro.config_token(config):
-        report.update(findings=[], positives=[], checked=0, error="", devices=[], scope="")
+        report.update(findings=[], positives=[], checked=0, error="", devices=[], scope="",
+                      important=[], events=[], packet_status="", next_check=0)
+    an = config.get("enabled") is True
+    gewaehlt = secure_pro.options(config if an else {})
+    settings = session.settings()
+    netz = bool(getattr(settings, "lan_enabled", False) and getattr(settings, "vm_lan", False))
     return {"allowed": True, "voice": voice.enabled(), "voice_ready": voice.ready(directory),
-            "secure": config.get("enabled") is True, "subnet": config.get("subnet", ""),
+            "secure": an, "subnet": config.get("subnet", ""),
             "router": config.get("router", ""),
+            "watch": gewaehlt["watch"], "interval": gewaehlt["interval"],
+            "intervals": list(secure_pro.INTERVALS), "packets": gewaehlt["packets"],
+            "vm": gewaehlt["vm"], "vm_network": netz,
+            "tasks": [{"id": t["id"], "text": t["text"], "label": t["label"],
+                       "host": t["host"], "port": t["port"]} for t in gewaehlt["tasks"]],
             **report}
 
 
@@ -2659,6 +2669,30 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                 return {"error": "Der Prüfungsdienst ist nicht verfügbar."}, 503
             return {"ok": True, "requested": SECURE_WATCHER.request(),
                     **feature_view(session)}, 200
+        elif action == "options":
+            werte: dict[str, Any] = {key: payload[key] for key in
+                                     ("watch", "interval", "packets", "vm") if key in payload}
+            if not werte:
+                return {"error": "Nichts zu ändern."}, 400
+            try:
+                secure_pro.set_options(directory, werte)
+            except ValueError as exc:
+                return {"error": str(exc)}, 400
+            if SECURE_WATCHER:
+                # Neuer Zeitplan oder Paketpruefung: gleich einmal pruefen, dann im Takt.
+                SECURE_WATCHER.wake.set()
+                SECURE_WATCHER.start()
+        elif action == "task_add":
+            try:
+                aufgabe = secure_pro.add_task(directory, str(payload.get("text", ""))[:400])
+            except ValueError as exc:
+                return {"error": str(exc)}, 400
+            return {"ok": True, "task": {"id": aufgabe["id"], "label": aufgabe["label"],
+                                         "host": aufgabe["host"], "port": aufgabe["port"]},
+                    **feature_view(session)}, 200
+        elif action == "task_remove":
+            if not secure_pro.remove_task(directory, str(payload.get("id", ""))[:40]):
+                return {"error": "Diese Aufgabe gibt es nicht mehr."}, 404
         elif action == "voice":
             if not isinstance(payload.get("enabled"), bool):
                 return {"error": "Wähle an oder aus."}, 400
@@ -2743,6 +2777,8 @@ def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> d
                     "next_offset": offset + 24 if offset + 24 < len(items) else None}
         state["device_count"] = len(all_devices)
         state["devices"] = all_devices[:24]
+        state["events"] = state.get("events", [])[:24]
+        state["important"] = state.get("important", [])[:24]
         state["findings_count"] = len(state.get("findings", []))
         state["findings"] = state.get("findings", [])[:24]
         if state.get("subnet", "").endswith("/32"):
@@ -2755,6 +2791,18 @@ def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> d
     config = secure_pro.read(directory)
     if config.get("enabled") is not True:
         return {"error": "Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei."}
+    if name == "secure_vm":
+        # Abwehr per SSH (14.1.3 Luna): nur mit dem VM-Schalter von Secure Pro und beiden
+        # Heimnetz-Freigaben. Jeder Befehl braucht danach trotzdem das Ja im Chat.
+        settings = session.settings()
+        if not secure_pro.options(config)["vm"]:
+            return {"ok": False, "error": "Secure Pro darf die VM nicht nutzen. Schalte das "
+                                          "in den Secure-Pro-Einstellungen ein."}
+        if not (getattr(settings, "lan_enabled", False) and getattr(settings, "vm_lan", False)):
+            return {"ok": False, "error": "Die VM braucht „Auch ins lokale Netz“ und „Ins "
+                                          "eigene Netz sehen dürfen“."}
+        return {"ok": True, "subnet": str(config.get("subnet", "")),
+                "router": str(config.get("router", ""))}
     if name == "secure_scan":
         if SECURE_WATCHER is None:
             return {"error": "Der Prüfungsdienst ist nicht verfügbar. Starte Aquaticy neu."}
@@ -6021,10 +6069,10 @@ class Handler(BaseHTTPRequestHandler):
                 cache.mark_secure_chat(selected.chat_id())
                 cache.add_history(selected.chat_id(), "Secure Pro",
                                   "Secure Pro: Hier besprichst du Befunde und sichere "
-                                  "Einstellungen "
-                                  "mit deinem Modell. Die Netzfreigabe steht unter Einstellungen "
-                                  "→ Dev settings → Secure Pro. Ohne diese Freigabe wird "
-                                  "nicht geprüft.",
+                                  "Einstellungen mit deinem Modell. Wichtiges meldet Secure "
+                                  "Pro hier von selbst. Netz, Zeitplan und Aufgaben stellst "
+                                  "du unter Einstellungen → Secure Pro ein. Ohne Netzfreigabe "
+                                  "wird nicht geprüft.",
                                   mode="normal")
                 cache.rename_chat(selected.chat_id(), "Secure Pro")
                 self._json({"ok": True, "session_id": selected.chat_id()})
@@ -6783,7 +6831,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
 
 
-        wunsch = {
+        wunsch: dict[str, Any] = {
             name: payload[name]
             for name in (
                 "mode", "effort", "structured", "recheck", "online", "sandbox", "agents",
@@ -7876,8 +7924,31 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         hub.ensure_running()
         return bool(hub.notify_owner(text))
 
+    def security_report(text: str) -> bool:
+        """Wichtiges aus Secure Pro erscheint im Secure-Pro-Chat (14.1.3 Luna)."""
+        from aquaticy.agent import new_session_id
+
+        if AUTH is None or not AUTH.single:
+            return False
+        owner = AUTH.ensure_owner_ultra()
+        if owner is None or _native_paused(owner):
+            return False
+        settings = SESSIONS.get(owner).settings()
+        cache = Cache(settings.db_path, settings.cache_ttl_hours)
+        chat = cache.latest_secure_chat()
+        if not chat:
+            chat = new_session_id()
+            cache.mark_secure_chat(chat)
+            cache.rename_chat(chat, "Secure Pro")
+        inhalt = text.removeprefix("[Aquaticy] Secure Pro\n")
+        cache.add_history(chat, "🛡 Secure Pro · Meldung", inhalt, {"secure_report": True},
+                          mode="normal")
+        with contextlib.suppress(Exception):
+            cache.mark_unread(chat, reason="secure")
+        return True
+
     global SECURE_WATCHER
-    security_watcher = Watcher(data_dir, security_notice)
+    security_watcher = Watcher(data_dir, security_notice, security_report)
     SECURE_WATCHER = security_watcher
 
 
