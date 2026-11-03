@@ -1436,6 +1436,7 @@ class Agent:
         toolbox: Toolbox | None = None,
     ) -> None:
         self.settings = settings
+        self.secure_pro = False
         self.cache = cache
         self.learning: Learning | None = None
         self.on_event = on_event
@@ -1535,6 +1536,16 @@ class Agent:
         Merkzettel und Subagenten bekommt nur der Hauptagent -- Subagenten
         sollen weder Notizen anlegen noch weitere Subagenten starten.
         """
+        if self.secure_pro:
+            from aquaticy.secure_chat import LOCAL, SCHEMAS
+
+            if not self._model_can_use_tools():
+                return []
+            schemas = [schema for schema in SCHEMAS
+                       if self.online or schema["function"]["name"] in LOCAL]
+            if self.toolbox.ask_handler is not None:
+                schemas.append(ASK_SCHEMA)
+            return schemas
         extra: list[dict[str, Any]] = []
         if self.cache is not None:
             extra.append(MEMORY_SCHEMA)
@@ -2700,6 +2711,14 @@ class Agent:
         Alles an einer Stelle, damit kein Weg durch den Code einen Teil davon
         vergisst.
         """
+        if self.secure_pro:
+            from aquaticy.secure_chat import PROMPT
+
+            text = PROMPT + (ASK_PROMPT if self.toolbox.ask_handler else NO_ASK_PROMPT)
+            if self.settings.legal_guard:
+                text += rules_prompt()
+            return text + (ENGLISH_PROMPT if getattr(self, "answer_language", "de") == "en"
+                           else GERMAN_ORTHOGRAPHY_PROMPT)
         text = self._system_prompt(
             self.cache, self._home_prompt(), mode=self.mode, structured=self.structured
         )
@@ -3296,6 +3315,14 @@ class Agent:
                 im Verlauf steht weiter, was der Nutzer getippt hat.
         """
         question = question.strip()
+        if self.secure_pro:
+            mode, structured, recheck = "normal", False, False
+            sandbox, visual_sources = False, False
+            self.use_subagents = False
+            self.learning = None
+            self.toolbox.secure_mode = True
+            self.toolbox._secure_checks = 0
+            self.toolbox._secure_sources.clear()
         self._plugin_turn = str(plugin_prompt or "").strip()
 
         from aquaticy.ownservices import followup_sources
@@ -3303,7 +3330,7 @@ class Agent:
         # Folgefragen zur eigenen Post (13.0.1 Luna): "schick mir den ganzen Text der zweiten".
         davor = tuple(getattr(self, "_eigene_davor", ()) or ())
         self._eigene: tuple[str, ...] = (
-            () if self._plugin_turn else followup_sources(question, davor))
+            () if self._plugin_turn or self.secure_pro else followup_sources(question, davor))
         self._eigene_davor = self._eigene
         self._ausweich_model = ""
         learning = getattr(self, "learning", None)
@@ -3324,7 +3351,7 @@ class Agent:
                 [str(m.get("content") or "") for m in self.messages
                  if m.get("role") == "user" and isinstance(m.get("content"), str)]
                 + [question])
-        standard = "" if self._plugin_turn else standard_chat_reply(
+        standard = "" if self._plugin_turn or self.secure_pro else standard_chat_reply(
             question, frage_offen=self._last_reply_asks())
         if standard:
             self.max_run = False
@@ -3341,6 +3368,7 @@ class Agent:
                   self.visual_sources, getattr(self, "_vm_da", None))
         if online is not None:
             self.online = bool(online)
+        self.toolbox.secure_online = self.online
         if sandbox is not None:
             self.sandbox = bool(sandbox)
         if visual_sources is not None:
@@ -3396,7 +3424,7 @@ class Agent:
             return abgelehnt
 
 
-        if getattr(self.settings, "council", False) and not self._eigene:
+        if getattr(self.settings, "council", False) and not self._eigene and not self.secure_pro:
             beantwortet = self._council_turn(question, stream)
             if beantwortet is not None:
                 return beantwortet
@@ -4167,7 +4195,7 @@ class Agent:
         selbst noch von den Agenten. Wer Seiten gelesen hat, hat nachgesehen; ob
         die Angabe dort stand, kann der Text dann selbst sagen.
         """
-        if not self.online or clean_mode(self.mode) == "code":
+        if not self.online or clean_mode(self.mode) == "code" or self.secure_pro:
             return ""
         stats = self.toolbox.stats
         if stats.fetched or stats.sources:
@@ -4410,6 +4438,11 @@ class Agent:
 
     def _with_context(self, question: str) -> str:
         """Haengt den aktiven Ortsfilter an die Nutzerfrage."""
+        if self.secure_pro and self.toolbox.secure_provider is not None:
+            state = self.toolbox.secure_provider("secure_status", {})
+            self.toolbox.untrusted_seen = True
+            return question + "\n\n" + wrap_block(json.dumps(state, ensure_ascii=False),
+                                                  "Secure-Pro-Messwerte")
         if getattr(self, "_plugin_turn", ""):
 
             question = self._plugin_turn

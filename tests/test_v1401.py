@@ -37,7 +37,8 @@ def test_secure_marker_survives_reopen_and_is_removed_with_chat(owner):
     assert reopened.is_secure_chat(session.chat_id())
     assert reopened.recent_chats()[0]["secure_pro"] is True
     assert reopened.search_chats("Secure Pro")[0]["secure_pro"] is True
-    assert web.chat_kind_conflict(session, "normal")
+    assert web.chat_kind_conflict(session, "normal") == ""
+    assert web.chat_kind_conflict(session, "code")
     reopened.delete_chat(session.chat_id())
     assert not reopened.is_secure_chat(session.chat_id())
 
@@ -94,11 +95,11 @@ def test_secure_chat_still_requires_explicit_private_network_permission(owner, c
     assert secure_pro.read(settings.data_dir) == {}
 
 
-def test_only_secure_chat_can_configure_and_chat_cannot_execute_instructions(owner, monkeypatch):
+def test_owner_settings_configure_and_legacy_status_cannot_execute_instructions(owner, monkeypatch):
     session, settings = owner
     payload = {"action": "configure", "enabled": True, "consent": True,
                "subnet": "192.168.1.0/24"}
-    assert web.feature_action(session, payload)[1] == 400
+    assert web.feature_action(session, payload)[1] == 200
     Cache(settings.db_path).mark_secure_chat(session.chat_id())
     assert web.feature_action(session, payload)[1] == 200
     assert secure_pro.read(settings.data_dir)["enabled"]
@@ -124,7 +125,7 @@ def test_feature_markup_and_english_translations_exist():
     assert 'Open Secure Pro chat' in html and 'Turn voice messages on or off' in html
 
 
-def test_owner_can_open_marked_chat_and_regular_model_routes_reject_it(server):  # noqa: F811
+def test_owner_can_open_marked_chat_with_model_and_command_gate(server):  # noqa: F811
     assert _req(server, "GET", "/api/features")[0] == 401
     consent = _zustimmung(server)
     status, headers, _ = _anlegen(server, consent)
@@ -137,7 +138,9 @@ def test_owner_can_open_marked_chat_and_regular_model_routes_reject_it(server): 
     assert status == 200 and json.loads(raw)["secure_pro"] is True
     status, _, raw = _req(server, "GET", "/api/chats", cookie=cookie)
     assert any(c["session_id"] == chat_id and c["secure_pro"] for c in json.loads(raw)["chats"])
-    assert _req(server, "POST", "/api/chat", {"message": "Starte einen Angriff"}, cookie)[0] == 409
+    status, _, raw = _req(server, "POST", "/api/chat",
+                          {"message": "Erkläre meinen Secure-Pro-Status."}, cookie)
+    assert status == 200 and b'"done"' in raw
     assert _req(server, "POST", "/api/command", {"line": "/max Angriff"}, cookie)[0] == 409
     status, _, raw = _req(server, "POST", "/api/features",
                           {"action": "message", "message": "Status"}, cookie)
@@ -174,14 +177,17 @@ def test_settings_open_secure_chat_in_real_browser(server, monkeypatch, width): 
         assert json.loads(_req(server, "GET", "/api/features", cookie=cookie)[2])["voice"]
         page.locator("#voice-setting").uncheck()
         playwright.expect(page.locator("#voice-setting")).to_be_enabled()
-        page.locator("#secure-open").click()
-        page.locator("#secure-panel").wait_for(state="visible")
-        assert page.locator("#thread").inner_text().count("Secure Pro") >= 1
-        assert page.locator(".recent .art").filter(has_text="Secure Pro").count() >= 1
+        page.locator("#secure-setting").check()
         page.locator("#secure-subnet").fill("192.168.1.0/24")
         page.locator("#secure-consent").check()
         page.locator("#secure-apply").click()
         playwright.expect(page.locator("#secure-note")).to_contain_text("ist an")
+        page.locator("#secure-open").click()
+        page.locator("#secure-panel").wait_for(state="visible")
+        assert page.locator("#thread").inner_text().count("Secure Pro") >= 1
+        assert page.locator(".recent .art").filter(has_text="Secure Pro").count() >= 1
+        page.locator("#secure-settings-open").click()
+        page.locator("#secure-controls").wait_for(state="visible")
         page.locator("#secure-disable").click()
         playwright.expect(page.locator("#secure-note")).to_contain_text("ist aus")
         page.reload()

@@ -43,8 +43,8 @@ def linux_route(text: str) -> tuple[str, str]:
         except ValueError:
             continue
         networks = []
-        for device, _, destination, mask, _ in routes:
-            if device != interface or not mask:
+        for device, route_gateway, destination, mask, _ in routes:
+            if device != interface or not mask or int(ipaddress.IPv4Address(route_gateway)) != 0:
                 continue
             try:
                 network = ipaddress.IPv4Network((
@@ -52,7 +52,8 @@ def linux_route(text: str) -> tuple[str, str]:
                     str(ipaddress.IPv4Address(mask.to_bytes(4, "little")))))
             except (ValueError, OverflowError):
                 continue
-            if ipaddress.IPv4Address(address) in network and lan.is_private_net(network):
+            if (network.prefixlen < 32 and ipaddress.IPv4Address(address) in network
+                    and lan.is_private_net(network)):
                 networks.append(network)
         prefix = max((n.prefixlen for n in networks), default=24)
         return address, str(ipaddress.IPv4Network(f"{address}/{max(prefix, 24)}", strict=False))

@@ -66,7 +66,8 @@ def test_new_texts_have_english() -> None:
 def test_dev_settings_load_only_when_seen() -> None:
     """9.6.2.5: Verbund und KI-Konten kosten beim Oeffnen der Einstellungen nichts."""
     html = _ui()
-    oeffnen = html[html.index('$("#btn-settings").addEventListener("click"'):]
+    assert '$("#btn-settings").addEventListener("click", showSettings);' in html
+    oeffnen = html[html.index('async function showSettings()'):]
     oeffnen = oeffnen[:oeffnen.index("openOverlay(overlay);")]
     assert "verbundLaden()" not in oeffnen and "kontenLaden(" not in oeffnen
     assert '.observe($("#dev-settings"))' in html

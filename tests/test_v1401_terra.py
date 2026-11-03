@@ -112,7 +112,7 @@ def test_router_start_requires_owner_marked_chat_and_consent(owner, monkeypatch)
     session, settings = owner
     monkeypatch.setattr(router, "detect", lambda: {"router": "192.168.1.1"})
     monkeypatch.setattr(router, "test", lambda *a: pytest.fail("no consent"))
-    assert web.feature_action(session, {"action": "detect"})[1] == 409
+    assert web.feature_action(session, {"action": "detect"})[1] == 200
     Cache(settings.db_path).mark_secure_chat(session.chat_id())
     assert web.feature_action(session, {"action": "detect"})[0]["router"] == "192.168.1.1"
     assert web.feature_action(session, {"action": "router_test", "consent": False})[1] == 400
@@ -261,6 +261,16 @@ def test_automatic_router_setup_and_live_results_in_browser(
                 "Zertifikate wurden nicht geprüft", timeout=15000)
             playwright.expect(page.locator("#secure-router")).to_have_value("192.168.1.254")
             playwright.expect(page.locator("#secure-checked")).to_contain_text("Letzte")
+            page.locator("#secure-open").click()
+            page.locator("#secure-panel").wait_for(state="visible")
+            assert page.locator("#secure-panel #secure-subnet").count() == 0
+            page.locator("#input").fill("WERKZEUG:secure_status {}")
+            page.locator("#input").press("Enter")
+            playwright.expect(page.locator("#thread")).to_contain_text("Die Antwort ist 42.",
+                                                                       timeout=15000)
+            playwright.expect(page.locator("#send")).to_be_enabled()
+            page.locator("#secure-settings-open").click()
+            page.locator("#secure-controls").wait_for(state="visible")
             page.locator("#secure-disable").click()
             playwright.expect(page.locator("#secure-note")).to_contain_text("ist aus")
             assert secure_pro.read(watcher.directory) == {}

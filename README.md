@@ -1,4 +1,4 @@
-# Aquaticy AI 14.0.2 Sol
+# Aquaticy AI 14.0.3 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,30 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.0.3 Sol:** Secure Pro hat einen eigenen LLM-Chat mit defensiven Werkzeugen.
+Die Einrichtung liegt unter **Einstellungen → Dev settings → Secure Pro** und erscheint nach dem Einschalten.
+Router und Prüfbereich werden vorgeschlagen. Bestätige dort dein eigenes Netz, bevor die Prüfung startet.
+Linux-Hostrouten mit `/32` verdrängen den Netzbereich nicht mehr. Alte Freigaben werden nicht still erweitert:
+Wenn bisher nur eine Adresse erlaubt war, bestätigst du den größeren Vorschlag in den Einstellungen erneut.
+Neben TCP-Antworten zeigt Secure Pro die lokale Nachbartabelle. Diese Einträge können veraltet sein;
+Geräte ohne offene TCP-Ports gelten deshalb nicht automatisch als aktiv erreichbar.
+Neue Dienste und geänderte Geräteadressen erscheinen als Hinweise mit ihren möglichen harmlosen Ursachen.
+
+Öffne danach den **Secure-Pro-Chat** und nutze dein gewähltes Chat-Modell.
+Es kann Status und Geräte lesen, einen freigegebenen Scan anfordern und einzelne Dienste lesend prüfen:
+SSH-Banner ohne Anmeldung, HTTP-Header ohne Weiterleitung und TLS mit Zertifikatsprüfung.
+Öffentliche Recherche zu Hersteller, Produkt, Firmware und CVE hilft bei bekannten Schwachstellen.
+Die Recherchewerkzeuge nehmen keine lokalen IPs, MAC-Adressen oder E-Mail-Adressen als Suchanfrage an.
+Seiten werden nur aus den zurückgegebenen Suchtreffern und mit den bestehenden Web-Sicherheitsprüfungen gelesen.
+Das Modell erklärt Messwerte, Stärken, Grenzen und sichere Einstellungen im Gespräch.
+Es hat dabei keine Shell, SSH-Anmeldung, Speicher- oder Einstellungsrechte und erweitert nie die Netzfreigabe.
+Ungeprüfte Banner oder passende Ports bestätigen keine CVE. Produkt und betroffene Version müssen passen.
+
+Malware lässt sich weiterhin nur mit ClamAV in ausdrücklich lokal freigegebenen Dateien prüfen.
+Eine Prüfung aller Dateien anderer Geräte und eine Aufzeichnung des Netzwerkverkehrs findet nicht statt.
+Verdächtige Beobachtungen sind keine bestätigte Infektion. Bei Cloud-Modellen gehen deine Nachrichten
+und ausgewählte Befunde an den gewählten Modellanbieter. Für lokale Verarbeitung wähle ein lokales Modell.
 
 **Neu in 14.0.2 Sol:** OpenSSH aus der aktivierten VM zu eigenen Geräten im Heimnetz.
 Aktiviere im Code-Chat die VM und unter Einstellungen sowohl die Netzsuche als auch
@@ -211,7 +235,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.0.2 Sol
+aquaticy --version            # 14.0.3 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

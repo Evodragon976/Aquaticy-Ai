@@ -294,7 +294,7 @@ body:not(.start) .hello{display:none}
 #secure-panel{max-width:46rem;margin:12px auto;padding:16px 24px;border:1px solid var(--line);
   border-radius:16px}
 #secure-panel label{display:block;margin:12px 0}
-#secure-panel button{margin:4px 4px 4px 0}
+#secure-panel button,#secure-controls button{margin:4px 4px 4px 0}
 
 
 .hello{max-width:46rem;margin:0 auto;padding:0 24px 26px;text-align:center}
@@ -1751,28 +1751,9 @@ html.vv,html.vv body{height:var(--app-h)}
       <button type="button" class="btn" id="security-ok">Das war ich</button>
     </div>
     <section id="secure-panel" hidden aria-label="Secure Pro">
-      <h2>Secure Pro</h2>
-      <label for="secure-router">Router-IP</label>
-      <input id="secure-router" placeholder="192.168.1.1" maxlength="15" inputmode="decimal">
-      <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
-      <p id="secure-router-hint" role="status"></p>
-      <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
-      <input id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
-      <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf es prüfen.</label>
-      <button id="secure-test" type="button" class="btn">Router testen und starten</button>
-      <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
-      <button id="secure-check" type="button" class="btn">Prüfen</button>
-      <button id="secure-status" type="button" class="btn">Status</button>
-      <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
-      <p>Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.</p>
-      <p>Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.</p>
-      <p id="secure-note" role="status"></p>
-      <p id="secure-checked"></p>
-      <h3>Positiv beobachtet</h3>
-      <ul id="secure-positive"></ul>
-      <h3>Prüfhinweise</h3>
-      <ul id="secure-findings"></ul>
-      <p>Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.</p>
+      <b>Secure Pro</b>
+      <button type="button" class="btn" id="secure-settings-open">Secure-Pro-Einstellungen</button>
+      <p id="secure-chat-note" role="status"></p>
     </section>
     <div class="thread" id="thread" role="log" aria-live="polite"
          aria-relevant="additions text"></div>
@@ -2648,9 +2629,39 @@ html.vv,html.vv body{height:var(--app-h)}
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="secure-setting">
           <label for="secure-setting">Secure Pro
-            <span class="why">Öffnet einen eigenen Chat für Netzfreigabe, Status und Prüfhinweise.</span>
+            <span class="why">Zeigt die Einrichtung. Im eigenen Chat erklärt dein Modell Befunde und sichere Einstellungen.</span>
           </label>
-          <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
+
+        </div>
+        <div id="secure-controls" class="cluster-box" hidden>
+          <p>Cloud-Modelle erhalten deine Nachrichten und ausgewählte Netzbefunde. Für lokale Verarbeitung wähle ein lokales Modell.</p>
+          <p>Neue Werte gelten erst nach deiner bestätigten Netzfreigabe.</p>
+<h3>Secure Pro einrichten</h3>
+      <label for="secure-router">Router-IP</label>
+      <input type="text" id="secure-router" placeholder="192.168.1.1" maxlength="15" inputmode="decimal">
+      <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
+      <p id="secure-router-hint" role="status"></p>
+      <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
+      <input type="text" id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
+      <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf es prüfen.</label>
+      <button id="secure-test" type="button" class="btn">Router testen und starten</button>
+      <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
+      <button id="secure-check" type="button" class="btn">Prüfen</button>
+      <button id="secure-status" type="button" class="btn">Status</button>
+      <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
+      <p>Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.</p>
+      <p>Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.</p>
+      <p id="secure-scope-note" role="status"></p>
+      <p id="secure-note" role="status"></p>
+      <p id="secure-checked"></p>
+      <h3>Geräte im freigegebenen Netz</h3>
+      <ul id="secure-devices"></ul>
+      <h3>Positiv beobachtet</h3>
+      <ul id="secure-positive"></ul>
+      <h3>Prüfhinweise</h3>
+      <ul id="secure-findings"></ul>
+      <p>Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige Sicherheitsprüfung.</p>
+    <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
         </div>
         <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="voice-setting">
@@ -2811,7 +2822,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.2 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.3 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -4266,7 +4277,6 @@ async function runCommand(line){
 
 async function ask(text){
   if (busy) return;
-  if (secureChat) return secureMessage(text);
   if (!text.trim() && !pending.length) return;
 
 
@@ -4276,11 +4286,11 @@ async function ask(text){
 
 
   const befehl = BEFEHL_RE.exec(eingabe);
-  const plugin = befehl ? pluginNamen.get(befehl[2].toLowerCase()) : null;
+  const plugin = !secureChat && befehl ? pluginNamen.get(befehl[2].toLowerCase()) : null;
   if (plugin){
     const rest = eingabe.slice(befehl[0].length).trim();
     if (!rest && !pending.length && plugin.needs_text) return runCommand(eingabe);
-  } else if (eingabe.startsWith("/") && !/^\/image\b/i.test(eingabe)
+  } else if (!secureChat && eingabe.startsWith("/") && !/^\/image\b/i.test(eingabe)
       && !/^\/max\s+\S/i.test(eingabe)){
     return runCommand(eingabe);
   }
@@ -5516,6 +5526,18 @@ try {
 
 
 const EN = {
+"Secure-Pro-Einstellungen": "Secure Pro settings",
+"Secure Pro einrichten": "Set up Secure Pro",
+"Geräte im freigegebenen Netz": "Devices in the authorized network",
+"Cloud-Modelle erhalten deine Nachrichten und ausgewählte Netzbefunde. Für lokale Verarbeitung wähle ein lokales Modell.": "Cloud models receive your messages and selected network findings. Choose a local model for local processing.",
+"Neue Werte gelten erst nach deiner bestätigten Netzfreigabe.": "New values apply only after you confirm network authorization.",
+"Zeigt die Einrichtung. Im eigenen Chat erklärt dein Modell Befunde und sichere Einstellungen.": "Shows setup options. In its own chat, your model explains findings and safe settings.",
+"Nur eine Adresse ist freigegeben. Bestätige einen größeren Prüfbereich für weitere Geräte.": "Only one address is authorized. Confirm a larger range to check more devices.",
+"Bestätige die Netzfreigabe in den Secure-Pro-Einstellungen.": "Confirm network authorization in Secure Pro settings.",
+"Der Prüfbereich bleibt privat und umfasst 1 Adresse.": "The check stays within a private range of one address.",
+"Bei einem erreichbaren Gerät antwortet keiner der geprüften Risikodienste.": "None of the checked risk services responded on the reachable device.",
+"Bei einem Gerät antwortet Port 443 oder 8443. Dort sind oft verschlüsselte Weboberflächen erreichbar. TLS und Zertifikate wurden nicht geprüft.": "One device responded on port 443 or 8443, often used for encrypted web interfaces. TLS and certificates were not checked.",
+
 "Prüft OpenSSH; alte Abbilder werden aktualisiert.": "Checking OpenSSH; old images are updated.",
 "Mit eingeschalteter VM und „Auch ins lokale Netz“ kann Aquaticy OpenSSH nutzen. Der öffentliche VM-Schlüssel wird am eigenen Gerät freigegeben. Prüfe dessen Fingerabdruck direkt dort. Jeder Befehl über das SSH-Werkzeug braucht dein Ja. Keine Passwörter oder privaten Schlüssel im Chat.": "With the VM and “Also into the local network” enabled, Aquaticy can use OpenSSH. Authorize the public VM key on your own device. Verify its fingerprint directly there. Every command through the SSH tool needs your approval. No passwords or private keys in chat.",
 
@@ -5523,7 +5545,6 @@ const EN = {
 "Der freigegebene Dateiordner wurde verschoben oder ersetzt. Die Dateiprüfung ist nicht erfolgt. Gib den Ordner erneut frei.": "The authorized folder was moved or replaced. The file check did not run. Authorize the folder again.",
 "Einstellungen dürfen keine symbolische Verknüpfung sein.": "Settings must not be symbolic links.",
 
-"Bestätige die Netzfreigabe im Secure-Pro-Chat.": "Confirm network authorization in the Secure Pro chat.",
 "Öffne zuerst einen Secure-Pro-Chat.": "Open a Secure Pro chat first.",
 "Gib eine private IPv4-Adresse für den Router ein.": "Enter a private IPv4 address for the router.",
 "Der Router muss im freigegebenen Netz mit höchstens 256 Adressen liegen.": "The router must be within the authorized network of at most 256 addresses.",
@@ -5557,7 +5578,6 @@ const EN = {
 "Secure Pro ausschalten": "Turn off Secure Pro",
 "Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.": "Open services are review hints, not confirmed infections.",
 "Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.": "Authorize local folders with aquaticy secure-pro in the terminal.",
-"Öffnet einen eigenen Chat für Netzfreigabe, Status und Prüfhinweise.": "Opens a dedicated chat for network authorization, status and findings.",
 "Secure-Pro-Chat öffnen": "Open Secure Pro chat",
 "Sprachnachrichten an oder aus": "Turn voice messages on or off",
 "Lokale Programme und Modell richtest du einmalig mit aquaticy voice ein.": "Set up local programs and the model once with aquaticy voice.",
@@ -7655,7 +7675,7 @@ function fill(values, target = form){
     else field.value = v ?? "";
   }
 }
-$("#btn-settings").addEventListener("click", async () => {
+async function showSettings(){
 
   if (narrow()) document.body.classList.add("collapsed");
   let cfg;
@@ -7694,7 +7714,8 @@ $("#btn-settings").addEventListener("click", async () => {
   $("#ha-note").textContent = ""; $("#ha-note").className = "note";
   openOverlay(overlay);
   featureLoad();
-});
+}
+$("#btn-settings").addEventListener("click", showSettings);
 
 async function loadLearning(){
   const control = $("#learning-enabled"), status = $("#learning-status");
@@ -9754,9 +9775,8 @@ async function featureRequest(payload){
   if (!response.ok) throw new Error(data.error || "Das hat nicht geklappt.");
   return data;
 }
-let secureRefreshTimer = null, secureRefreshPending = false;
+let secureRefreshTimer = null, secureRefreshPending = false, secureSetup = false;
 function secureRender(data, fill = false){
-  if (!secureChat) return;
   if (fill){
     for (const id of ["subnet", "router"]){
       const field = $("#secure-" + id);
@@ -9770,6 +9790,19 @@ function secureRender(data, fill = false){
     note += " " + sp("Die erste Prüfung steht noch aus.", "The first check is pending.");
   if (data.error) note += " " + enOderDe(data.error);
   $("#secure-note").textContent = note;
+  if (secureChat) $("#secure-chat-note").textContent = note;
+  $("#secure-scope-note").textContent = (data.subnet || "").endsWith("/32")
+    ? sp("Nur eine Adresse ist freigegeben. Bestätige einen größeren Prüfbereich für weitere Geräte.",
+         "Only one address is authorized. Confirm a larger range to check more devices.") : "";
+  const devices = $("#secure-devices"); devices.replaceChildren();
+  for (const item of data.devices || []){
+    const li = document.createElement("li");
+    li.textContent = item.address + (item.mac ? " · " + item.mac : "") + " · "
+      + (item.active ? sp("TCP-Antwort", "TCP response")
+                     : sp("Nachbartabelle, kann veraltet sein", "Neighbor table, may be stale"))
+      + (item.ports?.length ? " · " + sp("Ports: ", "Ports: ") + item.ports.join(", ") : "");
+    devices.appendChild(li);
+  }
   $("#secure-checked").textContent = data.checked
     ? sp("Letzte abgeschlossene Prüfung: ", "Last completed check: ")
       + new Date(data.checked * 1000).toLocaleString()
@@ -9784,16 +9817,16 @@ function secureRender(data, fill = false){
 }
 function secureSchedule(){
   clearTimeout(secureRefreshTimer);
-  if (!secureChat || document.hidden) return;
+  if ((!secureChat && !secureSettingsVisible()) || document.hidden) return;
   secureRefreshTimer = setTimeout(async () => {
-    if (!secureChat || document.hidden) return;
+    if ((!secureChat && !secureSettingsVisible()) || document.hidden) return;
     const chat = currentChat;
     if (!secureRefreshPending){
       secureRefreshPending = true;
       try {
         const response = await api("/api/features", {quietErrors:true});
         const data = await response.json();
-        if (chat === currentChat && secureChat){
+        if (chat === currentChat && (secureChat || secureSettingsVisible())){
           if (response.ok && data.allowed) secureRender(data);
           else $("#secure-note").textContent = data.error || sp(
             "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.",
@@ -9818,32 +9851,47 @@ async function featureLoad(){
       $("#" + id).disabled = !allowed;
     }
     $("#voice-setting").checked = !!data.voice;
-    $("#secure-setting").checked = !!data.secure;
+    $("#secure-setting").checked = !!data.secure || secureSetup;
+    $("#secure-controls").hidden = !allowed || !$("#secure-setting").checked;
+    $("#secure-setting").setAttribute("aria-expanded", String(!$("#secure-controls").hidden));
     $("#feature-note").textContent = allowed ? ""
       : "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.";
-    if (allowed && secureChat) secureRender(data, true);
+    if (allowed){
+      secureRender(data, true);
+      if (!$("#secure-controls").hidden && (!data.router || (data.subnet || "").endsWith("/32")))
+        await secureDetect();
+      secureSchedule();
+    }
   } catch { $("#feature-note").textContent = "Aquaticy ist gerade nicht erreichbar."; }
 }
 async function secureDetect(replace = false){
-  const chat = currentChat, button = $("#secure-detect"); button.disabled = true;
+  const chat = currentChat, button = $("#secure-detect");
+  if (button.disabled) return;
+  button.disabled = true;
+  $("#secure-router").disabled = true; $("#secure-subnet").disabled = true;
   try {
     const data = await featureRequest({action:"detect"});
-    if (!secureChat || chat !== currentChat) return;
+    if (chat !== currentChat) return;
     for (const id of ["router", "subnet"]){
       const field = $("#secure-" + id);
-      if (replace || !field.value) field.value = data[id] || "";
+      if (replace || !field.value || (id === "subnet" && field.value.endsWith("/32"))){
+        if (field.value !== data[id]) $("#secure-consent").checked = false;
+        field.value = data[id] || "";
+      }
     }
     $("#secure-router-hint").textContent = data.hint || "";
     uebersetze($("#secure-router-hint"));
   } catch(error){
-    if (secureChat && chat === currentChat) $("#secure-router-hint").textContent = error.message;
-  } finally { button.disabled = false; }
+    if (chat === currentChat) $("#secure-router-hint").textContent = error.message;
+  } finally {
+    button.disabled = false;
+    $("#secure-router").disabled = false; $("#secure-subnet").disabled = false;
+  }
 }
 async function loadSecureChat(){
   const chat = currentChat;
   await featureLoad();
   if (!secureChat || chat !== currentChat) return;
-  if (!$("#secure-router").value) await secureDetect();
   secureSchedule();
 }
 $("#secure-detect").addEventListener("click", () => secureDetect(true));
@@ -9852,13 +9900,14 @@ $("#secure-test").addEventListener("click", async event => {
   try {
     const data = await featureRequest({action:"router_test", router:$("#secure-router").value.trim(),
       subnet:$("#secure-subnet").value.trim(), consent:$("#secure-consent").checked});
-    if (!secureChat || chat !== currentChat) return;
+    if (chat !== currentChat) return;
+    secureSetup = true;
     secureRender(data);
     $("#secure-router-hint").textContent = sp("Router antwortet. Secure Pro wurde gestartet.",
                                             "Router responded. Secure Pro has started.");
     secureSchedule();
   } catch(error){
-    if (secureChat && chat === currentChat) $("#secure-note").textContent = error.message;
+    if (chat === currentChat) $("#secure-note").textContent = error.message;
   } finally { button.disabled = false; }
 });
 async function openSecureChat(){
@@ -9870,28 +9919,29 @@ async function openSecureChat(){
     await openChat(data.session_id, {force:true});
   } catch (error){ $("#feature-note").textContent = error.message; }
 }
-async function secureMessage(text){
-  if (busy) return;
-  setBusy(true);
-  const chat = currentChat;
-  addUser(text); input.value = "";
-  const {steps, bubble} = addBot(); steps.remove();
-  try {
-    const data = await featureRequest({action:"message", message:text});
-    if (chat !== currentChat) return;
-    bubble.innerHTML = md(data.answer || "");
-    uebersetze(bubble);
-    loadRecents();
-  } catch(error){ bubble.textContent = error.message; }
-  finally { setBusy(false); }
+function secureSettingsVisible(){
+  return overlay.classList.contains("open") && !$("#secure-controls").hidden;
 }
+$("#secure-settings-open").addEventListener("click", async () => {
+  await showSettings();
+  $("#dev-settings").scrollIntoView({behavior:"smooth", block:"start"});
+});
 $("#secure-open").addEventListener("click", openSecureChat);
 $("#secure-setting").addEventListener("change", async event => {
-  if (event.target.checked) return openSecureChat();
+  secureSetup = event.target.checked;
+  $("#secure-controls").hidden = !secureSetup;
+  event.target.setAttribute("aria-expanded", String(secureSetup));
+  if (secureSetup){
+    await secureDetect(true);
+    secureSchedule();
+    return;
+  }
   try { await featureRequest({action:"configure", enabled:false}); }
   catch(error){ $("#feature-note").textContent = error.message; }
   featureLoad();
 });
+for (const id of ["secure-router", "secure-subnet"])
+  $("#" + id).addEventListener("input", () => { $("#secure-consent").checked = false; });
 $("#voice-setting").addEventListener("change", async event => {
   const field = event.target; field.disabled = true;
   try { await featureRequest({action:"voice", enabled:field.checked}); }
@@ -9900,18 +9950,26 @@ $("#voice-setting").addEventListener("change", async event => {
 });
 $("#secure-apply").addEventListener("click", async () => {
   try {
-    await featureRequest({action:"configure", enabled:true,
+    const data = await featureRequest({action:"configure", enabled:true,
       subnet:$("#secure-subnet").value.trim(), consent:$("#secure-consent").checked});
-    $("#secure-note").textContent = "Secure Pro ist an.";
-    secureMessage("Status");
+    secureSetup = true; secureRender(data); secureSchedule();
   } catch(error){ $("#secure-note").textContent = error.message; }
 });
 $("#secure-disable").addEventListener("click", async () => {
-  try { await featureRequest({action:"configure", enabled:false}); featureLoad(); }
+  try { secureSetup = false; await featureRequest({action:"configure", enabled:false}); featureLoad(); }
   catch(error){ $("#secure-note").textContent = error.message; }
 });
-$("#secure-check").addEventListener("click", () => secureMessage("Prüfen"));
-$("#secure-status").addEventListener("click", () => secureMessage("Status"));
+$("#secure-check").addEventListener("click", async () => {
+  try {
+    const data = await featureRequest({action:"check"});
+    secureRender(data);
+    $("#secure-note").textContent = data.requested
+      ? sp("Prüfung angefordert.", "Check requested.")
+      : sp("Warte vor einer weiteren Prüfung mindestens eine Minute.", "Wait a minute before another check.");
+    secureSchedule();
+  } catch(error){ $("#secure-note").textContent = error.message; }
+});
+$("#secure-status").addEventListener("click", featureLoad);
 
 
 let verbundTakt = null;

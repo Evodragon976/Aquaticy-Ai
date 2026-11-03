@@ -71,6 +71,8 @@ class Watcher:
         self._network = ""
         self._result_subnet = ""
         self._configuration = ""
+        self.devices: list[dict[str, Any]] = []
+        self._inventory: dict[str, dict[str, Any]] | None = None
         self._requested = 0.0
         self._lock = threading.Lock()
 
@@ -78,7 +80,8 @@ class Watcher:
         with self._lock:
             return {"findings": list(self.last_findings), "positives": list(self.positives),
                     "checked": self.last_checked, "scanning": self.scanning, "error": self.error,
-                    "scope": self._result_subnet, "configuration": self._configuration}
+                    "scope": self._result_subnet, "configuration": self._configuration,
+                    "devices": [{**item, "ports": list(item["ports"])} for item in self.devices]}
 
     def start(self) -> None:
         with self._lock:
@@ -120,6 +123,8 @@ class Watcher:
                 self.positives = []
                 self.last_checked = 0
                 self.error = ""
+                self.devices = []
+                self._inventory = None
         network = lan.parse_subnet(config.get("subnet", ""))
         if network.num_addresses > 256:
             raise ValueError("Netz zu groß.")
@@ -128,25 +133,58 @@ class Watcher:
             self.announced.clear()
             self._network = str(network)
         devices = lan.scan(str(network), quick=False, with_titles=False, with_names=False)
+        from aquaticy.secure_network import neighbours
+
+        inventory = {item["address"]: item for item in neighbours(str(network))}
+        for device in devices:
+            item = inventory.setdefault(device.address, {"address": device.address, "mac": ""})
+            item.update(ports=list(device.ports), active=True, source="TCP-Antwort")
         findings: set[str] = set()
-        positives = [f"Der Prüfbereich bleibt privat und umfasst {network.num_addresses} Adressen."]
+        positives = [("Der Prüfbereich bleibt privat und umfasst 1 Adresse."
+                      if network.num_addresses == 1 else
+                      "Der Prüfbereich bleibt privat und umfasst "
+                      f"{network.num_addresses} Adressen.")]
+        changed = False
+        if self._inventory is not None:
+            for address, item in inventory.items():
+                old = self._inventory.get(address)
+                if old is None:
+                    findings.add(f"Neu in der lokalen Beobachtung: {address}. "
+                                 "Das kann ein eigenes Gerät oder ein alter Nachbareintrag sein.")
+                elif old.get("mac") and item.get("mac") and old["mac"] != item["mac"]:
+                    changed = True
+                    findings.add(f"Geänderte Geräteadresse bei {address}. "
+                                 "Prüfe DHCP und das Gerät; das allein belegt keinen Angriff.")
+                if old and old.get("active") and item.get("active"):
+                    added = sorted(set(item["ports"]) - set(old["ports"]))
+                    if added:
+                        changed = True
+                        findings.add(f"Neue antwortende Dienste bei {address}: {added}. "
+                                     "Prüfe, ob du diese Änderung erwartet hast.")
         current = {d.address for d in devices}
         if self.known is not None:
             findings.update(f"Neues Gerät: {ip}" for ip in current - self.known)
-            if current and current == self.known:
+            if current and current == self.known and not changed:
                 positives.append("Die erreichbaren Geräte sind seit der letzten Prüfung "
                                  "unverändert.")
         if devices:
             if not any(set(device.ports) & set(RISK_PORTS) for device in devices):
-                positives.append(f"Bei {len(devices)} erreichbaren Geräten antwortet keiner der "
-                                 "geprüften Risikodienste.")
+                positives.append(
+                    "Bei einem erreichbaren Gerät antwortet keiner der geprüften Risikodienste."
+                    if len(devices) == 1 else
+                    f"Bei {len(devices)} erreichbaren Geräten antwortet keiner der "
+                    "geprüften Risikodienste.")
             if not any(set(device.ports) & {21, 23} for device in devices):
                 positives.append("Bei den erreichbaren Geräten antworten weder FTP noch Telnet.")
             tls_ports = sum(bool(set(device.ports) & {443, 8443}) for device in devices)
             if tls_ports:
-                positives.append(f"Bei {tls_ports} Geräten antwortet Port 443 oder 8443. "
-                                 "Dort sind oft verschlüsselte Weboberflächen erreichbar. "
-                                 "TLS und Zertifikate wurden nicht geprüft.")
+                positives.append(
+                    ("Bei einem Gerät antwortet Port 443 oder 8443. "
+                     "Dort sind oft verschlüsselte Weboberflächen erreichbar. "
+                     "TLS und Zertifikate wurden nicht geprüft.") if tls_ports == 1 else
+                    (f"Bei {tls_ports} Geräten antwortet Port 443 oder 8443. "
+                     "Dort sind oft verschlüsselte Weboberflächen erreichbar. "
+                     "TLS und Zertifikate wurden nicht geprüft."))
         else:
             findings.add("Keine Geräte über die geprüften TCP-Ports erreichbar. "
                          "Prüfe Netz, Router und Container-Anbindung. "
@@ -186,6 +224,7 @@ class Watcher:
         if self.stop_event.is_set() or read(self.directory) != config:
             return []
         self.known = current
+        self._inventory = inventory
         self.announced.intersection_update(findings)
         with self._lock:
             self.last_findings = sorted(findings)[:200]
@@ -193,6 +232,8 @@ class Watcher:
             self.last_checked = time.time()
             self._result_subnet = str(network)
             self.error = ""
+            self.devices = sorted(inventory.values(), key=lambda item: tuple(
+                int(part) for part in item["address"].split(".")))[:256]
         new = sorted(findings - self.announced)[:20]
         if new and not self.stop_event.is_set() and read(self.directory) == config:
             message = "[Aquaticy] Secure Pro\n" + "\n".join(new)

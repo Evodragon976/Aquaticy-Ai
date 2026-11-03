@@ -1730,6 +1730,25 @@ class ChatSession:
                 with self._frage_lock:
                     self._frage_offen = False
                 agent = self.agent()
+                secure = Cache(self.settings().db_path).is_secure_chat(self.chat_id())
+                previous_secure = bool(getattr(agent, "secure_pro", False))
+                agent.secure_pro = secure
+                agent.toolbox.secure_mode = secure
+                if secure:
+                    if not host_feature_owner(self):
+                        raise BadRequest("Nur der Besitzer kann den Secure-Pro-Chat nutzen.")
+                    agent.toolbox.secure_provider = lambda name, args: secure_feature_tool(
+                        self, name, args)
+                    mode, structured, recheck, sandbox = "normal", False, False, False
+                    visual_sources = False
+                    agent._refresh_system()
+                elif previous_secure:
+                    from aquaticy.learning import Learning
+
+                    agent.toolbox.secure_provider = None
+                    agent.use_subagents = self.settings().max_subagents > 0
+                    agent.learning = Learning(self.settings().data_dir)
+                    agent._refresh_system()
                 previous_agent_limit = getattr(agent, "_agent_limit_override", None)
                 try:
                     def melden(name: str, payload: dict[str, Any]) -> None:
@@ -1752,7 +1771,7 @@ class ChatSession:
 
                     plugin = None
                     plugin_prompt = ""
-                    if message.startswith("/") and not message.startswith("/image"):
+                    if not secure and message.startswith("/") and not message.startswith("/image"):
                         from aquaticy import plugins as plugin_mod
 
                         plugin = plugin_mod.match(message, self.settings(), self.ultra)
@@ -2594,9 +2613,10 @@ def feature_view(session: Any) -> dict[str, Any]:
     directory = get_settings().data_dir
     config = secure_pro.read(directory)
     report = SECURE_WATCHER.snapshot() if SECURE_WATCHER else {
-        "findings": [], "positives": [], "checked": 0, "scanning": False, "error": ""}
+        "findings": [], "positives": [], "checked": 0, "scanning": False, "error": "",
+        "devices": []}
     if report.get("configuration", "") != secure_pro.config_token(config):
-        report.update(findings=[], positives=[], checked=0, error="")
+        report.update(findings=[], positives=[], checked=0, error="", devices=[], scope="")
     return {"allowed": True, "voice": voice.enabled(), "voice_ready": voice.ready(directory),
             "secure": config.get("enabled") is True, "subnet": config.get("subnet", ""),
             "router": config.get("router", ""),
@@ -2615,12 +2635,11 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
         cache = Cache(settings.db_path, settings.cache_ttl_hours)
         action = payload.get("action")
         if action == "detect" or action == "router_test":
-            if not cache.is_secure_chat(session.chat_id()):
-                return {"error": "Öffne zuerst einen Secure-Pro-Chat."}, 409
             if action == "detect":
                 return {"ok": True, **router.detect()}, 200
             if payload.get("consent") is not True:
-                return {"error": "Bestätige die Netzfreigabe im Secure-Pro-Chat."}, 400
+                return {"error": "Bestätige die Netzfreigabe in den "
+                                 "Secure-Pro-Einstellungen."}, 400
             try:
                 tested = router.test(str(payload.get("router", "")),
                                      str(payload.get("subnet", "")))
@@ -2633,6 +2652,13 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                 SECURE_WATCHER.wake.set()
                 SECURE_WATCHER.start()
             return {"ok": True, "tested": tested, **feature_view(session)}, 200
+        elif action == "check":
+            if secure_pro.read(directory).get("enabled") is not True:
+                return {"error": "Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei."}, 400
+            if SECURE_WATCHER is None:
+                return {"error": "Der Prüfungsdienst ist nicht verfügbar."}, 503
+            return {"ok": True, "requested": SECURE_WATCHER.request(),
+                    **feature_view(session)}, 200
         elif action == "voice":
             if not isinstance(payload.get("enabled"), bool):
                 return {"error": "Wähle an oder aus."}, 400
@@ -2642,9 +2668,9 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                 return {"error": str(exc)}, 400
         elif action == "configure":
             if payload.get("enabled") is True:
-                if (not cache.is_secure_chat(session.chat_id())
-                        or payload.get("consent") is not True):
-                    return {"error": "Bestätige die Netzfreigabe im Secure-Pro-Chat."}, 400
+                if payload.get("consent") is not True:
+                    return {"error": "Bestätige die Netzfreigabe in den "
+                                     "Secure-Pro-Einstellungen."}, 400
                 try:
                     secure_pro.configure(directory, str(payload.get("subnet", "")),
                                          secure_pro.read(directory).get("folder", ""))
@@ -2691,6 +2717,61 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
         else:
             return {"error": "Unbekannte Aktion."}, 400
         return {"ok": True, **feature_view(session)}, 200
+
+
+def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if (not host_feature_owner(session)
+            or not Cache(session.settings().db_path).is_secure_chat(session.chat_id())):
+        return {"error": "Dieser Secure-Pro-Zugriff ist nicht freigegeben."}
+    from aquaticy import secure_network, secure_pro
+
+    if name in {"secure_status", "secure_devices", "secure_findings"}:
+        state = feature_view(session)
+        state.pop("voice", None)
+        state.pop("voice_ready", None)
+        state.pop("configuration", None)
+        all_devices = state.get("devices", [])
+        if name in {"secure_devices", "secure_findings"}:
+            try:
+                offset = max(0, min(255, int(arguments.get("offset", 0))))
+            except (ValueError, TypeError, OverflowError):
+                return {"error": "Ungültige Seite der Geräteliste."}
+            field = "devices" if name == "secure_devices" else "findings"
+            items = state.get(field, [])
+            return {"total": len(items), "offset": offset,
+                    field: items[offset:offset + 24],
+                    "next_offset": offset + 24 if offset + 24 < len(items) else None}
+        state["device_count"] = len(all_devices)
+        state["devices"] = all_devices[:24]
+        state["findings_count"] = len(state.get("findings", []))
+        state["findings"] = state.get("findings", [])[:24]
+        if state.get("subnet", "").endswith("/32"):
+            state["scope_note"] = ("Nur eine Adresse freigegeben. Weitere Geräte brauchen "
+                                   "eine bestätigte Netzfreigabe in den Einstellungen.")
+        state["limitations"] = ("Nachbartabellen können alte Einträge enthalten. "
+                                "Keine Paketaufzeichnung oder Fernprüfung aller Dateien.")
+        return state
+    directory = get_settings().data_dir
+    config = secure_pro.read(directory)
+    if config.get("enabled") is not True:
+        return {"error": "Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei."}
+    if name == "secure_scan":
+        if SECURE_WATCHER is None:
+            return {"error": "Der Prüfungsdienst ist nicht verfügbar. Starte Aquaticy neu."}
+        requested = SECURE_WATCHER.request()
+        return {"requested": requested, "note": (
+            "Prüfung angefordert. Ergebnisse folgen im Status." if requested else
+            "Warte vor einer weiteren Prüfung mindestens eine Minute.")}
+    if name == "secure_inspect":
+        try:
+            result = secure_network.inspect(config.get("subnet", ""),
+                                            str(arguments.get("host", "")))
+        except (ValueError, OSError) as exc:
+            return {"error": str(exc)}
+        if not host_feature_owner(session) or secure_pro.read(directory) != config:
+            return {"error": "Die Freigabe hat sich während der Prüfung geändert."}
+        return result
+    return {"error": "Unbekannte Secure-Pro-Prüfung."}
 
 
 def _build_native_hub(get_session: Callable[[], Any], account: Any, directory: Path) -> Any:
@@ -5939,8 +6020,11 @@ class Handler(BaseHTTPRequestHandler):
                 cache = Cache(settings.db_path, settings.cache_ttl_hours)
                 cache.mark_secure_chat(selected.chat_id())
                 cache.add_history(selected.chat_id(), "Secure Pro",
-                                  "Secure Pro: Gib dein eigenes Netz im Formular frei. "
-                                  "Mit Status und Prüfen verwaltest du die Überwachung.",
+                                  "Secure Pro: Hier besprichst du Befunde und sichere "
+                                  "Einstellungen "
+                                  "mit deinem Modell. Die Netzfreigabe steht unter Einstellungen "
+                                  "→ Dev settings → Secure Pro. Ohne diese Freigabe wird "
+                                  "nicht geprüft.",
                                   mode="normal")
                 cache.rename_chat(selected.chat_id(), "Secure Pro")
                 self._json({"ok": True, "session_id": selected.chat_id()})
@@ -6653,8 +6737,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
     def _chat(self) -> None:
         """Fuehrt die Anfrage aus und streamt die Ereignisse als SSE."""
-        if Cache(SESSION.settings().db_path).is_secure_chat(SESSION.chat_id()):
-            self._json({"error": "Nutze Status oder Prüfen im Secure-Pro-Chat."}, 409)
+        secure = Cache(SESSION.settings().db_path).is_secure_chat(SESSION.chat_id())
+        if secure and not host_feature_owner(SESSION.current()):
+            self._json({"error": "Nur der Besitzer kann den Secure-Pro-Chat nutzen."}, 403)
             return
         kontingent = SESSION.settings().quota
 
@@ -6708,6 +6793,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         }
         if "structured" not in wunsch and "thinking" in payload:
             wunsch["structured"] = payload["thinking"]
+        if secure:
+            wunsch.update(mode="normal", structured=False, recheck=False, sandbox=False,
+                          visual_sources=False, agents=1)
 
         if payload.get("image_mode") not in (None, False):
             self._json({"error": "Diesen Modus gibt es nicht mehr."}, 400)
@@ -7691,7 +7779,7 @@ def chat_kind_conflict(session: Any, mode: str) -> str:
     try:
         settings = session.settings()
         if Cache(settings.db_path).is_secure_chat(session.chat_id()):
-            return "Nutze Status oder Prüfen im Secure-Pro-Chat."
+            return "" if mode == "normal" else "Secure Pro nutzt seinen eigenen Chat-Modus."
         art = Cache(settings.db_path, settings.cache_ttl_hours).chat_mode(session.chat_id())
     except Exception:
         return ""

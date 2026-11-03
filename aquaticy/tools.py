@@ -1027,6 +1027,7 @@ BLENDER_SCHEMA: dict[str, Any] = {
 
 
 WORK_TOOLS: dict[str, str] = {
+    "secure_advisories": "suche", "secure_read_advisory": "seite",
     "web_search": "suche", "search_news": "suche", "local_places": "suche",
     "find_profiles": "suche", "weather": "suche", "github": "suche",
     "fetch_page": "seite", "inspect_public_visual": "seite", "read_feeds": "seite",
@@ -1051,6 +1052,8 @@ UNTRUSTED_SOURCES = frozenset({
 
 
     "vm_run", "vm_read", "vm_files", "blender_run", "ha_states", "lan_ssh",
+    "secure_status", "secure_scan", "secure_inspect", "secure_advisories", "secure_read_advisory",
+    "secure_devices", "secure_findings",
 })
 
 
@@ -1644,6 +1647,11 @@ class Toolbox:
 
         self.ask_handler: AskHandler | None = None
         self.ssh_allowed: Callable[[], bool] | None = None
+        self.secure_mode = False
+        self.secure_online = True
+        self.secure_provider: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None
+        self._secure_sources: set[str] = set()
+        self._secure_checks = 0
 
 
         self.untrusted_seen = False
@@ -2769,12 +2777,20 @@ class Toolbox:
         laeuft (aquaticy/metering.py, seit 9.5.14 Seashell). Ist nichts mehr
         uebrig, lehnt das Werkzeug ab -- das Modell antwortet dann ohne.
         """
+        if getattr(self, "secure_mode", False):
+            from aquaticy.secure_chat import ALLOWED
+
+            if name not in ALLOWED:
+                return {"error": "Dieses Werkzeug ist im Secure-Pro-Chat nicht freigegeben."}
         pruefung = getattr(self, "gate", None)
         if pruefung is not None:
             vorab = pruefung(name, arguments)
             if vorab is not None:
                 return vorab
-        nein = self._untrusted_gate(name, arguments) or self._leak_gate(name, arguments)
+        guard_name = {"secure_advisories": "web_search",
+                      "secure_read_advisory": "fetch_page"}.get(name, name)
+        nein = (self._untrusted_gate(guard_name, arguments)
+                or self._leak_gate(guard_name, arguments))
         if nein:
             return nein
         art = WORK_TOOLS.get(name)
@@ -2950,7 +2966,7 @@ class Toolbox:
             elif not payload.get("error"):
                 kosten += metering.work_cost("datei")
             return kosten
-        if name == "fetch_page":
+        if name in ("fetch_page", "secure_read_advisory"):
             ohne_abruf = {"invalid_url", "blocked_by_list", "robots_disallowed", "legal_guard",
                           "timeout", "network_error", "not_public"}
             if payload.get("via") != "cache" and payload.get("skipped_reason") not in ohne_abruf:
@@ -2958,7 +2974,7 @@ class Toolbox:
             return 0
         if payload.get("error"):
             return 0
-        if name in ("web_search", "search_news"):
+        if name in ("web_search", "search_news", "secure_advisories"):
             if not payload.get("cached"):
                 anzahl = len(payload.get("queries") or []) or 1
                 return metering.work_cost("suche", anzahl)
@@ -2973,6 +2989,8 @@ class Toolbox:
 
     def _call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Fuehrt den Tool-Call *name* mit *arguments* aus."""
+        if name.startswith("secure_"):
+            return self.secure_tool(name, arguments)
         if self.guard is not None and name in SENSITIVE_TOOLS:
             verdict = self.guard.check_call(name, arguments)
             if verdict.abuse:
@@ -3649,6 +3667,40 @@ class Toolbox:
             ),
         }
 
+
+    def secure_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        from aquaticy.secure_chat import LOCAL, public_query
+
+        if not getattr(self, "secure_mode", False) or self.secure_provider is None:
+            return {"error": "Kein freigegebener Secure-Pro-Chat."}
+        access = self.secure_provider("secure_status", {})
+        if access.get("error"):
+            return access
+        if name in LOCAL:
+            if name == "secure_inspect":
+                if self._secure_checks >= 6:
+                    return {"error": "Höchstens sechs gezielte Geräteprüfungen je Nachricht."}
+                self._secure_checks += 1
+            return access if name == "secure_status" else self.secure_provider(name, arguments)
+        if not self.secure_online:
+            return {"error": "Die öffentliche Recherche ist in diesem Chat ausgeschaltet."}
+        if name == "secure_advisories":
+            query = str(arguments.get("query", "")).strip()
+            if not public_query(query):
+                return {"error": "Suche nur nach Produkt, Version oder CVE, ohne lokale Adressen "
+                                 "oder private Angaben."}
+            result = self.web_search(query=query + " security advisory CVE", count=5)
+            for item in result.get("results", []):
+                url = str(item.get("url", ""))
+                if url and public_query(url.replace("://", " ")):
+                    self._secure_sources.add(url)
+            return result
+        if name == "secure_read_advisory":
+            url = str(arguments.get("url", ""))
+            if url not in self._secure_sources:
+                return {"error": "Lies nur öffentliche Treffer aus der Sicherheitssuche."}
+            return self.fetch_page(url)
+        return {"error": "Unbekanntes Secure-Pro-Werkzeug."}
 
     def lan_scan(self, subnet: str = "", thorough: bool = False) -> dict[str, Any]:
         """Sieht nach, welche Geraete im Heimnetz erreichbar sind."""
