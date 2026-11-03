@@ -2574,6 +2574,92 @@ def _native_paused(account: Any) -> bool:
     return CLUSTER is not None and not CLUSTER.is_home(account.id)
 
 
+SECURE_WATCHER: Any = None
+FEATURE_LOCK = threading.RLock()
+
+
+def host_feature_owner(session: Any) -> bool:
+    account = getattr(session, "account", None)
+    if AUTH is None or not AUTH.single or account is None or not session.ultra:
+        return False
+    owner = AUTH.ensure_owner_ultra()
+    return bool(owner is not None and owner.id == account.id and not _native_paused(account))
+
+
+def feature_view(session: Any) -> dict[str, Any]:
+    if not host_feature_owner(session):
+        return {"allowed": False}
+    from aquaticy import secure_pro, voice
+
+    directory = get_settings().data_dir
+    config = secure_pro.read(directory)
+    return {"allowed": True, "voice": voice.enabled(), "voice_ready": voice.ready(directory),
+            "secure": config.get("enabled") is True, "subnet": config.get("subnet", ""),
+            "findings": list(SECURE_WATCHER.last_findings) if SECURE_WATCHER else [],
+            "checked": SECURE_WATCHER.last_checked if SECURE_WATCHER else 0}
+
+
+def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    if not host_feature_owner(session):
+        return {"error": "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus."}, 403
+    from aquaticy import secure_pro, voice
+
+    with FEATURE_LOCK:
+        directory = get_settings().data_dir
+        settings = session.settings()
+        cache = Cache(settings.db_path, settings.cache_ttl_hours)
+        action = payload.get("action")
+        if action == "voice":
+            if not isinstance(payload.get("enabled"), bool):
+                return {"error": "Wähle an oder aus."}, 400
+            try:
+                voice.set_enabled(directory, payload["enabled"])
+            except ValueError as exc:
+                return {"error": str(exc)}, 400
+        elif action == "configure":
+            if payload.get("enabled") is True:
+                if (not cache.is_secure_chat(session.chat_id())
+                        or payload.get("consent") is not True):
+                    return {"error": "Bestätige die Netzfreigabe im Secure-Pro-Chat."}, 400
+                try:
+                    secure_pro.configure(directory, str(payload.get("subnet", "")),
+                                         secure_pro.read(directory).get("folder", ""))
+                except ValueError as exc:
+                    return {"error": str(exc)}, 400
+                if SECURE_WATCHER:
+                    SECURE_WATCHER.wake.set()
+                    SECURE_WATCHER.start()
+            elif payload.get("enabled") is False:
+                (directory / "secure-pro.json").unlink(missing_ok=True)
+                if SECURE_WATCHER:
+                    SECURE_WATCHER.wake.set()
+            else:
+                return {"error": "Wähle an oder aus."}, 400
+        elif action == "message":
+            if not cache.is_secure_chat(session.chat_id()):
+                return {"error": "Öffne zuerst einen Secure-Pro-Chat."}, 409
+            text = str(payload.get("message", "")).strip()[:2000]
+            if text.casefold() in {"prüfen", "pruefen", "check"}:
+                if secure_pro.read(directory).get("enabled") is not True:
+                    answer = "Gib zuerst dein eigenes Netz frei."
+                elif SECURE_WATCHER and SECURE_WATCHER.request():
+                    answer = "Prüfung angefordert. Mit Status siehst du die letzten Ergebnisse."
+                else:
+                    answer = "Warte vor einer weiteren Prüfung mindestens eine Minute."
+            else:
+                state = feature_view(session)
+                answer = ("Secure Pro ist an." if state["secure"] else "Secure Pro ist aus.")
+                answer += "\n" + ("\n".join(state["findings"]) or
+                                   "Noch keine Prüfhinweise vorhanden. "
+                                   "Das ist kein Sicherheitsnachweis.")
+                answer += "\nBefehle: Status, Prüfen. Die Netzfreigabe änderst du im Formular."
+            cache.add_history(session.chat_id(), text or "Status", answer, mode="normal")
+            return {"ok": True, "answer": answer, **feature_view(session)}, 200
+        else:
+            return {"error": "Unbekannte Aktion."}, 400
+        return {"ok": True, **feature_view(session)}, 200
+
+
 def _build_native_hub(get_session: Callable[[], Any], account: Any, directory: Path) -> Any:
     """Die direkten Kopplungen eines Kontos: WhatsApp (neonize) und Signal (signal-cli)."""
     from aquaticy import bridge as bridge_mod
@@ -4495,6 +4581,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             base = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
             chat_route = route in {"/api/chat", "/api/chats", "/api/clear", "/api/open",
+                                  "/api/features",
                                   "/api/run", "/api/runstate", "/api/stop", "/api/answer",
                                   "/api/command", "/api/chat-edit", "/api/chatexport"}
             _REQUEST.session = base.resolve_chat(
@@ -5231,6 +5318,8 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/cluster":
             verbund, status = cluster_view(SESSION.current())
             self._json(verbund, status)
+        elif route == "/api/features":
+            self._json(feature_view(SESSION.current()))
         elif route == "/api/linked":
             self._json(linked_view(SESSION.current()))
         elif route == "/api/upgrades":
@@ -5806,6 +5895,25 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": True, **state})
         elif route == "/api/chat":
             self._chat()
+        elif route == "/api/features":
+            payload = self._read_json(limit=AUTH_BODY_BYTES)
+            if payload.get("action") == "open":
+                if not host_feature_owner(SESSION.current()):
+                    self._json({"error": "Nur der Besitzer kann Secure Pro verwalten."}, 403)
+                    return
+                selected, _ = SESSION.switch_chat()
+                settings = selected.settings()
+                cache = Cache(settings.db_path, settings.cache_ttl_hours)
+                cache.mark_secure_chat(selected.chat_id())
+                cache.add_history(selected.chat_id(), "Secure Pro",
+                                  "Secure Pro: Gib dein eigenes Netz im Formular frei. "
+                                  "Mit Status und Prüfen verwaltest du die Überwachung.",
+                                  mode="normal")
+                cache.rename_chat(selected.chat_id(), "Secure Pro")
+                self._json({"ok": True, "session_id": selected.chat_id()})
+            else:
+                result, status = feature_action(SESSION.current(), payload)
+                self._json(result, status)
         elif route == "/api/clear":
             selected, _ = SESSION.switch_chat()
             self._json({"ok": True, "current": selected.chat_id()})
@@ -5824,7 +5932,9 @@ class Handler(BaseHTTPRequestHandler):
                 settings = SESSION.settings()
                 art = Cache(settings.db_path, settings.cache_ttl_hours).chat_mode(wanted)
             self._json({"ok": True, **data, "session_id": selected.chat_id(),
-                        **(art or {"kind": "chat", "mode": "normal"})})
+                        **(art or {"kind": "chat", "mode": "normal"}),
+                        "secure_pro": Cache(selected.settings().db_path).is_secure_chat(
+                            selected.chat_id())})
         elif route == "/api/ha":
             if not SESSION.ultra:
                 self._json({"ok": False, "error": "Home Assistant gibt es nur mit Ultra."},
@@ -5880,6 +5990,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json({"ok": SESSION.answer(text)})
         elif route == "/api/command":
+            if Cache(SESSION.settings().db_path).is_secure_chat(SESSION.chat_id()):
+                self._json({"error": "Nutze Status oder Prüfen im Secure-Pro-Chat."}, 409)
+                return
             line = str(self._read_json().get("line", "")).strip()
             if not line.startswith("/"):
                 self._json({"ok": False, "error": "kein Befehl"}, 400)
@@ -6507,6 +6620,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
     def _chat(self) -> None:
         """Fuehrt die Anfrage aus und streamt die Ereignisse als SSE."""
+        if Cache(SESSION.settings().db_path).is_secure_chat(SESSION.chat_id()):
+            self._json({"error": "Nutze Status oder Prüfen im Secure-Pro-Chat."}, 409)
+            return
         kontingent = SESSION.settings().quota
 
 
@@ -7541,6 +7657,8 @@ def chat_kind_conflict(session: Any, mode: str) -> str:
     """
     try:
         settings = session.settings()
+        if Cache(settings.db_path).is_secure_chat(session.chat_id()):
+            return "Nutze Status oder Prüfen im Secure-Pro-Chat."
         art = Cache(settings.db_path, settings.cache_ttl_hours).chat_mode(session.chat_id())
     except Exception:
         return ""
@@ -7637,7 +7755,9 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         hub.ensure_running()
         return bool(hub.notify_owner(text))
 
+    global SECURE_WATCHER
     security_watcher = Watcher(data_dir, security_notice)
+    SECURE_WATCHER = security_watcher
 
 
 
@@ -7700,6 +7820,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         pass
     finally:
         security_watcher.stop()
+        SECURE_WATCHER = None
         server.server_close()
         if PUBLIC_SERVER is not None:
             with contextlib.suppress(Exception):

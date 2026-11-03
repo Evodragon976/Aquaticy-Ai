@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -57,6 +58,19 @@ def configure(directory: Path, enable: bool) -> None:
 
         WhisperModel("small", device="cpu", compute_type="int8",
                      download_root=str(directory / "voice-models"))
+    set_enabled(directory, enable)
+
+
+def ready(directory: Path) -> bool:
+    return bool(shutil.which("ffmpeg") and shutil.which("espeak-ng")
+                and importlib.util.find_spec("faster_whisper")
+                and next((p for p in (directory / "voice-models").rglob("model.bin")
+                          if p.is_file() and p.stat().st_size > 0), None))
+
+
+def set_enabled(directory: Path, enable: bool) -> None:
+    if enable and not ready(directory):
+        raise ValueError("Sprachnachrichten zuerst im Terminal mit aquaticy voice einrichten.")
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "voice.json"
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC

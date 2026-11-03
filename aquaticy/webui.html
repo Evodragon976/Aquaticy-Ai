@@ -291,6 +291,10 @@ body.start .thread{display:none}
 
 body:not(.start) .hello{display:none}
 .thread{max-width:46rem;margin:0 auto;padding:8px 24px 200px}
+#secure-panel{max-width:46rem;margin:12px auto;padding:16px 24px;border:1px solid var(--line);
+  border-radius:16px}
+#secure-panel label{display:block;margin:12px 0}
+#secure-panel button{margin:4px 4px 4px 0}
 
 
 .hello{max-width:46rem;margin:0 auto;padding:0 24px 26px;text-align:center}
@@ -1746,6 +1750,19 @@ html.vv,html.vv body{height:var(--app-h)}
       <button type="button" class="btn" id="security-open">Ansehen</button>
       <button type="button" class="btn" id="security-ok">Das war ich</button>
     </div>
+    <section id="secure-panel" hidden aria-label="Secure Pro">
+      <h2>Secure Pro</h2>
+      <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
+      <input id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
+      <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf es prüfen.</label>
+      <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
+      <button id="secure-check" type="button" class="btn">Prüfen</button>
+      <button id="secure-status" type="button" class="btn">Status</button>
+      <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
+      <p>Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.</p>
+      <p>Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.</p>
+      <p id="secure-note" role="status"></p>
+    </section>
     <div class="thread" id="thread" role="log" aria-live="polite"
          aria-relevant="additions text"></div>
   </main>
@@ -2615,6 +2632,20 @@ html.vv,html.vv body{height:var(--app-h)}
 
       <fieldset id="dev-settings"><legend>Dev settings</legend>
         <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="secure-setting">
+          <label for="secure-setting">Secure Pro
+            <span class="why">Öffnet einen eigenen Chat für Netzfreigabe, Status und Prüfhinweise.</span>
+          </label>
+          <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
+        </div>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="voice-setting">
+          <label for="voice-setting">Sprachnachrichten an oder aus
+            <span class="why">Lokale Programme und Modell richtest du einmalig mit aquaticy voice ein.</span>
+          </label>
+        </div>
+        <p id="feature-note" class="note" role="status"></p>
+        <div class="check">
           <input type="checkbox" role="switch" class="schalter" id="legalguard"
                  name="AQUATICY_LEGAL_GUARD">
           <label for="legalguard" style="margin:0">Rechts-Leitplanken nach Grundgesetz und BGB
@@ -2765,7 +2796,8 @@ document.querySelectorAll(".note").forEach((note) => {
 const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#send");
 let busy = false;
 let currentChat = "";
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.0 Luna";
+let secureChat = false;
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.0.1 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -4220,6 +4252,7 @@ async function runCommand(line){
 
 async function ask(text){
   if (busy) return;
+  if (secureChat) return secureMessage(text);
   if (!text.trim() && !pending.length) return;
 
 
@@ -5210,6 +5243,7 @@ async function neuerChat({ leiste = true } = {}){
     if (opening !== chatOpening) return;
     detachChat();
     currentChat = data.current || "";
+    secureChat = false; $("#secure-panel").hidden = true;
   } catch {
     toast("Neuer Chat ging gerade nicht. Versuch es gleich noch einmal.");
     return;
@@ -5465,6 +5499,22 @@ try {
 
 
 const EN = {
+"Eigenes Netz (CIDR, höchstens 256 Adressen)": "Your network (CIDR, up to 256 addresses)",
+"Dieses Netz gehört mir oder ich darf es prüfen.": "I own this network or have permission to check it.",
+"Netz freigeben": "Authorize network",
+"Prüfen": "Check",
+"Secure Pro ausschalten": "Turn off Secure Pro",
+"Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.": "Open services are review hints, not confirmed infections.",
+"Lokale Dateiordner gibst du weiterhin mit aquaticy secure-pro im Terminal frei.": "Authorize local folders with aquaticy secure-pro in the terminal.",
+"Öffnet einen eigenen Chat für Netzfreigabe, Status und Prüfhinweise.": "Opens a dedicated chat for network authorization, status and findings.",
+"Secure-Pro-Chat öffnen": "Open Secure Pro chat",
+"Sprachnachrichten an oder aus": "Turn voice messages on or off",
+"Lokale Programme und Modell richtest du einmalig mit aquaticy voice ein.": "Set up local programs and the model once with aquaticy voice.",
+"Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.": "Only the owner in single-account mode can manage these features.",
+"Secure Pro ist an.": "Secure Pro is on.",
+"Secure Pro ist aus.": "Secure Pro is off.",
+"Noch keine Prüfhinweise vorhanden. Das ist kein Sicherheitsnachweis.": "No findings available yet. This does not establish safety.",
+"Sprachnachrichten zuerst im Terminal mit aquaticy voice einrichten.": "First set up voice messages in the terminal with aquaticy voice.",
 "Kurze Unterbrechung. Die QR-Anzeige wird automatisch erneut geladen.": "Brief interruption. The QR display will reload automatically.",
 "Die QR-Erkennung fehlt. Aktualisiere Aquaticy und starte den Server neu.": "QR detection is missing. Update Aquaticy and restart the server.",
 "QR-Code anzeigen": "Show QR code",
@@ -6853,7 +6903,11 @@ function drawRecents(){
       name.appendChild(stelle);
     }
     name.setAttribute("aria-label", `Chat öffnen: ${label}`);
-    if ((chat.kind || "chat") === "chat" && (chat.mode === "normal" || chat.mode === "pro")){
+    if (chat.secure_pro){
+      const art = document.createElement("span");
+      art.className = "art pro"; art.textContent = "Secure Pro";
+      row.insertBefore(art, row.querySelector(".more"));
+    } else if ((chat.kind || "chat") === "chat" && (chat.mode === "normal" || chat.mode === "pro")){
       const pro = chat.mode === "pro";
       const art = document.createElement("span");
       art.className = "art" + (pro ? " pro" : "");
@@ -7080,6 +7134,8 @@ async function deleteChat(chat){
 
   if (chat.session_id === currentChat){
     currentChat = "";
+    secureChat = false;
+    $("#secure-panel").hidden = true;
     thread.innerHTML = "";
     document.body.classList.remove("chat-compact", "chat-details-open");
   document.body.classList.add("start");
@@ -7089,9 +7145,9 @@ async function deleteChat(chat){
   drawRecents();
 }
 
-async function openChat(sessionId){
+async function openChat(sessionId, {force = false} = {}){
   if (narrow()) document.body.classList.add("collapsed");
-  if (sessionId === currentChat) return;
+  if (sessionId === currentChat && !force && thread.children.length) return;
   const opening = ++chatOpening;
   let data;
   try {
@@ -7108,6 +7164,9 @@ async function openChat(sessionId){
   if (!data.ok){ toast(data.error || "Der Chat ließ sich nicht öffnen."); return; }
   detachChat();
   currentChat = sessionId;
+  secureChat = data.secure_pro === true;
+  $("#secure-panel").hidden = !secureChat;
+  if (secureChat) featureLoad();
   const artVorher = chatArt();
   if (data.kind === "code" && mode !== "code") setMode("code");
   else if (data.kind !== "code" && (mode === "code" || mode !== data.mode))
@@ -7577,6 +7636,7 @@ $("#btn-settings").addEventListener("click", async () => {
   $("#savenote").textContent = ""; $("#savenote").className = "note";
   $("#ha-note").textContent = ""; $("#ha-note").className = "note";
   openOverlay(overlay);
+  featureLoad();
 });
 
 async function loadLearning(){
@@ -9629,6 +9689,83 @@ function closeSettings(){
   clearTimeout(upgradeTakt);
   upgradeAnfrage++;
 }
+
+async function featureRequest(payload){
+  const response = await api("/api/features", {method:"POST",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)});
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Das hat nicht geklappt.");
+  return data;
+}
+async function featureLoad(){
+  try {
+    const response = await api("/api/features", {quietErrors:true});
+    const data = await response.json();
+    const allowed = response.ok && data.allowed;
+    for (const id of ["voice-setting", "secure-setting", "secure-open"]){
+      $("#" + id).disabled = !allowed;
+    }
+    $("#voice-setting").checked = !!data.voice;
+    $("#secure-setting").checked = !!data.secure;
+    $("#feature-note").textContent = allowed ? ""
+      : "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.";
+    if (allowed && secureChat){
+      $("#secure-subnet").value = data.subnet || "";
+      $("#secure-note").textContent = data.secure ? "Secure Pro ist an." : "Secure Pro ist aus.";
+    }
+  } catch { $("#feature-note").textContent = "Aquaticy ist gerade nicht erreichbar."; }
+}
+async function openSecureChat(){
+  try {
+    const data = await featureRequest({action:"open"});
+    currentChat = data.session_id;
+    closeSettings();
+    setMode("normal");
+    await openChat(data.session_id, {force:true});
+  } catch (error){ $("#feature-note").textContent = error.message; }
+}
+async function secureMessage(text){
+  if (busy) return;
+  setBusy(true);
+  const chat = currentChat;
+  addUser(text); input.value = "";
+  const {steps, bubble} = addBot(); steps.remove();
+  try {
+    const data = await featureRequest({action:"message", message:text});
+    if (chat !== currentChat) return;
+    bubble.innerHTML = md(data.answer || "");
+    uebersetze(bubble);
+    loadRecents();
+  } catch(error){ bubble.textContent = error.message; }
+  finally { setBusy(false); }
+}
+$("#secure-open").addEventListener("click", openSecureChat);
+$("#secure-setting").addEventListener("change", async event => {
+  if (event.target.checked) return openSecureChat();
+  try { await featureRequest({action:"configure", enabled:false}); }
+  catch(error){ $("#feature-note").textContent = error.message; }
+  featureLoad();
+});
+$("#voice-setting").addEventListener("change", async event => {
+  const field = event.target; field.disabled = true;
+  try { await featureRequest({action:"voice", enabled:field.checked}); }
+  catch(error){ $("#feature-note").textContent = error.message; field.checked = !field.checked; }
+  finally { field.disabled = false; }
+});
+$("#secure-apply").addEventListener("click", async () => {
+  try {
+    await featureRequest({action:"configure", enabled:true,
+      subnet:$("#secure-subnet").value.trim(), consent:$("#secure-consent").checked});
+    $("#secure-note").textContent = "Secure Pro ist an.";
+    secureMessage("Status");
+  } catch(error){ $("#secure-note").textContent = error.message; }
+});
+$("#secure-disable").addEventListener("click", async () => {
+  try { await featureRequest({action:"configure", enabled:false}); featureLoad(); }
+  catch(error){ $("#secure-note").textContent = error.message; }
+});
+$("#secure-check").addEventListener("click", () => secureMessage("Prüfen"));
+$("#secure-status").addEventListener("click", () => secureMessage("Status"));
 
 
 let verbundTakt = null;

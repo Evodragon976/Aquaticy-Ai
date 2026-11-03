@@ -1,4 +1,4 @@
-# Aquaticy AI 14.0.0 Luna
+# Aquaticy AI 14.0.1 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -27,11 +27,21 @@ $ aquaticy
 
 ## Inhalt
 
+**Neu in 14.0.1 Luna:** Der Besitzer findet Secure Pro und Sprachnachrichten unter
+**Einstellungen → Dev settings**. Secure Pro öffnet einen eigenen, dauerhaft markierten Chat.
+Dort bestätigst du dein privates Netz, startest Prüfungen und fragst den Status ab.
+Die Überwachung lässt sich im Chat oder in den Einstellungen wieder ausschalten.
+Nach einer Prüfung zeigt „Status“ die letzten Hinweise. Ein offener Port ist kein Infektionsnachweis.
+Sprachnachrichten schaltest du dort an oder aus. Programme und Modell brauchen einmalig
+`aquaticy voice` im Terminal; der Browser installiert keine Programme oder Modelle.
+Diese hostweiten Funktionen verwaltet nur der angemeldete Besitzer im Einzelkonto-Modus.
+Lokale Dateiordner für ClamAV werden weiterhin im Terminal freigegeben.
+
 **Neu in 14.0.0 Luna:** lokale Sprachnachrichten und die freiwillige Netzprüfung Secure Pro.
 
 `aquaticy setup --voice --secure-pro` richtet beide Funktionen ein.
 Bestehende Installationen können `aquaticy voice` oder `aquaticy secure-pro` einzeln aufrufen.
-Die Einrichtung erfolgt am Rechner im Terminal, mit den Rechten seines Betreibers.
+Die erstmalige Programmeinrichtung erfolgt im Terminal, mit den Rechten des Betreibers.
 
 **Sprachnachrichten:** Aktiviere die WhatsApp-/Signal-Brücke und gib nur vertrauenswürdige
 Einzelkontakte frei. Eigener Chat und freigegebene Nummern dürfen Audios bis 90 Sekunden
@@ -161,7 +171,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.0.0 Luna
+aquaticy --version            # 14.0.1 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

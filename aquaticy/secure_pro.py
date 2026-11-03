@@ -51,15 +51,34 @@ class Watcher:
         self.thread: threading.Thread | None = None
         self.known: set[str] | None = None
         self.announced: set[str] = set()
+        self.wake = threading.Event()
+        self.last_findings: list[str] = []
+        self.last_checked = 0.0
+        self._requested = 0.0
+        self._lock = threading.Lock()
 
     def start(self) -> None:
-        if read(self.directory).get("enabled") is not True:
-            return
-        self.thread = threading.Thread(target=self._run, name="aquaticy-secure-pro", daemon=True)
-        self.thread.start()
+        with self._lock:
+            if read(self.directory).get("enabled") is not True:
+                return
+            if self.thread is None or not self.thread.is_alive():
+                self.thread = threading.Thread(target=self._run, name="aquaticy-secure-pro",
+                                               daemon=True)
+                self.thread.start()
+
+    def request(self) -> bool:
+        with self._lock:
+            now = time.monotonic()
+            if self._requested and now - self._requested < 60:
+                return False
+            self._requested = now
+        self.wake.set()
+        self.start()
+        return True
 
     def stop(self) -> None:
         self.stop_event.set()
+        self.wake.set()
         if self.thread:
             self.thread.join(timeout=3)
 
@@ -105,6 +124,8 @@ class Watcher:
             elif result.returncode != 0:
                 findings.add("ClamAV-Prüfung fehlgeschlagen. Es liegt kein sauberes Ergebnis vor.")
         self.announced.intersection_update(findings)
+        self.last_findings = sorted(findings)[:200]
+        self.last_checked = time.time()
         new = sorted(findings - self.announced)[:20]
         if new and not self.stop_event.is_set() and read(self.directory) == config:
             message = "[Aquaticy] Secure Pro\n" + "\n".join(new)
@@ -114,6 +135,12 @@ class Watcher:
 
     def _run(self) -> None:
         while not self.stop_event.is_set():
+            self.wake.clear()
+            if self.stop_event.is_set():
+                break
+            if read(self.directory).get("enabled") is not True:
+                self.wake.wait()
+                continue
             try:
                 findings = self.tick()
                 if findings:
@@ -128,5 +155,4 @@ class Watcher:
                                     "Prüfe das lokale Protokoll.")
                     except Exception:
                         LOG.warning("Secure-Pro-Warnung konnte nicht versendet werden.")
-            if self.stop_event.wait(900):
-                break
+            self.wake.wait(900)

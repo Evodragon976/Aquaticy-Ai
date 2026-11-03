@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS chat_modes (
     kind       TEXT NOT NULL CHECK(kind IN ('chat', 'code')),
     mode       TEXT NOT NULL DEFAULT 'normal'
 );
+CREATE TABLE IF NOT EXISTS secure_chats (session_id TEXT PRIMARY KEY);
 
 -- Seit 9.5.32 liegen Chats verschluesselt (aquaticy/privacy.py). Steht hier
 -- eine 1, sind auch die alten Zeilen umgeschrieben.
@@ -96,7 +97,8 @@ CHAT_MODES = ("normal", "pro", "code")
 _CHAT_SUMMARIES_BASE = """
     SELECT h.session_id, h.turns, h.touched, first.question, title.title,
            unread.session_id IS NOT NULL AS unread,
-           COALESCE(modes.kind, 'chat') AS kind, modes.mode AS mode
+           COALESCE(modes.kind, 'chat') AS kind, modes.mode AS mode,
+           EXISTS(SELECT 1 FROM secure_chats s WHERE s.session_id = h.session_id) AS secure_pro
     FROM (
         SELECT session_id, MIN(id) AS first_id, MAX(id) AS last_id,
                COUNT(*) AS turns, MAX(created_at) AS touched
@@ -532,6 +534,15 @@ class Cache:
                              (session_id,)).fetchone()
         return {"kind": "chat", "mode": "normal"} if da is not None else None
 
+    def mark_secure_chat(self, session_id: str) -> None:
+        with self._connect() as conn:
+            conn.execute("INSERT OR IGNORE INTO secure_chats VALUES (?)", (session_id,))
+
+    def is_secure_chat(self, session_id: str) -> bool:
+        with self._connect() as conn:
+            return conn.execute("SELECT 1 FROM secure_chats WHERE session_id = ?",
+                                (session_id,)).fetchone() is not None
+
     def recent_history(self, limit: int = 20, session_id: str | None = None) -> list[HistoryEntry]:
         query = "SELECT * FROM history"
         params: list[Any] = []
@@ -611,6 +622,7 @@ class Cache:
             "unread": bool(row["unread"]),
             "kind": str(row["kind"]),
             "mode": str(row["mode"] or ""),
+            "secure_pro": bool(row["secure_pro"]),
         }
 
     def search_chats(self, needle: str, limit: int = 30,
@@ -701,6 +713,7 @@ class Cache:
 
             cur.execute("DELETE FROM chat_unread WHERE session_id = ?", (session_id,))
             cur.execute("DELETE FROM chat_modes WHERE session_id = ?", (session_id,))
+            cur.execute("DELETE FROM secure_chats WHERE session_id = ?", (session_id,))
             conn.commit()
         for media_id in bilder:
             if KEEP_MARK not in media_id:

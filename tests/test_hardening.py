@@ -512,11 +512,12 @@ def test_making_room_drops_replaceable_things_first(
 ) -> None:
     cache = Cache(tmp_path / "aquaticy.sqlite3")
     cache.add_history("chat", "Frage", "Antwort")
+    protected_bytes = budget.used_bytes(tmp_path, fresh=True)
     cache.set("alt", "c" * 200_000)
     fest = media.save_snapshot(tmp_path, PNG + b"f" * 50_000, "image/png", keep=True)
     moment = media.save_snapshot(tmp_path, PNG + b"m" * 50_000, "image/png")
 
-    _klein(monkeypatch, 130_000)
+    _klein(monkeypatch, int((protected_bytes + 60_000) / budget.CLEANUP_AT))
     budget.make_room(tmp_path)
     assert cache.get("alt") is None, "Zwischenspeicher zuerst"
     assert media.snapshot_path(tmp_path, moment) is None, "dann Momentaufnahmen"
