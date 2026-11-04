@@ -760,6 +760,9 @@ class EigenerChat(nat.Transport):
     def available(self) -> tuple[bool, str]:
         return True, ""
 
+    def stop(self) -> None:
+        self._set(nat.OFF)
+
     def own_chat(self) -> str:
         return "4915100000000@s.whatsapp.net" if self.messenger == "whatsapp" else "self"
 

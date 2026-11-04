@@ -2768,6 +2768,9 @@ def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> d
         return {"error": "Dieser Secure-Pro-Zugriff ist nicht freigegeben."}
     from aquaticy import secure_network, secure_pro
 
+    if name == "secure_privacy":
+        return {"domains": [domain for event in feature_view(session).get("events", [])
+                            for domain in event.get("dns_names", []) if isinstance(domain, str)]}
     if name in {"secure_status", "secure_devices", "secure_findings"}:
         state = feature_view(session)
         state.pop("voice", None)
@@ -2823,11 +2826,14 @@ def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> d
         ziel = str(config.get("subnet", "")) if ziel.lower() in ("netz", "net", "") else ziel
         modus = str(arguments.get("mode") or "schwachstellen")
         try:
-            ergebnis = secure_nmap.run(str(config.get("subnet", "")), [ziel], modus)
+            ergebnis = secure_nmap.run(
+                str(config.get("subnet", "")), [ziel], modus,
+                allowed=lambda: (host_feature_owner(session) and
+                                 secure_pro.grant_active(directory, config, "nmap")))
         except (secure_nmap.NmapError, ValueError) as exc:
             return {"error": str(exc)}
-        if (not host_feature_owner(session) or secure_pro.config_token(
-                secure_pro.read(directory)) != secure_pro.config_token(config)):
+        if (not host_feature_owner(session) or
+                not secure_pro.grant_active(directory, config, "nmap")):
             return {"error": "Die Freigabe hat sich während der Prüfung geändert."}
         ergebnis["findings"] = [e["text"] for e in secure_nmap.events(ergebnis["hosts"])]
         return ergebnis

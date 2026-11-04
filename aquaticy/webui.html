@@ -2626,11 +2626,14 @@ html.vv,html.vv body{height:var(--app-h)}
             <div class="check">
               <input type="checkbox" role="switch" class="schalter" id="secure-packets">
               <label for="secure-packets" style="margin:0">Pakete prüfen
-                <span class="why">Liest bei jeder Prüfung 15 Sekunden lang Kopfdaten: Adressen,
-                  Ports und DNS-Namen. Nie Inhalte. Nichts wird gespeichert. So erkennt Secure
-                  Pro Portscans, ARP-Spoofing, Passwort-Angriffe und Malware-Verkehr. Braucht
-                  Linux und Root-Rechte. Mit Switch sieht dieser Rechner nur seinen eigenen
-                  Verkehr und Rundrufe.</span></label>
+                <span class="why">Liest 15 Sekunden lang Adressen, Ports und DNS-Namen für dein
+                  freigegebenes Netz. Nachrichteninhalte werden nicht ausgewertet. Keine
+                  gespeicherten Paketmitschnitte.</span>
+                <span class="why">Befunde können Adressen und auffällige
+                  DNS-Namen enthalten. Sie erscheinen im Chat, im lokalen Protokoll und
+                  gegebenenfalls im Messenger. Cloud-Modelle erhalten ausgewählte Befunde.</span>
+                <span class="why">Braucht Linux und Root-Rechte oder CAP_NET_RAW. Mit Switch sieht dieser
+                  Rechner nur eigenen Verkehr und Rundrufe.</span></label>
             </div>
             <p id="secure-packet-note" class="note" role="status"></p>
             <div class="check">
@@ -2906,7 +2909,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.1.3 Terra";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.1.4 Sol";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5633,7 +5636,9 @@ const EN = {
 "alle 6 Stunden": "every 6 hours",
 "alle 12 Stunden": "every 12 hours",
 "Pakete prüfen": "Check packets",
-"Liest bei jeder Prüfung 15 Sekunden lang Kopfdaten: Adressen, Ports und DNS-Namen. Nie Inhalte. Nichts wird gespeichert. So erkennt Secure Pro Portscans, ARP-Spoofing, Passwort-Angriffe und Malware-Verkehr. Braucht Linux und Root-Rechte. Mit Switch sieht dieser Rechner nur seinen eigenen Verkehr und Rundrufe.": "Reads headers for 15 seconds on every check: addresses, ports and DNS names. Never contents. Nothing is stored. This lets Secure Pro spot port scans, ARP spoofing, password attacks and malware traffic. Needs Linux and root rights. With a switch, this computer only sees its own traffic and broadcasts.",
+"Liest 15 Sekunden lang Adressen, Ports und DNS-Namen für dein freigegebenes Netz. Nachrichteninhalte werden nicht ausgewertet. Keine gespeicherten Paketmitschnitte.": "Reads addresses, ports and DNS names for your authorized network for 15 seconds. Message contents are not analyzed. No packet captures are saved.",
+"Befunde können Adressen und auffällige DNS-Namen enthalten. Sie erscheinen im Chat, im lokalen Protokoll und gegebenenfalls im Messenger. Cloud-Modelle erhalten ausgewählte Befunde.": "Findings may include addresses and suspicious DNS names. They appear in chat, in the local log and, if configured, in the messenger. Cloud models receive selected findings.",
+"Braucht Linux und Root-Rechte oder CAP_NET_RAW. Mit Switch sieht dieser Rechner nur eigenen Verkehr und Rundrufe.": "Requires Linux and root privileges or CAP_NET_RAW. With a switch, this computer only sees its own traffic and broadcasts.",
 "VM für Abwehr nutzen": "Use the VM for defense",
 "Secure Pro darf über SSH aus der VM Ports schließen, Geräte sperren und Dienste stoppen. Jeder Befehl braucht dein Ja im Secure-Pro-Chat. Den Router, Aquaticy und SSH sperrt es nie.": "Secure Pro may close ports, block devices and stop services over SSH from the VM. Every command needs your yes in the Secure Pro chat. It never blocks the router, Aquaticy or SSH.",
 "Aufgaben": "Tasks",

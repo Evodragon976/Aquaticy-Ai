@@ -12,6 +12,8 @@ import ipaddress
 import re
 from typing import Any
 
+from aquaticy.lan import parse_subnet
+
 ACTIONS: dict[str, str] = {
     "listeners": "Offene Dienste und ihre Programme zeigen (nur lesen).",
     "block_port": "Eingehende Verbindungen auf einen Port sperren.",
@@ -26,10 +28,10 @@ _UNIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,79}")
 
 def _linux_port(port: int, proto: str, block: bool) -> str:
     if block:
-        return (f"if command -v ufw >/dev/null 2>&1; then sudo -n ufw deny {port}/{proto}; "
+        return ("if command -v ufw >/dev/null 2>&1; then "
+                f"sudo -n ufw insert 1 deny {port}/{proto}; "
                 f"elif command -v firewall-cmd >/dev/null 2>&1; then "
-                f"sudo -n firewall-cmd --add-port={port}/{proto} --remove-port={port}/{proto} "
-                f">/dev/null 2>&1; sudo -n firewall-cmd --add-rich-rule='rule port "
+                f"sudo -n firewall-cmd --add-rich-rule='rule port "
                 f"port=\"{port}\" protocol=\"{proto}\" drop'; "
                 f"else sudo -n iptables -I INPUT -p {proto} --dport {port} -j DROP; fi")
     return (f"if command -v ufw >/dev/null 2>&1; then sudo -n ufw delete deny {port}/{proto}; "
@@ -69,7 +71,9 @@ def build(action: str, *, system: str = "linux", host: str, port: Any = 0,
         raise ValueError("Massnahme: " + ", ".join(ACTIONS) + ".")
     if system not in SYSTEMS:
         raise ValueError("System: linux oder windows.")
-    network = ipaddress.IPv4Network(subnet)
+    network = parse_subnet(subnet)
+    if network.num_addresses > 256:
+        raise ValueError("Secure Pro prüft höchstens 256 Adressen.")
     ziel = ipaddress.IPv4Address(host)
     if ziel not in network:
         raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.")
@@ -77,6 +81,8 @@ def build(action: str, *, system: str = "linux", host: str, port: Any = 0,
                             "label": ACTIONS[action]}
     if action in ("block_port", "unblock_port"):
         try:
+            if type(port) not in (int, str):
+                raise ValueError
             nummer = int(port)
         except (TypeError, ValueError) as exc:
             raise ValueError("Nenne einen Port zwischen 1 und 65535.") from exc

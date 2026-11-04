@@ -1652,6 +1652,8 @@ class Toolbox:
         self.secure_online = True
         self.secure_provider: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None
         self._secure_sources: set[str] = set()
+        self._secure_dns: set[str] = set()
+        self._secure_dns_full = False
         self._secure_checks = 0
         self._secure_nmaps = 0
 
@@ -2499,11 +2501,28 @@ class Toolbox:
         self.stats.vm_calls += 1
         return result.as_dict()
 
-    def lan_ssh(self, **arguments: Any) -> dict[str, Any]:
+    def lan_ssh(self, *, _secure_scope: tuple[str, str] | None = None,
+                **arguments: Any) -> dict[str, Any]:
+        import ipaddress
+
         from aquaticy import vm_ssh
         from aquaticy.sandbox import SandboxUnavailable
 
         def allowed() -> bool:
+            if getattr(self, "secure_mode", False):
+                if _secure_scope is None or self.secure_provider is None:
+                    return False
+                grant = self.secure_provider("secure_vm", {})
+                if (grant.get("ok") is not True or
+                        (grant.get("subnet"), grant.get("router", "")) != _secure_scope):
+                    return False
+                if arguments.get("action") != "key":
+                    try:
+                        if ipaddress.IPv4Address(str(arguments.get("host", ""))) not in \
+                                ipaddress.IPv4Network(_secure_scope[0]):
+                            return False
+                    except ValueError:
+                        return False
             return bool(self.ssh_allowed and self.ssh_allowed()
                         and self.settings.lan_enabled and self.settings.vm_lan)
 
@@ -2515,6 +2534,9 @@ class Toolbox:
             if not box.lan or not box.netz_offen:
                 return {"error": "Diese VM hat keine Heimnetz-Freigabe."}
             name = box.ensure()
+            if not allowed() or not box.lan or not box.netz_offen:
+                return {"error": "Die VM oder ihre Freigabe hat sich geändert. "
+                                 "Erneut anfragen."}
             if data["action"] == "run":
                 if self.ask_handler is None:
                     return {"error": "Ohne persönliche Bestätigung wird kein SSH-Befehl "
@@ -2526,7 +2548,8 @@ class Toolbox:
                 refusal = self._confirm(question)
                 if refusal:
                     return {"error": refusal}
-                if not allowed() or box.name != name or not box.alive or not box.lan:
+                if (not allowed() or box.name != name or not box.alive or not box.lan
+                        or not box.netz_offen):
                     return {"error": "Die VM oder ihre Freigabe hat sich geändert. "
                                      "Erneut anfragen."}
             result = box.run(vm_ssh.vm_command(data), timeout=min(120, data["timeout"] + 10))
@@ -2841,6 +2864,8 @@ class Toolbox:
         Hinweis, dass es nur Daten sind; stehen darin Anweisungen an eine KI,
         kommt eine Warnung dazu (aquaticy/injection.py).
         """
+        if name.startswith("secure_") and isinstance(payload, dict):
+            self.remember_secure_dns(payload)
         if name not in UNTRUSTED_SOURCES or not isinstance(payload, dict):
             return payload
         from aquaticy import injection
@@ -2868,6 +2893,21 @@ class Toolbox:
             self._emit("injection", tool=name, kinds=arten)
         return markiert
 
+    def remember_secure_dns(self, state: dict[str, Any]) -> None:
+        if not getattr(self, "secure_mode", False):
+            return
+        names = [name for event in state.get("events", [])
+                 for name in event.get("dns_names", [])]
+        names.extend(state.get("domains", []))
+        for name in names:
+            if isinstance(name, str) and 0 < len(name) <= 253:
+                if name.lower() in self._secure_dns:
+                    continue
+                if len(self._secure_dns) >= 4096:
+                    self._secure_dns_full = True
+                    break
+                self._secure_dns.add(name.lower())
+
     def _private_terms(self) -> tuple[set[str], set[str]]:
         """Private Angaben dieses Kontos: Merkzettel, Speicher, Ort, E-Mail."""
         from aquaticy import injection
@@ -2882,6 +2922,9 @@ class Toolbox:
             if store is not None:
                 texte += [e.text for e in store.all_entries(limit=200)]
         hart = [str(getattr(self.settings, "account_email", "") or "")]
+        if getattr(self, "secure_mode", False) and self.secure_provider is not None:
+            self.remember_secure_dns(self.secure_provider("secure_privacy", {}))
+            hart.extend(self._secure_dns)
         return injection.private_terms(texte, hart)
 
     def _leak_gate(self, name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
@@ -3700,6 +3743,9 @@ class Toolbox:
             return access if name == "secure_status" else self.secure_provider(name, arguments)
         if not self.secure_online:
             return {"error": "Die öffentliche Recherche ist in diesem Chat ausgeschaltet."}
+        if self._secure_dns_full:
+            return {"error": "Zu viele private Netzangaben. Öffne einen neuen Secure-Pro-Chat "
+                             "für weitere öffentliche Recherche."}
         if name == "secure_advisories":
             query = str(arguments.get("query", "")).strip()
             if not public_query(query):
@@ -3735,19 +3781,21 @@ class Toolbox:
         if vm.get("ok") is not True:
             return {"error": str(vm.get("error") or "Secure Pro darf die VM nicht nutzen.")}
         subnet, router = str(vm.get("subnet", "")), str(vm.get("router", ""))
+        grant = (subnet, router)
         host = str(arguments.get("host", "")).strip()
         if name == "secure_ssh":
             action = arguments.get("action")
             if action not in ("key", "inspect"):
                 return {"error": "secure_ssh: action key oder inspect."}
             if action == "key":
-                return self.lan_ssh(action="key")
+                return self.lan_ssh(action="key", _secure_scope=grant)
             try:
                 if ipaddress.IPv4Address(host) not in ipaddress.IPv4Network(subnet):
                     raise ValueError
             except ValueError:
                 return {"error": "Das Gerät liegt außerhalb des freigegebenen Netzes."}
-            return self.lan_ssh(action="inspect", host=host, port=arguments.get("port", 22))
+            return self.lan_ssh(action="inspect", host=host, port=arguments.get("port", 22),
+                                _secure_scope=grant)
         try:
             data = secure_defense.build(
                 str(arguments.get("action", "")), system=str(arguments.get("system") or "linux"),
@@ -3756,12 +3804,15 @@ class Toolbox:
                 address=str(arguments.get("address", "")),
                 service=str(arguments.get("service", "")), subnet=subnet, router=router,
                 own=own_addresses(router))
-        except ValueError as exc:
+            if (data["action"] == "block_port" and data["proto"] == "tcp"
+                    and data["port"] == int(arguments.get("ssh_port", 22))):
+                raise ValueError("Der verwendete SSH-Port darf nicht gesperrt werden.")
+        except (ValueError, TypeError, OverflowError) as exc:
             return {"error": str(exc)}
         result = self.lan_ssh(action="run", host=data["host"], user=str(arguments.get("user", "")),
                               command=data["command"],
                               server_key=str(arguments.get("server_key", "")),
-                              port=arguments.get("ssh_port", 22))
+                              port=arguments.get("ssh_port", 22), _secure_scope=grant)
         result["measure"] = data["label"]
         return result
 

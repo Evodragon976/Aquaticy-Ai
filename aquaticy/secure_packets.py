@@ -1,8 +1,8 @@
 """Paketpruefung fuer Secure Pro: nur Kopfdaten lesen, Angriffe und Malware-Zeichen finden.
 
 Liest kurz Ethernet-, ARP-, IPv4-, TCP-, UDP- und DNS-Koepfe (Linux, Root oder CAP_NET_RAW).
-Inhalte von Nachrichten werden nie gelesen oder gespeichert, nur Adressen, Ports und
-DNS-Namen. In einem geswitchten Netz sieht dieser Rechner nur seinen eigenen Verkehr,
+Nachrichteninhalte werden nicht ausgewertet. Paketmitschnitte werden nicht gespeichert.
+Metadaten sind Adressen, Ports und DNS-Namen. Im geswitchten Netz sieht er eigenen Verkehr,
 Rundrufe (ARP, DHCP) und Verkehr, der ueber ihn laeuft. Das steht auch im Ergebnis.
 """
 
@@ -16,8 +16,10 @@ import socket
 import struct
 import time
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from typing import Any
 
+from aquaticy.lan import parse_subnet
 from aquaticy.secure_knowledge import MALWARE_PORTS
 
 # Starke Zeichen: diese Ports nutzen kaum harmlose Programme.
@@ -44,11 +46,13 @@ def _mac(raw: bytes) -> str:
 def _dns_name(data: bytes, offset: int) -> str:
     """Liest den ersten Namen einer DNS-Frage (ohne Zeiger, hoechstens 253 Zeichen)."""
     teile: list[str] = []
+    beendet = False
     for _ in range(64):
         if offset >= len(data):
             return ""
         laenge = data[offset]
         if laenge == 0:
+            beendet = True
             break
         if laenge & 0xC0:
             return ""
@@ -60,7 +64,7 @@ def _dns_name(data: bytes, offset: int) -> str:
     name = ".".join(teile).lower()
     # Nur uebliche Zeichen: Ein Name mit Leerzeichen oder Anfuehrungszeichen koennte sonst
     # als Text an das Modell gehen (Prompt-Injection ueber DNS).
-    if not 0 < len(name) <= 253 or not _DNS_ZEICHEN.fullmatch(name):
+    if not beendet or not 0 < len(name) <= 253 or not _DNS_ZEICHEN.fullmatch(name):
         return ""
     return name
 
@@ -76,22 +80,37 @@ def parse_frame(frame: bytes) -> dict[str, Any] | None:
         start = 18
     data = frame[start:]
     if art == 0x0806 and len(data) >= 28:
+        if data[:6] != b"\x00\x01\x08\x00\x06\x04":
+            return None
         op = struct.unpack("!H", data[6:8])[0]
+        if op not in (1, 2):
+            return None
         return {"t": "arp", "op": op, "mac": _mac(data[8:14]), "ip": _ip(data[14:18]),
                 "target": _ip(data[24:28])}
     if art != 0x0800 or len(data) < 20 or data[0] >> 4 != 4:
         return None
     kopf = (data[0] & 0x0F) * 4
+    gesamt = struct.unpack("!H", data[2:4])[0]
+    fragment = struct.unpack("!H", data[6:8])[0] & 0x1FFF
+    if kopf < 20 or kopf > len(data) or gesamt < kopf or fragment:
+        return None
     proto = data[9]
     record: dict[str, Any] = {"src": _ip(data[12:16]), "dst": _ip(data[16:20])}
-    rest = data[kopf:]
-    if proto == 6 and len(rest) >= 14:
+    rest = data[kopf:min(gesamt, len(data))]
+    if proto == 6 and len(rest) >= 20:
+        tcp_kopf = (rest[12] >> 4) * 4
+        if tcp_kopf < 20 or tcp_kopf > len(rest):
+            return None
         sport, dport = struct.unpack("!HH", rest[:4])
         flags = rest[13]
         record.update(t="tcp", sport=sport, dport=dport, syn=bool(flags & 0x02),
                       ack=bool(flags & 0x10))
         return record
     if proto == 17 and len(rest) >= 8:
+        udp_laenge = struct.unpack("!H", rest[4:6])[0]
+        if udp_laenge < 8 or udp_laenge > gesamt - kopf:
+            return None
+        rest = rest[:udp_laenge]
         sport, dport = struct.unpack("!HH", rest[:4])
         record.update(t="udp", sport=sport, dport=dport)
         if 53 in (sport, dport) and len(rest) >= 20:
@@ -103,10 +122,15 @@ def parse_frame(frame: bytes) -> dict[str, Any] | None:
     return None
 
 
-def capture(seconds: float = 15.0, max_packets: int = MAX_PACKETS) -> list[dict[str, Any]]:
-    """Liest *seconds* lang Kopfdaten mit. Nichts davon wird gespeichert."""
+def capture(seconds: float = 15.0, max_packets: int = MAX_PACKETS, *, subnet: str = "",
+            allowed: Callable[[], bool] | None = None) -> list[dict[str, Any]]:
+    """Liest *seconds* lang Metadaten mit, ohne gespeicherte Paketmitschnitte."""
     if platform.system() != "Linux" or not hasattr(socket, "AF_PACKET"):
         raise Unavailable("Die Paketprüfung gibt es nur unter Linux.")
+    network = parse_subnet(subnet) if subnet else None
+    limit = max(1, min(MAX_PACKETS, int(max_packets)))
+    if allowed is not None and not allowed():
+        return []
     try:
         sock = socket.socket(getattr(socket, "AF_PACKET"), socket.SOCK_RAW,  # noqa: B009
                              socket.ntohs(0x0003))
@@ -118,7 +142,8 @@ def capture(seconds: float = 15.0, max_packets: int = MAX_PACKETS) -> list[dict[
     ende = time.monotonic() + max(1.0, min(float(seconds), 60.0))
     try:
         sock.settimeout(0.5)
-        while time.monotonic() < ende and len(records) < max_packets:
+        while (time.monotonic() < ende and len(records) < limit
+               and (allowed is None or allowed())):
             try:
                 frame = sock.recv(SNAP)
             except TimeoutError:
@@ -127,6 +152,10 @@ def capture(seconds: float = 15.0, max_packets: int = MAX_PACKETS) -> list[dict[
                 break
             record = parse_frame(frame)
             if record is not None:
+                if network is not None and not any(
+                        ipaddress.IPv4Address(record[key]) in network
+                        for key in ("src", "dst", "ip", "target") if key in record):
+                    continue
                 records.append(record)
     finally:
         sock.close()
@@ -299,15 +328,18 @@ def analyze(records: list[dict[str, Any]], subnet: str, *, router: str = "",
                 f"{frager} fragt {anzahl} Namen ab, die es nicht gibt. So suchen manche "
                 "Schadprogramme ihren Server (DGA).", frager))
     for frager, namen in sorted(zufall.items()):
-        events.append(_event(
+        event = _event(
             "malware", "hinweis",
             f"{frager} fragt zufällig aussehende Namen ab ({', '.join(sorted(namen))}). "
-            "Das kann ein Zeichen für Schadsoftware sein.", frager))
+            "Das kann ein Zeichen für Schadsoftware sein.", frager)
+        event["dns_names"] = sorted(namen)
+        events.append(event)
     return events[:50]
 
 
 def summary(records: list[dict[str, Any]], seconds: float) -> str:
     """Kurzer Satz, was die Paketpruefung gesehen hat -- mit ihrer Grenze."""
     return (f"Paketprüfung: {len(records)} Kopfdaten in {int(seconds)} Sekunden gelesen. "
-            "Inhalte bleiben ungelesen. In einem Netz mit Switch sieht dieser Rechner nur "
+            "Nachrichteninhalte werden nicht ausgewertet. "
+            "In einem Netz mit Switch sieht dieser Rechner nur "
             "seinen eigenen Verkehr und Rundrufe.")

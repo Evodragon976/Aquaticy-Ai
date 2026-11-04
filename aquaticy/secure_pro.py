@@ -58,6 +58,12 @@ def config_token(config: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(scope(config), sort_keys=True).encode()).hexdigest()
 
 
+def grant_active(directory: Path, config: dict[str, Any], capability: str = "") -> bool:
+    current = read(directory)
+    return (current.get("enabled") is True and scope(current) == scope(config)
+            and (not capability or current.get(capability) is True))
+
+
 def options(config: dict[str, Any]) -> dict[str, Any]:
     """Zeitplan, Paketpruefung, VM und Aufgaben -- mit sicheren Standardwerten."""
     from aquaticy import secure_tasks
@@ -136,6 +142,11 @@ def add_task(directory: Path, text: str) -> dict[str, Any]:
     if len(neu["tasks"]) >= secure_tasks.MAX_TASKS:
         raise ValueError("Höchstens 20 Aufgaben.")
     aufgabe = secure_tasks.parse(text)
+    if aufgabe["host"]:
+        import ipaddress
+
+        if ipaddress.IPv4Address(aufgabe["host"]) not in ipaddress.IPv4Network(config["subnet"]):
+            raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.")
     neu["tasks"].append(aufgabe)
     private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
     return aufgabe
@@ -248,11 +259,16 @@ class Watcher:
                 self.packet_status = ""
             return []
         router = str(config.get("router") or "")
+        def allowed() -> bool:
+            return (not self.stop_event.is_set()
+                    and grant_active(self.directory, config, "packets"))
         try:
-            records = secure_packets.capture(PACKET_SECONDS)
+            records = secure_packets.capture(PACKET_SECONDS, subnet=network, allowed=allowed)
         except secure_packets.Unavailable as exc:
             with self._lock:
                 self.packet_status = str(exc)
+            return []
+        if not allowed():
             return []
         events = secure_packets.analyze(records, network, router=router, known_macs=known,
                                         own=own_addresses(router))
@@ -289,11 +305,18 @@ class Watcher:
         ziele = faellig[:NMAP_PER_CHECK]
         if ziele:
             try:
-                ergebnis = secure_nmap.run(network, [z[1] for z in ziele], "schwachstellen")
+                ergebnis = secure_nmap.run(
+                    network, [z[1] for z in ziele], "schwachstellen",
+                    allowed=lambda: (not self.stop_event.is_set()
+                                     and grant_active(self.directory, config, "nmap")))
             except (secure_nmap.NmapError, ValueError) as exc:
+                if not grant_active(self.directory, config, "nmap"):
+                    return []
                 with self._lock:
                     self.nmap_status = str(exc)
                 return self._nmap_events
+            if not grant_active(self.directory, config, "nmap"):
+                return []
             gefunden = {host["address"]: host for host in ergebnis["hosts"]}
             for _, address, ports in ziele:
                 self._nmap_seen[address] = (jetzt, ports)
@@ -354,9 +377,13 @@ class Watcher:
                 vorher_macs = {item["address"]: item["mac"]
                                for item in neighbours(str(network))}
         packet_events = self._packets(config, str(network), vorher_macs)
+        if not grant_active(self.directory, config) or self.stop_event.is_set():
+            return []
         ports = tuple(sorted(set(lan.FULL_PORTS) | set(RISK_PORTS) | set(MALWARE_PORTS)))
         devices = lan.scan(str(network), quick=False, with_titles=False, with_names=False,
                            ports=ports)
+        if not grant_active(self.directory, config) or self.stop_event.is_set():
+            return []
         inventory = {item["address"]: item for item in neighbours(str(network))}
         for device in devices:
             item = inventory.setdefault(device.address, {"address": device.address, "mac": ""})
@@ -456,13 +483,17 @@ class Watcher:
                            "Das kann auch ein harmloses Programm sein. Prüfe, was dort läuft.",
                            "malware", WICHTIG if port in STRONG_PORTS else HINWEIS,
                            device.address, port)
-        for event in packet_events:
+        for event in packet_events if grant_active(self.directory, config, "packets") else []:
             befund(event["text"], event["kind"], event["level"], event["host"], event["port"])
+            if event.get("dns_names"):
+                befunde[event["text"]]["dns_names"] = list(event["dns_names"])
         for event in self._nmap(config, str(network), devices):
             befund(event["text"], event["kind"], event["level"], event["host"], event["port"])
         for address, dienste in self._nmap_services.items():
             if address in inventory:
                 inventory[address]["services"] = list(dienste)
+        if not grant_active(self.directory, config) or self.stop_event.is_set():
+            return []
         folder = config.get("folder", "")
         target = Path(folder) if folder else None
         if target and (not target.is_dir() or target.resolve() != target):
@@ -537,20 +568,26 @@ class Watcher:
 
     def _deliver(self, lines: list[str], abwehr: bool) -> bool:
         """Meldet Wichtiges an Messenger und Secure-Pro-Chat. True, wenn es ankam."""
-        message = "[Aquaticy] Secure Pro\n" + "\n".join(lines)
-        if abwehr:
-            message += ("\nSchreib im Secure-Pro-Chat, was ich tun soll, zum Beispiel "
-                        "„Sperre Port 4444 auf 192.168.1.20“. Jede Abwehr braucht dein Ja.")
-        angekommen = False
-        for weg, name in ((self.notify, "Messenger"), (self.report, "Chat")):
-            if weg is None:
-                continue
-            try:
-                angekommen = bool(weg(message[:2900])) or angekommen
-            except Exception:
-                LOG.warning("Secure-Pro-Hinweis (%s) konnte nicht zugestellt werden; "
-                            "die Prüfergebnisse bleiben verfügbar.", name)
-        return angekommen
+        prefix = "[Aquaticy] Secure Pro\n"
+        suffix = ("\nSchreib im Secure-Pro-Chat, was ich tun soll, zum Beispiel "
+                  "„Sperre Port 4444 auf 192.168.1.20“. Jede Abwehr braucht dein Ja."
+                  if abwehr else "")
+        body = "\n".join(lines)
+        size = 2900 - len(prefix) - len(suffix)
+        delivered = True
+        for offset in range(0, len(body), size):
+            message = prefix + body[offset:offset + size] + suffix
+            angekommen = False
+            for weg, name in ((self.notify, "Messenger"), (self.report, "Chat")):
+                if weg is None:
+                    continue
+                try:
+                    angekommen = bool(weg(message)) or angekommen
+                except Exception:
+                    LOG.warning("Secure-Pro-Hinweis (%s) konnte nicht zugestellt werden; "
+                                "die Prüfergebnisse bleiben verfügbar.", name)
+            delivered = delivered and angekommen
+        return delivered and bool(body)
 
     def _wait_seconds(self) -> float | None:
         """Wie lange bis zur naechsten Pruefung -- None: nur auf Anfrage."""

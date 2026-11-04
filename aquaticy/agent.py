@@ -4462,6 +4462,7 @@ class Agent:
         """Haengt den aktiven Ortsfilter an die Nutzerfrage."""
         if self.secure_pro and self.toolbox.secure_provider is not None:
             state = self.toolbox.secure_provider("secure_status", {})
+            self.toolbox.remember_secure_dns(state)
             self.toolbox.untrusted_seen = True
             return question + "\n\n" + wrap_block(json.dumps(state, ensure_ascii=False),
                                                   "Secure-Pro-Messwerte")

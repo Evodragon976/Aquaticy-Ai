@@ -10,15 +10,22 @@ Skriptname, CVE-Nummern), nie freier Text.
 from __future__ import annotations
 
 import ipaddress
+import os
 import re
 import shutil
 import subprocess
+import tempfile
+import time
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from typing import Any
+
+from aquaticy.lan import parse_subnet
 
 SCRIPTS = "vuln and safe and not (external or intrusive or dos or brute or exploit)"
 MODES = ("dienste", "schwachstellen")
 MAX_TARGETS = 8
+MAX_OUTPUT = 4 * 1024 * 1024
 _FELD = re.compile(r"[^\w .+/()-]")
 _SKRIPT = re.compile(r"[a-z0-9][a-z0-9_-]{0,60}")
 _CVE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b")
@@ -38,8 +45,8 @@ def targets_in(subnet: str, targets: list[str]) -> list[str]:
     Raises:
         ValueError: Wenn ein Ziel ausserhalb liegt oder es zu viele sind.
     """
-    netz = ipaddress.IPv4Network(subnet)
-    if netz.num_addresses > 256 or not netz.is_private:
+    netz = parse_subnet(subnet)
+    if netz.num_addresses > 256:
         raise ValueError("nmap prüft nur das freigegebene private Netz.")
     sauber: list[str] = []
     for ziel in targets:
@@ -84,6 +91,8 @@ def parse(xml_text: str) -> list[dict[str, Any]]:
     """Liest die XML-Ausgabe von nmap. Nur bereinigte Felder kommen heraus."""
     # Schutz vor XXE und "Billion Laughs": nmap schreibt nur "<!DOCTYPE nmaprun>". Das faellt
     # weg; jede weitere Deklaration (DOCTYPE mit Inhalt, ENTITY, ELEMENT ...) wird abgelehnt.
+    if len(xml_text) > MAX_OUTPUT:
+        raise NmapError("Die nmap-Ausgabe ist zu groß.")
     ohne_dtd = re.sub(r"<!DOCTYPE nmaprun>", "", xml_text, count=1)
     if "<!" in ohne_dtd.replace("<!--", "").replace("<![CDATA[", "") or "&" in re.sub(
             r"&(?:amp|lt|gt|quot|apos|#\d{1,7}|#x[0-9a-fA-F]{1,6});", "", ohne_dtd):
@@ -112,6 +121,8 @@ def parse(xml_text: str) -> list[dict[str, Any]]:
                 nummer = int(port.get("portid", "0"))
             except ValueError:
                 continue
+            if not 1 <= nummer <= 65535:
+                continue
             service = port.find("service")
             eintrag: dict[str, Any] = {
                 "port": nummer, "proto": "udp" if port.get("protocol") == "udp" else "tcp",
@@ -134,21 +145,52 @@ def parse(xml_text: str) -> list[dict[str, Any]]:
     return hosts[:256]
 
 
-def run(subnet: str, targets: list[str], mode: str = "schwachstellen") -> dict[str, Any]:
+def _execute(args: list[str], timeout: float,
+             allowed: Callable[[], bool] | None) -> str:
+    with tempfile.TemporaryFile() as output:
+        with subprocess.Popen(args, stdout=output, stderr=subprocess.DEVNULL,
+                              stdin=subprocess.DEVNULL) as process:
+            deadline = time.monotonic() + timeout
+            try:
+                while True:
+                    if allowed is not None and not allowed():
+                        raise NmapError("Die Freigabe wurde während der Prüfung entzogen.")
+                    if os.fstat(output.fileno()).st_size > MAX_OUTPUT:
+                        raise NmapError("Die nmap-Ausgabe ist zu groß.")
+                    status = process.poll()
+                    if status is not None:
+                        break
+                    if time.monotonic() >= deadline:
+                        raise NmapError("nmap hat zu lange gebraucht. "
+                                        "Prüfe weniger Geräte auf einmal.")
+                    time.sleep(0.1)
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+        output.seek(0)
+        data = output.read(MAX_OUTPUT + 1)
+    if status != 0 or not data.strip() or len(data) > MAX_OUTPUT:
+        raise NmapError("nmap ist fehlgeschlagen. Es liegt kein Ergebnis vor.")
+    return data.decode("utf-8", "replace")
+
+
+def run(subnet: str, targets: list[str], mode: str = "schwachstellen", *,
+        allowed: Callable[[], bool] | None = None) -> dict[str, Any]:
     """Fuehrt nmap aus. Raises NmapError oder ValueError."""
     ziele = targets_in(subnet, targets)
     args = command(ziele, mode)
     zeit = 120 + 200 * len(ziele) if mode == "schwachstellen" else 600
     try:
-        ergebnis = subprocess.run(args, capture_output=True, text=True,
-                                  timeout=min(zeit, 1200), check=False)
-    except subprocess.TimeoutExpired as exc:
-        raise NmapError("nmap hat zu lange gebraucht. Prüfe weniger Geräte auf einmal.") from exc
+        if allowed is not None and not allowed():
+            raise NmapError("Die Netzfreigabe ist nicht mehr gültig.")
+        xml = _execute(args, min(zeit, 1200), allowed)
     except OSError as exc:
         raise NmapError("nmap ließ sich nicht starten.") from exc
-    if ergebnis.returncode != 0 or not ergebnis.stdout.strip():
-        raise NmapError("nmap ist fehlgeschlagen. Es liegt kein Ergebnis vor.")
-    return {"mode": mode, "targets": ziele, "hosts": parse(ergebnis.stdout),
+    network = parse_subnet(subnet)
+    hosts = [h for h in parse(xml) if ipaddress.IPv4Address(h["address"]) in network
+             and (str(network) in ziele or h["address"] in ziele)]
+    return {"mode": mode, "targets": ziele, "hosts": hosts,
             "limits": "Nur sichere Prüfskripte ohne Internet. Versionen sind selbst gemeldet "
                       "und können falsch sein. Kein Treffer heißt nicht sicher."}
 

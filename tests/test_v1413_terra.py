@@ -4,7 +4,6 @@ Schwachstellen und eigene Tipps fuer das Heimnetz."""
 from __future__ import annotations
 
 import re
-import subprocess
 import threading
 import time
 from pathlib import Path
@@ -145,19 +144,19 @@ def test_nmap_run_uses_a_timeout(monkeypatch) -> None:
     monkeypatch.setattr(secure_nmap.shutil, "which", lambda name: "/usr/bin/nmap")
     aufrufe: list[dict[str, Any]] = []
 
-    def lauf(args: list[str], **kwargs: Any) -> Any:
-        aufrufe.append({"args": args, **kwargs})
-        return SimpleNamespace(returncode=0, stdout=XML)
+    def lauf(args: list[str], timeout: float, allowed: Any) -> str:
+        aufrufe.append({"args": args, "timeout": timeout})
+        return XML
 
-    monkeypatch.setattr(secure_nmap.subprocess, "run", lauf)
+    monkeypatch.setattr(secure_nmap, "_execute", lauf)
     ergebnis = secure_nmap.run(NETZ, ["192.168.1.5"])
     assert ergebnis["hosts"][0]["address"] == "192.168.1.5"
     assert aufrufe[0]["timeout"] <= 1200 and "shell" not in aufrufe[0]
 
     def zu_lang(*args: Any, **kwargs: Any) -> Any:
-        raise subprocess.TimeoutExpired("nmap", 1)
+        raise secure_nmap.NmapError("nmap hat zu lange gebraucht.")
 
-    monkeypatch.setattr(secure_nmap.subprocess, "run", zu_lang)
+    monkeypatch.setattr(secure_nmap, "_execute", zu_lang)
     with pytest.raises(secure_nmap.NmapError, match="zu lange"):
         secure_nmap.run(NETZ, ["192.168.1.5"])
 
@@ -177,7 +176,7 @@ def test_watcher_checks_new_devices_with_nmap(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr(secure_nmap, "available", lambda: True)
     gepruft: list[list[str]] = []
 
-    def lauf(subnet: str, targets: list[str], mode: str = "") -> dict[str, Any]:
+    def lauf(subnet: str, targets: list[str], mode: str = "", **kwargs: Any) -> dict[str, Any]:
         gepruft.append(list(targets))
         return {"hosts": secure_nmap.parse(XML)}
 
@@ -222,7 +221,7 @@ def test_chat_nmap_needs_the_switch_and_stays_in_the_net(owner, monkeypatch) -> 
     secure_pro.set_options(settings.data_dir, {"nmap": True})
     ziele: list[list[str]] = []
 
-    def lauf(subnet: str, targets: list[str], mode: str = "") -> dict[str, Any]:
+    def lauf(subnet: str, targets: list[str], mode: str = "", **kwargs: Any) -> dict[str, Any]:
         ziele.append(secure_nmap.targets_in(subnet, targets))
         return {"hosts": secure_nmap.parse(XML)}
 

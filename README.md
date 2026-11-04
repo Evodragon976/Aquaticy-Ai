@@ -1,4 +1,4 @@
-# Aquaticy AI 14.1.3 Terra
+# Aquaticy AI 14.1.4 Sol
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,18 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.1.4 Sol:** Freigaben für Secure-Pro-Abwehr werden nach einer Bestätigung
+erneut gegen denselben Netzbereich und Router geprüft. Auch ein eigener SSH-Port bleibt
+vor einer versehentlichen Sperre geschützt. Firewalld verändert bei einer Portsperre keine
+vorhandenen Portfreigaben; UFW setzt die Sperre vor vorhandene Freigaben.
+nmap und die Paketprüfung brechen bei Freigabeentzug ab. nmap-Ausgaben sind begrenzt,
+und Ergebnisse fremder Ziele werden verworfen. Fehlerhafte IP-, TCP-, UDP- und ARP-Köpfe
+gelten nicht mehr als gültige Beobachtungen. Die Paketprüfung übernimmt nur Metadaten
+mit Bezug zum freigegebenen Netz. Lange Warnungen werden vollständig aufgeteilt versendet.
+Tailscale-Netze gelten bei Aufgaben und nmap nach denselben Freigaberegeln wie im Netzscanner.
+Die Datenschutztexte erklären, welche Befunde im Chat, Protokoll und Messenger erscheinen
+und welche ein gewähltes Cloud-Modell erhält. Funktionen und Bestätigungen bleiben erhalten.
 
 **Neu in 14.1.3 Terra:** Secure Pro steht jetzt als Unterpunkt unter **Einstellungen → Zuhause &
 Netz**. Heimnetz, Home Assistant, Lager und Secure Pro sind ein Abschnitt.
@@ -62,7 +74,10 @@ Alles stellst du unter **Einstellungen → Zuhause & Netz → Secure Pro** ein, 
 - **Malware-Zeichen im Netz:** Secure Pro prüft auch bekannte Malware- und Hintertür-Ports
   (zum Beispiel 4444, 31337, Mining-Pools) und riskante Datenbanken und Docker-APIs.
 - **Pakete prüfen** (aus ab Werk): Bei jeder Prüfung liest Secure Pro 15 Sekunden lang nur
-  Kopfdaten: Adressen, Ports und DNS-Namen. Nie Inhalte, nichts wird gespeichert. So erkennt es
+  Kopfdaten: Adressen, Ports und DNS-Namen im freigegebenen Netz. Nachrichteninhalte werden
+  nicht ausgewertet. Paketmitschnitte werden nicht gespeichert. Befunde mit Adressen oder
+  auffälligen DNS-Namen können im Chat, Protokoll und Messenger stehen. Cloud-Modelle erhalten
+  ausgewählte Befunde. So erkennt es
   Portscans, ARP-Spoofing, Passwort-Angriffe, Spam-Versand, Malware-Ports und zufällige
   DNS-Namen (DGA). Das braucht Linux und Root-Rechte oder `CAP_NET_RAW`. In einem Netz mit
   Switch sieht der Rechner nur seinen eigenen Verkehr und Rundrufe. Ein Treffer ist ein
@@ -291,7 +306,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.1.3 Terra
+aquaticy --version            # 14.1.4 Sol
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

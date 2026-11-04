@@ -12,6 +12,8 @@ import re
 import secrets
 from typing import Any
 
+from aquaticy.lan import is_private_net
+
 MAX_TASKS = 20
 
 # Ereignis -> Beschreibung, wie sie in der Oberflaeche steht.
@@ -77,7 +79,7 @@ def parse(text: str) -> dict[str, Any]:
             adresse = ipaddress.IPv4Address(treffer)
         except ValueError:
             continue
-        if not adresse.is_private:
+        if not is_private_net(ipaddress.IPv4Network(f"{adresse}/32")):
             raise ValueError("Aufgaben gelten nur für Geräte in deinem Heimnetz.")
         host = str(adresse)
         break

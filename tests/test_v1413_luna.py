@@ -230,7 +230,7 @@ def test_packet_findings_flow_into_the_report(tmp_path, monkeypatch):
     secure_pro.set_options(tmp_path, {"packets": True})
     syn = [{"t": "tcp", "src": "192.168.1.66", "dst": "192.168.1.2", "sport": 40000,
             "dport": port, "syn": True, "ack": False} for port in range(1, 40)]
-    monkeypatch.setattr(secure_packets, "capture", lambda seconds: syn)
+    monkeypatch.setattr(secure_packets, "capture", lambda seconds, **kw: syn)
     watcher, nachrichten, _ = _beobachter(tmp_path, monkeypatch,
                                           [lan.Device("192.168.1.2", ports=[443])])
     monkeypatch.setattr(secure_pro, "own_addresses", lambda router="": frozenset())
@@ -243,7 +243,7 @@ def test_missing_packet_rights_are_explained(tmp_path, monkeypatch):
     secure_pro.configure(tmp_path, NETZ)
     secure_pro.set_options(tmp_path, {"packets": True})
 
-    def ohne(seconds: float) -> list[dict[str, Any]]:
+    def ohne(seconds: float, **kwargs: Any) -> list[dict[str, Any]]:
         raise secure_packets.Unavailable("Die Paketprüfung braucht Root-Rechte oder CAP_NET_RAW.")
 
     monkeypatch.setattr(secure_packets, "capture", ohne)
@@ -353,7 +353,8 @@ def test_knowledge_explains_ports_malware_and_weaknesses() -> None:
 # -- Abwehr ---------------------------------------------------------------------------------------
 def test_defense_builds_fixed_commands() -> None:
     sperre = secure_defense.build("block_port", host="192.168.1.20", port=4444, subnet=NETZ)
-    assert "ufw deny 4444/tcp" in sperre["command"] and "iptables -I INPUT" in sperre["command"]
+    assert "ufw insert 1 deny 4444/tcp" in sperre["command"]
+    assert "iptables -I INPUT" in sperre["command"]
     auf = secure_defense.build("unblock_port", host="192.168.1.20", port=4444, subnet=NETZ)
     assert "ufw delete deny 4444/tcp" in auf["command"]
     ip = secure_defense.build("block_ip", host="192.168.1.20", address="192.168.1.66",
@@ -418,11 +419,12 @@ def test_defense_runs_the_built_command_through_ssh(settings, monkeypatch) -> No
             "action": "block_port", "host": "192.168.1.20", "user": "pi",
             "server_key": "ssh-ed25519 AAAA", "port": 4444, "command": "rm -rf /"})
         assert ergebnis["measure"].startswith("Eingehende Verbindungen")
-        assert aufrufe[0]["action"] == "run" and "ufw deny 4444/tcp" in aufrufe[0]["command"]
+        assert aufrufe[0]["action"] == "run"
+        assert "ufw insert 1 deny 4444/tcp" in aufrufe[0]["command"]
         assert "rm -rf" not in aufrufe[0]["command"], "eigene Befehle gibt es nicht"
         assert box.call("secure_ssh", {"action": "inspect", "host": "10.0.0.5"})["error"]
         box.call("secure_ssh", {"action": "key"})
-        assert aufrufe[-1] == {"action": "key"}
+        assert aufrufe[-1] == {"action": "key", "_secure_scope": (NETZ, "192.168.1.1")}
     finally:
         box.close()
 
