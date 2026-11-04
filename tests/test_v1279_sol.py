@@ -794,11 +794,14 @@ def verbunden(hub: NativeHub, name: str = "whatsapp", nummer: str = "+4915100000
 def test_the_message_names_the_coworker_and_then_comes_the_text() -> None:
     from aquaticy.bridge_native import coworker_text
 
+    # Seit 15.0.0: "[Aquaticy Coworker Ava]" in eigener Zeile, darunter Auftrag und Text.
     assert coworker_text("Ava", "Meldung", "Drei neue Mails.") == (
-        "[Aquaticy] Coworker Ava\nDrei neue Mails.")
-    assert coworker_text("Ava", "Antwort", "Ja.") == "[Aquaticy] Coworker Ava\nJa."
+        "[Aquaticy Coworker Ava]\nDrei neue Mails.")
+    assert coworker_text("Ava", "Antwort", "Ja.") == "[Aquaticy Coworker Ava]\nJa."
     assert coworker_text("Ava", "Wetter morgen", "Sonnig.") == (
-        "[Aquaticy] Coworker Ava · Wetter morgen\nSonnig.")
+        "[Aquaticy Coworker Ava]\nWetter morgen\nSonnig.")
+    assert coworker_text("Ava", "", "Sonnig.", auftrag="Wetter jeden Morgen") == (
+        "[Aquaticy Coworker Ava]\nAuftrag: Wetter jeden Morgen\nSonnig.")
     assert coworker_text("Ava", "", "**Fett** und [Link](https://a.example)").endswith(
         "Fett und Link (https://a.example)")
 
@@ -807,17 +810,18 @@ def test_a_question_says_where_to_answer_and_an_approval_says_to_open_the_app() 
     from aquaticy.bridge_native import coworker_text
 
     frage = coworker_text("Ava", "Frage", "Soll ich den Termin verschieben?", frage=True)
-    assert frage.startswith("[Aquaticy] Coworker Ava\nSoll ich") and frage.endswith(
+    assert frage.startswith("[Aquaticy Coworker Ava]\nSoll ich") and frage.endswith(
         "Antworten kannst du in der App.")
     freigabe = coworker_text("Ava", "Freigabe", "geheimer Text", freigabe=True)
-    assert freigabe == "[Aquaticy] Coworker Ava\nWartet auf deine Freigabe. Öffne die App."
+    assert freigabe == "[Aquaticy Coworker Ava]\nWartet auf deine Freigabe. Öffne die App."
 
 
 def test_payment_data_never_leave_through_a_coworker_message() -> None:
     from aquaticy.bridge_native import coworker_text
 
     text = coworker_text("Ava", "Mail", "Bitte zahle auf DE89 3704 0044 0532 0130 00")
-    assert "DE89" not in text and "Zahlungsdaten" in text and text.startswith("[Aquaticy] Coworker")
+    assert "DE89" not in text and "Zahlungsdaten" in text and text.startswith(
+        "[Aquaticy Coworker Ava]")
 
 
 def test_the_name_and_length_of_a_message_are_bounded() -> None:
@@ -826,7 +830,7 @@ def test_the_name_and_length_of_a_message_are_bounded() -> None:
     lang = coworker_text("A\x00v\x07a" + "x" * 100, "T" * 500, "wort " * 5000)
     assert "\x00" not in lang and "\x07" not in lang
     assert len(lang) <= COWORKER_REPLY_CHARS + 60 < nat.MAX_SEND_CHARS
-    assert coworker_text("", "", "Hallo").startswith("[Aquaticy] Coworker Coworker\n")
+    assert coworker_text("", "", "Hallo").startswith("[Aquaticy Coworker Coworker]\n")
     assert bridge.is_own_text(lang), "kommt es als Echo zurueck, ist es keine Frage"
 
 
@@ -958,7 +962,8 @@ def test_a_report_of_a_coworker_reaches_the_messenger(monkeypatch, settings, sto
              _message(tool_calls=[_tool_call("coworker_report", {
                  "titel": "Erste Übersicht", "text": "**Drei** wichtige Mails."}, "c1")]),
              _message(content="Gemeldet."))
-    assert gesendet == ["[Aquaticy] Coworker Ava · Erste Übersicht\nDrei wichtige Mails."]
+    assert gesendet == ["[Aquaticy Coworker Ava]\nAuftrag: Gibt es schon etwas?\n"
+                        "Erste Übersicht\nDrei wichtige Mails."]
 
 
 def test_a_question_and_a_waiting_approval_reach_the_messenger(
@@ -972,8 +977,8 @@ def test_a_question_and_a_waiting_approval_reach_the_messenger(
              _message(tool_calls=[_tool_call("coworker_report", {
                  "titel": "Frage", "text": "Termin verschieben?", "frage": True}, "c1")]),
              _message(content="Gefragt."))
-    assert gesendet == ["[Aquaticy] Coworker Ava\nTermin verschieben?\n\n"
-                        "Antworten kannst du in der App."]
+    assert gesendet == ["[Aquaticy Coworker Ava]\nAuftrag: Fasse meine Mails zusammen.\n"
+                        "Termin verschieben?\n\nAntworten kannst du in der App."]
 
 
 def test_a_scheduled_coworker_sends_its_answer_every_time(monkeypatch, settings) -> None:
@@ -987,7 +992,8 @@ def test_a_scheduled_coworker_sends_its_answer_every_time(monkeypatch, settings)
     llm = ScriptedLLM(_message(content="Neu: **Preis** gesunken."))
     monkeypatch.setattr("litellm.completion", llm)
     assert cw.run_scheduled(kollege, settings, "normal", store=store) == "fertig"
-    assert gesendet == ["[Aquaticy] Coworker Ava\nNeu: Preis gesunken."]
+    assert gesendet == ["[Aquaticy Coworker Ava]\nAuftrag: Was gibt es Neues beim "
+                        "Lastenrad?\nNeu: Preis gesunken."]
 
 
 def test_a_failing_messenger_never_breaks_a_coworker_step(monkeypatch, settings, store) -> None:

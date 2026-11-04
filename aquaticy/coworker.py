@@ -117,6 +117,9 @@ CATEGORY_OF = {tool: kat for kat in CATEGORIES for tool in kat.tools}
 FORBIDDEN = frozenset({
     "change_setting", "ask_user", "create_image", "blender_run", "remember",
     "research_subtasks", "inspect_public_visual", "lan_ssh",
+    # 15.0.0: Ohne Mensch davor aendert ein Coworker nichts bei GitHub und legt keine
+    # weiteren Coworker an.
+    "github_write", "coworker_create",
 })
 
 
@@ -221,6 +224,8 @@ class Coworker:
     ha_binding: str = ""
     interval_seconds: int = 0
     timing_version: int = 0
+    # Auftraege per WhatsApp/Signal annehmen (14.4.4): nur aus dem eigenen Chat des Besitzers.
+    messenger_orders: bool = False
 
     def rule(self, key: str) -> str:
         return clean_rules(self.rules).get(key, "fragen")
@@ -290,6 +295,8 @@ class CoworkerStore:
                  "NOT NULL DEFAULT 0"),
                 ("timing_version", "ALTER TABLE coworkers ADD COLUMN timing_version INTEGER "
                  "NOT NULL DEFAULT 0"),
+                ("messenger_orders", "ALTER TABLE coworkers ADD COLUMN messenger_orders "
+                 "INTEGER NOT NULL DEFAULT 0"),
             )
             for name, statement in changes:
                 if name not in spalten:
@@ -445,6 +452,7 @@ class CoworkerStore:
             interval_seconds=row["interval_seconds"] if row["interval_seconds"] in
             INTERVAL_SECONDS else 0,
             timing_version=int(row["timing_version"] or 0),
+            messenger_orders=bool(row["messenger_orders"]),
         )
 
 
@@ -581,6 +589,17 @@ class CoworkerStore:
             conn.execute("UPDATE coworkers SET rules = ?, ha_binding = ? WHERE id = ?",
                          (json.dumps(neu), binding, int(coworker_id)))
         return neu
+
+    def set_messenger_orders(self, coworker_id: int, on: bool) -> None:
+        """Nur der Besitzer im Browser schaltet das, kein Modellwerkzeug."""
+        with self._lock, self._connect() as conn:
+            conn.execute("UPDATE coworkers SET messenger_orders = ? WHERE id = ?",
+                         (1 if on else 0, int(coworker_id)))
+
+    def by_name(self, name: str) -> Coworker | None:
+        """Ein Coworker nach seinem Namen (gross/klein egal)."""
+        gesucht = " ".join(str(name or "").split()).casefold()
+        return next((cw for cw in self.all() if cw.name.casefold() == gesucht), None)
 
     def set_preferences(self, coworker_id: int, values: dict[str, Any], *,
                         settings: Any = None, ultra: bool = False) -> None:
@@ -1420,19 +1439,27 @@ def post_to_chat(settings: Any, cw: Coworker, titel: str, text: str) -> None:
         cache.mark_unread(cw.chat, reason="coworker")
 
 
+def order_text(cw: Coworker, nachrichten: list[dict[str, Any]] | None = None) -> str:
+    """Was man dem Coworker aufgetragen hat: die neuen Nachrichten, sonst seine Aufgabe."""
+    texte = [" ".join(str(n.get("text") or "").split()) for n in nachrichten or []]
+    text = " · ".join(t for t in texte if t) or " ".join(str(cw.goal or "").split())
+    return text if len(text) <= 300 else text[:299] + "…"
+
+
 def push_to_messenger(settings: Any, cw: Coworker, titel: str, text: str, *,
-                      frage: bool = False, freigabe: bool = False) -> None:
+                      frage: bool = False, freigabe: bool = False, auftrag: str = "") -> None:
     """Die Meldung geht auch auf WhatsApp und Signal -- in den eigenen Chat des Besitzers.
 
-    "[Aquaticy] Coworker Ava" und dann die Nachricht. Nur wenn der Besitzer die Kopplung
-    gemacht und die Bruecke eingeschaltet hat; sonst passiert nichts. Scheitert das, bleibt die
-    Meldung in der App, wie immer.
+    "[Aquaticy Coworker Ava]", der Auftrag und dann die Nachricht. Nur wenn der Besitzer die
+    Kopplung gemacht und die Bruecke eingeschaltet hat; sonst passiert nichts. Scheitert das,
+    bleibt die Meldung in der App, wie immer.
     """
     with contextlib.suppress(Exception):
         from aquaticy import bridge_native, messenger_native
 
         messenger_native.notify_owner(settings, bridge_native.coworker_text(
-            cw.name, titel, text, frage=frage, freigabe=freigabe))
+            cw.name, titel, text, frage=frage, freigabe=freigabe,
+            auftrag=auftrag or order_text(cw)))
 
 
 def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
@@ -1550,11 +1577,13 @@ def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
         with contextlib.suppress(Exception):
             post_to_chat(settings, aktuell, bericht["titel"], bericht["text"])
         push_to_messenger(settings, aktuell, bericht["titel"], bericht["text"],
-                          frage=bool(bericht["frage"]))
+                          frage=bool(bericht["frage"]),
+                          auftrag=order_text(aktuell, nachrichten))
     for nummer in session.requested:
         store.add_log(cw.id, "aktion", f"Wartet auf deine Freigabe (Anfrage #{nummer}).")
     if session.requested:
-        push_to_messenger(settings, aktuell, "Freigabe", "", freigabe=True)
+        push_to_messenger(settings, aktuell, "Freigabe", "", freigabe=True,
+                          auftrag=order_text(aktuell, nachrichten))
     if protokoll and zustand == "fertig":
         store.add_log(cw.id, "schritt", protokoll, seen=True)
     minimum = MIN_SLEEP_MINUTES.get(plan, 15)
@@ -1627,7 +1656,8 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
                                    context=intro, active=alive,
                                    chat_id=cw.chat if cw.interval_seconds else "",
                                    on_answer=lambda antwort: push_to_messenger(
-                                       settings, cw, "", antwort))
+                                       settings, cw, "", antwort,
+                                       auftrag=order_text(cw, messages)))
     if not alive():
         return "angehalten"
     store.mark_read([n["id"] for n in messages])
@@ -1637,7 +1667,7 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
                       title=report["titel"])
         post_to_chat(settings, cw, report["titel"], report["text"])
         push_to_messenger(settings, cw, report["titel"], report["text"],
-                          frage=bool(report["frage"]))
+                          frage=bool(report["frage"]), auftrag=order_text(cw, messages))
     job = schedule.JobStore._row(cw)
     store.note_run(cw.id, state=state, notes=session.notes, chat=chat,
                    reason="Zeitplan", next_wake=schedule.next_time(
@@ -1730,6 +1760,7 @@ def view(store: CoworkerStore, cw: Coworker, *, log_limit: int = 25) -> dict[str
         "sharing_chats": cw.sharing_chats, "sharing_coworkers": cw.sharing_coworkers,
         "notes_limit": cw.notes_limit,
         "interval_seconds": cw.interval_seconds,
+        "messenger_orders": cw.messenger_orders,
         "created_at": cw.created_at, "next_wake": cw.next_wake, "wake_reason": cw.wake_reason,
         "last_run": cw.last_run, "last_state": cw.last_state, "runs": cw.runs,
         "runs_today": store.runs_today(cw), "chat": cw.chat, "tainted": cw.tainted,

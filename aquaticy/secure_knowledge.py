@@ -240,6 +240,22 @@ def network_tips(devices: list[dict[str, Any]], events: list[dict[str, Any]],
     if je_port.get(22):
         tipps.append(f"SSH ist offen bei {_liste(je_port[22])}. Erlaube dort nur Anmeldung mit "
                      "Schlüssel und schalte die Passwort-Anmeldung aus.")
+    kameras = [str(d["address"]) for d in aktiv
+               if str(d.get("vendor") or "").startswith(("Hikvision", "Dahua"))]
+    if kameras:
+        tipps.append(f"Kameras bei {_liste(kameras)}: Halte die Firmware aktuell, ändere das "
+                     "Standardpasswort und mach sie nicht aus dem Internet erreichbar.")
+    iot = [str(d["address"]) for d in aktiv if d.get("kind") == "Smart-Home-Gerät"]
+    if len(iot) >= 3:
+        tipps.append(f"{len(iot)} Smart-Home-Geräte antworten. Lege sie in ein Gast-WLAN, "
+                     "dann kommen sie nicht an deine PCs.")
+    if any(e.get("kind") == "upnp" for e in events):
+        tipps.append("UPnP ist am Router an. Schalte es aus, wenn du es nicht brauchst. Dann "
+                     "kann kein Gerät selbst Ports ins Internet öffnen.")
+    unbekannt = [d for d in aktiv if not d.get("name")]
+    if len(unbekannt) >= 3:
+        tipps.append("Benenne deine bekannten Geräte in der Geräteliste. Dann fällt ein "
+                     "fremdes Gerät sofort auf.")
     if router:
         tipps.append(f"Prüfe deinen Router ({router}): automatische Updates an, UPnP und "
                      "Fernzugriff aus, WLAN mit WPA2-AES oder WPA3, WPS aus.")

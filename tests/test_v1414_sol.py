@@ -271,7 +271,7 @@ def test_large_alert_batches_are_delivered_without_truncation(tmp_path):
     lines = [f"Befund {i}: " + "x" * 400 for i in range(20)]
     assert watcher._deliver(lines, False)
     assert len(messages) > 1 and all(len(m) <= 2900 for m in messages)
-    assert ''.join(m.removeprefix('[Aquaticy] Secure Pro\n') for m in messages) == '\n'.join(lines)
+    assert ''.join(m.removeprefix('[Aquaticy Secure Pro]\n') for m in messages) == '\n'.join(lines)
     watcher.notify = lambda text: text != messages[-1]
     assert not watcher._deliver(lines, False)
 

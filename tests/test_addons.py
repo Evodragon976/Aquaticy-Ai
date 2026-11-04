@@ -496,14 +496,17 @@ def test_tools_exist_only_for_switched_on_addons(konto: Settings) -> None:
     addons.install(konto, "github", pro=False)
     assert namen() == [], "ohne Anmeldung kein GitHub-Werkzeug"
     konto.github_token = "ghp_" + "a" * 36
-    assert namen() == ["github"]
+    # Seit 15.0.0 darf GitHub ab Werk auch aendern (jeder Schritt mit Rueckfrage).
+    assert namen() == ["github", "github_write"]
+    addons.set_rights(konto, "github", {"inhalte": "ja"})
+    assert namen() == ["github"], "nur lesen: kein Schreibwerkzeug"
     addons.install(konto, "wetter", pro=False)
     addons.install(konto, "feeds", pro=False)
     assert namen() == ["github", "weather"], "ohne eingetragene Feeds kein Feed-Werkzeug"
     addons.set_feeds(konto, ["https://a.example/rss"])
     assert namen() == ["github", "weather", "read_feeds"]
     addons.set_enabled(konto, "github", False, pro=False)
-    assert "github" not in namen()
+    assert "github" not in namen() and "github_write" not in namen()
 
 
 def test_blender_in_the_user_mode_comes_from_the_addon(konto: Settings) -> None:

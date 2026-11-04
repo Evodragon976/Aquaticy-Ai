@@ -793,7 +793,11 @@ SETTING_PROMPT = """\
 Bittet dich der Nutzer, etwas an dir umzustellen -- "mach den Hintergrund weiss", \
 "such lieber auf Englisch", "nimm weniger Teilfragen" -- dann tu das mit \
 `change_setting(setting, value)`, statt ihn in die Einstellungen zu schicken.
-- Aendere nur, worum ausdruecklich gebeten wurde. Eine Sache je Aufruf.
+- Braucht ein Auftrag eine erlaubte Einstellung, stell sie mit reason="auftrag" selbst \
+ein (Aquaticy fragt den Nutzer vorher). Sonst nur, worum gebeten wurde. Eine Sache je Aufruf.
+- Will der Nutzer etwas Wiederkehrendes ("jeden Morgen", "stuendlich", "immer wenn", \
+"kuemmere dich ab jetzt um"), lege mit coworker_create einen Coworker an, wenn das \
+Werkzeug da ist. Sag danach in einem Satz, wer es macht und wann.
 - Sag hinterher in EINEM Satz, was jetzt gilt. Keine Aufzaehlung, kein Formular.
 - Zugangsdaten und alles, was mir mehr Zugriff gaebe -- Schalten im Haus, Mail und \
 Kalender, Schreibrechte im Lager, Netzzugriff, Gedaechtnis -- aenderst du NICHT. \
@@ -1502,6 +1506,7 @@ class Agent:
             visual_inspector=self.inspect_public_visual,
         )
         self.toolbox.ssh_allowed = lambda: self._ssh_ready() and not self.stopped
+        self.toolbox.github_vm_ready = lambda: self._vm_ready() and not self.stopped
 
 
 
@@ -1601,6 +1606,10 @@ class Agent:
 
 
         extra.append(SETTING_SCHEMA)
+        if self.toolbox.coworker_creator is not None:
+            from aquaticy.tools import COWORKER_CREATE_SCHEMA
+
+            extra.append(COWORKER_CREATE_SCHEMA)
 
 
         if self.toolbox.ask_handler is not None:

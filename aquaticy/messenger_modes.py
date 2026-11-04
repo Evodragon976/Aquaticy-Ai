@@ -16,6 +16,61 @@ def switch_request(text: str) -> bool:
     return SWITCH_RE.fullmatch(str(text).strip()) is not None
 
 
+# Klartext statt Slash-Befehl (14.4.4): "Aquaticy, wechsel auf das Modell Qwen 3" macht dasselbe
+# wie "/switch Qwen 3". Nur kurze Saetze, die mit der Bitte anfangen; alles andere beantwortet
+# das Modell. Loeschen (/forget) gibt es bewusst nur als ausdruecklichen Befehl.
+_BITTE = r"(?:(?:kannst|könntest|koenntest)\s+du\s+|bitte\s+)?"
+_NATUERLICH: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(_BITTE + r"(?:wechs(?:le|el)n?|stell[e]?|schalte?|geh[e]?)\s+(?:bitte\s+)?"
+                r"(?:auf|zu|zum|in)\s+(?:das\s+|dem\s+|den\s+)?(?:llm|modell|model)\s+"
+                r"(?P<arg>.{2,60}?)(?:\s+um)?\s*[.!?]?$", re.I), "switch"),
+    (re.compile(_BITTE + r"(?:nimm|nutze|verwende|benutze)\s+(?:bitte\s+)?(?:ab\s+jetzt\s+)?"
+                r"(?:das\s+)?(?:llm|modell|model)\s+(?P<arg>.{2,60}?)\s*[.!?]?$", re.I),
+     "switch"),
+    (re.compile(_BITTE + r"(?:bitte\s+)?(?:auf|zu|zum)\s+(?:das\s+|dem\s+)?(?:llm|modell|model)\s+"
+                r"(?P<arg>.{2,60}?)\s+(?:wechseln|umstellen|umschalten|gehen)\s*[.!?]?$", re.I),
+     "switch"),
+    (re.compile(r"(?:please\s+)?(?:switch|change)\s+(?:to\s+)?(?:the\s+)?model\s+(?:to\s+)?"
+                r"(?P<arg>.{2,60}?)\s*[.!?]?$", re.I), "switch"),
+    (re.compile(r"(?:please\s+)?use\s+(?:the\s+)?model\s+(?P<arg>.{2,60}?)\s*[.!?]?$", re.I),
+     "switch"),
+    (re.compile(_BITTE + r"(?:welches|was\s+für\s+ein)\s+(?:llm|modell)\s+(?:nutzt|benutzt|"
+                r"verwendest|hast)\s+du(?:\s+gerade)?\s*\??$", re.I), "model"),
+    (re.compile(_BITTE + r"(?:wechs(?:le|el)n?|schalte?|geh[e]?)\s+(?:bitte\s+)?(?:in\s+den|"
+                r"auf\s+den|zum|auf|in)\s+pro(?:-?modus)?\s*[.!?]?$", re.I), "pro"),
+    (re.compile(_BITTE + r"(?:wechs(?:le|el)n?|schalte?|geh[e]?)\s+(?:bitte\s+)?(?:in\s+den|"
+                r"auf\s+den|zum|auf|in)\s+(?:normal(?:-?modus)?|normalen\s+modus)\s*[.!?]?$",
+                re.I), "normal"),
+    (re.compile(_BITTE + r"(?:setz[e]?|stell[e]?)\s+(?:den\s+|meinen\s+)?(?:ort|standort|"
+                r"ortsfilter)\s+auf\s+(?P<arg>.{2,60}?)\s*[.!?]?$", re.I), "location"),
+    (re.compile(_BITTE + r"(?:ortsfilter|standort|ort)\s+(?:aus|weg|aufheben|löschen)"
+                r"\s*[.!?]?$", re.I), "location"),
+    (re.compile(_BITTE + r"zeig[e]?\s+(?:mir\s+)?(?:meine\s+)?notizen\s*[.!?]?$", re.I),
+     "notes"),
+    (re.compile(_BITTE + r"was\s+weißt\s+du\s+(?:alles\s+)?über\s+mich\s*\??$", re.I),
+     "memory"),
+    (re.compile(_BITTE + r"zeig[e]?\s+(?:mir\s+)?(?:meine\s+)?(?:hochgeladenen\s+)?"
+                r"(?:dateien|uploads)\s*[.!?]?$", re.I), "uploads"),
+    (re.compile(_BITTE + r"(?:exportier[e]?|schick[e]?\s+mir)\s+(?:den\s+|unseren\s+)?"
+                r"(?:verlauf|chat)\s*[.!?]?$", re.I), "export"),
+    (re.compile(_BITTE + r"(?:fang\s+neu\s+an|neues\s+gespräch|neuer\s+chat|"
+                r"vergiss\s+(?:dieses|unser)\s+gespräch)\s*[.!?]?$", re.I), "clear"),
+)
+
+
+def natural_command(text: str) -> tuple[str, str] | None:
+    """Ein Satz, der einen Befehl meint -> ("befehl", "Argument"); sonst None."""
+    roh = " ".join(str(text or "").split())
+    if not roh or len(roh) > 120 or roh.startswith("/"):
+        return None
+    for muster, befehl in _NATUERLICH:
+        treffer = muster.fullmatch(roh)
+        if treffer:
+            argument = (treffer.groupdict().get("arg") or "").strip(" \"'„“")
+            return befehl, argument
+    return None
+
+
 def _name(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
 

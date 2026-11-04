@@ -71,7 +71,8 @@ def test_update_checks_fixed_branch_and_installs_only_new_release(tmp_path, monk
         if "clone" in args:
             root = Path(args[-1])
             (root / "aquaticy").mkdir(parents=True)
-            version, name = remote.split()
+            # Seit 15.0.0 darf der Name fehlen ("15.0.0").
+            version, _, name = remote.partition(" ")
             (root / "aquaticy/__init__.py").write_text(
                 f'__version__ = "{version}"\n__codename__ = "{name}"\n')
         return SimpleNamespace(stdout="", returncode=0)

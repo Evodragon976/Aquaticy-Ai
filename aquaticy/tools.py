@@ -12,6 +12,7 @@ Ausschnitt.
 from __future__ import annotations
 
 import contextlib
+import json
 import subprocess
 import time
 from collections.abc import Callable
@@ -1030,7 +1031,7 @@ WORK_TOOLS: dict[str, str] = {
     "secure_advisories": "suche", "secure_read_advisory": "seite",
     "secure_ssh": "werkstatt", "secure_defend": "werkstatt",
     "web_search": "suche", "search_news": "suche", "local_places": "suche",
-    "find_profiles": "suche", "weather": "suche", "github": "suche",
+    "find_profiles": "suche", "weather": "suche", "github": "suche", "github_write": "suche",
     "fetch_page": "seite", "inspect_public_visual": "seite", "read_feeds": "seite",
     "news_tagesschau": "suche", "wikipedia": "suche", "currency": "suche",
     "holidays": "suche",
@@ -1046,7 +1047,8 @@ WORK_TOOLS: dict[str, str] = {
 
 UNTRUSTED_SOURCES = frozenset({
     "web_search", "search_news", "fetch_page", "inspect_public_visual", "find_profiles",
-    "local_places", "github", "weather", "read_feeds", "mail_search", "mail_read",
+    "local_places", "github", "github_write", "weather", "read_feeds", "mail_search",
+    "mail_read",
     "news_tagesschau", "wikipedia", "currency", "holidays",
     "calendar_events", "desktop_look", "desktop_windows", "research_subtasks",
 
@@ -1317,11 +1319,13 @@ GITHUB_SCHEMA: dict[str, Any] = {
     "function": {
         "name": "github",
         "description": (
-            "Liest bei GitHub mit dem Konto des Nutzers -- NUR lesen, nie schreiben. "
+            "Liest bei GitHub mit dem Konto des Nutzers (aendern: github_write). "
             "action: ich (wer bin ich), repos (eigene Repos), repo, issues, issue, pulls, "
             "pull (Dateien und Patches), datei (path, ref, start_line, max_lines), "
             "baum (Dateibaum), branches, review (Codeauszuege eines festen Commits; "
-            "bei PRs number angeben), commits, suche (Issues/PRs). Zum Codepruefen zuerst "
+            "bei PRs number angeben), commits (ref, path, page), commit (ref = SHA: "
+            "Nachricht und Patches), vergleich (base...ref), suche (Issues/PRs). "
+            "Zum Codepruefen zuerst "
             "review, danach fehlenden Kontext mit datei nachlesen. repo als 'besitzer/name' "
             "oder GitHub-URL. page fuer weitere Ergebnisse. Private Inhalte nie ungefragt "
             "in oeffentliche Suchanfragen uebernehmen. Keine vollstaendige Pruefung behaupten."
@@ -1330,8 +1334,9 @@ GITHUB_SCHEMA: dict[str, Any] = {
             "type": "object",
             "properties": {
                 "action": {"type": "string", "enum": ["ich", "repos", "repo", "issues", "issue",
-                           "pulls", "pull", "datei", "commits", "suche", "baum", "branches",
-                           "review"]},
+                           "pulls", "pull", "datei", "commits", "commit", "vergleich", "suche",
+                           "baum", "branches", "review"]},
+                "base": {"type": "string", "description": "Basis fuer vergleich, z.B. main."},
                 "repo": {"type": "string"},
                 "number": {"type": "integer"},
                 "path": {"type": "string"},
@@ -1345,6 +1350,45 @@ GITHUB_SCHEMA: dict[str, Any] = {
                 "paths": {"type": "array", "maxItems": 6, "items": {"type": "string"}},
             },
             "required": ["action"],
+        },
+    },
+}
+
+GITHUB_WRITE_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "github_write",
+        "description": (
+            "Aendert bei GitHub wie Codex: checkout holt repo (ref) als Ordner dir in die VM "
+            "(nur im Code-Chat mit VM; der Schluessel bleibt draussen). Dort mit vm_run/"
+            "vm_write aendern und testen. push committet alle Aenderungen im Ordner und pusht "
+            "sie auf branch (Standard: neuer aquaticy/...-Branch). Ohne VM: commit mit files "
+            "[{path, content} oder {path, delete: true}]. branch legt einen Branch an, "
+            "pull_request oeffnet einen PR (title, body, branch, base), comment schreibt zu "
+            "number. Jeder Schritt fragt den Nutzer. Nie force, nie auf den Standard-Branch, "
+            "kein Mergen, keine GitHub Actions, nie Schluessel oder Passwoerter in Dateien."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["checkout", "branch", "commit", "push",
+                                                      "pull_request", "comment"]},
+                "repo": {"type": "string"},
+                "ref": {"type": "string", "description": "Was checkout holt (Standard: "
+                                                         "Standard-Branch)."},
+                "dir": {"type": "string", "description": "Ordnername in /work."},
+                "branch": {"type": "string"},
+                "base": {"type": "string"},
+                "message": {"type": "string"},
+                "files": {"type": "array", "maxItems": 20, "items": {
+                    "type": "object", "properties": {
+                        "path": {"type": "string"}, "content": {"type": "string"},
+                        "delete": {"type": "boolean"}}, "required": ["path"]}},
+                "title": {"type": "string"},
+                "body": {"type": "string"},
+                "draft": {"type": "boolean"},
+                "number": {"type": "integer"},
+            },
+            "required": ["action", "repo"],
         },
     },
 }
@@ -1468,7 +1512,7 @@ HOLIDAYS_SCHEMA: dict[str, Any] = {
 
 
 ADDON_TOOLS: dict[str, str] = {
-    "github": "github", "weather": "wetter", "read_feeds": "feeds",
+    "github": "github", "github_write": "github", "weather": "wetter", "read_feeds": "feeds",
     "news_tagesschau": "nachrichten", "wikipedia": "wikipedia",
     "currency": "waehrung", "holidays": "feiertage",
 }
@@ -1484,6 +1528,8 @@ def addon_schemas_for(settings: Any, pro: bool = True) -> list[dict[str, Any]]:
     schemas: list[dict[str, Any]] = []
     if "github" in aktiv and addons.github_token(settings):
         schemas.append(GITHUB_SCHEMA)
+        if addons.github_write_level(addons.rights_of(settings, "github")) != "nein":
+            schemas.append(GITHUB_WRITE_SCHEMA)
     if "wetter" in aktiv:
         schemas.append(WEATHER_SCHEMA)
     if "feeds" in aktiv and addons.feeds_of(settings):
@@ -1513,16 +1559,50 @@ SETTING_SCHEMA: dict[str, Any] = {
             "NICHT aenderbar sind Zugangsdaten und alles, was mir mehr Zugriff gaebe: "
             "Schalten im Haus, Mail und Kalender, Schreibrechte im Lager, Netzzugriff, "
             "Gedaechtnis. Frag danach gar nicht erst -- verweise auf die Einstellungen. "
-            "Aendere nur, worum ausdruecklich gebeten wurde, eine Sache je Aufruf, und "
-            "sag hinterher in einem Satz, was jetzt gilt."
+            "Braucht ein Auftrag eine dieser erlaubten Einstellungen (etwa Englisch fuer "
+            "englische Quellen), stell sie mit reason=auftrag selbst ein: dann fragt "
+            "Aquaticy den Nutzer vorher. reason=nutzer nur, wenn er genau darum gebeten hat. "
+            "Eine Sache je Aufruf; sag hinterher in einem Satz, was jetzt gilt."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "setting": {"type": "string", "description": "Name der Einstellung."},
                 "value": {"type": "string", "description": "Der neue Wert."},
+                "reason": {"type": "string", "enum": ["nutzer", "auftrag"],
+                           "description": "nutzer: ausdruecklich gewuenscht; auftrag: "
+                                          "fuer eine Aufgabe noetig (fragt vorher)."},
+                "why": {"type": "string", "description": "Kurz, wofuer (bei auftrag)."},
             },
             "required": ["setting", "value"],
+        },
+    },
+}
+
+
+COWORKER_CREATE_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "coworker_create",
+        "description": (
+            "Legt einen Coworker an, wenn der Nutzer etwas Wiederkehrendes oder Dauerhaftes "
+            "will: 'nenne mir jeden Morgen die neusten Nachrichten', 'sag mir stündlich, ob "
+            "der Preis sinkt', 'kümmere dich ab jetzt um ...'. rhythm: daily, hourly, weekly "
+            "oder dauerhaft (ohne Zeitplan, arbeitet selbstständig). hour/minute fuer daily und "
+            "weekly, weekday 0=Montag. goal ist der Auftrag in einem bis zwei Saetzen. "
+            "Aquaticy fragt den Nutzer vorher."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Kurzer Vorname, z.B. Ava."},
+                "goal": {"type": "string"},
+                "rhythm": {"type": "string",
+                           "enum": ["daily", "hourly", "weekly", "dauerhaft"]},
+                "hour": {"type": "integer", "minimum": 0, "maximum": 23},
+                "minute": {"type": "integer", "minimum": 0, "maximum": 59},
+                "weekday": {"type": "integer", "minimum": 0, "maximum": 6},
+            },
+            "required": ["name", "goal", "rhythm"],
         },
     },
 }
@@ -1658,6 +1738,10 @@ class Toolbox:
 
         self.ask_handler: AskHandler | None = None
         self.ssh_allowed: Callable[[], bool] | None = None
+        # Darf github_write die VM nutzen (checkout/push)? Setzt der Agent: nur im Code-Chat.
+        self.github_vm_ready: Callable[[], bool] | None = None
+        # Legt einen Coworker an (15.0.0). Setzt die Website fuer den Chat des Kontos.
+        self.coworker_creator: Callable[[dict[str, Any]], dict[str, Any]] | None = None
         self.secure_mode = False
         self.secure_online = True
         self.secure_provider: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None
@@ -2423,8 +2507,56 @@ class Toolbox:
             pass
         return Path(eigen)
 
-    def change_setting(self, setting: str, value: str) -> dict[str, Any]:
-        """Aendert eine Einstellung -- soweit sie dafuer vorgesehen ist."""
+    def coworker_create(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Ein Auftrag im Chat wird ein Coworker (15.0.0) -- erst nach dem Ja des Nutzers."""
+        if self.coworker_creator is None:
+            return {"error": "Coworker gibt es hier nicht. Lege ihn in der Coworker-Übersicht "
+                             "an."}
+        if self.ask_handler is None:
+            return {"error": "Hier kann gerade niemand bestätigen. Sag dem Nutzer, dass ein "
+                             "Coworker das übernehmen kann."}
+        name = " ".join(str(arguments.get("name") or "").split())[:40]
+        ziel = " ".join(str(arguments.get("goal") or "").split())[:2000]
+        takt = str(arguments.get("rhythm") or "daily")
+        if not name or not ziel or takt not in ("daily", "hourly", "weekly", "dauerhaft"):
+            return {"error": "coworker_create braucht name, goal und rhythm (daily, hourly, "
+                             "weekly oder dauerhaft)."}
+
+        def zahl(feld: str, standard: int, hoechstens: int) -> int:
+            wert = arguments.get(feld, standard)
+            return wert if type(wert) is int and 0 <= wert <= hoechstens else standard
+
+        stunde, minute, tag = zahl("hour", 8, 23), zahl("minute", 0, 59), zahl("weekday", 0, 6)
+        tage = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+        wann = {"daily": f"täglich um {stunde:02d}:{minute:02d} Uhr", "hourly": "stündlich",
+                "weekly": f"jeden {tage[tag]} um {stunde:02d}:{minute:02d} Uhr",
+                "dauerhaft": "dauerhaft, er entscheidet selbst, wann er arbeitet"}[takt]
+        nein = self._confirm(f"Soll ich dafür einen Coworker anlegen?\nName: {name}\n"
+                             f"Auftrag: {ziel[:400]}\nWann: {wann}")
+        if nein:
+            return {"error": nein}
+        nutzlast: dict[str, Any] = {"name": name, "goal": ziel}
+        if takt != "dauerhaft":
+            nutzlast["schedule"] = {"kind": "research", "rhythm": takt, "hour": stunde,
+                                    "minute": minute, "weekday": tag}
+        ergebnis = self.coworker_creator(nutzlast)
+        if not ergebnis.get("ok"):
+            return {"error": str(ergebnis.get("error") or "Der Coworker ließ sich nicht "
+                                                            "anlegen.")}
+        self._emit("note", text=f"Coworker {name} angelegt: {wann}.",
+                   text_en=f"Coworker {name} created.")
+        return {"created": name, "when": wann,
+                "note": "Er erscheint in der Coworker-Übersicht. Dort kann der Nutzer ihn "
+                        "ändern, pausieren oder löschen."}
+
+    def change_setting(self, setting: str, value: str, reason: str = "nutzer",
+                       why: str = "") -> dict[str, Any]:
+        """Aendert eine Einstellung -- soweit sie dafuer vorgesehen ist.
+
+        Seit 15.0.0 stellt Aquaticy erlaubte Einstellungen auch selbst ein, wenn ein Auftrag
+        sie braucht (reason="auftrag"). Dann fragt es den Nutzer vorher. Rechte (Haus, Mail,
+        Heimnetz, Gedaechtnis, Leitplanken ...) bleiben wie immer beim Menschen.
+        """
         from aquaticy import preferences
 
         preference = preferences.find(setting)
@@ -2443,6 +2575,16 @@ class Toolbox:
             stored = preferences.coerce(preference, value)
         except preferences.BadValue as exc:
             return {"error": str(exc)}
+        if reason == "auftrag":
+            if self.ask_handler is None:
+                return {"error": "Hier kann gerade niemand bestätigen. Sag dem Nutzer, welche "
+                                 "Einstellung hilft."}
+            grund = " ".join(str(why or "").split())[:200]
+            nein = self._confirm(f"Für deinen Auftrag stelle ich „{preference.label}“ auf "
+                                 f"„{stored}“ um" + (f" ({grund})" if grund else "")
+                                 + ". Einverstanden?")
+            if nein:
+                return {"error": nein}
 
         self._emit("setting", label=preference.label, value=stored)
 
@@ -2702,16 +2844,19 @@ class Toolbox:
                 state=str(arguments.get("state") or "open"),
                 query=str(arguments.get("query") or ""),
                 nur_oeffentlich=rechte["repos"] == "oeffentlich",
-                inhalte=rechte["inhalte"] == "ja",
+                inhalte=addons.github_reads_content(rechte),
                 page=arguments.get("page", 1), start_line=arguments.get("start_line", 1),
                 max_lines=arguments.get("max_lines", 300),
                 recursive=arguments.get("recursive", True), paths=arguments.get("paths"),
+                base=str(arguments.get("base") or ""),
             )
             if (not addons.active(self.settings, "github")
                     or addons.load_state(self.settings).get("github") != before):
                 return {"error": "Die GitHub-Freigabe hat sich während des Abrufs geändert. "
                                  "Starte die Anfrage erneut."}
             return result
+        if name == "github_write":
+            return self.github_write(arguments)
         if name == "weather":
             ort = str(arguments.get("place") or self.settings.location or "")
             if rechte["orte"] == "meiner":
@@ -3236,7 +3381,11 @@ class Toolbox:
             return self.change_setting(
                 setting=str(arguments.get("setting", "")),
                 value=str(arguments.get("value", "")),
+                reason=str(arguments.get("reason") or "nutzer"),
+                why=str(arguments.get("why") or ""),
             )
+        if name == "coworker_create":
+            return self.coworker_create(arguments)
         if name == "storage_find":
             return self.storage_find(
                 query=str(arguments.get("query", "")),
@@ -3853,6 +4002,311 @@ class Toolbox:
                               port=arguments.get("ssh_port", 22), _secure_scope=grant)
         result["measure"] = data["label"]
         return result
+
+    # -- GitHub aendern (14.4.4) --------------------------------------------------------------
+    def _github_checkouts(self) -> dict[str, dict[str, Any]]:
+        """Welcher VM-Ordner zu welchem Repo gehoert. Der Rechner merkt es sich, nicht die VM."""
+        pfad = self.settings.data_dir / "github-checkouts.json"
+        try:
+            daten = json.loads(pfad.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return daten if isinstance(daten, dict) else {}
+
+    def _github_checkout_merken(self, ordner: str, eintrag: dict[str, Any] | None) -> None:
+        from aquaticy import private_json
+
+        daten = self._github_checkouts()
+        if eintrag is None:
+            daten.pop(ordner, None)
+        else:
+            daten[ordner] = eintrag
+        private_json.write(self.settings.data_dir / "github-checkouts.json",
+                           dict(list(daten.items())[-50:]))
+
+    def github_write(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Aendern bei GitHub: holen, committen, pushen, Pull Request, Kommentar.
+
+        Jeder Schritt, der etwas bei GitHub aendert, fragt den Nutzer (self._confirm). Der
+        Schluessel geht nie in die VM. Auf den Standard-Branch, ans Mergen und an GitHub
+        Actions geht es nie: Das bleibt beim Menschen auf GitHub.
+        """
+        import httpx
+
+        from aquaticy import addons, github_repo
+        from aquaticy import github_write as gw
+
+        if not addons.active(self.settings, "github"):
+            return {"error": "Das GitHub-Add-on ist aus."}
+        token = addons.github_token(self.settings)
+        if not token:
+            return {"error": "GitHub ist nicht angemeldet. Das macht der Nutzer im "
+                             "Add-on-Fenster."}
+        vorher = addons.load_state(self.settings).get("github")
+        rechte = addons.rights_of(self.settings, "github")
+        darf = addons.github_write_level(rechte)
+        if darf == "nein":
+            return {"error": "Ändern ist im GitHub-Add-on aus (Rechte: Dateien und "
+                             "Änderungen). Das stellt der Nutzer selbst ein."}
+        aktion = str(arguments.get("action") or "").strip().lower()
+        if aktion not in gw.ACTIONS:
+            return {"error": "Aktion: " + ", ".join(gw.ACTIONS) + "."}
+        if aktion != "checkout" and self.ask_handler is None:
+            return {"error": "Hier kann gerade niemand bestätigen. Ohne dein Ja ändert "
+                             "Aquaticy nichts bei GitHub."}
+        try:
+            repo, _, _, _ = github_repo.target(str(arguments.get("repo") or ""))
+        except github_repo.GitHubError as exc:
+            return {"error": str(exc)}
+
+        def gleich_geblieben() -> bool:
+            return (addons.active(self.settings, "github")
+                    and addons.load_state(self.settings).get("github") == vorher)
+
+        def zielbranch(name: str, standard: str) -> str:
+            if not gw.valid_branch(name):
+                raise gw.WriteError("Ungültiger Branch-Name.")
+            if name == standard:
+                raise gw.WriteError(
+                    f"Auf den Standard-Branch {standard} schreibt Aquaticy nicht. Nimm einen "
+                    "eigenen Branch und öffne danach einen Pull Request.")
+            return name
+
+        client = httpx.Client(timeout=30, follow_redirects=False)
+        api = gw.Api(client, addons._github_headers(token), addons._takt)
+        try:
+            info = api.get(f"/repos/{repo}")
+            if rechte.get("repos") == "oeffentlich" and info.get("private") is not False:
+                return {"error": "Das Repo ist privat. Erlaubt sind nur öffentliche Repos "
+                                 "(Add-on GitHub -> Rechte)."}
+            standard = str(info.get("default_branch") or "main")
+            if aktion == "checkout":
+                return self._github_checkout(api, client, repo, standard, arguments, rechte)
+            if aktion == "push":
+                return self._github_push(api, repo, standard, arguments, darf, zielbranch,
+                                         gleich_geblieben)
+            if aktion == "commit":
+                return self._github_commit(api, repo, standard, arguments, darf, zielbranch,
+                                           gleich_geblieben)
+            if aktion == "branch":
+                name = zielbranch(str(arguments.get("branch") or gw.default_branch_name()),
+                                  standard)
+                basis = str(arguments.get("base") or standard)
+                sha = gw.resolve(api, repo, basis)
+                nein = self._confirm(f"In {repo} den Branch {name} von {basis} anlegen?")
+                if nein:
+                    return {"error": nein}
+                if not gleich_geblieben():
+                    return {"error": "Die GitHub-Freigabe hat sich geändert."}
+                api.send("POST", f"/repos/{repo}/git/refs",
+                         {"ref": f"refs/heads/{name}", "sha": sha})
+                return {"branch": name, "from": basis, "sha": sha}
+            text = str(arguments.get("body") or "")
+            if len(text) > 20_000 or gw.secret_problem("Der Text", text.encode("utf-8")):
+                return {"error": "Der Text ist zu lang oder enthält einen Schlüssel oder ein "
+                                 "Passwort."}
+            if aktion == "pull_request":
+                kopf = str(arguments.get("branch") or "")
+                basis = str(arguments.get("base") or standard)
+                titel = " ".join(str(arguments.get("title") or "").split())[:250]
+                if not (gw.valid_branch(kopf) and gw.valid_branch(basis) and titel):
+                    return {"error": "pull_request braucht title, branch (der Kopf) und "
+                                     "optional base."}
+                nein = self._confirm(f"In {repo} einen Pull Request öffnen?\n{kopf} → {basis}\n"
+                                     f"Titel: {titel}")
+                if nein:
+                    return {"error": nein}
+                if not gleich_geblieben():
+                    return {"error": "Die GitHub-Freigabe hat sich geändert."}
+                pr = api.send("POST", f"/repos/{repo}/pulls", {
+                    "title": titel, "head": kopf, "base": basis, "body": text,
+                    "draft": arguments.get("draft") is True})
+                return {"number": pr.get("number"), "url": pr.get("html_url"),
+                        "state": pr.get("state")}
+            nummer = arguments.get("number")
+            if type(nummer) is not int or nummer <= 0:
+                return {"error": "number bitte als ganze Zahl."}
+            if aktion == "comment":
+                if not text.strip():
+                    return {"error": "comment braucht einen Text (body)."}
+                vorschau = text if len(text) <= 600 else text[:600] + " …"
+                nein = self._confirm(f"In {repo} zu #{nummer} kommentieren?\n{vorschau}")
+                if nein:
+                    return {"error": nein}
+                if not gleich_geblieben():
+                    return {"error": "Die GitHub-Freigabe hat sich geändert."}
+                kommentar = api.send("POST", f"/repos/{repo}/issues/{nummer}/comments",
+                                     {"body": text})
+                return {"comment": kommentar.get("id"), "url": kommentar.get("html_url")}
+            return {"error": "Unbekannte Aktion."}
+        except gw.WriteError as exc:
+            return {"error": str(exc)}
+        except httpx.HTTPError as exc:
+            return {"error": f"GitHub nicht erreichbar ({type(exc).__name__})."}
+        except (AttributeError, TypeError, KeyError, ValueError):
+            return {"error": "GitHub hat unerwartet geantwortet."}
+        finally:
+            client.close()
+
+    def _github_vm(self) -> Any:
+        from aquaticy import github_write as gw
+
+        if self.github_vm_ready is None or not self.github_vm_ready():
+            raise gw.WriteError("Dafür braucht es einen Code-Chat mit virtual machine. Ohne "
+                                "VM geht commit mit files.")
+        return self._sandbox()
+
+    def _github_checkout(self, api: Any, client: Any, repo: str, standard: str,
+                         arguments: dict[str, Any], rechte: dict[str, str]) -> dict[str, Any]:
+        import shlex
+        import uuid
+
+        from aquaticy import github_write as gw
+        from aquaticy.addons import github_reads_content
+        from aquaticy.sandbox import SandboxUnavailable
+
+        if not github_reads_content(rechte):
+            return {"error": "Dateiinhalte sind nicht freigegeben (Add-on GitHub -> Rechte)."}
+        ref = str(arguments.get("ref") or standard)
+        ordner = gw.vm_dir(str(arguments.get("dir") or repo.split("/")[1]))
+        try:
+            box = self._github_vm()
+            sha = gw.resolve(api, repo, ref)
+            daten = gw.download_tarball(client, api.headers, repo, sha)
+            archiv = f"/work/.aquaticy-github-{uuid.uuid4().hex[:8]}.tar.gz"
+            gelegt = box.put_bytes(archiv, daten)
+            if gelegt.get("error"):
+                return {"error": str(gelegt["error"])}
+            aus = box.run(shlex.join(["python3", "-c", gw.EXTRACT, archiv, ordner]), timeout=300)
+            if aus.exit_code == 3:
+                box.run(shlex.join(["rm", "-f", archiv]), timeout=30)
+                return {"error": f"Den Ordner {ordner} gibt es schon. Nimm einen anderen "
+                                 "Namen (dir) oder lösche ihn selbst."}
+            if aus.exit_code != 0:
+                return {"error": "Das Archiv ließ sich in der VM nicht auspacken."}
+            liste = box.run(shlex.join(["python3", "-c", gw.MANIFEST, ordner,
+                                        json.dumps(list(gw.SKIP)), "write"]), timeout=300)
+            if liste.exit_code != 0:
+                return {"error": "Die Dateiliste in der VM ließ sich nicht anlegen."}
+            anzahl = gw.parse_helper(liste.stdout).get("files")
+        except SandboxUnavailable as exc:
+            return {"error": str(exc)}
+        self.stats.vm_calls += 1
+        self._github_checkout_merken(ordner, {"repo": repo, "ref": ref, "sha": sha,
+                                              "branch": "" if ref == standard else ref})
+        return {"dir": ordner, "repo": repo, "ref": ref, "sha": sha, "files": anzahl,
+                "note": "Ändere und teste die Dateien mit vm_run und vm_write. Danach "
+                        "github_write action=push mit dir und einer Nachricht."}
+
+    def _github_push(self, api: Any, repo: str, standard: str, arguments: dict[str, Any],
+                     darf: str, zielbranch: Callable[[str, str], str],
+                     gleich_geblieben: Callable[[], bool]) -> dict[str, Any]:
+        import shlex
+
+        from aquaticy import github_write as gw
+        from aquaticy.sandbox import SandboxUnavailable
+
+        ordner = gw.vm_dir(str(arguments.get("dir") or repo.split("/")[1]))
+        eintrag = self._github_checkouts().get(ordner)
+        if not isinstance(eintrag, dict) or eintrag.get("repo") != repo:
+            return {"error": f"{ordner} wurde nicht mit checkout aus {repo} geholt. Hole das "
+                             "Repo zuerst mit github_write action=checkout."}
+        branch = zielbranch(str(arguments.get("branch") or eintrag.get("work_branch")
+                                or eintrag.get("branch") or gw.default_branch_name()), standard)
+        nachricht = str(arguments.get("message") or "").strip()[:4000]
+        if not nachricht:
+            return {"error": "push braucht eine Commit-Nachricht (message)."}
+        try:
+            box = self._github_vm()
+            diff = box.run(shlex.join(["python3", "-c", gw.MANIFEST, ordner,
+                                       json.dumps(list(gw.SKIP)), "diff"]), timeout=300)
+            if diff.exit_code != 0:
+                return {"error": "Die Änderungen in der VM ließen sich nicht ermitteln."}
+            liste = gw.parse_helper(diff.stdout).get("changes")
+            if not isinstance(liste, list):
+                return {"error": "Die VM hat unerwartet geantwortet."}
+            if len(liste) > gw.MAX_FILES:
+                return {"error": f"Mehr als {gw.MAX_FILES} geänderte Dateien. Übertrage in "
+                                 "kleineren Schritten oder räume Build-Dateien auf."}
+            aenderungen: list[dict[str, Any]] = []
+            for item in liste:
+                pfad = str(item.get("path") or "")
+                if not gw.valid_repo_path(pfad):
+                    return {"error": f"Ungültiger Pfad in der VM: {pfad[:120]}"}
+                daten = None
+                if item.get("status") != "gelöscht":
+                    daten = box.get_bytes(f"{ordner}/{pfad}", gw.MAX_FILE_BYTES)
+                aenderungen.append({"path": pfad, "data": daten,
+                                    "status": str(item.get("status") or ""),
+                                    "mode": "100755" if item.get("mode") == "100755"
+                                    else "100644"})
+            gw.check_changes(aenderungen, workflows_allowed=darf == "alles")
+        except (SandboxUnavailable, FileNotFoundError) as exc:
+            return {"error": str(exc)}
+        nein = self._confirm(self._github_frage(repo, branch, nachricht, aenderungen,
+                                                gw.branch_head(api, repo, branch) == ""))
+        if nein:
+            return {"error": nein}
+        if not gleich_geblieben():
+            return {"error": "Die GitHub-Freigabe hat sich geändert."}
+        ergebnis = gw.commit(api, repo, branch, nachricht, aenderungen,
+                             parent=str(eintrag.get("sha") or ""))
+        self._github_checkout_merken(ordner, {**eintrag, "sha": ergebnis["commit"],
+                                              "work_branch": branch})
+        box.run(shlex.join(["python3", "-c", gw.MANIFEST, ordner, json.dumps(list(gw.SKIP)),
+                            "write"]), timeout=300)
+        ergebnis["note"] = ("Gepusht. Einen Pull Request öffnest du mit github_write "
+                            "action=pull_request.")
+        return ergebnis
+
+    def _github_commit(self, api: Any, repo: str, standard: str, arguments: dict[str, Any],
+                       darf: str, zielbranch: Callable[[str, str], str],
+                       gleich_geblieben: Callable[[], bool]) -> dict[str, Any]:
+        from aquaticy import github_write as gw
+
+        dateien = arguments.get("files")
+        if not isinstance(dateien, list) or not 1 <= len(dateien) <= 20:
+            return {"error": "commit braucht files mit 1 bis 20 Einträgen."}
+        aenderungen: list[dict[str, Any]] = []
+        for datei in dateien:
+            if not isinstance(datei, dict):
+                return {"error": "Jeder Eintrag in files braucht path und content."}
+            pfad = str(datei.get("path") or "").strip().strip("/")
+            if datei.get("delete") is True:
+                aenderungen.append({"path": pfad, "data": None, "status": "gelöscht"})
+                continue
+            inhalt = datei.get("content")
+            if not isinstance(inhalt, str):
+                return {"error": f"{pfad[:120]}: content fehlt."}
+            aenderungen.append({"path": pfad, "data": inhalt.encode("utf-8"),
+                                "status": "geändert"})
+        gw.check_changes(aenderungen, workflows_allowed=darf == "alles")
+        branch = zielbranch(str(arguments.get("branch") or gw.default_branch_name()), standard)
+        nachricht = str(arguments.get("message") or "").strip()[:4000]
+        if not nachricht:
+            return {"error": "commit braucht eine Commit-Nachricht (message)."}
+        kopf = gw.branch_head(api, repo, branch)
+        eltern = kopf or gw.resolve(api, repo, str(arguments.get("base") or standard))
+        nein = self._confirm(self._github_frage(repo, branch, nachricht, aenderungen,
+                                                not kopf))
+        if nein:
+            return {"error": nein}
+        if not gleich_geblieben():
+            return {"error": "Die GitHub-Freigabe hat sich geändert."}
+        return gw.commit(api, repo, branch, nachricht, aenderungen, parent=eltern)
+
+    @staticmethod
+    def _github_frage(repo: str, branch: str, nachricht: str, aenderungen: list[dict[str, Any]],
+                      neu: bool) -> str:
+        zeilen = [f"{c.get('status') or 'geändert'}: {c['path']}" for c in aenderungen[:15]]
+        if len(aenderungen) > 15:
+            zeilen.append(f"… und {len(aenderungen) - 15} weitere")
+        warnung = ("\nAchtung: ändert GitHub Actions (.github/workflows)."
+                   if any(c["path"].startswith(".github/workflows/") for c in aenderungen)
+                   else "")
+        return (f"In {repo} auf {'den neuen ' if neu else ''}Branch {branch} committen und "
+                f"pushen ({len(aenderungen)} Dateien)?\nNachricht: {nachricht[:300]}\n"
+                + "\n".join(zeilen) + warnung)
 
     def lan_scan(self, subnet: str = "", thorough: bool = False) -> dict[str, Any]:
         """Sieht nach, welche Geraete im Heimnetz erreichbar sind."""

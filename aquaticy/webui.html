@@ -2646,6 +2646,13 @@ html.vv,html.vv body{height:var(--app-h)}
             </div>
             <p id="secure-nmap-note" class="note" role="status"></p>
             <div class="check">
+              <input type="checkbox" role="switch" class="schalter" id="secure-messenger">
+              <label for="secure-messenger" style="margin:0">Aufträge per WhatsApp/Signal
+                <span class="why">Schreib in deinem eigenen Chat zum Beispiel „Secure Pro
+                  prüfen“, „Secure Pro Status“ oder „Secure Pro Tipps“. Antworten beginnen mit
+                  [Aquaticy Secure Pro]. Fremde Nummern und Gruppen können das nicht.</span></label>
+            </div>
+            <div class="check">
               <input type="checkbox" role="switch" class="schalter" id="secure-vm">
               <label for="secure-vm" style="margin:0">VM für Abwehr nutzen
                 <span class="why">Secure Pro darf über SSH aus der VM Ports schließen, Geräte
@@ -2669,6 +2676,7 @@ html.vv,html.vv body{height:var(--app-h)}
           <p id="secure-scope-note" role="status"></p>
           <p id="secure-note" role="status"></p>
           <p id="secure-checked"></p>
+          <p id="secure-score" class="note" role="status"></p>
           <h3>Wichtig</h3>
           <ul id="secure-important"></ul>
           <h3>Tipps für dein Heimnetz</h3>
@@ -2679,6 +2687,8 @@ html.vv,html.vv body{height:var(--app-h)}
           <ul id="secure-positive"></ul>
           <h3>Geräte im freigegebenen Netz</h3>
           <ul id="secure-devices"></ul>
+          <h3>Verlauf</h3>
+          <ul id="secure-history"></ul>
           <p class="note">Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.
             Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige
             Sicherheitsprüfung.</p>
@@ -2908,7 +2918,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.3.4 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.0.0";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -5612,6 +5622,31 @@ try {
 
 
 const EN = {
+"Dateien und Änderungen": "Files and changes",
+"Lesen und ändern: eigene Branches, Commits, Pull Requests": "Read and change: own branches, commits, pull requests",
+"Router oder Repeater": "Router or repeater",
+"Kleinrechner": "Single-board computer",
+"Smart-Home-Gerät": "Smart home device",
+"Echo, Fire TV oder Kindle": "Echo, Fire TV or Kindle",
+"Nest oder Chromecast": "Nest or Chromecast",
+"Kamera": "Camera",
+"Router, Repeater oder Steckdose": "Router, repeater or smart plug",
+"Netzwerkgerät": "Network device",
+"Lautsprecher": "Speaker",
+"Smart-Home-Gerät oder Handy": "Smart home device or phone",
+"PC oder Laptop": "PC or laptop",
+"Drucker": "Printer",
+"Virtuelle Maschine": "Virtual machine",
+"Handy oder Laptop (private WLAN-Adresse)": "Phone or laptop (private Wi-Fi address)",
+"Medienserver": "Media server",
+"Smart-Home-Zentrale": "Smart home hub",
+"KI-Server": "AI server",
+"Höchstens 256 bekannte Geräte.": "At most 256 known devices.",
+"Aufträge per WhatsApp/Signal": "Tasks via WhatsApp/Signal",
+"Schreib in deinem eigenen Chat zum Beispiel „Secure Pro prüfen“, „Secure Pro Status“ oder „Secure Pro Tipps“. Antworten beginnen mit [Aquaticy Secure Pro]. Fremde Nummern und Gruppen können das nicht.": "Write in your own chat, for example “Secure Pro check”, “Secure Pro status” or “Secure Pro tips”. Replies start with [Aquaticy Secure Pro]. Other numbers and groups can't do this.",
+"Deine Repos, Commits, Issues, Pull Requests und Dateien. Aquaticy kann auch ändern, committen, pushen und Pull Requests öffnen. Code prüfen: „Prüfe https://github.com/besitzer/repo“.": "Your repos, commits, issues, pull requests and files. Aquaticy can also make changes, commit, push and open pull requests. Review code: “Review https://github.com/owner/repo”.",
+"Erstelle ein Fine-grained-Token auf GitHub. Wähle deine Repos unter Repository access. Zum Lesen reicht Contents: Read-only. Zum Ändern erlaube Contents: Read and write und Pull requests: Read and write. Füge das Token hier ein.": "Create a fine-grained token on GitHub. Choose your repos under Repository access. Contents: Read-only is enough for reading. To make changes, allow Contents: Read and write and Pull requests: Read and write. Paste the token here.",
+"Ausgewählte Dateien gehen an dein Chat-Modell. Jeder Commit, Push, Pull Request und Kommentar braucht dein Ja. Aquaticy pusht nie mit force. Der Schlüssel bleibt auf diesem Rechner, auch wenn die VM das Repo bearbeitet. Nach privaten Repo-Inhalten braucht öffentliche Recherche deine Bestätigung.": "Selected files go to your chat model. Every commit, push, pull request and comment needs your yes. Aquaticy never force-pushes. The token stays on this computer, even when the VM works on the repo. After private repo content, public research needs your confirmation.",
 "Die ganze Zeit und kurze Abstände belasten Heimnetz und Geräte stärker. Eine Prüfung dauert oft länger als 30 Sekunden.": "All the time and short intervals put more load on your home network and devices. A check often takes longer than 30 seconds.",
 "nmap für Schwachstellen nutzen": "Use nmap for vulnerabilities",
 "nmap liest Dienste und Versionen und führt nur sichere Prüfskripte aus. Nichts davon geht ins Internet. Secure Pro prüft neue oder geänderte Geräte, sonst jedes Gerät einmal am Tag. Im Chat kannst du gezielt prüfen lassen.": "nmap reads services and versions and only runs safe check scripts. None of it goes to the internet. Secure Pro checks new or changed devices, otherwise each device once a day. In the chat you can ask for targeted checks.",
@@ -6564,9 +6599,6 @@ const EN = {
 "Noch nichts gezählt.": "Nothing counted yet.",
 "Rechtsprüfung nicht erreichbar": "Legal check not reachable",
 "Konten": "Accounts",
-"Deine Repos, Issues, Pull Requests und Dateien — nur lesend. Code prüfen: „Prüfe https://github.com/besitzer/repo“.": "Your repos, issues, pull requests and files — read only. Review code: “Review https://github.com/owner/repo”.",
-"Erstelle ein Fine-grained-Token auf GitHub. Wähle deine Repos unter Repository access. Erlaube Contents: Read-only und für Pull Requests auch Pull requests: Read-only. Füge das Token hier ein.": "Create a fine-grained token on GitHub. Select your repos under Repository access. Grant Contents: Read-only and Pull requests: Read-only for pull requests. Paste the token here.",
-"Aquaticy liest nur. Ausgewählte Dateien gehen an dein Chat-Modell. Nach privaten Repo-Inhalten braucht öffentliche Recherche deine Bestätigung.": "Aquaticy only reads. Selected files go to your chat model. Public research after reading private repo data needs your confirmation.",
 "WhatsApp im Browser der virtual machine: Aquaticy kann Chats lesen und Antworten vorbereiten. Senden nur nach deinem Ja.": "WhatsApp in the browser of the virtual machine: Aquaticy can read chats and prepare replies. Sending only after your yes.",
 "„Anmelden“ zeigt den QR-Code direkt in Aquaticy. Auf dem Handy: WhatsApp → Einstellungen → Verknüpfte Geräte → Gerät hinzufügen, dann den QR-Code im Anmeldefenster scannen.": "“Sign in” shows the QR code directly in Aquaticy. On your phone: WhatsApp → Settings → Linked devices → Link a device, then scan the QR code in the sign-in window.",
 "WhatsApp mag keine Automatisierung. Nutze es nur für dich, nie für Massennachrichten, sonst droht eine Sperre. Was Aquaticy liest, geht an dein Modell. Braucht Firefox (kommt beim Installieren mit).": "WhatsApp doesn't like automation. Use it only for yourself, never for mass messages, or you risk a ban. What Aquaticy reads goes to your model. Needs Firefox (comes with the installation).",
@@ -9026,6 +9058,20 @@ function coworkerKarte(cw, d){
     regeln.appendChild(cwElement("p", "note", sp(
       "Die Home-Assistant-Verbindung hat sich geändert. Zum erneuten Freigeben „Erlauben“ anklicken.",
       "The Home Assistant connection has changed. Click Allow to approve it again.")));
+  // Auftraege per WhatsApp/Signal (14.4.4): ein Schalter direkt auf der Karte.
+  const bote = cwElement("label", "check cw-messenger");
+  const boteAn = cwElement("input", "");
+  boteAn.type = "checkbox"; boteAn.setAttribute("role", "switch"); boteAn.className = "schalter";
+  boteAn.checked = !!cw.messenger_orders;
+  boteAn.addEventListener("change", () => coworkerTun({
+    action: "messenger", id: cw.id, enabled: boteAn.checked}, boteAn));
+  bote.append(boteAn, document.createTextNode(sp("Aufträge per WhatsApp/Signal",
+    "Tasks via WhatsApp/Signal")));
+  karte.appendChild(bote);
+  if (cw.messenger_orders)
+    karte.appendChild(cwElement("p", "note", sp(
+      `Schreib in deinem eigenen Chat: „Coworker ${cw.name}: …“`,
+      `Write in your own chat: “Coworker ${cw.name}: …”`)));
   karte.appendChild(cwAufklapp(cw, "regeln", `Regeln — was ${cw.name} ohne dich darf`, regeln));
 
   const prefs = cwElement("div", "");
@@ -9942,6 +9988,7 @@ function secureOptionen(data){
       : "";
   $("#secure-packet-note").textContent = data.packets ? enOderDe(data.packet_status || "") : "";
   $("#secure-nmap").checked = !!data.nmap;
+  $("#secure-messenger").checked = !!data.messenger;
   $("#secure-nmap-note").textContent = !data.nmap_ready
     ? sp("nmap fehlt. Installiere es mit aquaticy secure-pro oder sudo apt install nmap.",
          "nmap is missing. Install it with aquaticy secure-pro or sudo apt install nmap.")
@@ -9989,12 +10036,43 @@ function secureRender(data, fill = false){
   const devices = $("#secure-devices"); devices.replaceChildren();
   for (const item of data.devices || []){
     const li = document.createElement("li");
-    li.textContent = item.address + (item.mac ? " · " + item.mac : "") + " · "
+    const text = document.createElement("span");
+    text.textContent = (item.name ? item.name + " · " : "") + item.address
+      + (item.vendor ? " · " + item.vendor : "") + (item.kind ? " · " + enOderDe(item.kind) : "")
+      + (item.mac ? " · " + item.mac : "") + " · "
       + (item.active ? sp("TCP-Antwort", "TCP response")
                      : sp("Nachbartabelle, kann veraltet sein", "Neighbor table, may be stale"))
       + (item.ports?.length ? " · " + sp("Ports: ", "Ports: ") + item.ports.join(", ") : "");
+    const benennen = document.createElement("button");
+    benennen.type = "button"; benennen.className = "btn";
+    benennen.textContent = item.name ? sp("Umbenennen", "Rename") : sp("Benennen", "Name");
+    const feld = document.createElement("input");
+    feld.type = "text"; feld.maxLength = 40; feld.hidden = true; feld.value = item.name || "";
+    feld.setAttribute("aria-label", sp("Name des Geräts (leer: vergessen)",
+                                       "Device name (empty: forget)"));
+    async function speichern(){
+      try {
+        secureRender(await featureRequest({action:"device_name", address:item.address,
+                                           mac:item.mac || "", name:feld.value.trim()}));
+      } catch(error){ $("#secure-note").textContent = error.message; }
+    }
+    benennen.addEventListener("click", () => {
+      if (feld.hidden){ feld.hidden = false; feld.focus(); benennen.textContent =
+        sp("Speichern", "Save"); return; }
+      speichern();
+    });
+    feld.addEventListener("keydown", e => {
+      if (e.key === "Enter"){ e.preventDefault(); speichern(); }
+    });
+    li.append(text, feld, benennen);
     devices.appendChild(li);
   }
+  $("#secure-score").textContent = data.score === null || data.score === undefined ? ""
+    : sp("Sicherheitswert: ", "Security score: ") + data.score + "/100 ("
+      + data.grade + ")" + (data.trend > 0 ? sp(", besser als zuvor", ", better than before")
+        : data.trend < 0 ? sp(", schlechter als zuvor", ", worse than before") : "");
+  secureListe("secure-history", (data.history || []).map(e =>
+    new Date(e.t * 1000).toLocaleString() + " · " + e.text));
   $("#secure-checked").textContent = data.checked
     ? sp("Letzte abgeschlossene Prüfung: ", "Last completed check: ")
       + new Date(data.checked * 1000).toLocaleString()
@@ -10047,7 +10125,7 @@ async function featureLoad(){
     const allowed = response.ok && data.allowed;
     for (const id of ["voice-setting", "secure-setting", "secure-open", "secure-watch",
                       "secure-interval", "secure-packets", "secure-vm", "secure-nmap",
-                      "secure-task-add"]){
+                      "secure-messenger", "secure-task-add"]){
       $("#" + id).disabled = !allowed;
     }
     $("#voice-setting").checked = !!data.voice;
@@ -10188,6 +10266,8 @@ $("#secure-watch").addEventListener("change", e => secureOption({watch:e.target.
 $("#secure-interval").addEventListener("change", e =>
   secureOption({seconds:Number(e.target.value)}, e.target));
 $("#secure-nmap").addEventListener("change", e => secureOption({nmap:e.target.checked}, e.target));
+$("#secure-messenger").addEventListener("change", e =>
+  secureOption({messenger:e.target.checked}, e.target));
 $("#secure-packets").addEventListener("change", e =>
   secureOption({packets:e.target.checked}, e.target));
 $("#secure-vm").addEventListener("change", e => secureOption({vm:e.target.checked}, e.target));

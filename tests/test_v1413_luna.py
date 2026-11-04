@@ -97,7 +97,7 @@ def test_options_have_safe_defaults_and_are_validated(tmp_path: Path) -> None:
     # 14.1.3 Terra: der Abstand steht in Sekunden ("seconds"), dazu der nmap-Schalter.
     assert secure_pro.options(secure_pro.read(tmp_path)) == {
         "watch": True, "seconds": 900, "packets": False, "vm": False, "nmap": False,
-        "tasks": []}
+        "tasks": [], "messenger": False, "known": {}}  # 15.0.0: Messenger und Gerätenamen
     for falsch in ({"seconds": 7}, {"seconds": "60"}, {"seconds": True},
                    {"packets": "ja"}, {"vm": 1}, {"watch": None}, {"nmap": "an"}):
         with pytest.raises(ValueError):

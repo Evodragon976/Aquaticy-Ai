@@ -62,18 +62,24 @@ PLAIN_TITLES = frozenset({"", "meldung", "antwort", "frage", "freigabe"})
 
 
 def coworker_text(name: str, titel: str, text: str, *, frage: bool = False,
-                  freigabe: bool = False) -> str:
-    """Die Nachricht eines Coworkers im Messenger: "[Aquaticy] Coworker Ava" und dann der Text.
+                  freigabe: bool = False, auftrag: str = "") -> str:
+    """Die Nachricht eines Coworkers im Messenger: "[Aquaticy Coworker Ava]", der Auftrag, Text.
+
+    Seit 14.4.4 steht der Name in der Kennung und darunter, was man ihm aufgetragen hat.
 
     Gleiche Regeln wie bei jeder Antwort: kein Markdown, keine Zahlungsdaten, hoechstens
     COWORKER_REPLY_CHARS Zeichen (weniger als eine Nachricht fasst, damit nichts geteilt wird).
     """
     from aquaticy.desktop import payment_data
 
-    kopf = "".join(z for z in str(name or "") if z.isprintable()).strip()[:40] or "Coworker"
+    name = "".join(z for z in str(name or "") if z.isprintable() and z not in "[]\n")
+    if payment_data(name):  # Auch der Name in der Kennung darf keine Zahlungsdaten tragen.
+        return to_chat_text("Darin stehen Zahlungsdaten. Die sende ich nicht.", wide=True,
+                            signature="[Aquaticy Coworker Coworker]")
+    kennung = f"[Aquaticy Coworker {name.strip()[:40] or 'Coworker'}]"
     titel = " ".join(str(titel or "").split())[:80]
-    if titel.lower() not in PLAIN_TITLES:
-        kopf += f" · {titel}"
+    kopf = titel if titel.lower() not in PLAIN_TITLES else ""
+    auftrag = " ".join(str(auftrag or "").split())[:300]
     if freigabe:
         koerper = "Wartet auf deine Freigabe. Öffne die App."
     elif payment_data(str(text or "")):
@@ -82,9 +88,12 @@ def coworker_text(name: str, titel: str, text: str, *, frage: bool = False,
         koerper = str(text or "").strip()
         if frage:
             koerper += "\n\nAntworten kannst du in der App."
-    message = to_chat_text(f"Coworker {kopf}\n{koerper}", wide=True, limit=COWORKER_REPLY_CHARS)
+    zeilen = ([f"Auftrag: {auftrag}"] if auftrag else []) + ([kopf] if kopf else []) + [koerper]
+    message = to_chat_text("\n".join(zeilen), wide=True,
+                           limit=COWORKER_REPLY_CHARS - len(kennung), signature=kennung)
     if payment_data(message):
-        return to_chat_text("Coworker\nDarin stehen Zahlungsdaten. Die sende ich nicht.", wide=True)
+        return to_chat_text("Darin stehen Zahlungsdaten. Die sende ich nicht.", wide=True,
+                            signature="[Aquaticy Coworker Coworker]")
     return message
 
 
@@ -142,9 +151,12 @@ class NativeResponder:
 
     def __init__(self, settings_getter: Callable[[], Any], answerer: Callable[..., str], *,
                  paused: Callable[[], bool] | None = None,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time,
+                 orders: Callable[[str], str | None] | None = None) -> None:
         self._settings = settings_getter
         self._answerer = answerer
+        # Auftraege an Secure Pro und Coworker (14.4.4): nur im eigenen Chat des Besitzers.
+        self._orders = orders
         self._paused = paused
         self._clock = clock
         self._acked: collections.OrderedDict[str, None] = collections.OrderedDict()
@@ -274,6 +286,10 @@ class NativeResponder:
                     self._settings, msg.messenger, config, self._paused):
                 raise ValueError("Freigabe geändert.")
 
+        if self._orders is not None and decision.selbst and not decision.group:
+            fertig = self._orders(auftrag)
+            if fertig is not None:
+                return fertig
         # Ein Befehl ("/code-review ...") hat eigene Regeln; Codeschnipsel sind keine Mailfrage.
         befehl = parse_command(auftrag) is not None
         fehlend = [] if befehl else [q for q in own_sources(auftrag) if not service_allowed(

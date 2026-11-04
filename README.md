@@ -1,4 +1,4 @@
-# Aquaticy AI 14.3.4 Luna
+# Aquaticy AI 15.0.0
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,41 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.0.0:**
+
+- **GitHub wie Codex.** Aquaticy sieht Commits mit ihren Änderungen (`commit`), vergleicht
+  Branches (`vergleich`) und filtert Commits nach Datei. Mit `github_write` holt es ein Repo in
+  die VM (`checkout`, nur im Code-Chat), ändert und testet es dort und überträgt alles mit
+  `push` als Commit auf einen eigenen Branch. Ohne VM geht `commit` mit Dateien direkt. Danach
+  öffnet es einen Pull Request oder kommentiert. Jeder Schritt, der etwas bei GitHub ändert,
+  braucht dein Ja. Aquaticy pusht nie mit force: Hat der Branch neue Commits, lehnt GitHub ab
+  wie bei git. Den Standard-Branch, das Mergen und GitHub Actions fasst Aquaticy nie an. Das
+  machst du auf GitHub. Dateien mit Schlüsseln oder Passwörtern überträgt es nicht. Der
+  GitHub-Schlüssel bleibt auf diesem Rechner, auch wenn die VM das Repo bearbeitet. Das Recht
+  dafür heißt im GitHub-Add-on **Dateien und Änderungen** (ab Werk: Lesen und ändern). Dein
+  Token braucht dazu Contents: Read and write und Pull requests: Read and write.
+- **Aufträge per WhatsApp/Signal.** Coworker haben einen Schalter **Aufträge per
+  WhatsApp/Signal**. Dann schreibst du in deinem eigenen Chat „Coworker Ava: Schau nach neuen
+  Mails“. Secure Pro hat denselben Schalter: „Secure Pro Status“, „Secure Pro prüfen“, „Secure
+  Pro Wichtig“, „Secure Pro Tipps“, „Secure Pro Geräte“, „Secure Pro Aufgabe: Melde neue
+  Geräte“. Antworten beginnen mit **[Aquaticy Secure Pro]** oder **[Aquaticy Coworker Ava]**,
+  darunter steht der Auftrag. Fremde Nummern und Gruppen können das nicht.
+- **Klartext statt Befehl im Messenger.** „Aquaticy, wechsel auf das Modell Qwen 3“, „wechsel
+  in den Pro-Modus“, „setz den Ort auf Köln“ oder „zeig meine Notizen“ wirken wie /switch, /pro,
+  /location und /notes. Löschen (/forget) geht nur als ausdrücklicher Befehl.
+- **Der Chat richtet selbst ein.** Sagst du „Nenne mir jeden Morgen die neusten Nachrichten“,
+  schlägt Aquaticy einen Coworker mit Zeitplan vor und legt ihn nach deinem Ja an. Braucht ein
+  Auftrag eine Einstellung (Sprache, Suche, Modell …), stellt Aquaticy sie nach deinem Ja um und
+  sagt, was jetzt gilt. Rechte wie Heimnetz, Mails, Haussteuerung, Gedächtnis oder die
+  Rechts-Leitplanken schaltest weiter nur du in den Einstellungen.
+- **Secure Pro erkennt Geräte.** Hersteller und Art (Router, Kamera, Smart-Home-Gerät, Drucker
+  …) aus der Hardware-Adresse und den Diensten. Handys mit privater WLAN-Adresse werden als
+  solche erkannt. Du kannst Geräte **benennen**. Benannte Geräte lösen keinen Hinweis „Neues
+  Gerät“ mehr aus, fremde fallen dadurch sofort auf. Dazu kommen ein **Sicherheitswert** (0 bis
+  100, Note A bis E, mit Trend), ein **Verlauf** der Befunde (lokal, wird beim Ausschalten
+  gelöscht), mehr eigene Tipps (Kameras, Smart-Home, UPnP) und mit nmap eine **UPnP-Prüfung**
+  am Router (höchstens einmal je Stunde).
 
 **Neu in 14.3.4 Luna:** Die automatische Antwortprüfung beachtet jetzt den Rechts-Schalter
 und dessen Änderung während einer laufenden Antwort. Bei aktiver Prüfung zählt auch der
@@ -339,7 +374,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.3.4 Luna
+aquaticy --version            # 15.0.0
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

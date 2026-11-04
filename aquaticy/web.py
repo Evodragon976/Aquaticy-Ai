@@ -1539,6 +1539,12 @@ class ChatSession:
                 from aquaticy.learning import Learning
 
                 agent.learning = Learning(settings.data_dir)
+                # Auftraege im Chat koennen Coworker werden (15.0.0) -- fuer genau dieses Konto.
+                werkzeuge = getattr(agent, "toolbox", None)
+                if werkzeuge is not None:
+                    werkzeuge.coworker_creator = lambda nutzlast: coworker_action(
+                        {**nutzlast, "action": "create"}, getattr(self, "account", None),
+                        session=self)[0]
 
 
                 if self._carry_over:
@@ -2584,6 +2590,164 @@ def _messenger_session_command(get_session: Callable[[], Any]) -> Callable[[str,
     return ausfuehren
 
 
+_SECURE_ORDER = re.compile(r"^\s*(?:/secure-?pro|secure[ -]?pro)\b[\s:,.-]*(.*)$", re.I | re.S)
+_COWORKER_ORDER = re.compile(
+    r"^\s*(?:/coworker|coworker)\s+(?:([^:\n]{1,40}?)\s*:\s*(.+)|([^\s:,]{1,40})[\s,.-]+(.+))$",
+    re.I | re.S)
+
+
+def _messenger_orders(get_session: Callable[[], Any], account: Any
+                      ) -> Callable[[str], str | None]:
+    """Auftraege aus dem eigenen Messenger-Chat an Secure Pro und Coworker (14.4.4).
+
+    "Secure Pro prüfen" oder "Coworker Ava: Schau nach neuen Mails". Nur im eigenen Chat des
+    Besitzers (aquaticy/bridge_native.py), nur mit dem Schalter beim Coworker bzw. bei Secure
+    Pro. Die Antwort beginnt mit "[Aquaticy Secure Pro]" oder "[Aquaticy Coworker Ava]" und
+    nennt den Auftrag. Alles andere geht wie gewohnt an Aquaticy.
+    """
+    def antworten(auftrag: str) -> str | None:
+        text = str(auftrag or "").strip()
+        ausdruecklich = text.startswith("/")
+        treffer = _SECURE_ORDER.match(text)
+        if treffer:
+            befehl = treffer.group(1).strip()
+            # "Secure Pro, was ist ARP-Spoofing?" ist eine Frage, kein Befehl.
+            if ausdruecklich or _secure_command(befehl):
+                return secure_messenger_order(get_session(), befehl, text)
+            return None
+        treffer = _COWORKER_ORDER.match(text)
+        if treffer:
+            name = (treffer.group(1) or treffer.group(3) or "").strip()
+            inhalt = (treffer.group(2) or treffer.group(4) or "").strip()
+            if not ausdruecklich and treffer.group(1) is None:
+                # "Coworker sind toll" -- nur ein Auftrag, wenn es den Coworker gibt.
+                from aquaticy import coworker as coworker_mod
+
+                sitzung = get_session()
+                if coworker_mod.CoworkerStore(sitzung.settings().db_path).by_name(name) is None:
+                    return None
+            return coworker_messenger_order(get_session(), account, name, inhalt, text)
+        return None
+
+    return antworten
+
+
+_SECURE_COMMANDS = ("prüf", "pruef", "check", "scan", "tipp", "tip", "wichtig", "befund",
+                    "finding", "gerät", "geraet", "device", "aufgabe", "task", "status", "stand",
+                    "hilfe", "help")
+
+
+def _secure_command(befehl: str) -> bool:
+    klein = befehl.casefold().strip(" .!?")
+    return not klein or klein.startswith(_SECURE_COMMANDS)
+
+
+def _order_reply(kennung: str, auftrag: str, text: str) -> str:
+    from aquaticy import bridge as bridge_mod
+    from aquaticy.desktop import payment_data
+
+    auftrag = " ".join(auftrag.split())
+    auftrag = auftrag if len(auftrag) <= 300 else auftrag[:299] + "…"
+    antwort = bridge_mod.to_chat_text(f"Auftrag: {auftrag}\n{text}", wide=True, limit=3000,
+                                      signature=kennung)
+    if payment_data(antwort):
+        return bridge_mod.to_chat_text("Darin stehen Zahlungsdaten. Die sende ich nicht.")
+    return antwort
+
+
+def secure_messenger_order(session: Any, befehl: str, auftrag: str) -> str:
+    """Secure Pro per WhatsApp/Signal: Status, Prüfen, Wichtig, Tipps, Geräte, Aufgabe."""
+    from aquaticy import secure_pro
+
+    kennung = secure_pro.SIGNATURE
+    if not host_feature_owner(session):
+        return _order_reply(kennung, auftrag, "Secure Pro gibt es nur für den Besitzer.")
+    directory = get_settings().data_dir
+    config = secure_pro.read(directory)
+    if config.get("enabled") is not True:
+        return _order_reply(kennung, auftrag, "Secure Pro ist aus. Gib dein Netz in den "
+                            "Einstellungen frei.")
+    if not secure_pro.options(config)["messenger"]:
+        return _order_reply(kennung, auftrag, "Aufträge per WhatsApp/Signal sind für Secure "
+                            "Pro aus. Schalte sie unter Einstellungen → Zuhause & Netz → "
+                            "Secure Pro ein.")
+    klein = befehl.casefold()
+    stand = feature_view(session)
+    if klein.startswith(("prüf", "pruef", "check", "scan")):
+        if SECURE_WATCHER is None:
+            antwort = "Der Prüfungsdienst läuft gerade nicht."
+        elif SECURE_WATCHER.request():
+            antwort = "Prüfung gestartet. Wichtiges melde ich hier."
+        else:
+            antwort = "Warte vor einer weiteren Prüfung mindestens eine Minute."
+    elif klein.startswith(("tipp", "tip")):
+        antwort = "\n".join(f"• {t}" for t in stand.get("tips", [])[:8]) or "Keine Tipps."
+    elif klein.startswith(("wichtig", "befund", "finding")):
+        liste = stand.get("important", [])[:8] or stand.get("findings", [])[:8]
+        antwort = "\n".join(f"• {t}" for t in liste) or "Keine Befunde."
+    elif klein.startswith(("gerät", "geraet", "device")):
+        geraete = stand.get("devices", [])
+        aktiv = [d for d in geraete if d.get("active")]
+        zeilen = [f"• {d['address']}" + (f" {d['name']}" if d.get("name") else "")
+                  + (f" ({d['vendor']})" if d.get("vendor") else "") for d in aktiv[:15]]
+        antwort = f"{len(aktiv)} Geräte antworten.\n" + "\n".join(zeilen)
+    elif klein.startswith(("aufgabe", "task")):
+        _, _, rest = befehl.partition(":")
+        try:
+            neu = secure_pro.add_task(directory, (rest or befehl.split(None, 1)[-1]).strip())
+            antwort = f"Aufgabe gespeichert: {neu['label']}"
+        except ValueError as exc:
+            antwort = str(exc)
+    elif klein in ("", "status", "stand"):
+        antwort = ("Secure Pro ist an." + (" Die Prüfung läuft." if stand.get("scanning")
+                                           else ""))
+        if stand.get("score") is not None:
+            antwort += f"\nSicherheitswert: {stand['score']}/100 ({stand.get('grade', '')})"
+        if stand.get("checked"):
+            antwort += "\nLetzte Prüfung: " + time.strftime(
+                "%d.%m.%Y %H:%M", time.localtime(stand["checked"]))
+        wichtig = stand.get("important", [])
+        antwort += (f"\nWichtig: {len(wichtig)}\n" + "\n".join(f"• {t}" for t in wichtig[:5])
+                    if wichtig else "\nNichts Wichtiges.")
+    else:
+        antwort = ("Das kenne ich nicht. Schreib: Secure Pro Status, Prüfen, Wichtig, Tipps, "
+                   "Geräte oder Aufgabe: Melde neue Geräte.")
+    return _order_reply(kennung, auftrag, antwort)
+
+
+def coworker_messenger_order(session: Any, account: Any, name: str, inhalt: str,
+                             auftrag: str) -> str:
+    """Ein Auftrag an einen Coworker per WhatsApp/Signal -- wie eine Nachricht in der App."""
+    from aquaticy import coworker as coworker_mod
+
+    store = coworker_mod.CoworkerStore(session.settings().db_path)
+    kollege = store.by_name(name)
+    if kollege is None:
+        return _order_reply("[Aquaticy]", auftrag, f"Einen Coworker „{name[:40]}“ gibt es "
+                            "nicht.")
+    kennung = f"[Aquaticy Coworker {kollege.name.replace(']', '')[:40]}]"
+    if not kollege.messenger_orders:
+        return _order_reply(kennung, auftrag, f"{kollege.name} nimmt keine Aufträge per "
+                            "WhatsApp/Signal an. Schalte das im Coworker-Fenster ein.")
+    if AIGUARD is not None and account is not None and AIGUARD.is_banned(
+            user_id=account.id) is not None:
+        return _order_reply(kennung, auftrag, "Während einer Sperre arbeiten keine Coworker.")
+    text = coworker_mod._clean_text(inhalt, coworker_mod.MAX_MESSAGE)
+    if not text:
+        return _order_reply(kennung, auftrag, "Schreib nach dem Namen, was zu tun ist.")
+    nein = _coworker_insult(account, text, f"coworker:{kollege.id}")
+    if nein:
+        return _order_reply(kennung, auftrag, nein)
+    store.add_log(kollege.id, "nachricht", text)
+    takt = _coworker_scheduler(session)
+    if takt is not None:
+        takt.wake()
+    return _order_reply(kennung, auftrag, (
+        f"Angenommen. {kollege.name} meldet sich hier, wenn es Neues gibt."
+        if kollege.enabled else
+        f"{kollege.name} ist pausiert und liest es, sobald es weitergeht."))
+
+
 def _native_paused(account: Any) -> bool:
     """Ruht die direkte Bruecke? Stufe, Ai-guard-Sperre und Verbund wie bei der anderen."""
     if account is None:
@@ -2632,6 +2796,9 @@ def feature_view(session: Any) -> dict[str, Any]:
             "watch": gewaehlt["watch"], "seconds": gewaehlt["seconds"],
             "intervals": list(secure_pro.INTERVALS), "packets": gewaehlt["packets"],
             "vm": gewaehlt["vm"], "vm_network": netz, "nmap": gewaehlt["nmap"],
+            "messenger": gewaehlt["messenger"],
+            "history": list(reversed(secure_pro.read_history(directory)["events"][-30:]))
+            if an else [],
             "nmap_ready": secure_nmap.available(),
             # Eigene Tipps fuer dieses Heimnetz (14.1.3 Terra), aus den Messwerten.
             "tips": secure_knowledge.network_tips(
@@ -2681,8 +2848,8 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                     **feature_view(session)}, 200
         elif action == "options":
             werte: dict[str, Any] = {key: payload[key] for key in
-                                     ("watch", "seconds", "packets", "vm", "nmap")
-                                     if key in payload}
+                                     ("watch", "seconds", "packets", "vm", "nmap",
+                                      "messenger") if key in payload}
             if not werte:
                 return {"error": "Nichts zu ändern."}, 400
             try:
@@ -2701,6 +2868,15 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
             return {"ok": True, "task": {"id": aufgabe["id"], "label": aufgabe["label"],
                                          "host": aufgabe["host"], "port": aufgabe["port"]},
                     **feature_view(session)}, 200
+        elif action == "device_name":
+            try:
+                secure_pro.name_device(directory, str(payload.get("address", ""))[:40],
+                                       str(payload.get("mac", ""))[:40],
+                                       str(payload.get("name", ""))[:80])
+            except ValueError as exc:
+                return {"error": str(exc)}, 400
+            if SECURE_WATCHER:
+                SECURE_WATCHER.rename(secure_pro.options(secure_pro.read(directory))["known"])
         elif action == "task_remove":
             if not secure_pro.remove_task(directory, str(payload.get("id", ""))[:40]):
                 return {"error": "Diese Aufgabe gibt es nicht mehr."}, 404
@@ -2726,6 +2902,8 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                     SECURE_WATCHER.start()
             elif payload.get("enabled") is False:
                 (directory / "secure-pro.json").unlink(missing_ok=True)
+                # Ausschalten loescht auch den Verlauf (15.0.0).
+                secure_pro.history_path(directory).unlink(missing_ok=True)
                 if SECURE_WATCHER:
                     SECURE_WATCHER.wake.set()
             else:
@@ -2792,6 +2970,7 @@ def secure_feature_tool(session: Any, name: str, arguments: dict[str, Any]) -> d
         state["device_count"] = len(all_devices)
         state["devices"] = all_devices[:24]
         state["events"] = state.get("events", [])[:24]
+        state["history"] = state.get("history", [])[:15]
         state["important"] = state.get("important", [])[:24]
         state["findings_count"] = len(state.get("findings", []))
         state["findings"] = state.get("findings", [])[:24]
@@ -2871,7 +3050,8 @@ def _build_native_hub(get_session: Callable[[], Any], account: Any, directory: P
         einstellungen, on_abuse=lambda payload: bridge_abuse(account, payload),
         session_command=_messenger_session_command(get_session))
     antwort = NativeResponder(einstellungen, antworter,
-                              paused=lambda: _native_paused(account))
+                              paused=lambda: _native_paused(account),
+                              orders=_messenger_orders(get_session, account))
 
     def gewollt(messenger: str) -> bool:
         return bool(bridge_mod.load_config(einstellungen())[messenger]["an"])
@@ -3834,7 +4014,7 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
 
 COWORKER_ACTIONS = frozenset({
     "create", "message", "approve", "reject", "pause", "resume", "wake", "rules", "edit",
-    "delete", "seen", "reset_notes", "preferences",
+    "delete", "seen", "reset_notes", "preferences", "messenger",
 })
 
 
@@ -3931,7 +4111,8 @@ def coworker_image(payload: dict[str, Any], settings: Settings) -> tuple[str, st
         return "", "Dieses Bildformat wird nicht unterstützt (JPEG, PNG, WebP, GIF)."
 
 
-def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any], int]:
+def coworker_action(payload: dict[str, Any], konto: Any, *,
+                    session: Any = None) -> tuple[dict[str, Any], int]:
     """Anlegen, schreiben, freigeben, pausieren -- alles aus der Coworker-Uebersicht.
 
     Returns: (Antwort, HTTP-Status).
@@ -3940,7 +4121,8 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
     from aquaticy.agent import new_session_id
     from aquaticy.cache import Cache
 
-    session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
+    if session is None:
+        session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
     if konto is None:
         konto = getattr(session, "account", None)
     if AIGUARD is not None and konto is not None and AIGUARD.is_banned(
@@ -4099,6 +4281,13 @@ def coworker_action(payload: dict[str, Any], konto: Any) -> tuple[dict[str, Any]
             elif action == "preferences":
                 store.set_preferences(kollege.id, payload, settings=settings, ultra=session.ultra)
                 hinweis = "Einstellungen gespeichert."
+            elif action == "messenger":
+                if not isinstance(payload.get("enabled"), bool):
+                    return {"ok": False, "error": "Wähle an oder aus."}, 400
+                store.set_messenger_orders(kollege.id, payload["enabled"])
+                hinweis = (f"{kollege.name} nimmt Aufträge aus deinem eigenen WhatsApp- und "
+                           "Signal-Chat an." if payload["enabled"] else
+                           f"{kollege.name} nimmt keine Aufträge per Messenger mehr an.")
             elif action == "reset_notes":
                 store.reset_notes(kollege.id)
                 hinweis = f"Die Notizen von {kollege.name} sind gelöscht."
@@ -7976,7 +8165,9 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
             chat = new_session_id()
             cache.mark_secure_chat(chat)
             cache.rename_chat(chat, "Secure Pro")
-        inhalt = text.removeprefix("[Aquaticy] Secure Pro\n")
+        from aquaticy.secure_pro import SIGNATURE
+
+        inhalt = text.removeprefix(SIGNATURE + "\n")
         cache.add_history(chat, "🛡 Secure Pro · Meldung", inhalt, {"secure_report": True},
                           mode="normal")
         with contextlib.suppress(Exception):

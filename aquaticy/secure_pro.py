@@ -39,6 +39,8 @@ NMAP_PER_CHECK = 4
 PACKET_SECONDS = 15.0
 SCOPE = ("enabled", "subnet", "router", "folder")
 WICHTIG, HINWEIS = "wichtig", "hinweis"
+# Kennung im Messenger (14.4.4): so sieht man, dass Secure Pro schreibt.
+SIGNATURE = "[Aquaticy Secure Pro]"
 
 
 def read(directory: Path) -> dict[str, Any]:
@@ -79,8 +81,66 @@ def options(config: dict[str, Any]) -> dict[str, Any]:
         "packets": config.get("packets") is True,
         "vm": config.get("vm") is True,
         "nmap": config.get("nmap") is True,
+        # Auftraege aus dem eigenen WhatsApp/Signal-Chat ("Secure Pro prüfen"), 14.4.4.
+        "messenger": config.get("messenger") is True,
+        # Bekannte Geraete mit Namen (15.0.0): MAC oder IP -> Name.
+        "known": _known(config.get("known")),
         "tasks": secure_tasks.clean(config.get("tasks", [])),
     }
+
+
+def _known(roh: Any) -> dict[str, str]:
+    from aquaticy.secure_devices import clean_known
+
+    return clean_known(roh)
+
+
+def name_device(directory: Path, address: str, mac: str, name: str) -> dict[str, str]:
+    """Merkt sich ein Geraet mit Namen -- leerer Name vergisst es wieder.
+
+    Raises:
+        ValueError: Secure Pro ist aus oder das Geraet liegt ausserhalb der Freigabe.
+    """
+    import ipaddress
+
+    from aquaticy.secure_devices import clean_name, known_key
+
+    config = read(directory)
+    if config.get("enabled") is not True:
+        raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
+    try:
+        if ipaddress.IPv4Address(str(address)) not in ipaddress.IPv4Network(config["subnet"]):
+            raise ValueError
+    except (ValueError, KeyError) as exc:
+        raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.") from exc
+    neu = options(config)
+    schluessel = known_key({"address": str(address), "mac": str(mac or "")})
+    sauber = clean_name(name)
+    if sauber:
+        if schluessel not in neu["known"] and len(neu["known"]) >= 256:
+            raise ValueError("Höchstens 256 bekannte Geräte.")
+        neu["known"][schluessel] = sauber
+    else:
+        neu["known"].pop(schluessel, None)
+    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+    return neu["known"]
+
+
+def history_path(directory: Path) -> Path:
+    return directory / "secure-pro-log.json"
+
+
+def read_history(directory: Path) -> dict[str, Any]:
+    """Verlauf: Befunde mit Zeit und die letzten Sicherheitswerte (lokal, nur fuer dich)."""
+    try:
+        daten = json.loads(history_path(directory).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"events": [], "scores": []}
+    if not isinstance(daten, dict):
+        return {"events": [], "scores": []}
+    events = [e for e in daten.get("events", []) if isinstance(e, dict)][-300:]
+    scores = [s for s in daten.get("scores", []) if isinstance(s, list) and len(s) == 2][-60:]
+    return {"events": events, "scores": scores}
 
 
 def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "") -> None:
@@ -117,7 +177,7 @@ def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
     if config.get("enabled") is not True:
         raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
     neu = options(config)
-    for key in ("watch", "packets", "vm", "nmap"):
+    for key in ("watch", "packets", "vm", "nmap", "messenger"):
         if key in payload:
             if not isinstance(payload[key], bool):
                 raise ValueError("Wähle an oder aus.")
@@ -206,6 +266,11 @@ class Watcher:
         self._offline: set[str] = set()
         self._requested = 0.0
         self._fehler_gemeldet = False
+        self._logged: set[str] = set()
+        self.score: int | None = None
+        self.grade = ""
+        self.trend = 0
+        self._upnp: tuple[float, list[str]] = (0.0, [])
         self._nmap_seen: dict[str, tuple[float, tuple[int, ...]]] = {}
         self._nmap_services: dict[str, list[str]] = {}
         self._nmap_hosts: dict[str, dict[str, Any]] = {}
@@ -221,6 +286,7 @@ class Watcher:
                     "checked": self.last_checked, "next_check": self.next_check,
                     "scanning": self.scanning, "error": self.error,
                     "packet_status": self.packet_status, "nmap_status": self.nmap_status,
+                    "score": self.score, "grade": self.grade, "trend": self.trend,
                     "scope": self._result_subnet, "configuration": self._configuration,
                     "devices": [{**item, "ports": list(item["ports"])} for item in self.devices]}
 
@@ -398,6 +464,27 @@ class Watcher:
                 befunde[text] = {"kind": kind, "level": level, "text": text, "host": host,
                                  "port": port}
 
+        # Geraete erkennen und benennen (15.0.0): Hersteller, Art, bekannter Name.
+        from aquaticy import secure_devices
+
+        bekannt = options(config)["known"]
+        router_ip = str(config.get("router") or "")
+        for item in inventory.values():
+            item.update(secure_devices.describe(item, router_ip))
+            name = bekannt.get(secure_devices.known_key(item)) or bekannt.get(item["address"])
+            if name:
+                item["name"] = name
+            else:
+                item.pop("name", None)
+
+        def bekanntes(address: str) -> bool:
+            return bool(inventory.get(address, {}).get("name"))
+
+        def merkmal(address: str) -> str:
+            item = inventory.get(address, {})
+            was = item.get("vendor") or item.get("kind") or ""
+            return f" ({was})" if was else ""
+
         ereignisse: list[dict[str, Any]] = []
         positives = [("Der Prüfbereich bleibt privat und umfasst 1 Adresse."
                       if network.num_addresses == 1 else
@@ -408,8 +495,10 @@ class Watcher:
         if self._inventory is not None:
             for address, item in inventory.items():
                 old = self._inventory.get(address)
-                if old is None:
-                    befund(f"Neu in der lokalen Beobachtung: {address}. "
+                if old is None and bekanntes(address):
+                    pass
+                elif old is None:
+                    befund(f"Neu in der lokalen Beobachtung: {address}{merkmal(address)}. "
                            "Das kann ein eigenes Gerät oder ein alter Nachbareintrag sein.",
                            "new_device", HINWEIS, address)
                 elif old.get("mac") and item.get("mac") and old["mac"] != item["mac"]:
@@ -434,7 +523,8 @@ class Watcher:
         current = {d.address for d in devices}
         if self.known is not None:
             for ip in sorted(current - self.known):
-                befund(f"Neues Gerät: {ip}", "new_device", HINWEIS, ip)
+                if not bekanntes(ip):
+                    befund(f"Neues Gerät: {ip}{merkmal(ip)}", "new_device", HINWEIS, ip)
             for ip in sorted(self.known - current):
                 self._offline.add(ip)
                 ereignisse.append({"kind": "device_offline", "level": HINWEIS, "host": ip,
@@ -492,6 +582,17 @@ class Watcher:
         for address, dienste in self._nmap_services.items():
             if address in inventory:
                 inventory[address]["services"] = list(dienste)
+        # UPnP am Router (15.0.0): mit dem nmap-Schalter, hoechstens einmal je Stunde.
+        if router_ip and options(config)["nmap"] and time.time() - self._upnp[0] > 3600:
+            try:
+                self._upnp = (time.time(), secure_devices.upnp_gateways(str(network),
+                                                                        router_ip, 1.5))
+            except (OSError, ValueError):
+                self._upnp = (time.time(), [])
+        for gateway in self._upnp[1] if options(config)["nmap"] else []:
+            befund(f"UPnP ist an bei {gateway}. Geräte können damit selbst Ports ins "
+                   "Internet öffnen. Schalte UPnP am Router aus, wenn du es nicht brauchst.",
+                   "upnp", HINWEIS, gateway)
         if not grant_active(self.directory, config) or self.stop_event.is_set():
             return []
         folder = config.get("folder", "")
@@ -556,6 +657,7 @@ class Watcher:
             self.error = ""
             self.devices = sorted(inventory.values(), key=lambda item: tuple(
                 int(part) for part in item["address"].split(".")))[:256]
+        self._remember(befunde, options(read(self.directory)))
         new = [text for text in dict.fromkeys(wichtig + aufgaben)
                if text not in self.announced][:20]
         if new and not self.stop_event.is_set() and config_token(read(self.directory)) == token:
@@ -566,9 +668,46 @@ class Watcher:
                 self.announced.update(new)
         return new
 
+    def _remember(self, befunde: dict[str, dict[str, Any]], gewaehlt: dict[str, Any]) -> None:
+        """Sicherheitswert und Verlauf (15.0.0). Der Verlauf bleibt lokal und privat."""
+        from aquaticy import secure_devices
+
+        wert, note = secure_devices.score(list(befunde.values()), self.devices, gewaehlt)
+        verlauf = read_history(self.directory)
+        jetzt = time.time()
+        vorher = verlauf["scores"][-1] if verlauf["scores"] else None
+        with self._lock:
+            self.trend = wert - int(vorher[1]) if vorher else 0
+            self.score, self.grade = wert, note
+        neu = [item for text, item in befunde.items() if text not in self._logged]
+        self._logged = set(befunde)
+        if not neu and vorher and vorher[1] == wert and jetzt - float(vorher[0]) < 3600:
+            return
+        verlauf["events"].extend({"t": int(jetzt), "level": item["level"],
+                                  "text": item["text"][:500]} for item in neu)
+        if not vorher or vorher[1] != wert or jetzt - float(vorher[0]) >= 3600:
+            verlauf["scores"].append([int(jetzt), wert])
+        try:
+            private_json.write(history_path(self.directory), {
+                "events": verlauf["events"][-300:], "scores": verlauf["scores"][-60:]})
+        except OSError:
+            LOG.warning("Der Secure-Pro-Verlauf ließ sich nicht speichern.")
+
+    def rename(self, bekannt: dict[str, str]) -> None:
+        """Neue Namen gleich in der Geraeteliste zeigen, nicht erst nach der Pruefung."""
+        from aquaticy.secure_devices import known_key
+
+        with self._lock:
+            for item in self.devices:
+                name = bekannt.get(known_key(item)) or bekannt.get(item["address"])
+                if name:
+                    item["name"] = name
+                else:
+                    item.pop("name", None)
+
     def _deliver(self, lines: list[str], abwehr: bool) -> bool:
         """Meldet Wichtiges an Messenger und Secure-Pro-Chat. True, wenn es ankam."""
-        prefix = "[Aquaticy] Secure Pro\n"
+        prefix = SIGNATURE + "\n"
         suffix = ("\nSchreib im Secure-Pro-Chat, was ich tun soll, zum Beispiel "
                   "„Sperre Port 4444 auf 192.168.1.20“. Jede Abwehr braucht dein Ja."
                   if abwehr else "")
@@ -624,7 +763,7 @@ class Watcher:
                         and read(self.directory).get("enabled") is True):
                     self._fehler_gemeldet = True
                     try:
-                        self.notify("[Aquaticy] Secure Pro: Die Prüfung ist fehlgeschlagen. "
+                        self.notify(f"{SIGNATURE} Die Prüfung ist fehlgeschlagen. "
                                     "Es liegt kein sauberes Ergebnis vor. "
                                     "Prüfe das lokale Protokoll.")
                     except Exception:

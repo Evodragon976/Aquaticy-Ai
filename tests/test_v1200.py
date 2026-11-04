@@ -267,5 +267,6 @@ def test_twelve_is_the_version() -> None:
 
     # Seit 13.0.0 Luna die naechste Hauptversion: mindestens 12.
     assert int(aquaticy.__version__.split(".")[0]) >= 12
-    label = f"{aquaticy.__version__} {aquaticy.__codename__}"
+    # Seit 15.0.0 darf der Name fehlen ("15.0.0").
+    label = " ".join(t for t in (aquaticy.__version__, aquaticy.__codename__) if t)
     assert f'window.__AQUATICY_VERSION__ || "{label}"' in _ui()

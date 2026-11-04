@@ -20,7 +20,8 @@ def test_version_label() -> None:
 
     import aquaticy
 
-    assert re.fullmatch(r"\d+\.\d+(\.\d+)* \w+( \w+)?", aquaticy.VERSION_LABEL)
+    # Seit 15.0.0 darf der Name fehlen ("15.0.0").
+    assert re.fullmatch(r"\d+\.\d+(\.\d+)*( \w+)?( \w+)?", aquaticy.VERSION_LABEL)
 
 
 def test_page_is_gzipped_when_the_browser_accepts_it() -> None:

@@ -611,7 +611,8 @@ def _app_only() -> str:
 _MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 
 
-def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0) -> str:
+def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0,
+                 signature: str = "") -> str:
     """Macht aus einer Antwort einen Text, wie ihn ein Messenger zeigt.
 
     Kein Markdown, keine Zeichen jenseits der Unicode-Grundebene (die virtual machine
@@ -625,7 +626,8 @@ def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0) -> str:
     text = re.sub(r"(\*\*|__|\*|`)", "", text)
     text = re.sub(r"(?m)^\s*[-*+]\s+", "• ", text)
     text = re.sub(r"(?m)^\s*\|?\s*[-: |]{3,}\s*\|?\s*$", "", text)
-    text = re.sub(r"(?m)^\s*\|(.*)\|\s*$", lambda m: m.group(1).replace("|", " – ").strip(), text)
+    text = re.sub(r"(?m)^\s*\|(.*)\|\s*$",
+                  lambda m: str(m.group(1)).replace("|", " – ").strip(), text)
     text = "".join(z for z in text if (wide or ord(z) <= 0xFFFF)
                    and (z == "\n" or z.isprintable()))
     text = re.sub(r"[ \t]+", " ", text)
@@ -633,13 +635,23 @@ def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0) -> str:
     grenze = limit or MAX_REPLY_CHARS
     if len(text) > grenze:
         text = text[:grenze].rsplit(" ", 1)[0] + " … (Mehr in der App.)"
-    return f"{SIGNATURE} {text or 'Dazu habe ich keine Antwort.'}"
+    kennung = signature if OWN_SIGNATURE.fullmatch(signature or "") else SIGNATURE
+    # Eine eigene Kennung (Secure Pro, Coworker) steht in einer eigenen Zeile (15.0.0).
+    trenner = "\n" if signature and kennung == signature else " "
+    return f"{kennung}{trenner}{text or 'Dazu habe ich keine Antwort.'}"
+
+
+#: Eigene Kennungen: "[Aquaticy]", seit 14.4.4 auch "[Aquaticy Secure Pro]" und
+#: "[Aquaticy Coworker Ava]". Ohne Klammer zaehlt nur "Aquaticy]" -- "Aquaticy, ..." ist ein
+#: Auftrag in einer Gruppe, keine eigene Nachricht.
+OWN_SIGNATURE = re.compile(r"\[Aquaticy(?: Secure Pro| Coworker [^\]\n]{1,40})?\]")
+_OWN_START = re.compile(r"^\[?Aquaticy(?: Secure Pro| Coworker [^\]\n]{1,40})?\]")
 
 
 def is_own_text(text: str) -> bool:
     """Hat die Bruecke diese Nachricht selbst geschrieben?"""
     kopf = " ".join(str(text or "").split())
-    return kopf.startswith(SIGNATURE) or kopf.startswith(SIGNATURE[1:])
+    return bool(_OWN_START.match(kopf))
 
 
 
@@ -993,7 +1005,7 @@ class AgentAnswerer:
 
     def __call__(self, auftrag: str, decision: Decision, config: dict[str, Any], key: str,
                  messenger: str) -> str:
-        from aquaticy.messenger_modes import switch_request
+        from aquaticy.messenger_modes import natural_command, switch_request
 
         base = self._settings()
         erlaubt = allowed_tools(config, decision.trusted)
@@ -1013,7 +1025,7 @@ class AgentAnswerer:
             self._discard(key)
         if switch_request(auftrag):
             auftrag = "/switch"
-        befehl = parse_command(auftrag)
+        befehl = parse_command(auftrag) or natural_command(auftrag)
         if befehl is not None:
             ergebnis = self._command(befehl[0], befehl[1], decision, config, key, messenger)
             if isinstance(ergebnis, str):

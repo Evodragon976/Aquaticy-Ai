@@ -117,14 +117,18 @@ CATALOG: dict[str, AddOn] = {
         ),
         AddOn(
             "github", "GitHub", "🐙", "Konten",
-            "Deine Repos, Issues, Pull Requests und Dateien — nur lesend. Code prüfen: "
+            "Deine Repos, Commits, Issues, Pull Requests und Dateien. Aquaticy kann auch "
+            "ändern, committen, pushen und Pull Requests öffnen. Code prüfen: "
             "„Prüfe https://github.com/besitzer/repo“.",
             login="token",
             anmelden="Erstelle ein Fine-grained-Token auf GitHub. Wähle deine Repos unter "
-            "Repository access. Erlaube Contents: Read-only und für Pull Requests auch "
-            "Pull requests: Read-only. Füge das Token hier ein.",
-            hinweis="Aquaticy liest nur. Ausgewählte Dateien gehen an dein Chat-Modell. "
-            "Nach privaten Repo-Inhalten braucht öffentliche Recherche deine Bestätigung.",
+            "Repository access. Zum Lesen reicht Contents: Read-only. Zum Ändern erlaube "
+            "Contents: Read and write und Pull requests: Read and write. Füge das Token hier "
+            "ein.",
+            hinweis="Ausgewählte Dateien gehen an dein Chat-Modell. Jeder Commit, Push, Pull "
+            "Request und Kommentar braucht dein Ja. Aquaticy pusht nie mit force. Der "
+            "Schlüssel bleibt auf diesem Rechner, auch wenn die VM das Repo bearbeitet. Nach "
+            "privaten Repo-Inhalten braucht öffentliche Recherche deine Bestätigung.",
         ),
         AddOn(
             "whatsapp", "WhatsApp Web", "💬", "Messenger",
@@ -290,8 +294,13 @@ RIGHTS: dict[str, tuple[Recht, ...]] = {
     "github": (
         Recht("repos", "Welche Repos",
               (("oeffentlich", "Nur öffentliche"), ("alle", "Auch private")), "alle"),
-        Recht("inhalte", "Dateien",
-              (("nein", "Nur Übersicht"), ("ja", "Auch Inhalte lesen")), "ja"),
+        # Seit 15.0.0 auch aendern wie Codex. Jeder Schritt braucht trotzdem dein Ja.
+        # Den Standard-Branch, das Mergen und GitHub Actions macht Aquaticy nie: Das bleibt
+        # beim Menschen auf GitHub (wie bei Codex: Branch und Pull Request).
+        Recht("inhalte", "Dateien und Änderungen",
+              (("nein", "Nur Übersicht"), ("ja", "Auch Inhalte lesen"),
+               ("aendern", "Lesen und ändern: eigene Branches, Commits, Pull Requests")),
+              "aendern"),
     ),
     "whatsapp": _MESSENGER_RECHTE,
     "signal": _MESSENGER_RECHTE,
@@ -594,6 +603,15 @@ def mounts(settings: Any) -> dict[str, str]:
     if webapp and (state.get(FIREFOX) or {}).get("installed"):
         ergebnis[volume_name(settings, FIREFOX)] = f"{MOUNT_ROOT}/{FIREFOX}"
     return ergebnis
+
+
+def github_write_level(rechte: dict[str, str]) -> str:
+    """Was Aquaticy bei GitHub aendern darf: "nein", "branches" oder "alles" (15.0.0)."""
+    return "branches" if rechte.get("inhalte") == "aendern" else "nein"
+
+
+def github_reads_content(rechte: dict[str, str]) -> bool:
+    return rechte.get("inhalte") in ("ja", "aendern")
 
 
 def github_token(settings: Any) -> str:
@@ -1124,7 +1142,7 @@ REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 PATH_RE = re.compile(r"^[A-Za-z0-9 _.,@+()/-]{0,400}$")
 GITHUB_ACTIONS = ("ich", "repos", "repo", "issues", "issue", "pulls", "pull", "datei",
-                  "commits", "suche", "baum", "branches", "review")
+                  "commits", "commit", "vergleich", "suche", "baum", "branches", "review")
 MAX_GITHUB_TEXT = 20_000
 
 
@@ -1151,8 +1169,9 @@ def github_call(
     max_lines: Any = 300,
     recursive: bool = True,
     paths: Any = None,
+    base: str = "",
 ) -> dict[str, Any]:
-    """Liest bei GitHub -- ausschliesslich mit GET.
+    """Liest bei GitHub -- ausschliesslich mit GET (Schreiben: aquaticy/github_write.py).
 
     Args:
         nur_oeffentlich: Recht "Nur öffentliche Repos". Private tauchen weder in
@@ -1173,13 +1192,13 @@ def github_call(
     if not token:
         return {"error": "GitHub ist nicht angemeldet. Das macht der Nutzer im Add-on-Fenster."}
     action = (action or "").strip().lower()
-    action = {"tree": "baum", "file": "datei", "search": "suche",
+    action = {"tree": "baum", "file": "datei", "search": "suche", "compare": "vergleich",
               "code-review": "review"}.get(action, action)
     if action not in GITHUB_ACTIONS:
         return {"error": f"Unbekannte Aktion. Moeglich: {', '.join(GITHUB_ACTIONS)}."}
     repo = (repo or "").strip().strip("/")
     braucht_repo = action in {"repo", "issues", "issue", "pulls", "pull", "datei", "commits",
-                             "baum", "branches", "review"}
+                             "commit", "vergleich", "baum", "branches", "review"}
     try:
         if repo or braucht_repo:
             repo, ref, path, number = github_repo.target(repo, ref, path, number)
@@ -1224,6 +1243,12 @@ def github_call(
     if not github_repo.valid_path(path):
         return {"error": "Ungueltiger Pfad."}
     state = state if state in ("open", "closed", "all") else "open"
+    base = (base or "").strip()
+    if action in ("commit", "vergleich"):
+        if not ref or not REF_RE.fullmatch(ref) or ".." in ref:
+            return {"error": "ref bitte als Commit-SHA, Branch oder Tag."}
+        if action == "vergleich" and (not base or not REF_RE.fullmatch(base) or ".." in base):
+            return {"error": "base bitte als Branch, Tag oder Commit (zum Beispiel main)."}
 
     eigener = client is None
     client = client or httpx.Client(timeout=20, follow_redirects=False)
@@ -1277,7 +1302,7 @@ def github_call(
         else:
             ergebnis = _github_action(hole, action, repo, nummer, path, ref, state, query,
                                       nur_oeffentlich=nur_oeffentlich, inhalte=inhalte,
-                                      page=page)
+                                      page=page, base=base)
         if braucht_repo:
             ergebnis.setdefault("repo", repo)
             ergebnis.setdefault("privat", cache.get(
@@ -1299,9 +1324,21 @@ def github_call(
         return {"error": str(exc)}
 
 
+def _github_dateien(dateien: list[Any], inhalte: bool, grenze: int = 1500
+                    ) -> list[dict[str, Any]]:
+    """Geaenderte Dateien eines Commits oder Vergleichs -- Patch nur mit Inhalte-Recht."""
+    from aquaticy import github_repo
+
+    return [{"datei": d.get("filename"), "status": d.get("status"),
+             "plus": d.get("additions"), "minus": d.get("deletions"),
+             **({"patch": github_repo.redact(str(d.get("patch", "")))[:grenze],
+                 "patch_gekuerzt": len(str(d.get("patch", ""))) > grenze} if inhalte else {})}
+            for d in dateien if isinstance(d, dict)]
+
+
 def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, ref: str,
                    state: str, query: str, *, nur_oeffentlich: bool = False,
-                   inhalte: bool = True, page: int = 1) -> dict[str, Any]:
+                   inhalte: bool = True, page: int = 1, base: str = "") -> dict[str, Any]:
     from aquaticy import github_repo
 
     if action == "ich":
@@ -1364,12 +1401,38 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
                 "next_page": page + 1 if len(dateien) == 10 else None,
                 "head_sha": (p.get("head") or {}).get("sha")}
     if action == "commits":
-        eintraege = hole(f"/repos/{repo}/commits", sha=ref, per_page=20)
-        return {"commits": [{"sha": (c.get("sha") or "")[:10],
+        # Seit 14.4.4: voller SHA (fuer commit/vergleich), Seiten und Filter nach Datei.
+        eintraege = hole(f"/repos/{repo}/commits", sha=ref, path=path, per_page=20, page=page)
+        return {"commits": [{"sha": c.get("sha") or "",
                              "nachricht": _kurz((c.get("commit") or {}).get("message"), 300),
                              "von": ((c.get("commit") or {}).get("author") or {}).get("name"),
                              "datum": ((c.get("commit") or {}).get("author") or {}).get("date")}
-                            for c in eintraege[:20]]}
+                            for c in eintraege[:20]],
+                "next_page": page + 1 if len(eintraege) == 20 else None}
+    if action == "commit":
+        c = hole(f"/repos/{repo}/commits/{quote(ref, safe='')}", per_page=20, page=page)
+        dateien = c.get("files") or []
+        return {"sha": c.get("sha"),
+                "nachricht": github_repo.redact(_kurz((c.get("commit") or {}).get("message"),
+                                                      4000)),
+                "von": ((c.get("commit") or {}).get("author") or {}).get("name"),
+                "datum": ((c.get("commit") or {}).get("author") or {}).get("date"),
+                "eltern": [e.get("sha") for e in c.get("parents") or []][:4],
+                "plus": (c.get("stats") or {}).get("additions"),
+                "minus": (c.get("stats") or {}).get("deletions"),
+                "dateien": _github_dateien(dateien[:20], inhalte),
+                "next_page": page + 1 if len(dateien) >= 20 else None}
+    if action == "vergleich":
+        v = hole(f"/repos/{repo}/compare/{quote(base, safe='')}...{quote(ref, safe='')}",
+                 per_page=20, page=page)
+        dateien = v.get("files") or []
+        return {"basis": base, "kopf": ref, "status": v.get("status"),
+                "voraus": v.get("ahead_by"), "zurueck": v.get("behind_by"),
+                "commits": [{"sha": c.get("sha"),
+                             "nachricht": _kurz((c.get("commit") or {}).get("message"), 200)}
+                            for c in (v.get("commits") or [])[-20:]],
+                "dateien": _github_dateien(dateien[:20], inhalte),
+                "next_page": page + 1 if len(dateien) >= 20 else None}
 
     q = " ".join(str(query or "").split())[:256]
     if not q:
@@ -1864,8 +1927,11 @@ gleichzeitig, nie Werbung, nie etwas im Namen des Nutzers versprechen.
 das macht der Nutzer im Add-on-Fenster selbst.
 - Namen, Nummern und Inhalte aus Chats oder privaten GitHub-Repos gehoeren nie \
 in eine Websuche.
-- GitHub nur lesend (Werkzeug github). Schreiben, kommentieren, mergen gibt es \
-nicht -- sag das, wenn danach gefragt wird.
+- GitHub lesen mit github (auch commit und vergleich). Aendern mit github_write, wenn \
+das Recht es erlaubt: checkout holt das Repo in die VM (Code-Chat), dort aendern und \
+testen, push committet und pusht die Aenderungen auf einen eigenen Branch; ohne VM \
+commit mit files. Danach pull_request. Jeder Schritt fragt den Nutzer. Nie auf den \
+Standard-Branch, kein Mergen, keine GitHub Actions; nie Schluessel oder Passwoerter.
 - Blender: Skripte mit blender_run, die Oberflaeche mit desktop_open app=blender.
 - Code-Review und Security-Review sind Prueflisten, keine Werkzeuge: sie gelten, \
 wenn der Nutzer /code-review oder /security-review schreibt.

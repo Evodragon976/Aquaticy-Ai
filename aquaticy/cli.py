@@ -427,6 +427,7 @@ def secure_pro_command(disable: bool = typer.Option(False, "--disable", help="Ü
     if disable:
         path = get_settings().data_dir / "secure-pro.json"
         path.unlink(missing_ok=True)
+        (get_settings().data_dir / "secure-pro-log.json").unlink(missing_ok=True)
         console.print("Secure Pro ist aus.")
     else:
         _setup_secure_pro()

@@ -12,9 +12,10 @@ from pathlib import Path
 import aquaticy
 
 ROOT = Path(__file__).resolve().parents[1]
-NUMMER = "14.3.4"
-NAME = "Luna"
-LABEL = f"{NUMMER} {NAME}"
+NUMMER = "15.0.0"
+NAME = ""
+# Seit 15.0.0 darf der Name fehlen.
+LABEL = " ".join(t for t in (NUMMER, NAME) if t)
 
 
 def test_release_version_is_consistent() -> None:
