@@ -1,4 +1,4 @@
-# Aquaticy AI 14.2.4 Luna
+# Aquaticy AI 14.3.4 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,12 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.3.4 Luna:** Die automatische Antwortprüfung beachtet jetzt den Rechts-Schalter
+und dessen Änderung während einer laufenden Antwort. Bei aktiver Prüfung zählt auch der
+ursprüngliche Auftrag. Eine Beanstandung durch das Prüfmodell wird vor dem Zurückziehen erneut
+geprüft. Sachliche README-, Commit- und Sicherheitsbeschreibungen sind erlaubt; bloße
+Schlagwörter sind kein Missbrauchsbeleg. Kontenrechte und feste Werkzeuggrenzen bleiben bestehen.
 
 **Neu in 14.2.4 Luna:** GitHub liefert jetzt echte Prüfgrundlagen für Repository-Code.
 Verbinde GitHub unter **Add-ons**, wähle die gewünschten Repos im Fine-grained-Token
@@ -333,7 +339,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.2.4 Luna
+aquaticy --version            # 14.3.4 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -1389,7 +1395,10 @@ Private Anschrift, Handynummer oder Aufenthaltsort auszuforschen ist es nicht.
 - **Beleidigungen** erkennt Aquaticy auch ohne Modell, auf Deutsch und Englisch. Gezählt wird
   nur, was **gegen jemanden** geht. Tarnungen wie Leetspeak oder Sternchen helfen nicht.
 - **Zitieren ist frei.** Hilfe beim Mobben nicht.
-- **Antworten werden mitgeprüft.** Eine unangemessene Antwort wird zurückgezogen.
+- **Antworten werden mitgeprüft**, wenn Rechts-Leitplanken und `AQUATICY_ANSWER_CHECK` an sind.
+  Der ursprüngliche Auftrag hilft bei der Einordnung. Sachliche Beschreibungen von Risiken
+  bleiben erlaubt. Bei ausgeschalteten Rechts-Leitplanken entfällt diese automatische
+  Rücknahme, auch für laufende Antworten. Anbieter können weiterhin eigene Grenzen anwenden.
 - Ein gesperrtes Konto kann sich anmelden und seine Chats ansehen, sonst nichts. Oben links
   steht ein rotes **Info** mit Dauer und Grund. Ultra-Konten werden nur gewarnt.
 
@@ -1552,7 +1561,7 @@ du auch in der Weboberfläche ein.
 | `AQUATICY_VM_LAN` | virtual machine auch ins lokale Netz (Ultra) | `false` |
 | `AQUATICY_VM_DESKTOP_IMAGE` | Abbild für den User mode | `aquaticy-werkstatt-desktop:local` |
 | `AQUATICY_VM_IDLE_MINUTES` | virtual machine löschen nach Minuten Ruhe | `20` |
-| `AQUATICY_ANSWER_CHECK` | Ai-guard prüft auch Antworten | `true` |
+| `AQUATICY_ANSWER_CHECK` | Ai-guard prüft Antworten bei aktiven Rechts-Leitplanken | `true` |
 | `AQUATICY_GITHUB_TOKEN` | Token des GitHub-Add-ons | – |
 | `AQUATICY_SIGNAL_CLI` | Pfad zu signal-cli (Signal direkt koppeln, ohne virtual machine) | im Suchpfad |
 | `AQUATICY_GOOGLE` / `AQUATICY_GOOGLE_WRITE` | Gmail und Kalender lesen / ändern | `false` |

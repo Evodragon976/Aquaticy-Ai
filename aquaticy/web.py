@@ -1833,6 +1833,8 @@ class ChatSession:
 
                     from aquaticy.agent import Agent as BuiltinAgent
                     if isinstance(agent, BuiltinAgent):
+                        agent.answer_check_enabled = lambda: (
+                            self.settings().legal_guard and self.settings().answer_check)
                         ask_options["visual_sources"] = visual_sources
                         if plugin_prompt:
                             ask_options["plugin_prompt"] = plugin_prompt

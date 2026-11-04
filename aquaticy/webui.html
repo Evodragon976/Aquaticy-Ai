@@ -2761,8 +2761,7 @@ html.vv,html.vv body{height:var(--app-h)}
           <input type="checkbox" role="switch" class="schalter" id="legalguard"
                  name="AQUATICY_LEGAL_GUARD">
           <label for="legalguard" style="margin:0">Rechts-Leitplanken nach Grundgesetz und BGB
-            <span class="why">Aquaticy prüft jede Frage, Personensuche, jedes Kamerabild und jeden
-              Mail-Entwurf gegen Grundgesetz und BGB. Im Chat kannst du das nie abschalten.</span></label>
+            <span class="why">Aquaticy prüft Fragen und Inhalte gegen Grundgesetz und BGB. Aus: keine automatische Rücknahme von Antworten. Im Chat kannst du das nie abschalten.</span></label>
         </div>
         <details class="note" id="legal-rules"><summary>Welche Regeln gelten?</summary>
           <ul id="legal-rule-list"></ul></details>
@@ -2909,7 +2908,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.2.4 Luna";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.3.4 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6254,7 +6253,7 @@ const EN = {
 "Für Seiten, die ihren Inhalt erst später nachladen. Dafür muss einmal": "For pages that only load their content later. For this, run once",
 "ausgeführt werden.": ".",
 "Rechts-Leitplanken nach Grundgesetz und BGB": "Legal guardrails under the German Basic Law and Civil Code",
-"Aquaticy prüft jede Frage, Personensuche, jedes Kamerabild und jeden Mail-Entwurf gegen Grundgesetz und BGB. Im Chat kannst du das nie abschalten.": "Aquaticy checks every question, person search, camera image and mail draft against the Basic Law and the Civil Code. You can never turn this off in the chat.",
+"Aquaticy prüft Fragen und Inhalte gegen Grundgesetz und BGB. Aus: keine automatische Rücknahme von Antworten. Im Chat kannst du das nie abschalten.": "Aquaticy checks questions and content against the Basic Law and the Civil Code. Off: no automatic answer withdrawal. You cannot turn this off in the chat.",
 "Modell automatisch wählen": "Choose model automatically",
 "Aquaticy nimmt für jede Nachricht das passende Modell: das Code-Modell fürs Programmieren, ein Modell, das malen kann, für Bilder, das schnelle für ein „Hallo“. Kostet nichts extra. Im Verlauf siehst du, welches Modell geantwortet hat.": "Aquaticy uses the right model for each message: the code model for programming, one that can paint for images, the fast one for a “Hello”. No extra cost. The history shows which model answered.",
 "Welche Regeln gelten?": "Which rules apply?",
@@ -6468,7 +6467,7 @@ const EN = {
 "Verstoß gegen die Nutzungsregeln": "Violation of the terms of use",
 "Nur mit einem Ultra-Konto lassen sich die Rechts-Leitplanken nach Grundgesetz und BGB abschalten. Bei deinem Konto bleiben sie immer an.": "Only an Ultra account can turn off the legal guardrails based on the German Basic Law and Civil Code. On your account they always stay on.",
 "Bist du dir wirklich sicher?": "Are you really sure?",
-"Aquaticy prüft Anfragen dann nicht mehr gegen Grundgesetz und BGB. Die festen Grenzen bleiben (Bezahlschranken, Heimnetz, Schalten, Google). Gilt sofort.": "Aquaticy then stops checking requests against the Basic Law and the Civil Code. The fixed limits stay (paywalls, home network, switching devices, Google). Applies immediately.",
+"Aquaticy prüft Anfragen dann nicht mehr gegen Grundgesetz und BGB und zieht Antworten nicht automatisch zurück. Feste Grenzen bleiben (Bezahlschranken, Heimnetz, Schalten, Google). Gilt sofort.": "Aquaticy then stops checking requests against the Basic Law and the Civil Code and stops automatic answer withdrawal. Fixed limits stay (paywalls, home network, switching devices, Google). Applies immediately.",
 "Der User mode gehört zu Ultra. Das ist die virtual machine als Desktop mit Internet. Die Add-ons ohne virtual machine kannst du trotzdem nutzen: GitHub, Wetter, RSS-Feeds, Tagesschau, Wikipedia, Währungsrechner, Feiertage.": "User mode is part of Ultra. It's the virtual machine as a desktop with internet. You can still use the add-ons without a virtual machine: GitHub, weather, RSS feeds, Tagesschau, Wikipedia, currency converter, public holidays.",
 "Nur mit Ultra darf die virtual machine auch ins Heimnetz. Bei Normal- und Pro-Konten hat sie gar kein Netz.": "Only with Ultra may the virtual machine reach the home network too. With Normal and Pro accounts it has no network at all.",
 "Programm und Anmeldung werden gelöscht. Eine laufende virtual machine startet dafür neu.": "The program and the sign-in are deleted. A running virtual machine restarts for this.",
@@ -8161,8 +8160,9 @@ $("#legalguard").addEventListener("click", async (e) => {
   const weiter = await guardDialog({
     head: "Rechts-Leitplanken",
     title: "Bist du dir wirklich sicher?",
-    text: "Aquaticy prüft Anfragen dann nicht mehr gegen Grundgesetz und BGB. Die festen Grenzen "
-      + "bleiben (Bezahlschranken, Heimnetz, Schalten, Google). Gilt sofort.",
+    text: "Aquaticy prüft Anfragen dann nicht mehr gegen Grundgesetz und BGB und zieht Antworten "
+      + "nicht automatisch zurück. Feste Grenzen bleiben (Bezahlschranken, Heimnetz, Schalten, Google). "
+      + "Gilt sofort.",
     ok: "Weiter",
     cancel: "Abbrechen",
   });

@@ -224,7 +224,7 @@ def test_rejected_or_incomplete_answers_do_not_seed_person_cache(settings, monke
             agent.cancel()
         else:
             monkeypatch.setattr(agent, "_check_answer",
-                                lambda result: setattr(result, "answer", "Nein."))
+                                lambda result, question="": setattr(result, "answer", "Nein."))
         agent._finish(result, QUESTION)
         assert store.research.recall(QUESTION) == []
         assert agent.toolbox.stats.research_pages == []
@@ -247,7 +247,7 @@ def test_real_research_then_fresh_chat_uses_facts_for_new_answer(learners, setti
     scripted = ScriptedLLM(_message(tool_calls=[_tool_call("fetch_page", {"url": SOURCE})]),
                           _message(content=FACT))
     monkeypatch.setattr("litellm.completion", scripted)
-    monkeypatch.setattr("aquaticy.aiguard.answer_problem", lambda *args: None)
+    monkeypatch.setattr("aquaticy.aiguard.answer_problem", lambda *args, **kwargs: None)
     agent = Agent(own, toolbox=Toolbox(own, fetcher=Fetcher()))
     agent.learning = store
     try:

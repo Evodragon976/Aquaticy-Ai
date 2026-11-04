@@ -206,7 +206,7 @@ def test_agent_shares_after_safety_check_and_marks_recalled_material(settings, m
     try:
         agent.toolbox.learning_ticket = store.ticket()
         agent.toolbox.stats.learning_pages = [(SOURCE, FACT)]
-        monkeypatch.setattr(agent, "_check_answer", lambda result: None)
+        monkeypatch.setattr(agent, "_check_answer", lambda result, question="": None)
         agent._finish(AgentResult(answer=FACT), QUESTION)
         assert store.recall(QUESTION)
         context = agent._with_context(QUESTION)
@@ -219,7 +219,7 @@ def test_agent_shares_after_safety_check_and_marks_recalled_material(settings, m
         agent.toolbox.learning_ticket = store.ticket()
         agent.toolbox.stats.learning_pages = [(SOURCE, FACT)]
         monkeypatch.setattr(
-            agent, "_check_answer", lambda result: setattr(result, "answer", "Nein."))
+            agent, "_check_answer", lambda result, question="": setattr(result, "answer", "Nein."))
         agent._finish(AgentResult(answer=FACT), QUESTION)
         assert not store.recall(QUESTION)
     finally:
@@ -251,7 +251,7 @@ def test_real_chat_turn_then_another_account_uses_shared_knowledge(
         return scripted(**kwargs)
 
     monkeypatch.setattr("litellm.completion", completion)
-    monkeypatch.setattr("aquaticy.aiguard.answer_problem", lambda *args: None)
+    monkeypatch.setattr("aquaticy.aiguard.answer_problem", lambda *args, **kwargs: None)
     box = Toolbox(own_settings, fetcher=Fetcher())
     agent = Agent(own_settings, toolbox=box)
     agent.learning = first
@@ -290,7 +290,7 @@ def test_stopped_or_failed_runs_do_not_contribute(settings, monkeypatch, stopped
     store.set_consent(True, LEGAL_VERSION)
     agent = Agent(settings)
     agent.learning = store
-    monkeypatch.setattr(agent, "_check_answer", lambda result: None)
+    monkeypatch.setattr(agent, "_check_answer", lambda result, question="": None)
     try:
         agent.toolbox.learning_ticket = store.ticket()
         agent.toolbox.stats.learning_pages = [(SOURCE, FACT)]

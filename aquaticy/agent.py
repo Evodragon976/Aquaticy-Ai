@@ -1436,6 +1436,7 @@ class Agent:
         toolbox: Toolbox | None = None,
     ) -> None:
         self.settings = settings
+        self.answer_check_enabled: Callable[[], bool] | None = None
         self.secure_pro = False
         self.cache = cache
         self.learning: Learning | None = None
@@ -4398,24 +4399,30 @@ class Agent:
             self._emit("answer_chunk", text=stueck)
             time.sleep(STANDARD_TYPING_SECONDS)
 
-    def _check_answer(self, result: AgentResult) -> None:
+    def _answer_check_enabled(self) -> bool:
+        if self.answer_check_enabled is not None:
+            return self.answer_check_enabled()
+        return (getattr(self.settings, "legal_guard", True)
+                and getattr(self.settings, "answer_check", True))
+
+    def _check_answer(self, result: AgentResult, question: str = "") -> None:
         """Ai-guard prueft die Antwort (9.5.34) -- milder als bei Nachrichten.
 
         Niemand wird gesperrt. Ist die Antwort eindeutig unangemessen, steht
         stattdessen ein Satz, dass Aquaticy dabei nicht helfen kann; was schon
         gestreamt wurde, wird per ``answer_reset`` wieder weggenommen.
         """
-        if not getattr(self.settings, "answer_check", True) or not result.answer:
+        if not self._answer_check_enabled() or not result.answer:
             return
         if result.error or self.stopped:
             return
         from aquaticy.aiguard import ANSWER_REFUSAL, answer_problem
 
         try:
-            art = answer_problem(result.answer, self.settings)
+            art = answer_problem(result.answer, self.settings, context=question)
         except Exception:
             return
-        if not art:
+        if not art or self.stopped or not self._answer_check_enabled():
             return
         self._emit("answer_reset", reason="antwort_geprueft")
         self._emit("answer_chunk", text=ANSWER_REFUSAL)
@@ -4432,7 +4439,7 @@ class Agent:
 
     def _finish(self, result: AgentResult, question: str = "") -> AgentResult:
         original_answer = result.answer
-        self._check_answer(result)
+        self._check_answer(result, question)
         stats = self.toolbox.stats
         result.tool_calls = stats.tool_calls
         result.searches = list(stats.searches)
