@@ -1,4 +1,4 @@
-# Aquaticy AI 14.1.4 Sol
+# Aquaticy AI 14.2.4 Luna
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,33 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 14.2.4 Luna:** GitHub liefert jetzt echte Prüfgrundlagen für Repository-Code.
+Verbinde GitHub unter **Add-ons**, wähle die gewünschten Repos im Fine-grained-Token
+und erlaube **Contents: Read-only**. Für Pull Requests brauchst du zusätzlich
+**Pull requests: Read-only**. Unter den Aquaticy-Rechten muss **Auch Inhalte lesen** an sein.
+
+Schreibe zum Beispiel **„Prüfe https://github.com/besitzer/repo auf Fehler“**.
+Bei eingeschaltetem Code-Review- oder Security-Review-Add-on geht auch
+`/code-review besitzer/repo` oder `/security-review https://github.com/besitzer/repo/pull/12`.
+Aquaticy lädt bei eindeutigen Review-Aufträgen Codeauszüge vor dem Modellaufruf.
+Das funktioniert auch mit Modellen ohne eigene Werkzeugaufrufe. Der AI Council übernimmt
+diese Aufträge nicht. Das Modell erhält eine begrenzte, als fremde Daten markierte Prüfgrundlage.
+
+Neue GitHub-Aktionen: **review** für bis zu sechs Dateiauszüge eines festen Commits,
+**baum** für den Dateibaum und **branches** für Branches. Mit **page** liest Aquaticy weitere
+Ergebnisse; **datei** unterstützt **start_line** und **max_lines** für späteren Code.
+Pull Requests liefern auch Patches. Branch- und Datei-URLs sowie Unicode-Dateinamen werden
+verstanden. Änderungen am PR-Kopf während des Abrufs verwerfen das gemischte Ergebnis.
+Jede Antwort zeigt Grenzen und fehlenden Kontext. Eine Stichprobe ist keine vollständige Prüfung.
+
+GitHub bleibt ausschließlich lesend. Netzwerkantworten und Modellkontext sind begrenzt;
+Tokens werden nur an die feste GitHub-API geschickt, nie an Weiterleitungen oder Download-URLs.
+„Nur Übersicht“ ruft keine Dateiinhalte ab. Die Beschränkung auf öffentliche Repos gilt auch
+für Suchtreffer und Quell-Forks. Erkannte Zugangsdaten und private Schlüssel werden in
+Codeauszügen verdeckt; die Vorprüfung meldet mögliche Fehler mit Zeilenangaben.
+Ausgewählte Inhalte gehen an dein gewähltes Chat-Modell. Nach privaten Repo-Inhalten braucht
+öffentliche Recherche eine persönliche Bestätigung. Entzogene Add-on-Rechte verwerfen laufende Abrufe.
 
 **Neu in 14.1.4 Sol:** Freigaben für Secure-Pro-Abwehr werden nach einer Bestätigung
 erneut gegen denselben Netzbereich und Router geprüft. Auch ein eigener SSH-Port bleibt
@@ -306,7 +333,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 14.1.4 Sol
+aquaticy --version            # 14.2.4 Luna
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

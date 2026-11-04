@@ -133,6 +133,7 @@ def test_overview_only_reads_no_file_contents() -> None:
 
     gefragt: list[httpx.Request] = []
     client = _github({
+        "/repos/a/b/contents/": [{"name": "src", "type": "dir"}],
         "/repos/a/b/contents/src": [{"name": "x.py", "type": "file", "size": 3}],
         "/repos/a/b/contents/src/x.py": {"encoding": "base64", "size": 3,
                                           "content": base64.b64encode(b"geheim").decode()},
@@ -143,6 +144,7 @@ def test_overview_only_reads_no_file_contents() -> None:
     datei = addons.github_call(TOKEN, "datei", repo="a/b", path="src/x.py", client=client,
                                inhalte=False)
     assert "text" not in datei and "geheim" not in json.dumps(datei)
+    assert all(r.url.path != "/repos/a/b/contents/src/x.py" for r in gefragt)
 
 
 def test_the_toolbox_passes_the_github_rights(konto: Settings,

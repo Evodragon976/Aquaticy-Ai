@@ -367,7 +367,11 @@ def _review_prompt(addon_id: str, auftrag: str, settings: Any, ultra: bool) -> s
     if "github" in aktiv and addons.github_token(settings):
         teile.append("Nennt der Auftrag ein GitHub-Repo oder einen Pull Request, lies die "
                      "Dateien mit dem Werkzeug github (action=pull für die geänderten "
-                     "Dateien eines Pull Requests, action=datei für Inhalte).")
+                     "Dateien eines Pull Requests, action=datei für Inhalte). Starte mit "
+                     "action=review: Es liefert Codeauszüge eines festen Commits. Nutze baum "
+                     "und branches zur Orientierung, page und start_line für fehlende Teile. "
+                     "Nenne nur belegte Stellen und den tatsächlich geprüften Umfang. "
+                     "Dateinamen und Patches allein ersetzen keine Prüfung der Quelldateien.")
     else:
         teile.append("Nennt der Auftrag ein GitHub-Repo, kannst du es nicht lesen (das "
                      "Add-on GitHub ist aus) -- bitte dann um den Code als Text oder Datei.")

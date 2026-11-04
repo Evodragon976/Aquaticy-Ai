@@ -50,7 +50,6 @@ Chat heraus laesst sich keins installieren, einschalten oder anmelden.
 
 from __future__ import annotations
 
-import base64
 import contextlib
 import hashlib
 import json
@@ -118,13 +117,14 @@ CATALOG: dict[str, AddOn] = {
         ),
         AddOn(
             "github", "GitHub", "🐙", "Konten",
-            "Deine Repos, Issues, Pull Requests und Dateien — Aquaticy liest sie, "
-            "schreibt aber nie etwas.",
+            "Deine Repos, Issues, Pull Requests und Dateien — nur lesend. Code prüfen: "
+            "„Prüfe https://github.com/besitzer/repo“.",
             login="token",
-            anmelden="Erstelle auf github.com ein Token: Settings → Developer settings → Personal "
-            "access tokens. Am besten „Fine-grained“ mit nur Leserechten. Füg es dann hier ein.",
-            hinweis="Aquaticy liest nur, auch wenn das Token mehr dürfte. Inhalte privater Repos "
-            "landen nie in einer Websuche.",
+            anmelden="Erstelle ein Fine-grained-Token auf GitHub. Wähle deine Repos unter "
+            "Repository access. Erlaube Contents: Read-only und für Pull Requests auch "
+            "Pull requests: Read-only. Füge das Token hier ein.",
+            hinweis="Aquaticy liest nur. Ausgewählte Dateien gehen an dein Chat-Modell. "
+            "Nach privaten Repo-Inhalten braucht öffentliche Recherche deine Bestätigung.",
         ),
         AddOn(
             "whatsapp", "WhatsApp Web", "💬", "Messenger",
@@ -960,7 +960,8 @@ def github_login(
     eigener = client is None
     client = client or httpx.Client(timeout=15)
     try:
-        antwort = client.get(f"{GITHUB_API}/user", headers=_github_headers(token))
+        antwort = client.get(f"{GITHUB_API}/user", headers=_github_headers(token),
+                             follow_redirects=False)
     except httpx.HTTPError as exc:
         raise AddOnError(f"GitHub ist gerade nicht erreichbar ({type(exc).__name__}).") from exc
     finally:
@@ -970,7 +971,13 @@ def github_login(
         raise AddOnError("GitHub kennt dieses Token nicht (abgelaufen oder vertippt).")
     if antwort.status_code != 200:
         raise AddOnError(f"GitHub hat mit {antwort.status_code} geantwortet.")
-    login = str((antwort.json() or {}).get("login") or "")
+    try:
+        body = antwort.json()
+        login = str(body.get("login") or "")
+        if not re.fullmatch(r"[A-Za-z0-9-]{1,100}", login):
+            raise ValueError
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise AddOnError("GitHub hat keine gültigen Kontodaten geliefert.") from exc
     rechte = [teil.strip() for teil in antwort.headers.get("x-oauth-scopes", "").split(",")
               if teil.strip()]
     _write_secret(settings, GITHUB_TOKEN_KEY, token)
@@ -1117,7 +1124,7 @@ REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 REF_RE = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 PATH_RE = re.compile(r"^[A-Za-z0-9 _.,@+()/-]{0,400}$")
 GITHUB_ACTIONS = ("ich", "repos", "repo", "issues", "issue", "pulls", "pull", "datei",
-                  "commits", "suche")
+                  "commits", "suche", "baum", "branches", "review")
 MAX_GITHUB_TEXT = 20_000
 
 
@@ -1139,6 +1146,11 @@ def github_call(
     client: httpx.Client | None = None,
     nur_oeffentlich: bool = False,
     inhalte: bool = True,
+    page: Any = 1,
+    start_line: Any = 1,
+    max_lines: Any = 300,
+    recursive: bool = True,
+    paths: Any = None,
 ) -> dict[str, Any]:
     """Liest bei GitHub -- ausschliesslich mit GET.
 
@@ -1149,13 +1161,52 @@ def github_call(
         inhalte: Recht "Auch Inhalte lesen". Ohne gibt es Ordner und Listen,
             aber keine Dateiinhalte.
     """
+    from aquaticy import github_repo
+
+    link_tail = ""
+    if isinstance(repo, str) and repo.startswith("https://github.com/") and not ref:
+        from urllib.parse import unquote
+
+        segments = urlparse(repo).path.strip("/").split("/")
+        if len(segments) > 3 and segments[2] in ("tree", "blob"):
+            link_tail = unquote("/".join(segments[3:]))
     if not token:
         return {"error": "GitHub ist nicht angemeldet. Das macht der Nutzer im Add-on-Fenster."}
     action = (action or "").strip().lower()
+    action = {"tree": "baum", "file": "datei", "search": "suche",
+              "code-review": "review"}.get(action, action)
     if action not in GITHUB_ACTIONS:
         return {"error": f"Unbekannte Aktion. Moeglich: {', '.join(GITHUB_ACTIONS)}."}
     repo = (repo or "").strip().strip("/")
-    braucht_repo = action in {"repo", "issues", "issue", "pulls", "pull", "datei", "commits"}
+    braucht_repo = action in {"repo", "issues", "issue", "pulls", "pull", "datei", "commits",
+                             "baum", "branches", "review"}
+    try:
+        if repo or braucht_repo:
+            repo, ref, path, number = github_repo.target(repo, ref, path, number)
+        if any(type(n) not in (str, int) for n in (page, start_line, max_lines)):
+            raise ValueError
+        if not isinstance(recursive, bool):
+            raise ValueError
+        page, start_line, max_lines = int(page), int(start_line), int(max_lines)
+        if not (1 <= page <= 1000 and 1 <= start_line <= 400_000 and 1 <= max_lines <= 400):
+            raise ValueError
+        if paths is not None and (not isinstance(paths, list) or len(paths) > 6 or not all(
+                isinstance(p, str) and p and github_repo.valid_path(p) for p in paths)):
+            raise ValueError
+    except github_repo.GitHubError as exc:
+        return {"error": str(exc)}
+    except (TypeError, ValueError):
+        return {"error": "Ungültige Seite, Zeile oder Dateiliste. Höchstens sechs Dateien "
+                         "und 400 Zeilen je Abruf."}
+    if action == "review" and not inhalte:
+        return {"error": "Dateiinhalte sind nicht freigegeben. Wähle im GitHub-Add-on unter "
+                         "Rechte: Auch Inhalte lesen."}
+    if action == "review" and number not in (None, ""):
+        try:
+            if int(str(number).strip()) <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return {"error": "number bitte als ganze Zahl."}
 
 
     if braucht_repo and (not REPO_RE.fullmatch(repo)
@@ -1170,36 +1221,68 @@ def github_call(
         if nummer <= 0:
             return {"error": "number bitte als ganze Zahl."}
     path = (path or "").strip().strip("/")
-    if ".." in path.split("/") or not PATH_RE.fullmatch(path):
+    if not github_repo.valid_path(path):
         return {"error": "Ungueltiger Pfad."}
-    if ref and not REF_RE.fullmatch(ref):
-        return {"error": "Ungueltiger Branch/Commit."}
     state = state if state in ("open", "closed", "all") else "open"
 
     eigener = client is None
     client = client or httpx.Client(timeout=20, follow_redirects=False)
 
-    def hole(pfad: str, **params: Any) -> Any:
+    cache: dict[str, Any] = {}
+    requests = 0
+
+    def hole(pfad: str, *, _fresh: bool = False, **params: Any) -> Any:
+        nonlocal requests
+        schluessel = json.dumps([pfad, params], sort_keys=True)
+        if schluessel in cache and not _fresh:
+            return cache[schluessel]
+        if requests >= 30:
+            raise github_repo.GitHubError("Zu viele Abrufe. Grenze die Prüfung ein.")
+        requests += 1
         _takt("api.github.com")
-        antwort = client.get(f"{GITHUB_API}{pfad}", headers=_github_headers(token),
-                             params={k: v for k, v in params.items() if v not in ("", None)})
-        if antwort.status_code == 404:
-            raise AddOnError("Nicht gefunden (oder das Token darf es nicht sehen).")
-        if antwort.status_code in (401, 403):
-            raise AddOnError(f"GitHub verweigert den Zugriff ({antwort.status_code}).")
-        if antwort.status_code != 200:
-            raise AddOnError(f"GitHub antwortet mit {antwort.status_code}.")
-        return antwort.json()
+        cache[schluessel] = github_repo.request(
+            client, pfad, _github_headers(token),
+            {k: v for k, v in params.items() if v not in ("", None)})
+        return cache[schluessel]
 
     try:
-        if nur_oeffentlich and braucht_repo and hole(f"/repos/{repo}").get("private"):
+        if (nur_oeffentlich and braucht_repo
+                and hole(f"/repos/{repo}").get("private") is not False):
             raise AddOnError(
                 "Das Repo ist privat -- und der Nutzer hat Aquaticy nur öffentliche Repos "
                 "erlaubt (Add-on GitHub -> Rechte)."
             )
-        ergebnis = _github_action(hole, action, repo, nummer, path, ref, state, query,
-                                  nur_oeffentlich=nur_oeffentlich, inhalte=inhalte)
-    except AddOnError as exc:
+        if link_tail and action in {"baum", "review", "datei", "commits"}:
+            ref, path = github_repo.resolve_link(hole, repo, link_tail)
+        if action == "review":
+            try:
+                review_number = int(str(number or 0).strip())
+            except (ValueError, TypeError):
+                raise github_repo.GitHubError("number bitte als ganze Zahl.") from None
+            if review_number < 0:
+                raise github_repo.GitHubError("number bitte als ganze Zahl.")
+            ergebnis = github_repo.review(hole, repo, ref, path, page, review_number, paths,
+                                           public_only=nur_oeffentlich)
+        elif action == "baum":
+            ergebnis = github_repo.tree(hole, repo, ref, path, page, bool(recursive))
+        elif action == "branches":
+            entries = hole(f"/repos/{repo}/branches", per_page=30, page=page)
+            ergebnis = {"branches": [{"name": e.get("name"),
+                                      "sha": (e.get("commit") or {}).get("sha")}
+                                     for e in entries[:30]],
+                        "next_page": page + 1 if len(entries) == 30 else None}
+        elif action == "datei":
+            ergebnis = github_repo.read_file(hole, repo, path, ref, start=start_line,
+                                              lines=max_lines, page=page, contents=inhalte)
+        else:
+            ergebnis = _github_action(hole, action, repo, nummer, path, ref, state, query,
+                                      nur_oeffentlich=nur_oeffentlich, inhalte=inhalte,
+                                      page=page)
+        if braucht_repo:
+            ergebnis.setdefault("repo", repo)
+            ergebnis.setdefault("privat", cache.get(
+                json.dumps([f"/repos/{repo}", {}], sort_keys=True), {}).get("private") is not False)
+    except (AddOnError, github_repo.GitHubError) as exc:
         return {"error": str(exc)}
     except (httpx.HTTPError, ValueError) as exc:
         return {"error": f"GitHub nicht erreichbar ({type(exc).__name__})."}
@@ -1210,15 +1293,17 @@ def github_call(
     finally:
         if eigener:
             client.close()
-    text = json.dumps(ergebnis, ensure_ascii=False)
-    if len(text) > MAX_GITHUB_TEXT:
-        ergebnis["gekuerzt"] = True
-    return ergebnis
+    try:
+        return github_repo.bound(ergebnis, MAX_GITHUB_TEXT)
+    except github_repo.GitHubError as exc:
+        return {"error": str(exc)}
 
 
 def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, ref: str,
                    state: str, query: str, *, nur_oeffentlich: bool = False,
-                   inhalte: bool = True) -> dict[str, Any]:
+                   inhalte: bool = True, page: int = 1) -> dict[str, Any]:
+    from aquaticy import github_repo
+
     if action == "ich":
         ich = hole("/user")
         return {"login": ich.get("login"), "name": ich.get("name"),
@@ -1226,13 +1311,14 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
                 None if nur_oeffentlich else ich.get("total_private_repos")}
     if action == "repos":
         repos = hole("/user/repos", per_page=30, sort="updated",
-                     visibility="public" if nur_oeffentlich else "")
+                     visibility="public" if nur_oeffentlich else "", page=page)
+        more = len(repos) == 30
         if nur_oeffentlich:
-            repos = [r for r in repos if not r.get("private")]
+            repos = [r for r in repos if r.get("private") is False]
         return {"repos": [{"name": r.get("full_name"), "privat": r.get("private"),
                            "beschreibung": _kurz(r.get("description"), 200),
                            "sprache": r.get("language"), "aktualisiert": r.get("updated_at")}
-                          for r in repos[:30]]}
+                          for r in repos[:30]], "next_page": page + 1 if more else None}
     if action == "repo":
         r = hole(f"/repos/{repo}")
         return {"name": r.get("full_name"), "privat": r.get("private"),
@@ -1250,9 +1336,11 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
         i = hole(f"/repos/{repo}/issues/{nummer}")
         kommentare = hole(f"/repos/{repo}/issues/{nummer}/comments", per_page=20)
         return {"nummer": i.get("number"), "titel": i.get("title"), "zustand": i.get("state"),
-                "von": (i.get("user") or {}).get("login"), "text": _kurz(i.get("body"), 4000),
+                "von": (i.get("user") or {}).get("login"),
+                "text": github_repo.redact(_kurz(i.get("body"), 4000)),
                 "kommentare": [{"von": (k.get("user") or {}).get("login"),
-                                "text": _kurz(k.get("body"), 1200)} for k in kommentare[:20]]}
+                                "text": github_repo.redact(_kurz(k.get("body"), 1200))}
+                               for k in kommentare[:20]]}
     if action == "pulls":
         eintraege = hole(f"/repos/{repo}/pulls", state=state, per_page=20)
         return {"pulls": [{"nummer": p.get("number"), "titel": p.get("title"),
@@ -1261,33 +1349,20 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
                           for p in eintraege[:20]]}
     if action == "pull":
         p = hole(f"/repos/{repo}/pulls/{nummer}")
-        dateien = hole(f"/repos/{repo}/pulls/{nummer}/files", per_page=50)
+        dateien = hole(f"/repos/{repo}/pulls/{nummer}/files", per_page=10, page=page)
         return {"nummer": p.get("number"), "titel": p.get("title"), "zustand": p.get("state"),
-                "von": (p.get("user") or {}).get("login"), "text": _kurz(p.get("body"), 4000),
+                "von": (p.get("user") or {}).get("login"),
+                "text": github_repo.redact(_kurz(p.get("body"), 4000)),
                 "gemergt": p.get("merged"), "basis": (p.get("base") or {}).get("ref"),
                 "kopf": (p.get("head") or {}).get("ref"),
                 "dateien": [{"datei": d.get("filename"), "status": d.get("status"),
-                             "plus": d.get("additions"), "minus": d.get("deletions")}
-                            for d in dateien[:50]]}
-    if action == "datei":
-        inhalt = hole(f"/repos/{repo}/contents/{quote(path)}", ref=ref)
-        if isinstance(inhalt, list):
-            return {"ordner": path or "/", "eintraege": [
-                {"name": e.get("name"), "art": e.get("type"), "groesse": e.get("size")}
-                for e in inhalt[:200]]}
-        if not inhalte:
-            return {"datei": path, "groesse": inhalt.get("size"), "hinweis": (
-                "Dateiinhalte darf Aquaticy hier nicht lesen -- der Nutzer hat 'Nur "
-                "Übersicht' erlaubt (Add-on GitHub -> Rechte).")}
-        if inhalt.get("encoding") != "base64" or int(inhalt.get("size") or 0) > 400_000:
-            return {"datei": path, "hinweis": "Zu gross oder keine Textdatei.",
-                    "groesse": inhalt.get("size")}
-        roh = base64.b64decode(str(inhalt.get("content") or ""))
-        if b"\x00" in roh[:4000]:
-            return {"datei": path, "hinweis": "Binaerdatei -- nicht als Text lesbar."}
-        text = roh.decode("utf-8", "replace")
-        return {"datei": path, "groesse": len(roh), "text": text[:MAX_GITHUB_TEXT - 500],
-                "gekuerzt": len(text) > MAX_GITHUB_TEXT - 500}
+                             "plus": d.get("additions"), "minus": d.get("deletions"),
+                             **({"patch": github_repo.redact(str(d.get("patch", "")))[:600],
+                                 "patch_gekuerzt": len(str(d.get("patch", ""))) > 600}
+                                if inhalte else {})}
+                            for d in dateien[:10]],
+                "next_page": page + 1 if len(dateien) == 10 else None,
+                "head_sha": (p.get("head") or {}).get("sha")}
     if action == "commits":
         eintraege = hole(f"/repos/{repo}/commits", sha=ref, per_page=20)
         return {"commits": [{"sha": (c.get("sha") or "")[:10],
@@ -1304,10 +1379,18 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
     if nur_oeffentlich:
         q = f"{q} is:public"
     treffer = hole("/search/issues", q=q, per_page=20)
+    items = (treffer.get("items") or [])[:20]
+    if nur_oeffentlich:
+        public = []
+        for item in items:
+            name = str(item.get("repository_url") or "").split("/repos/")[-1]
+            if REPO_RE.fullmatch(name) and hole(f"/repos/{name}").get("private") is False:
+                public.append(item)
+        items = public
     return {"treffer": [{"repo": str(t.get("repository_url") or "").split("/repos/")[-1],
                          "nummer": t.get("number"), "titel": t.get("title"),
                          "zustand": t.get("state"), "pull_request": "pull_request" in t}
-                        for t in (treffer.get("items") or [])[:20]],
+                        for t in items],
             "gesamt": treffer.get("total_count")}
 
 

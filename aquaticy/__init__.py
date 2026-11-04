@@ -4,11 +4,11 @@ import os as _os
 
 _os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
-__version__ = "14.1.4"
+__version__ = "14.2.4"
 
 
 
-__codename__ = "Sol"
+__codename__ = "Luna"
 
 
 

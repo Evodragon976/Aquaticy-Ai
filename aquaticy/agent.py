@@ -2155,7 +2155,8 @@ class Agent:
         self._vorplan = None
         if not (self.pro_mode and self.structured and self.online and question
                 and self._auto_subagents_wanted() and not SMALL_TALK_RE.match(question)
-                and not getattr(self, "_eigene", ())):
+                and not getattr(self, "_eigene", ())
+                and not getattr(self, "_github_review_target", None)):
             return
         from aquaticy.master import plan_mission
 
@@ -3346,13 +3347,22 @@ class Agent:
             self.toolbox._secure_nmaps = 0
             self.toolbox._secure_sources.clear()
         self._plugin_turn = str(plugin_prompt or "").strip()
+        self._github_review_target = None
+        if not self.secure_pro:
+            from aquaticy import addons, github_repo
+
+            if (self.online if online is None else bool(online)) and \
+                    addons.active(self.settings, "github") and \
+                    addons.github_token(self.settings):
+                self._github_review_target = github_repo.review_target(question)
 
         from aquaticy.ownservices import followup_sources
 
         # Folgefragen zur eigenen Post (13.0.1 Luna): "schick mir den ganzen Text der zweiten".
         davor = tuple(getattr(self, "_eigene_davor", ()) or ())
         self._eigene: tuple[str, ...] = (
-            () if self._plugin_turn or self.secure_pro else followup_sources(question, davor))
+            () if self._plugin_turn or self.secure_pro or self._github_review_target
+            else followup_sources(question, davor))
         self._eigene_davor = self._eigene
         self._ausweich_model = ""
         learning = getattr(self, "learning", None)
@@ -3446,7 +3456,8 @@ class Agent:
             return abgelehnt
 
 
-        if getattr(self.settings, "council", False) and not self._eigene and not self.secure_pro:
+        if (getattr(self.settings, "council", False) and not self._eigene and not self.secure_pro
+                and not self._plugin_turn and not self._github_review_target):
             beantwortet = self._council_turn(question, stream)
             if beantwortet is not None:
                 return beantwortet
@@ -3542,7 +3553,9 @@ class Agent:
 
 
 
-        if self._eigene:
+        if self._github_review_target:
+            self._emit("triage", decision="chat", source="github")
+        elif self._eigene:
 
             self._emit("triage", decision="chat", source="eigene_dienste")
         elif not self.structured:
@@ -3566,7 +3579,26 @@ class Agent:
                 used += self._auto_research(question, budget)
         elif self.online and self._auto_subagents_wanted() and self._needs_research(question):
             used += self._auto_research(question, budget)
-        if self._eigene and not self.stopped:
+        if self._github_review_target and not self.stopped:
+            call = {"id": "github-review", "type": "function", "function": {
+                "name": "github", "arguments": json.dumps(self._github_review_target)}}
+            context = self._tool_result(call)["content"]
+            try:
+                snapshot = json.loads(context)
+            except ValueError:
+                snapshot = {}
+            if snapshot.get("error"):
+                self._emit("note", text="GitHub konnte keinen Code laden: " + snapshot["error"],
+                           text_en="GitHub could not load code: " + snapshot["error"])
+            else:
+                count = sum("text" in file for file in snapshot.get("dateien", []))
+                self._emit("note", text=f"GitHub: {count} Dateiauszüge geladen. "
+                                        "Die Prüfung ist auf diese Ausschnitte begrenzt.",
+                           text_en=f"GitHub: {count} file excerpts loaded. "
+                                   "The review is limited to these excerpts.")
+            self.messages[-1]["content"] += "\n\n" + wrap_block(context, "GitHub-Prüfgrundlage")
+            used += 1
+        elif self._eigene and not self.stopped:
             used += self._prefetch_own(question)
         elif self.online and not self.stopped:
             used += self._prefetch_news(question)
@@ -4087,6 +4119,13 @@ class Agent:
             self.remember_clarified(paare)
             if isinstance(getattr(self, "_turn_clarified", None), list):
                 self._turn_clarified.extend(paare)
+        if name == "github" and isinstance(payload, dict):
+            from aquaticy.github_repo import GitHubError, bound
+
+            try:
+                payload = bound(payload, self.blob_limit())
+            except GitHubError as exc:
+                payload = {"error": str(exc)}
         blob = json.dumps(payload, ensure_ascii=False)[: self.blob_limit()]
         self._emit("action_done", tool=name, result=blob[:TRACE_CHARS])
         return {
@@ -4217,7 +4256,8 @@ class Agent:
         selbst noch von den Agenten. Wer Seiten gelesen hat, hat nachgesehen; ob
         die Angabe dort stand, kann der Text dann selbst sagen.
         """
-        if not self.online or clean_mode(self.mode) == "code" or self.secure_pro:
+        if (not self.online or clean_mode(self.mode) == "code" or self.secure_pro
+                or getattr(self, "_github_review_target", None)):
             return ""
         stats = self.toolbox.stats
         if stats.fetched or stats.sources:

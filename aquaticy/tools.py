@@ -1319,20 +1319,30 @@ GITHUB_SCHEMA: dict[str, Any] = {
         "description": (
             "Liest bei GitHub mit dem Konto des Nutzers -- NUR lesen, nie schreiben. "
             "action: ich (wer bin ich), repos (eigene Repos), repo, issues, issue, pulls, "
-            "pull (mit geaenderten Dateien), datei (Datei oder Ordner, path + optional ref), "
-            "commits, suche (Issues/PRs, query, optional repo). repo immer als "
-            "'besitzer/name'. Inhalte privater Repos nie in eine Websuche uebernehmen."
+            "pull (Dateien und Patches), datei (path, ref, start_line, max_lines), "
+            "baum (Dateibaum), branches, review (Codeauszuege eines festen Commits; "
+            "bei PRs number angeben), commits, suche (Issues/PRs). Zum Codepruefen zuerst "
+            "review, danach fehlenden Kontext mit datei nachlesen. repo als 'besitzer/name' "
+            "oder GitHub-URL. page fuer weitere Ergebnisse. Private Inhalte nie ungefragt "
+            "in oeffentliche Suchanfragen uebernehmen. Keine vollstaendige Pruefung behaupten."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "action": {"type": "string"},
+                "action": {"type": "string", "enum": ["ich", "repos", "repo", "issues", "issue",
+                           "pulls", "pull", "datei", "commits", "suche", "baum", "branches",
+                           "review"]},
                 "repo": {"type": "string"},
                 "number": {"type": "integer"},
                 "path": {"type": "string"},
                 "ref": {"type": "string"},
                 "state": {"type": "string", "description": "open, closed oder all."},
                 "query": {"type": "string"},
+                "page": {"type": "integer", "minimum": 1, "maximum": 1000},
+                "start_line": {"type": "integer", "minimum": 1},
+                "max_lines": {"type": "integer", "minimum": 1, "maximum": 400},
+                "recursive": {"type": "boolean"},
+                "paths": {"type": "array", "maxItems": 6, "items": {"type": "string"}},
             },
             "required": ["action"],
         },
@@ -1654,6 +1664,7 @@ class Toolbox:
         self._secure_sources: set[str] = set()
         self._secure_dns: set[str] = set()
         self._secure_dns_full = False
+        self._github_private = False
         self._secure_checks = 0
         self._secure_nmaps = 0
 
@@ -2680,7 +2691,8 @@ class Toolbox:
         self.stats.addon_calls += 1
         rechte = addons.rights_of(self.settings, erforderlich)
         if name == "github":
-            return addons.github_call(
+            before = addons.load_state(self.settings).get("github")
+            result = addons.github_call(
                 addons.github_token(self.settings),
                 str(arguments.get("action") or ""),
                 repo=str(arguments.get("repo") or ""),
@@ -2691,7 +2703,15 @@ class Toolbox:
                 query=str(arguments.get("query") or ""),
                 nur_oeffentlich=rechte["repos"] == "oeffentlich",
                 inhalte=rechte["inhalte"] == "ja",
+                page=arguments.get("page", 1), start_line=arguments.get("start_line", 1),
+                max_lines=arguments.get("max_lines", 300),
+                recursive=arguments.get("recursive", True), paths=arguments.get("paths"),
             )
+            if (not addons.active(self.settings, "github")
+                    or addons.load_state(self.settings).get("github") != before):
+                return {"error": "Die GitHub-Freigabe hat sich während des Abrufs geändert. "
+                                 "Starte die Anfrage erneut."}
+            return result
         if name == "weather":
             ort = str(arguments.get("place") or self.settings.location or "")
             if rechte["orte"] == "meiner":
@@ -2864,6 +2884,10 @@ class Toolbox:
         Hinweis, dass es nur Daten sind; stehen darin Anweisungen an eine KI,
         kommt eine Warnung dazu (aquaticy/injection.py).
         """
+        if (name == "github" and isinstance(payload, dict) and not payload.get("error")
+                and (payload.get("privat") is True or any(
+                    r.get("privat") is True for r in payload.get("repos", [])))):
+            self._github_private = True
         if name.startswith("secure_") and isinstance(payload, dict):
             self.remember_secure_dns(payload)
         if name not in UNTRUSTED_SOURCES or not isinstance(payload, dict):
@@ -2938,6 +2962,20 @@ class Toolbox:
         from aquaticy import injection
 
         if not getattr(self, "untrusted_seen", False):
+            return None
+        if getattr(self, "_github_private", False) and (
+                name in injection.SEARCHES or name in {"fetch_page", "inspect_public_visual"}):
+            import json
+
+            data = json.dumps(arguments, ensure_ascii=False)
+            if len(data) > 2000 or self.ask_handler is None:
+                return {"error": "Nach privaten GitHub-Inhalten braucht öffentliche Recherche "
+                                 "eine persönliche Bestätigung.", "skipped_reason": "private_data"}
+            refusal = self._confirm("Private GitHub-Inhalte wurden gelesen. Diese öffentliche "
+                                    f"Anfrage an {name} erlauben? Prüfe, ob sie Code oder private "
+                                    f"Angaben enthält:\n{data}")
+            if refusal:
+                return {"error": refusal, "skipped_reason": "private_data"}
             return None
         if name not in injection.OUTBOUND and name not in injection.SEARCHES:
             return None

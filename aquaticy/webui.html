@@ -2909,7 +2909,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.1.4 Sol";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "14.2.4 Luna";
 $("#version").textContent = "v" + aquaticyVersion;
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
@@ -6565,9 +6565,9 @@ const EN = {
 "Noch nichts gezählt.": "Nothing counted yet.",
 "Rechtsprüfung nicht erreichbar": "Legal check not reachable",
 "Konten": "Accounts",
-"Deine Repos, Issues, Pull Requests und Dateien — Aquaticy liest sie, schreibt aber nie etwas.": "Your repos, issues, pull requests and files — Aquaticy reads them but never writes anything.",
-"Erstelle auf github.com ein Token: Settings → Developer settings → Personal access tokens. Am besten „Fine-grained“ mit nur Leserechten. Füg es dann hier ein.": "Create a token on github.com: Settings → Developer settings → Personal access tokens. Ideally “Fine-grained” with read-only access. Then paste it here.",
-"Aquaticy liest nur, auch wenn das Token mehr dürfte. Inhalte privater Repos landen nie in einer Websuche.": "Aquaticy only reads, even if the token would allow more. Content from private repos never ends up in a web search.",
+"Deine Repos, Issues, Pull Requests und Dateien — nur lesend. Code prüfen: „Prüfe https://github.com/besitzer/repo“.": "Your repos, issues, pull requests and files — read only. Review code: “Review https://github.com/owner/repo”.",
+"Erstelle ein Fine-grained-Token auf GitHub. Wähle deine Repos unter Repository access. Erlaube Contents: Read-only und für Pull Requests auch Pull requests: Read-only. Füge das Token hier ein.": "Create a fine-grained token on GitHub. Select your repos under Repository access. Grant Contents: Read-only and Pull requests: Read-only for pull requests. Paste the token here.",
+"Aquaticy liest nur. Ausgewählte Dateien gehen an dein Chat-Modell. Nach privaten Repo-Inhalten braucht öffentliche Recherche deine Bestätigung.": "Aquaticy only reads. Selected files go to your chat model. Public research after reading private repo data needs your confirmation.",
 "WhatsApp im Browser der virtual machine: Aquaticy kann Chats lesen und Antworten vorbereiten. Senden nur nach deinem Ja.": "WhatsApp in the browser of the virtual machine: Aquaticy can read chats and prepare replies. Sending only after your yes.",
 "„Anmelden“ zeigt den QR-Code direkt in Aquaticy. Auf dem Handy: WhatsApp → Einstellungen → Verknüpfte Geräte → Gerät hinzufügen, dann den QR-Code im Anmeldefenster scannen.": "“Sign in” shows the QR code directly in Aquaticy. On your phone: WhatsApp → Settings → Linked devices → Link a device, then scan the QR code in the sign-in window.",
 "WhatsApp mag keine Automatisierung. Nutze es nur für dich, nie für Massennachrichten, sonst droht eine Sperre. Was Aquaticy liest, geht an dein Modell. Braucht Firefox (kommt beim Installieren mit).": "WhatsApp doesn't like automation. Use it only for yourself, never for mass messages, or you risk a ban. What Aquaticy reads goes to your model. Needs Firefox (comes with the installation).",

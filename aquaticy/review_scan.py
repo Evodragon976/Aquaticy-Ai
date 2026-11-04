@@ -454,6 +454,11 @@ def scan(text: str) -> list[Hint]:
     return sorted(hinweise, key=lambda h: (rang.get(h.severity, 9), art.get(h.kind, 9)))
 
 
+def scan_file(name: str, text: str) -> list[Hint]:
+    """Prueft einen Dateiausschnitt ohne Markdown-Auswertung oder Dateikopf."""
+    return _scan_unit(Unit(name, "file", text[:MAX_TOTAL_CHARS].splitlines()))[:MAX_HINTS]
+
+
 def summary(text: str) -> str:
     """Wie viel geprueft wird: Dateien und Bloecke mit Zeilenzahl.
 
