@@ -2920,6 +2920,19 @@ let currentChat = "";
 let secureChat = false;
 const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.0.0";
 $("#version").textContent = "v" + aquaticyVersion;
+// Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
+const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
+if (aquaticyInstalliert){
+  $("#version").textContent = "v" + aquaticyVersion + " → " + aquaticyInstalliert;
+  setTimeout(() => {
+    const text = sp("Installiert ist " + aquaticyInstalliert + ". Hier läuft noch "
+      + aquaticyVersion + ". Starte Aquaticy neu, dann gilt die neue Version.",
+      aquaticyInstalliert + " is installed. This is still running " + aquaticyVersion
+      + ". Restart Aquaticy to use the new version.");
+    $("#version").title = text;
+    toast(text);
+  }, 1500);
+}
 
 const aquaticyIntern = window.__AQUATICY_INTERNAL__ === true
   || (window.__AQUATICY_INTERNAL__ === undefined && /\b(Intern|Test)\b/i.test(aquaticyVersion));

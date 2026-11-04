@@ -1077,6 +1077,32 @@ def history_command(
         console.print(f"    [dim]{first_line[:110]}[/dim]")
 
 
+def _altes_aquaticy(port: int) -> None:
+    """Laeuft auf *port* schon ein anderer Aquaticy-Prozess? Dann wird er beendet (15.0.0).
+
+    So zeigt der Browser unter der gewohnten Adresse immer die gerade gestartete Version
+    (vorher: "Terminal 15.0.0, Browser 14.3.4", weil der alte Hintergrundprozess weiterlief
+    und der neue auf einen anderen Port auswich). Beendet werden nur eigene Prozesse, die
+    wirklich Aquaticy sind -- nie ein fremdes Programm auf dem Port.
+    """
+    from aquaticy import old_server
+
+    laeuft = old_server.running_version(port)
+    if not laeuft:
+        return
+    prozesse = [pid for pid in old_server.listener_pids(port) if old_server.is_aquaticy(pid)]
+    if not prozesse:
+        console.print(f"[yellow]Auf Port {port} läuft Aquaticy {laeuft}, aber der Prozess "
+                      "lässt sich hier nicht beenden. Beende ihn selbst.[/yellow]")
+        return
+    if all(old_server.stop(pid) for pid in prozesse):
+        console.print(f"Anderer Aquaticy-Prozess ({laeuft}) beendet. Aquaticy {VERSION_LABEL} "
+                      "startet.", markup=False)
+    else:
+        console.print(f"[yellow]Der andere Aquaticy-Prozess ({laeuft}) reagiert nicht. "
+                      f"Beende ihn mit: kill {' '.join(map(str, prozesse))}[/yellow]")
+
+
 @app.command("web")
 def web_command(
     port: int = typer.Option(8765, "--port", "-p", help="Port für die Oberfläche."),
@@ -1129,6 +1155,7 @@ def web_command(
 
 
     gewuenscht = port
+    _altes_aquaticy(port)
     with contextlib.suppress(OSError):
         port = free_port(bind, port)
     public = is_public_host(bind)

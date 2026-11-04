@@ -4801,6 +4801,8 @@ def with_state(html: str, *, nonce: str = "") -> str:
     boot = (
         f"window.__AQUATICY_STATE__ = {roh};"
         f"window.__AQUATICY_VERSION__ = {json.dumps(VERSION_LABEL)};"
+        # Neuere Version installiert, aber dieser Prozess laeuft noch mit der alten (15.0.0).
+        f"window.__AQUATICY_INSTALLED__ = {json.dumps(installed_version())};"
 
         f"window.__AQUATICY_INTERNAL__ = {json.dumps(INTERNAL)};"
 
@@ -4809,6 +4811,14 @@ def with_state(html: str, *, nonce: str = "") -> str:
     marke = f' nonce="{nonce}"' if nonce else ""
     html = html.replace("<script>", f"<script{marke}>{boot}</script>\n<script{marke}>", 1)
     return html
+
+
+def installed_version() -> str:
+    """Die installierte Version, wenn sie von der laufenden abweicht -- sonst ""."""
+    from aquaticy.old_server import installed_label
+
+    installiert = installed_label()
+    return installiert if installiert and installiert != VERSION_LABEL else ""
 
 
 def safe_name(name: str) -> str:

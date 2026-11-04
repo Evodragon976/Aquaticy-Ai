@@ -4192,8 +4192,10 @@ class Toolbox:
         except SandboxUnavailable as exc:
             return {"error": str(exc)}
         self.stats.vm_calls += 1
+        # Weitergefuehrt wird nur ein echter Branch -- nie ein Tag oder Commit-SHA.
+        weiter = ref if ref != standard and gw.branch_head(api, repo, ref) else ""
         self._github_checkout_merken(ordner, {"repo": repo, "ref": ref, "sha": sha,
-                                              "branch": "" if ref == standard else ref})
+                                              "branch": weiter})
         return {"dir": ordner, "repo": repo, "ref": ref, "sha": sha, "files": anzahl,
                 "note": "Ändere und teste die Dateien mit vm_run und vm_write. Danach "
                         "github_write action=push mit dir und einer Nachricht."}

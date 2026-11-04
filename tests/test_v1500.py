@@ -649,3 +649,77 @@ def test_a_sentence_about_coworkers_is_no_order(settings, monkeypatch) -> None:
     assert route("Coworker sind toll, oder?") is None
     cwm.CoworkerStore(settings.db_path).add("Ava", "Fasse meine Mails zusammen.", plan="ultra")
     assert route("Coworker Ava schau nach Mails") == "c" and gesehen == ["Ava"]
+
+
+def test_a_tag_checkout_pushes_to_a_new_branch(github, monkeypatch) -> None:
+    box, _, _, _ = github
+    vm = FakeBox([{"path": "src/a.py", "status": "geändert", "mode": "100644", "size": 4}])
+    box.github_vm_ready = lambda: True
+    monkeypatch.setattr(box, "_sandbox", lambda: vm)
+    box.call("github_write", {"action": "checkout", "repo": "o/r", "ref": "v1.0"})
+    gepusht = box.call("github_write", {"action": "push", "repo": "o/r", "dir": "r",
+                                        "message": "x"})
+    assert gepusht["branch"].startswith("aquaticy/"), "kein Branch namens v1.0"
+
+
+# -- Alte Version laeuft noch (Terminal 15.0.0, Browser 14.3.4) ----------------------------------
+def test_the_running_version_is_read_from_the_page(monkeypatch) -> None:
+    from aquaticy import old_server
+
+    seite = '<script>window.__AQUATICY_VERSION__ = "14.3.4 Luna";</script>'
+    echt = httpx.Client
+    monkeypatch.setattr(old_server.httpx, "Client", lambda **kw: echt(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text=seite)), **kw))
+    assert old_server.running_version(8765) == "14.3.4 Luna"
+    monkeypatch.setattr(old_server.httpx, "Client", lambda **kw: echt(
+        transport=httpx.MockTransport(lambda r: httpx.Response(200, text="anderes")), **kw))
+    assert old_server.running_version(8765) == ""
+
+
+@pytest.mark.parametrize("laeuft", ["14.3.4 Luna", "15.0.0"])
+def test_web_start_replaces_another_aquaticy(monkeypatch, laeuft) -> None:
+    from aquaticy import cli, old_server
+
+    monkeypatch.setattr(old_server, "running_version", lambda port: laeuft)
+    monkeypatch.setattr(old_server, "listener_pids", lambda port: [4242])
+    monkeypatch.setattr(old_server, "is_aquaticy", lambda pid: True)
+    beendet: list[int] = []
+    monkeypatch.setattr(old_server, "stop", lambda pid: beendet.append(pid) or True)
+    monkeypatch.setattr(cli.typer, "confirm", lambda *a, **kw: pytest.fail("ohne Rückfrage"))
+    cli._altes_aquaticy(8765)
+    assert beendet == [4242], "der andere Prozess wird beendet, der neue startet"
+
+
+def test_web_start_leaves_foreign_programs_alone(monkeypatch) -> None:
+    from aquaticy import cli, old_server
+
+    monkeypatch.setattr(old_server, "running_version", lambda port: "")
+    monkeypatch.setattr(old_server, "listener_pids", lambda port: [4242])
+    monkeypatch.setattr(old_server, "stop", lambda pid: pytest.fail("kein Aquaticy"))
+    cli._altes_aquaticy(8765)
+    monkeypatch.setattr(old_server, "running_version", lambda port: "14.3.4 Luna")
+    monkeypatch.setattr(old_server, "is_aquaticy", lambda pid: False)
+    cli._altes_aquaticy(8765)
+
+
+def test_only_aquaticy_processes_are_stopped(monkeypatch) -> None:
+    import os
+
+    from aquaticy import old_server
+
+    assert not old_server.is_aquaticy(os.getpid()), "nie sich selbst"
+    getoetet: list[int] = []
+    monkeypatch.setattr(old_server, "is_aquaticy", lambda pid: False)
+    monkeypatch.setattr(old_server.os, "kill", lambda pid, sig: getoetet.append(pid))
+    assert old_server.stop(99999) is False and getoetet == []
+
+
+def test_the_page_says_when_a_newer_version_is_installed(monkeypatch) -> None:
+    from aquaticy import old_server
+
+    monkeypatch.setattr(old_server, "installed_label", lambda: "99.0.0")
+    assert web.installed_version() == "99.0.0"
+    monkeypatch.setattr(old_server, "installed_label", lambda: web.VERSION_LABEL)
+    assert web.installed_version() == ""
+    html = (Path(web.__file__).parent / "webui.html").read_text(encoding="utf-8")
+    assert "window.__AQUATICY_INSTALLED__" in html

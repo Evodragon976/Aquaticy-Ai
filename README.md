@@ -29,6 +29,11 @@ $ aquaticy
 
 **Neu in 15.0.0:**
 
+- **Immer die neue Version im Browser.** Startest du Aquaticy und läuft auf dem Port noch ein
+  anderer Aquaticy-Prozess (etwa der alte Hintergrundprozess nach einem Update), beendet
+  Aquaticy ihn und startet neu. Beendet werden nur eigene Aquaticy-Prozesse, nie ein anderes
+  Programm. Läuft im Browser noch eine ältere Version als installiert, steht das neben der
+  Versionsnummer, mit dem Hinweis, Aquaticy neu zu starten.
 - **GitHub wie Codex.** Aquaticy sieht Commits mit ihren Änderungen (`commit`), vergleicht
   Branches (`vergleich`) und filtert Commits nach Datei. Mit `github_write` holt es ein Repo in
   die VM (`checkout`, nur im Code-Chat), ändert und testet es dort und überträgt alles mit
