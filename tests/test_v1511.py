@@ -81,3 +81,88 @@ def test_the_security_workflow_only_reads_and_pins_its_tools() -> None:
                   if z.startswith("bandit=="))
     assert bandit in text
     assert "secrets." not in text and "write" not in text
+
+
+# -- NVIDIA NIM: Werkzeuge ohne Stream, klare Fehlermeldung ----------------------------------------
+class _Fehler(Exception):
+    def __init__(self, text: str, status: int | None = None) -> None:
+        super().__init__(text)
+        if status is not None:
+            self.status_code = status
+
+
+class AuthenticationError(_Fehler):
+    pass
+
+
+class BadRequestError(_Fehler):
+    pass
+
+
+NIM = "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5"
+
+
+@pytest.mark.parametrize(("fehler", "erwartet"), [
+    (AuthenticationError("bad key", 401), "API-Schlüssel"),
+    (_Fehler("too many", 429), "zu viele Anfragen"),
+    (_Fehler("Function not found for account", 404), "nicht mehr"),
+    (TimeoutError("timed out"), "nicht rechtzeitig"),
+    (BadRequestError("tool_choice auto not supported", 400), "lehnt die Anfrage"),
+    (_Fehler("Service Unavailable", 503), "überlastet"),
+])
+def test_nvidia_errors_get_a_clear_sentence(fehler: Exception, erwartet: str) -> None:
+    from aquaticy.agent import model_error_hint
+    from aquaticy.web import public_error
+
+    satz = model_error_hint(fehler, NIM)
+    assert erwartet in satz and "NVIDIA" in satz
+    assert public_error(satz) == satz  # die Oberflaeche zeigt den Satz unveraendert
+
+
+def test_local_models_keep_their_own_messages() -> None:
+    from aquaticy.agent import model_error_hint
+
+    assert model_error_hint(_Fehler("x", 500), "ollama_chat/qwen3:8b") == ""
+    assert model_error_hint(ValueError("seltsam"), NIM) == ""
+
+
+def test_nvidia_with_tools_asks_without_stream(monkeypatch: pytest.MonkeyPatch,
+                                               settings: Any) -> None:
+    from types import SimpleNamespace
+
+    from aquaticy.agent import Agent
+
+    settings.model = NIM
+    gesehen: list[dict[str, Any]] = []
+
+    def antwort(**kwargs: Any) -> Any:
+        gesehen.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+            content="Hallo!", tool_calls=None))])
+
+    monkeypatch.setattr("litellm.completion", antwort)
+    werkzeuge = [{"type": "function", "function": {"name": "web_search", "parameters": {}}}]
+    monkeypatch.setattr(Agent, "tools", property(lambda self: werkzeuge))
+    agent = Agent(settings, cache=None)
+    ergebnis = agent._completion([{"role": "user", "content": "Hallo"}], stream=True)
+    assert ergebnis["content"] == "Hallo!"
+    assert gesehen and gesehen[-1]["stream"] is False and gesehen[-1]["tools"]
+
+
+def test_nvidia_errors_reach_the_user_as_a_sentence(monkeypatch: pytest.MonkeyPatch,
+                                                    settings: Any) -> None:
+    from aquaticy.agent import Agent
+
+    settings.model = NIM
+    settings.llm_retries = 1
+
+    def kaputt(**kwargs: Any) -> Any:
+        raise BadRequestError("litellm.BadRequestError: NvidiaNimException - 400", 400)
+
+    monkeypatch.setattr("litellm.completion", kaputt)
+    ereignisse: list[tuple[str, dict[str, Any]]] = []
+    agent = Agent(settings, cache=None, on_event=lambda n, p: ereignisse.append((n, p)))
+    ergebnis = agent.ask("Erklär mir kurz, wie Photosynthese funktioniert.", stream=False)
+    fehler = [p for n, p in ereignisse if n == "error"]
+    assert fehler and "lehnt die Anfrage" in fehler[-1]["message"]
+    assert "400" in fehler[-1]["technisch"] and "400" in ergebnis.error

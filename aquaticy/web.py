@@ -7201,6 +7201,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
 
                 technisch = str(payload.get("message", ""))
+                if payload.get("technisch"):
+                    # 15.1.1: klarer Satz fuer den Browser, die genaue Meldung ins Terminal.
+                    print(f"  [Fehler] {scrub_error(str(payload['technisch']), geheim)[:300]}",
+                          flush=True)
+                    payload = {k: v for k, v in payload.items() if k != "technisch"}
                 oeffentlich = public_error(technisch)
                 if oeffentlich != " ".join(technisch.split()):
 

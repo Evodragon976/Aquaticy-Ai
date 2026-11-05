@@ -29,6 +29,11 @@ $ aquaticy
 
 **Neu in 15.1.1:**
 
+- **NVIDIA NIM antwortet wieder.** Bei NVIDIA scheitern Werkzeugaufrufe im Stream bei manchen
+  Modellen. Aquaticy fragt NVIDIA mit Werkzeugen deshalb ohne Stream: Die Antwort kommt am
+  Stück. Klappt es trotzdem nicht, steht statt „Bei Aquaticy ist etwas schiefgelaufen“ ein
+  klarer Satz da: Schlüssel abgelehnt, zu viele Anfragen, Modell weg, keine Antwort in der
+  Zeit oder Anfrage abgelehnt. Die genaue Meldung steht im Terminal.
 - **Ehrlichere GitHub-Prüfung.** Fehlt im Repo nur eine Datei, ein Branch oder eine Nummer,
   nennt Aquaticy genau das (zum Beispiel „die Datei „requirements.txt““) und sagt, dass der
   Zugriff passt. Die GitHub-Suche sagt jetzt dazu, dass sie nur Issues und Pull Requests

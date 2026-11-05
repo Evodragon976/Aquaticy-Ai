@@ -1391,6 +1391,49 @@ def is_transient(detail: str) -> bool:
     return any(marker in lowered for marker in TRANSIENT_MARKERS)
 
 
+def model_error_hint(exc: BaseException, model: str) -> str:
+    """Ein klarer Satz, warum der Anbieter nicht geantwortet hat -- sonst "" (15.1.1).
+
+    Vorher sah man bei NVIDIA nur "Bei Aquaticy ist etwas schiefgelaufen": Der technische
+    Text wird in der Oberflaeche verdeckt. Dieser Satz enthaelt nichts Technisches und
+    nennt, was zu tun ist. Die genaue Meldung bleibt im Terminal.
+    """
+    from aquaticy.config import provider_of
+    from aquaticy.system import PROVIDER_LABELS
+
+    anbieter = PROVIDER_LABELS.get(provider_of(model), "Der Modell-Anbieter")
+    if anbieter == "lokal":
+        return ""
+    name = type(exc).__name__
+    status = getattr(exc, "status_code", None)
+    text = str(exc).lower()
+
+    def hat(*codes: int) -> bool:
+        return status in codes or (not isinstance(status, int) and any(
+            re.search(rf"\b{c}\b", text) for c in codes))
+
+    if "Authentication" in name or "PermissionDenied" in name or hat(401, 403):
+        return (f"{anbieter} lehnt deinen API-Schlüssel ab. Prüfe ihn im Add-on {anbieter} "
+                "oder erstelle dort einen neuen.")
+    if "RateLimit" in name or hat(429):
+        return (f"{anbieter} meldet zu viele Anfragen. Warte eine Minute und frag dann noch "
+                "einmal.")
+    if "NotFound" in name or hat(404):
+        return (f"Das Modell {model.split('/', 1)[-1]} gibt es bei {anbieter} nicht oder "
+                "nicht mehr. Wähle oben ein anderes Modell.")
+    if "Timeout" in name or "timed out" in text or "timeout" in text:
+        return (f"{anbieter} hat nicht rechtzeitig geantwortet. Frag gleich noch einmal oder "
+                "nimm ein schnelleres Modell.")
+    if "BadRequest" in name or "UnprocessableEntity" in name or hat(400, 413, 422):
+        return (f"{anbieter} lehnt die Anfrage mit {model.split('/', 1)[-1]} ab. Nimm oben ein "
+                "anderes Modell. Die genaue Meldung steht im Terminal.")
+    if ("ServiceUnavailable" in name or "InternalServer" in name or "APIConnection" in name
+            or hat(500, 502, 503, 504)):
+        return (f"{anbieter} ist gerade nicht erreichbar oder überlastet. Frag in ein paar "
+                "Minuten noch einmal.")
+    return ""
+
+
 @dataclass
 class AgentResult:
     """Was ein Durchlauf ergeben hat."""
@@ -3174,6 +3217,13 @@ class Agent:
             frage = next((t for t in (own_words(m.get("content")) for m in reversed(messages)
                                       if m.get("role") == "user") if t), "")
             buchung = self._reserve(messages, werkzeuge)
+            from aquaticy.config import provider_of
+
+            if stream and werkzeuge and provider_of(self.active_model) == "nvidia_nim":
+                # 15.1.1: Bei NVIDIA NIM scheitern Werkzeugaufrufe im Stream bei manchen
+                # Modellen (laut NIM-Hinweisen: Tool Calling nicht mit stream=true). Ohne
+                # Stream kommt die Antwort am Stueck -- dafuer zuverlaessig.
+                stream = False
             try:
                 with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
                     if self.settings.model_access is not None:
@@ -3654,7 +3704,11 @@ class Agent:
                 break
             except Exception as exc:
                 result.error = f"{type(exc).__name__}: {exc}"
-                self._emit("error", message=result.error)
+                hinweis = model_error_hint(exc, self.active_model)
+                if hinweis:
+                    self._emit("error", message=hinweis, technisch=result.error)
+                else:
+                    self._emit("error", message=result.error)
 
 
                 del self.messages[turn_start:]
