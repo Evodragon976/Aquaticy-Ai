@@ -1,4 +1,4 @@
-# Aquaticy AI 15.0.0
+# Aquaticy AI 15.0.1
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,18 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.0.1:**
+
+- **GitHub-Commits gehen wieder.** Aquaticy folgt Weiterleitungen von GitHub (umbenannte oder
+  übertragene Repos) und liest öffentliche Repos notfalls ohne Token. Sieht dein Token ein Repo
+  nicht, sagt Aquaticy jetzt genau warum. Der häufigste Grund: Ein Fine-grained-Token
+  (github_pat_…) liest keine privaten Repos eines anderen Kontos, auch nicht als Mitarbeiter.
+  Dann hilft ein klassisches Token (ghp_…) mit dem Recht „repo“, ein Token vom Besitzer oder
+  das Übertragen des Repos. Ein Repo ohne Besitzer („Aquaticy-Ai“) sucht Aquaticy in deinen
+  eigenen Repos.
+- **`aquaticy stop`** beendet laufende Aquaticy-Server, auch den Hintergrundprozess.
+  `aquaticy stop --port 8765` beendet nur den auf diesem Port.
 
 **Neu in 15.0.0:**
 
@@ -379,7 +391,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.0.0
+aquaticy --version            # 15.0.1
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

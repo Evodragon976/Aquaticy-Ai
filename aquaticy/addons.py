@@ -1199,6 +1199,11 @@ def github_call(
     repo = (repo or "").strip().strip("/")
     braucht_repo = action in {"repo", "issues", "issue", "pulls", "pull", "datei", "commits",
                              "commit", "vergleich", "baum", "branches", "review"}
+    # 15.0.1: "Aquaticy-Ai" ohne Besitzer -- das Repo wird in den eigenen Repos gesucht.
+    kurz = ""
+    if braucht_repo and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", repo or "") and repo not in (
+            ".", ".."):
+        kurz, repo = repo, f"eigenes/{repo}"
     try:
         if repo or braucht_repo:
             repo, ref, path, number = github_repo.target(repo, ref, path, number)
@@ -1265,12 +1270,37 @@ def github_call(
             raise github_repo.GitHubError("Zu viele Abrufe. Grenze die Prüfung ein.")
         requests += 1
         _takt("api.github.com")
-        cache[schluessel] = github_repo.request(
-            client, pfad, _github_headers(token),
-            {k: v for k, v in params.items() if v not in ("", None)})
+        parameter = {k: v for k, v in params.items() if v not in ("", None)}
+        try:
+            cache[schluessel] = github_repo.request(client, pfad, _github_headers(token),
+                                                    parameter)
+        except github_repo.Missing:
+            # 15.0.1: Ein oeffentliches Repo geht auch ohne Token (wenn das Token es nicht
+            # sieht, etwa weil es einem anderen Konto gehoert). Sonst: die genaue Ursache.
+            if not repo or not pfad.startswith(f"/repos/{repo}"):
+                raise
+            ohne = {k: v for k, v in _github_headers(token).items() if k != "Authorization"}
+            try:
+                cache[schluessel] = github_repo.request(client, pfad, ohne, parameter)
+            except github_repo.GitHubError:
+                login = ""
+                with contextlib.suppress(github_repo.GitHubError, httpx.HTTPError, ValueError,
+                                         AttributeError):
+                    login = str(github_repo.request(client, "/user", _github_headers(token),
+                                                    {}).get("login") or "")
+                raise github_repo.Missing(github_repo.missing_reason(repo, login,
+                                                                     token)) from None
         return cache[schluessel]
 
     try:
+        if kurz:
+            eigene = hole("/user/repos", per_page=100, sort="updated")
+            passend = [str(r.get("full_name") or "") for r in eigene
+                       if str(r.get("name") or "").casefold() == kurz.casefold()]
+            if not passend or not REPO_RE.fullmatch(passend[0]):
+                raise AddOnError(f"Ein Repo „{kurz}“ finde ich in deinen Repos nicht. Nenne es "
+                                 "als besitzer/name, zum Beispiel jonas/projekt.")
+            repo = passend[0]
         if (nur_oeffentlich and braucht_repo
                 and hole(f"/repos/{repo}").get("private") is not False):
             raise AddOnError(

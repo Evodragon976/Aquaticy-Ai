@@ -341,7 +341,8 @@ def test_github_only_ever_reads(konto: Settings) -> None:
     ("args", "fehler"),
     [
         ({"action": "loeschen"}, "Unbekannte Aktion"),
-        ({"action": "repo", "repo": "nur-ein-teil"}, "besitzer/name"),
+        ({"action": "repo", "repo": "nur ein teil"}, "besitzer/name"),
+        ({"action": "repo", "repo": ".."}, "besitzer/name"),
         ({"action": "repo", "repo": "a/b/../c"}, "besitzer/name"),
         ({"action": "issue", "repo": "a/b", "number": "sieben"}, "ganze Zahl"),
         ({"action": "issue", "repo": "a/b", "number": -1}, "ganze Zahl"),

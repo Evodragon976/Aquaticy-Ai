@@ -84,28 +84,69 @@ def target(repo: str, ref: str = "", path: str = "", number: Any = None
 
 def request(client: httpx.Client, route: str, headers: dict[str, str],
             params: dict[str, Any]) -> Any:
-    with client.stream("GET", "https://api.github.com" + route, headers=headers,
-                       params=params, follow_redirects=False) as response:
-        status = response.status_code
-        permission = ("Pull requests: Read-only" if "/pulls/" in route else
-                      "Issues: Read-only" if "/issues" in route else "Contents: Read-only")
-        if status != 200:
-            if status == 404:
-                raise Missing("Nicht gefunden oder nicht freigegeben. Wähle das Repo im "
-                              f"GitHub-Token aus und erlaube {permission}.")
-            if status in (403, 429) and (response.headers.get("x-ratelimit-remaining") == "0"
-                                         or status == 429):
-                raise GitHubError("Das GitHub-Limit ist erreicht. Versuche es später erneut.")
-            if status in (401, 403):
-                raise GitHubError(f"GitHub verweigert den Zugriff ({status}). Prüfe Token, "
-                                  f"Repo-Auswahl, {permission} und gegebenenfalls SSO.")
-            raise GitHubError(f"GitHub antwortet mit {status}.")
-        data = bytearray()
-        for chunk in response.iter_bytes(chunk_size=65_536):
-            if len(data) + len(chunk) > MAX_RESPONSE:
-                raise GitHubError("GitHub-Antwort zu groß. Prüfe einen kleineren Ordner.")
-            data.extend(chunk)
-    return json.loads(data)
+    """Ein GET bei api.github.com.
+
+    Seit 15.0.1 folgt der Abruf Weiterleitungen -- aber nur innerhalb von api.github.com.
+    Umbenannte oder uebertragene Repos (etwa von einem Konto zu einem anderen) antworten mit
+    301; vorher endete das als "GitHub antwortet mit 301".
+    """
+    url = "https://api.github.com" + route
+    for _ in range(4):
+        with client.stream("GET", url, headers=headers, params=params,
+                           follow_redirects=False) as response:
+            status = response.status_code
+            if status in (301, 302, 307, 308):
+                ziel = urlsplit(response.headers.get("location", ""))
+                if ziel.scheme != "https" or ziel.hostname != "api.github.com":
+                    raise GitHubError("GitHub leitet an eine unerwartete Adresse weiter.")
+                url, params = ziel.geturl(), {}
+                continue
+            permission = ("Pull requests: Read-only" if "/pulls/" in route else
+                          "Issues: Read-only" if "/issues" in route else "Contents: Read-only")
+            if status != 200:
+                benoetigt = " ".join(response.headers.get(
+                    "x-accepted-github-permissions", "").split())[:120]
+                if benoetigt:
+                    permission += f" (GitHub verlangt: {benoetigt})"
+                if status == 404:
+                    raise Missing("Nicht gefunden oder nicht freigegeben. Wähle das Repo im "
+                                  f"GitHub-Token aus und erlaube {permission}.")
+                if status in (403, 429) and (
+                        response.headers.get("x-ratelimit-remaining") == "0" or status == 429):
+                    raise GitHubError("Das GitHub-Limit ist erreicht. Versuche es später "
+                                      "erneut.")
+                if status in (401, 403):
+                    raise GitHubError(f"GitHub verweigert den Zugriff ({status}). Prüfe Token, "
+                                      f"Repo-Auswahl, {permission} und gegebenenfalls SSO.")
+                raise GitHubError(f"GitHub antwortet mit {status}.")
+            data = bytearray()
+            for chunk in response.iter_bytes(chunk_size=65_536):
+                if len(data) + len(chunk) > MAX_RESPONSE:
+                    raise GitHubError("GitHub-Antwort zu groß. Prüfe einen kleineren Ordner.")
+                data.extend(chunk)
+        return json.loads(data)
+    raise GitHubError("GitHub leitet zu oft weiter.")
+
+
+def missing_reason(repo: str, login: str, token: str) -> str:
+    """Warum ein Token ein Repo nicht sieht -- mit der Loesung (15.0.1).
+
+    Die haeufigste Falle: Ein Fine-grained-Token (github_pat_...) liest keine privaten Repos
+    eines ANDEREN Kontos, auch wenn man dort Mitarbeiter ist. GitHub sagt dann nur 404.
+    """
+    besitzer = repo.split("/", 1)[0]
+    if token.startswith("github_pat_") and login and besitzer.casefold() != login.casefold():
+        return (f"{repo} gehört dem Konto {besitzer}, dein Token dem Konto {login}. "
+                "Fine-grained-Tokens lesen keine privaten Repos anderer Konten, auch nicht "
+                "als Mitarbeiter. So geht es: Erstelle ein klassisches Token (ghp_…) mit dem "
+                f"Recht „repo“, oder {besitzer} erstellt das Token, oder übertrage das Repo "
+                "auf dein Konto. Füge das neue Token im GitHub-Add-on ein.")
+    if token.startswith("github_pat_"):
+        return (f"Dein Token sieht {repo} nicht. Wähle das Repo im Token unter Repository "
+                "access aus und erlaube Contents: Read-only (für Commits und Dateien) und "
+                "Metadata: Read-only. Prüfe auch die Schreibweise.")
+    return (f"Dein Token sieht {repo} nicht. Prüfe die Schreibweise, beim klassischen Token "
+            "das Recht „repo“ und bei Organisationen die SSO-Freigabe des Tokens.")
 
 
 def redact(text: str) -> str:

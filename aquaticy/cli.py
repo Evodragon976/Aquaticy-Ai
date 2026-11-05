@@ -1103,6 +1103,30 @@ def _altes_aquaticy(port: int) -> None:
                       f"Beende ihn mit: kill {' '.join(map(str, prozesse))}[/yellow]")
 
 
+@app.command("stop")
+def stop_command(
+    port: int = typer.Option(0, "--port", "-p", help="Nur den Server auf diesem Port."),
+) -> None:
+    """Beendet laufende Aquaticy-Server, auch im Hintergrund (15.0.1)."""
+    from aquaticy import old_server
+
+    if os.name == "nt":
+        console.print("Unter Windows beendest du Aquaticy im Task-Manager (python.exe mit "
+                      "„aquaticy web“).")
+        raise typer.Exit(code=1)
+    prozesse = ([pid for pid in old_server.listener_pids(port) if old_server.is_aquaticy(pid)]
+                if port else old_server.aquaticy_servers())
+    if not prozesse:
+        console.print("Es läuft kein Aquaticy-Server.")
+        return
+    beendet = [pid for pid in prozesse if old_server.stop(pid)]
+    for pid in prozesse:
+        console.print(f"Aquaticy (Prozess {pid}) "
+                      + ("ist beendet." if pid in beendet else "reagiert nicht."), markup=False)
+    if len(beendet) != len(prozesse):
+        raise typer.Exit(code=1)
+
+
 @app.command("web")
 def web_command(
     port: int = typer.Option(8765, "--port", "-p", help="Port für die Oberfläche."),
@@ -2464,6 +2488,7 @@ HELP_TEXT = """\
   aquaticy export               Recherchen exportieren
   aquaticy cluster              Server-Verbund: Anfrage annehmen (yes/no)
   aquaticy website              eigene Domain: Stand, setup, remove
+  aquaticy stop                 laufende Aquaticy-Server beenden (auch im Hintergrund)
   aquaticy voice                lokale Sprachnachrichten einrichten; --disable schaltet sie aus
   aquaticy secure-pro           defensive Netzprüfung einrichten; --disable schaltet sie aus
 """

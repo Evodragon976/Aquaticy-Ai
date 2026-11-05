@@ -12,7 +12,7 @@ from pathlib import Path
 import aquaticy
 
 ROOT = Path(__file__).resolve().parents[1]
-NUMMER = "15.0.0"
+NUMMER = "15.0.1"
 NAME = ""
 # Seit 15.0.0 darf der Name fehlen.
 LABEL = " ".join(t for t in (NUMMER, NAME) if t)
