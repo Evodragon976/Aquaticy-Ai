@@ -100,6 +100,45 @@ def test_a_repo_without_owner_is_found_in_the_own_repos() -> None:
     assert "finde ich in deinen Repos nicht" in fehlt["error"]
 
 
+def _ohne_zugriff(extra: dict[str, Any], scopes: str = "repo") -> dict[str, Any]:
+    routes: dict[str, Any] = {
+        "/user": httpx.Response(200, json={"login": "jonasenriklaumen-a11y"},
+                                headers={"x-oauth-scopes": scopes}),
+        "/user/repository_invitations": [],
+    }
+    routes.update(extra)
+    return routes
+
+
+def test_a_classic_token_of_another_account_names_the_account() -> None:
+    gesehen: list[httpx.Request] = []
+    with _client(_ohne_zugriff({}), gesehen) as client:
+        ergebnis = addons.github_call(TOKEN_KLASSISCH, "commits",
+                                      repo="Evodragon976/Aquaticy-Ai", client=client)
+    assert "Konto jonasenriklaumen-a11y" in ergebnis["error"]
+    assert "Collaborators" in ergebnis["error"] and "Evodragon976" in ergebnis["error"]
+    assert all(r.method == "GET" for r in gesehen)
+
+
+def test_a_pending_invitation_is_named() -> None:
+    gesehen: list[httpx.Request] = []
+    einladung = [{"repository": {"full_name": "Evodragon976/Aquaticy-Ai"}}]
+    with _client(_ohne_zugriff({"/user/repository_invitations": einladung}),
+                 gesehen) as client:
+        ergebnis = addons.github_call(TOKEN_KLASSISCH, "commits",
+                                      repo="evodragon976/aquaticy-ai", client=client)
+    assert "Einladung" in ergebnis["error"] and "/invitations" in ergebnis["error"]
+
+
+def test_a_classic_token_without_repo_scope_says_so() -> None:
+    gesehen: list[httpx.Request] = []
+    with _client(_ohne_zugriff({}, scopes="read:user"), gesehen) as client:
+        ergebnis = addons.github_call(TOKEN_KLASSISCH, "commits",
+                                      repo="Evodragon976/Aquaticy-Ai", client=client)
+    assert "fehlt das Recht „repo“" in ergebnis["error"] and "read:user" in ergebnis["error"]
+    assert TOKEN_KLASSISCH not in ergebnis["error"]
+
+
 # -- aquaticy stop --------------------------------------------------------------------------------
 @pytest.mark.parametrize("befehl,server", [
     (["/usr/bin/python3", "-m", "aquaticy.cli", "web", "--foreground"], True),
@@ -137,3 +176,23 @@ def test_the_server_list_never_contains_this_process() -> None:
     import os
 
     assert os.getpid() not in old_server.aquaticy_servers()
+
+
+def test_a_missing_branch_is_not_called_missing_access() -> None:
+    gesehen: list[httpx.Request] = []
+
+    def commits(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("sha") == "main":
+            return httpx.Response(404)
+        return httpx.Response(200, json=[{"sha": SHA, "commit": {"message": "x"}}])
+
+    routes = {"/repos/Evodragon976/Aquaticy-Ai": {"full_name": "Evodragon976/Aquaticy-Ai",
+                                                  "default_branch": "Aquaticy-ai"},
+              "/repos/Evodragon976/Aquaticy-Ai/commits": commits}
+    with _client(routes, gesehen) as client:
+        ergebnis = addons.github_call(TOKEN_KLASSISCH, "commits", repo="Evodragon976/Aquaticy-Ai",
+                                      ref="main", client=client)
+        assert ergebnis["commits"][0]["sha"] == SHA and "„main“" in ergebnis["hinweis"]
+        baum = addons.github_call(TOKEN_KLASSISCH, "baum", repo="Evodragon976/Aquaticy-Ai",
+                                  ref="gibtsnicht", client=client)
+    assert "der Zugriff passt" in baum["error"] and "„Aquaticy-ai“" in baum["error"]

@@ -1341,7 +1341,9 @@ GITHUB_SCHEMA: dict[str, Any] = {
                 "repo": {"type": "string"},
                 "number": {"type": "integer"},
                 "path": {"type": "string"},
-                "ref": {"type": "string"},
+                "ref": {"type": "string",
+                        "description": "Branch, Tag oder SHA. Weglassen = Standard-Branch; "
+                                       "nie main raten."},
                 "state": {"type": "string", "description": "open, closed oder all."},
                 "query": {"type": "string"},
                 "page": {"type": "integer", "minimum": 1, "maximum": 1000},

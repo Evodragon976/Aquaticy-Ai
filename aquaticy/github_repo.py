@@ -128,7 +128,8 @@ def request(client: httpx.Client, route: str, headers: dict[str, str],
     raise GitHubError("GitHub leitet zu oft weiter.")
 
 
-def missing_reason(repo: str, login: str, token: str) -> str:
+def missing_reason(repo: str, login: str, token: str, *, scopes: str | None = None,
+                   invited: bool = False) -> str:
     """Warum ein Token ein Repo nicht sieht -- mit der Loesung (15.0.1).
 
     Die haeufigste Falle: Ein Fine-grained-Token (github_pat_...) liest keine privaten Repos
@@ -145,8 +146,60 @@ def missing_reason(repo: str, login: str, token: str) -> str:
         return (f"Dein Token sieht {repo} nicht. Wähle das Repo im Token unter Repository "
                 "access aus und erlaube Contents: Read-only (für Commits und Dateien) und "
                 "Metadata: Read-only. Prüfe auch die Schreibweise.")
+    if invited:
+        return (f"Für {repo} wartet noch eine Einladung an dein Konto {login}. Nimm sie an: "
+                f"https://github.com/{repo}/invitations -- danach sieht dein Token das Repo.")
+    rechte = [r.strip() for r in (scopes or "").split(",") if r.strip()]
+    if scopes is not None and "repo" not in rechte:
+        return (f"Deinem klassischen Token fehlt das Recht „repo“ (es hat: "
+                f"{', '.join(rechte) or 'keine Rechte'}). Erstelle ein neues Token mit „repo“ "
+                "und füge es im GitHub-Add-on ein.")
+    if login and besitzer.casefold() != login.casefold():
+        return (f"Dein Token gehört dem Konto {login}. Dieses Konto hat keinen Zugriff auf "
+                f"{repo}. So geht es: {besitzer} lädt {login} im Repo unter Settings → "
+                "Collaborators ein, und du nimmst die Einladung an. Oder du erstellst das Token "
+                f"mit dem Konto {besitzer}. Prüfe auch die Schreibweise.")
     return (f"Dein Token sieht {repo} nicht. Prüfe die Schreibweise, beim klassischen Token "
             "das Recht „repo“ und bei Organisationen die SSO-Freigabe des Tokens.")
+
+
+def missing_in_repo(repo: str, default_branch: str, ref: str, path: str) -> str:
+    """Das Repo ist sichtbar, nur Branch, Pfad oder Nummer fehlen (15.0.1)."""
+    fehlt = []
+    if ref:
+        fehlt.append(f"den Branch oder Commit „{ref}“")
+    if path:
+        fehlt.append(f"den Pfad „{path}“")
+    teil = " und ".join(fehlt) or "diese Nummer oder Seite"
+    standard = f" Der Standard-Branch heißt „{default_branch}“." if default_branch else ""
+    return (f"Dein Token sieht {repo}, der Zugriff passt. Nur {teil} gibt es dort nicht."
+            f"{standard} Lass ref weg, dann nimmt Aquaticy den Standard-Branch.")
+
+
+def diagnose(client: httpx.Client, repo: str, headers: dict[str, str]) -> dict[str, Any]:
+    """Wem gehoert das Token, welche Rechte hat es, wartet eine Einladung? (15.0.1)
+
+    Nur GET bei api.github.com. Fehler machen nichts: Dann fehlt eben die Angabe.
+    """
+    info: dict[str, Any] = {"login": "", "scopes": None, "invited": False}
+    try:
+        antwort = client.get("https://api.github.com/user", headers=headers,
+                             follow_redirects=False)
+        if antwort.status_code == 200:
+            info["login"] = str(antwort.json().get("login") or "")
+            if "x-oauth-scopes" in antwort.headers:
+                info["scopes"] = antwort.headers["x-oauth-scopes"]
+        if info["scopes"] is not None:
+            antwort = client.get("https://api.github.com/user/repository_invitations",
+                                 headers=headers, params={"per_page": 100},
+                                 follow_redirects=False)
+            if antwort.status_code == 200 and isinstance(antwort.json(), list):
+                info["invited"] = any(
+                    str((e.get("repository") or {}).get("full_name") or "").casefold()
+                    == repo.casefold() for e in antwort.json() if isinstance(e, dict))
+    except (httpx.HTTPError, ValueError, AttributeError, TypeError):
+        pass
+    return info
 
 
 def redact(text: str) -> str:

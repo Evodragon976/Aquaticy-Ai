@@ -1283,13 +1283,21 @@ def github_call(
             try:
                 cache[schluessel] = github_repo.request(client, pfad, ohne, parameter)
             except github_repo.GitHubError:
-                login = ""
-                with contextlib.suppress(github_repo.GitHubError, httpx.HTTPError, ValueError,
-                                         AttributeError):
-                    login = str(github_repo.request(client, "/user", _github_headers(token),
-                                                    {}).get("login") or "")
-                raise github_repo.Missing(github_repo.missing_reason(repo, login,
-                                                                     token)) from None
+                # Sieht das Token das Repo selbst? Dann fehlt nur Branch, Pfad oder Nummer --
+                # kein Rechteproblem (etwa ref "main", wenn der Standard-Branch anders heisst).
+                if pfad != f"/repos/{repo}":
+                    daten: Any = None
+                    with contextlib.suppress(github_repo.GitHubError, httpx.HTTPError,
+                                             ValueError):
+                        daten = github_repo.request(client, f"/repos/{repo}",
+                                                    _github_headers(token), {})
+                    if isinstance(daten, dict) and daten.get("full_name"):
+                        raise github_repo.Missing(github_repo.missing_in_repo(
+                            repo, str(daten.get("default_branch") or ""), ref, path)) from None
+                info = github_repo.diagnose(client, repo, _github_headers(token))
+                raise github_repo.Missing(github_repo.missing_reason(
+                    repo, info["login"], token, scopes=info["scopes"],
+                    invited=info["invited"])) from None
         return cache[schluessel]
 
     try:
@@ -1432,8 +1440,18 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
                 "head_sha": (p.get("head") or {}).get("sha")}
     if action == "commits":
         # Seit 14.4.4: voller SHA (fuer commit/vergleich), Seiten und Filter nach Datei.
-        eintraege = hole(f"/repos/{repo}/commits", sha=ref, path=path, per_page=20, page=page)
-        return {"commits": [{"sha": c.get("sha") or "",
+        hinweis = ""
+        try:
+            eintraege = hole(f"/repos/{repo}/commits", sha=ref, path=path, per_page=20,
+                             page=page)
+        except github_repo.Missing:
+            # 15.0.1: "main" oder "master" geraten, der Standard-Branch heisst aber anders.
+            if ref.casefold() not in ("main", "master"):
+                raise
+            eintraege = hole(f"/repos/{repo}/commits", path=path, per_page=20, page=page)
+            hinweis = (f"Einen Branch „{ref}“ gibt es nicht. Das sind die Commits des "
+                       "Standard-Branches.")
+        return {**({"hinweis": hinweis} if hinweis else {}), "commits": [{"sha": c.get("sha") or "",
                              "nachricht": _kurz((c.get("commit") or {}).get("message"), 300),
                              "von": ((c.get("commit") or {}).get("author") or {}).get("name"),
                              "datum": ((c.get("commit") or {}).get("author") or {}).get("date")}
