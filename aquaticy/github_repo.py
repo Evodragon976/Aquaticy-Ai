@@ -163,17 +163,41 @@ def missing_reason(repo: str, login: str, token: str, *, scopes: str | None = No
             "das Recht „repo“ und bei Organisationen die SSO-Freigabe des Tokens.")
 
 
-def missing_in_repo(repo: str, default_branch: str, ref: str, path: str) -> str:
-    """Das Repo ist sichtbar, nur Branch, Pfad oder Nummer fehlen (15.0.1)."""
-    fehlt = []
-    if ref:
-        fehlt.append(f"den Branch oder Commit „{ref}“")
-    if path:
-        fehlt.append(f"den Pfad „{path}“")
-    teil = " und ".join(fehlt) or "diese Nummer oder Seite"
+def missing_in_repo(repo: str, default_branch: str, route: str,
+                    params: dict[str, Any] | None = None) -> str:
+    """Das Repo ist sichtbar, nur ein Teil fehlt -- welcher, steht im Abruf (15.1.1).
+
+    Vorher kam bei Abrufen ohne ref und path (etwa mehrere Dateien im review) nur
+    "diese Nummer oder Seite", obwohl eine Datei fehlte.
+    """
+    params = params or {}
+    rest = route.removeprefix(f"/repos/{repo}").strip("/")
+    art, _, wert = rest.partition("/")
+    wert = unquote(wert)
+    ref = str(params.get("ref") or params.get("sha") or "")
+    if art == "contents":
+        teil = f"die Datei oder den Ordner „{wert or '/'}“"
+        if ref:
+            teil += f" im Branch „{ref}“"
+    elif art == "commits" and wert:
+        teil = f"den Commit oder Branch „{wert}“"
+    elif art == "git" and wert.startswith("trees/"):
+        teil = f"den Branch oder Commit „{wert.removeprefix('trees/')}“"
+    elif art in ("issues", "pulls") and wert:
+        nummer = wert.split("/", 1)[0]
+        teil = f"{'das Issue' if art == 'issues' else 'den Pull Request'} Nr. {nummer}"
+    elif art == "compare":
+        teil = f"den Vergleich „{wert}“"
+    elif art == "commits" and ref:
+        teil = f"den Branch oder Commit „{ref}“"
+    elif params.get("path"):
+        teil = f"den Pfad „{params['path']}“"
+    else:
+        teil = "diese Seite"
     standard = f" Der Standard-Branch heißt „{default_branch}“." if default_branch else ""
+    tipp = " Lass ref weg, dann nimmt Aquaticy den Standard-Branch." if ref else ""
     return (f"Dein Token sieht {repo}, der Zugriff passt. Nur {teil} gibt es dort nicht."
-            f"{standard} Lass ref weg, dann nimmt Aquaticy den Standard-Branch.")
+            f"{standard}{tipp} Das ist kein Rechteproblem; erfinde keinen Inhalt dafür.")
 
 
 def diagnose(client: httpx.Client, repo: str, headers: dict[str, str]) -> dict[str, Any]:

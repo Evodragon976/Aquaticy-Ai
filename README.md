@@ -1,4 +1,4 @@
-# Aquaticy AI 15.0.1
+# Aquaticy AI 15.1.1
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,19 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.1.1:**
+
+- **Ehrlichere GitHub-Prüfung.** Fehlt im Repo nur eine Datei, ein Branch oder eine Nummer,
+  nennt Aquaticy genau das (zum Beispiel „die Datei „requirements.txt““) und sagt, dass der
+  Zugriff passt. Die GitHub-Suche sagt jetzt dazu, dass sie nur Issues und Pull Requests
+  findet, keinen Code. So meldet ein Modell keine erfundenen Mängel mehr, etwa „keine
+  Sicherheitsprüfungen im Code“, nur weil die Suche nichts fand.
+- **Sicherheitsprüfung auf GitHub:** `.github/workflows/security.yml` prüft bei jedem Push und
+  jede Woche alle Abhängigkeiten aus `constraints.txt` auf bekannte Lücken (pip-audit) und den
+  Code mit bandit. Die Abhängigkeiten stehen in `pyproject.toml`, fest gepinnt in
+  `constraints.txt`. Eine eigene `requirements.txt` braucht es dafür nicht.
+- **nmap und ClamAV einrichten:** steht jetzt unter „Zuhause: Heimnetz, Home Assistant, Lager“.
 
 **Neu in 15.0.1:**
 
@@ -391,7 +404,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.0.1
+aquaticy --version            # 15.1.1
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -1248,6 +1261,23 @@ Nur mit **Ultra**.
   Schalter nicht selbst umlegen. Hat Aquaticy Webseiten oder Mails gelesen, fragt es trotzdem.
 - **Lagerverwaltung:** Räume → Möbel → Artikel. Aquaticy sagt, wo etwas liegt und wie viel da
   ist. Mit „Lesen und schreiben“ legt es auch an. Gelöscht wird nie.
+
+### nmap und ClamAV für Secure Pro einrichten
+
+Beides ist freiwillig. Secure Pro läuft auch ohne, prüft dann aber weniger.
+
+- **nmap** liest, welche Dienste ein Gerät im Heimnetz anbietet. `aquaticy secure-pro` bietet
+  an, nmap zu installieren (Linux mit apt). Sonst: `sudo apt install nmap` oder
+  `brew install nmap`. Danach schaltest du es ein: Einstellungen → Zuhause & Netz → Secure Pro.
+  nmap prüft nur Ziele im freigegebenen Heimnetz, mit festen Befehlen.
+- **ClamAV** sucht Malware, aber nur in einem Ordner, den du freigibst. Installiere es mit
+  `sudo apt install clamav` (oder `brew install clamav`) und hole die Virendaten mit
+  `sudo freshclam`. Den Ordner gibst du in `aquaticy secure-pro` an. Fehlt ClamAV, sagt Secure
+  Pro das im Bericht.
+- **Firewall:** Ohne `--lan` lauscht Aquaticy nur auf `127.0.0.1`. Mit `--lan` oder im
+  Hintergrund ist es auch im Heimnetz erreichbar. Soll nur dein Heimnetz an den Port, hilft
+  deine Firewall, zum Beispiel `sudo ufw allow from 192.168.0.0/16 to any port 8765`.
+  Secure Pro ändert keine Firewall-Regeln von selbst. Abwehr-Befehle brauchen immer dein Ja.
 
 ---
 

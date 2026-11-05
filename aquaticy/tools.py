@@ -1324,12 +1324,16 @@ GITHUB_SCHEMA: dict[str, Any] = {
             "pull (Dateien und Patches), datei (path, ref, start_line, max_lines), "
             "baum (Dateibaum), branches, review (Codeauszuege eines festen Commits; "
             "bei PRs number angeben), commits (ref, path, page), commit (ref = SHA: "
-            "Nachricht und Patches), vergleich (base...ref), suche (Issues/PRs). "
+            "Nachricht und Patches), vergleich (base...ref), suche (nur Issues/PRs, kein "
+            "Code: Code liest du mit baum und datei). "
             "repo ohne Besitzer sucht in den eigenen Repos. Kommt ein error, gib Ursache und "
             "Loesung daraus woertlich weiter, statt selbst zu raten. Zum Codepruefen zuerst "
             "review, danach fehlenden Kontext mit datei nachlesen. repo als 'besitzer/name' "
             "oder GitHub-URL. page fuer weitere Ergebnisse. Private Inhalte nie ungefragt "
-            "in oeffentliche Suchanfragen uebernehmen. Keine vollstaendige Pruefung behaupten."
+            "in oeffentliche Suchanfragen uebernehmen. Keine vollstaendige Pruefung behaupten. "
+            "Nenne nur Dateien und Befunde, die ein Ergebnis wirklich zeigt; erfinde keine. "
+            "Fehlt eine Datei, schau im baum nach dem Ersatz (z.B. pyproject.toml statt "
+            "requirements.txt), bevor du etwas als Mangel meldest."
         ),
         "parameters": {
             "type": "object",
@@ -1337,7 +1341,8 @@ GITHUB_SCHEMA: dict[str, Any] = {
                 "action": {"type": "string", "enum": ["ich", "repos", "repo", "issues", "issue",
                            "pulls", "pull", "datei", "commits", "commit", "vergleich", "suche",
                            "baum", "branches", "review"]},
-                "base": {"type": "string", "description": "Basis fuer vergleich, z.B. main."},
+                "base": {"type": "string",
+                         "description": "Basis fuer vergleich, z.B. der Standard-Branch."},
                 "repo": {"type": "string"},
                 "number": {"type": "integer"},
                 "path": {"type": "string"},

@@ -1293,7 +1293,8 @@ def github_call(
                                                     _github_headers(token), {})
                     if isinstance(daten, dict) and daten.get("full_name"):
                         raise github_repo.Missing(github_repo.missing_in_repo(
-                            repo, str(daten.get("default_branch") or ""), ref, path)) from None
+                            repo, str(daten.get("default_branch") or ""), pfad,
+                            parameter)) from None
                 info = github_repo.diagnose(client, repo, _github_headers(token))
                 raise github_repo.Missing(github_repo.missing_reason(
                     repo, info["login"], token, scopes=info["scopes"],
@@ -1498,7 +1499,9 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
             if REPO_RE.fullmatch(name) and hole(f"/repos/{name}").get("private") is False:
                 public.append(item)
         items = public
-    return {"treffer": [{"repo": str(t.get("repository_url") or "").split("/repos/")[-1],
+    return {"hinweis": "Diese Suche findet nur Issues und Pull Requests, keinen Code. "
+                       "Code liest du mit baum, datei oder review.",
+            "treffer": [{"repo": str(t.get("repository_url") or "").split("/repos/")[-1],
                          "nummer": t.get("number"), "titel": t.get("title"),
                          "zustand": t.get("state"), "pull_request": "pull_request" in t}
                         for t in items],
