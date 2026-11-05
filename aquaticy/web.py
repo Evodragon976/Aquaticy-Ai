@@ -2901,9 +2901,7 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                     SECURE_WATCHER.wake.set()
                     SECURE_WATCHER.start()
             elif payload.get("enabled") is False:
-                (directory / "secure-pro.json").unlink(missing_ok=True)
-                # Ausschalten loescht auch den Verlauf (15.0.0).
-                secure_pro.history_path(directory).unlink(missing_ok=True)
+                secure_pro.disable(directory)
                 if SECURE_WATCHER:
                     SECURE_WATCHER.wake.set()
             else:

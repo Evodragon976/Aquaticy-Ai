@@ -12,6 +12,7 @@ import ast
 import contextlib
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -92,16 +93,41 @@ def listener_pids(port: int) -> list[int]:
 
 def is_aquaticy(pid: int) -> bool:
     """Ist der Prozess wirklich Aquaticy? Sonst wird er nie angefasst."""
-    befehl = ""
-    with contextlib.suppress(OSError):
-        befehl = Path(f"/proc/{int(pid)}/cmdline").read_bytes().replace(b"\0", b" ").decode(
-            "utf-8", "replace")
-    if not befehl and shutil.which("ps"):
-        with contextlib.suppress(OSError, subprocess.SubprocessError):
-            befehl = subprocess.run(["ps", "-p", str(int(pid)), "-o", "command="],
+    if int(pid) <= 0 or int(pid) == os.getpid() or os.name == "nt":
+        return False
+    proc = Path(f"/proc/{int(pid)}")
+    if Path("/proc/net/tcp").exists():
+        try:
+            if proc.stat().st_uid != os.getuid():
+                return False
+            command = proc.joinpath("cmdline").read_bytes().split(b"\0")
+            return _ist_server([part.decode("utf-8", "replace") for part in command if part])
+        except OSError:
+            return False
+    if shutil.which("ps"):
+        with contextlib.suppress(OSError, subprocess.SubprocessError, ValueError):
+            output = subprocess.run(["ps", "-p", str(int(pid)), "-o", "uid=,command="],
                                     capture_output=True, text=True, timeout=5,
-                                    check=False).stdout
-    return "aquaticy" in befehl.lower() and int(pid) != os.getpid()
+                                    check=False).stdout.strip().split(None, 1)
+            return (len(output) == 2 and output[0] == str(os.getuid())
+                    and _ist_server(shlex.split(output[1])))
+    return False
+
+
+def _exited(pid: int) -> bool:
+    try:
+        state = Path(f"/proc/{int(pid)}/stat").read_text().rsplit(")", 1)[-1].split()[0]
+        if state in ("Z", "X"):
+            return True
+    except (OSError, IndexError):
+        pass
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    return False
 
 
 def stop(pid: int, wait: float = 10.0) -> bool:
@@ -117,12 +143,10 @@ def stop(pid: int, wait: float = 10.0) -> bool:
         return False
     ende = time.monotonic() + wait
     while time.monotonic() < ende:
-        try:
-            os.kill(int(pid), 0)
-        except OSError:
+        if _exited(pid):
             return True
         time.sleep(0.2)
-    return False
+    return _exited(pid)
 
 
 def aquaticy_servers() -> list[int]:
@@ -154,11 +178,16 @@ def aquaticy_servers() -> list[int]:
 
 def _ist_server(befehl: list[str]) -> bool:
     """`aquaticy web ...` oder `python -m aquaticy.cli web ...` -- nichts anderes."""
-    namen = [Path(t).name.lower() for t in befehl]
-    for i, name in enumerate(namen):
-        programm = i == 0 or (i == 1 and namen[0].startswith("python")) or (
-            i >= 1 and namen[i - 1] == "-m")
-        if (programm and name in ("aquaticy", "aquaticy.cli", "aquaticy.exe")
-                and "web" in namen[i + 1:i + 3]):
-            return True
-    return False
+    if not befehl:
+        return False
+    program = Path(befehl[0]).name.lower()
+    args = befehl[1:]
+    if re.fullmatch(r"(?:python|pypy)[0-9.]*w?(?:\.exe)?", program):
+        while args and args[0] in ("-u", "-B", "-E", "-s", "-S", "-I", "-O", "-OO", "-q"):
+            args = args[1:]
+        if args[:2] == ["-m", "aquaticy.cli"]:
+            return len(args) > 2 and args[2] == "web"
+        if not args:
+            return False
+        program, args = Path(args[0]).name.lower(), args[1:]
+    return program in ("aquaticy", "aquaticy.exe") and bool(args) and args[0] == "web"

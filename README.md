@@ -1,4 +1,4 @@
-# Aquaticy AI 15.1.1
+# Aquaticy AI 15.1.2
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,30 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.1.2: 15 nachgestellte Fehler behoben.**
+
+1. Ein fremdes Programm wird nicht mehr als Aquaticy erkannt, nur weil ein Argument so heißt.
+2. Bereits beendete Server zählen auch dann als beendet, wenn der Elternprozess sie noch nicht abgeholt hat.
+3. GitHub-Schreibzugriffe verwenden nach einer Repo-Übertragung den aktuellen Repository-Namen.
+4. Nach dem Laden privater Repos in die VM braucht öffentliche Recherche ebenfalls deine Bestätigung.
+5. Entziehst du GitHub-Rechte, brechen die noch ausstehenden Abruf- und Schreibschritte ab.
+   Bereits bei GitHub ausgeführte Teilschritte bleiben bestehen; Aquaticy meldet das.
+6. GitHub-Antworten und Archive werden während des Empfangs begrenzt, auch bei Fehlermeldungen.
+7. Repo-Archive haben auch beim Entpacken feste Grenzen: 32 MB je Datei, 128 MB insgesamt,
+   höchstens 20.000 Einträge. Fehler räumen das unvollständige Verzeichnis wieder auf.
+8. Die VM berechnet Datei-Prüfsummen in kleinen Blöcken statt mit der ganzen Datei im Speicher.
+9. Änderst du Dateien während eines Pushs weiter, bleiben diese Änderungen für den nächsten Push sichtbar.
+10. Auch UTF-16-/UTF-32-Dateien und eingebettete Schlüssel können die Geheimnisprüfung nicht umgehen.
+11. Auch Commit-Nachrichten und Pull-Request-Titel werden vor dem Veröffentlichen auf Schlüssel geprüft.
+12. UPnP-Befunde aus einem alten Netz erscheinen nach einem Netzwechsel nicht mehr als aktuelle Befunde.
+13. Ausschalten von Secure Pro und Speichern seines Verlaufs greifen nicht mehr ineinander.
+    Eine laufende Prüfung kann den gelöschten Verlauf nicht wieder anlegen.
+14. Fehlerhafte Secure-Pro-Verlaufsdaten werden verworfen, damit sie weitere Prüfungen nicht abbrechen.
+15. GitHub-Vergleiche zeigen auch Dateien nach der ersten Seite, obwohl GitHub sie nur dort liefert.
+
+Funktionen, Kontenrechte, Bestätigungen, Schutz vor force-Pushes und die festen Werkzeuggrenzen bleiben erhalten.
+Die Gegenproben stehen in `tests/test_v1512.py`.
 
 **Neu in 15.1.1:**
 
@@ -122,7 +146,8 @@ Pull Requests liefern auch Patches. Branch- und Datei-URLs sowie Unicode-Dateina
 verstanden. Änderungen am PR-Kopf während des Abrufs verwerfen das gemischte Ergebnis.
 Jede Antwort zeigt Grenzen und fehlenden Kontext. Eine Stichprobe ist keine vollständige Prüfung.
 
-GitHub bleibt ausschließlich lesend. Netzwerkantworten und Modellkontext sind begrenzt;
+GitHub-Leseaktionen verwenden ausschließlich GET. Schreibaktionen benötigen eigene Rechte und dein Ja.
+Netzwerkantworten und Modellkontext sind begrenzt;
 Tokens werden nur an die feste GitHub-API geschickt, nie an Weiterleitungen oder Download-URLs.
 „Nur Übersicht“ ruft keine Dateiinhalte ab. Die Beschränkung auf öffentliche Repos gilt auch
 für Suchtreffer und Quell-Forks. Erkannte Zugangsdaten und private Schlüssel werden in
@@ -409,7 +434,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.1.1
+aquaticy --version            # 15.1.2
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

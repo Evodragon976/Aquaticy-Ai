@@ -24,6 +24,7 @@ from typing import Any
 from aquaticy import private_json
 
 LOG = logging.getLogger(__name__)
+_CONFIG_LOCK = threading.RLock()
 RISK_PORTS = {21: "FTP", 23: "Telnet", 1433: "Microsoft SQL", 2375: "Docker-API",
               3389: "Fernwartung", 5900: "VNC", 6379: "Redis", 3306: "MySQL",
               5432: "PostgreSQL", 9200: "Elasticsearch", 11211: "Memcached",
@@ -101,29 +102,30 @@ def name_device(directory: Path, address: str, mac: str, name: str) -> dict[str,
     Raises:
         ValueError: Secure Pro ist aus oder das Geraet liegt ausserhalb der Freigabe.
     """
-    import ipaddress
+    with _CONFIG_LOCK:
+        import ipaddress
 
-    from aquaticy.secure_devices import clean_name, known_key
+        from aquaticy.secure_devices import clean_name, known_key
 
-    config = read(directory)
-    if config.get("enabled") is not True:
-        raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
-    try:
-        if ipaddress.IPv4Address(str(address)) not in ipaddress.IPv4Network(config["subnet"]):
-            raise ValueError
-    except (ValueError, KeyError) as exc:
-        raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.") from exc
-    neu = options(config)
-    schluessel = known_key({"address": str(address), "mac": str(mac or "")})
-    sauber = clean_name(name)
-    if sauber:
-        if schluessel not in neu["known"] and len(neu["known"]) >= 256:
-            raise ValueError("Höchstens 256 bekannte Geräte.")
-        neu["known"][schluessel] = sauber
-    else:
-        neu["known"].pop(schluessel, None)
-    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
-    return neu["known"]
+        config = read(directory)
+        if config.get("enabled") is not True:
+            raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
+        try:
+            if ipaddress.IPv4Address(str(address)) not in ipaddress.IPv4Network(config["subnet"]):
+                raise ValueError
+        except (ValueError, KeyError) as exc:
+            raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.") from exc
+        neu = options(config)
+        schluessel = known_key({"address": str(address), "mac": str(mac or "")})
+        sauber = clean_name(name)
+        if sauber:
+            if schluessel not in neu["known"] and len(neu["known"]) >= 256:
+                raise ValueError("Höchstens 256 bekannte Geräte.")
+            neu["known"][schluessel] = sauber
+        else:
+            neu["known"].pop(schluessel, None)
+        private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+        return neu["known"]
 
 
 def history_path(directory: Path) -> Path:
@@ -138,33 +140,51 @@ def read_history(directory: Path) -> dict[str, Any]:
         return {"events": [], "scores": []}
     if not isinstance(daten, dict):
         return {"events": [], "scores": []}
-    events = [e for e in daten.get("events", []) if isinstance(e, dict)][-300:]
-    scores = [s for s in daten.get("scores", []) if isinstance(s, list) and len(s) == 2][-60:]
+    raw_events, raw_scores = daten.get("events"), daten.get("scores")
+    def valid_time(value: Any) -> bool:
+        return type(value) in (int, float) and 0 <= value <= 253402300799
+
+    events = [{"t": e["t"], "level": e["level"], "text": e["text"][:500]}
+              for e in raw_events if isinstance(e, dict) and valid_time(e.get("t"))
+              and e.get("level") in (WICHTIG, HINWEIS) and isinstance(e.get("text"), str)][-300:] \
+        if isinstance(raw_events, list) else []
+    scores = [s for s in raw_scores if isinstance(s, list) and len(s) == 2
+              and valid_time(s[0])
+              and type(s[1]) is int and 0 <= s[1] <= 100][-60:] \
+        if isinstance(raw_scores, list) else []
     return {"events": events, "scores": scores}
 
 
 def configure(directory: Path, subnet: str, folder: str = "", *, router: str = "") -> None:
-    from aquaticy.lan import parse_subnet
+    with _CONFIG_LOCK:
+        from aquaticy.lan import parse_subnet
 
-    network = parse_subnet(subnet)
-    if network.num_addresses > 256:
-        raise ValueError("Secure Pro prüft höchstens 256 Adressen.")
-    if router:
-        import ipaddress
+        network = parse_subnet(subnet)
+        if network.num_addresses > 256:
+            raise ValueError("Secure Pro prüft höchstens 256 Adressen.")
+        if router:
+            import ipaddress
 
-        from aquaticy.network_router import private_address
+            from aquaticy.network_router import private_address
 
-        router = private_address(router)
-        if ipaddress.IPv4Address(router) not in network:
-            raise ValueError("Der Router muss im freigegebenen Netz liegen.")
-    target = Path(folder).expanduser().resolve() if folder else None
-    if target is not None and (not target.is_dir() or not shutil.which("clamscan")):
-        raise ValueError("Für lokale Dateien braucht Secure Pro einen Ordner und ClamAV.")
-    vorher = read(directory)
-    private_json.write(directory / "secure-pro.json", {
-        **(options(vorher) if vorher.get("enabled") is True else {}),
-        "enabled": True, "subnet": str(network), "router": router,
-        "folder": str(target) if target else ""})
+            router = private_address(router)
+            if ipaddress.IPv4Address(router) not in network:
+                raise ValueError("Der Router muss im freigegebenen Netz liegen.")
+        target = Path(folder).expanduser().resolve() if folder else None
+        if target is not None and (not target.is_dir() or not shutil.which("clamscan")):
+            raise ValueError("Für lokale Dateien braucht Secure Pro einen Ordner und ClamAV.")
+        vorher = read(directory)
+        private_json.write(directory / "secure-pro.json", {
+            **(options(vorher) if vorher.get("enabled") is True else {}),
+            "enabled": True, "subnet": str(network), "router": router,
+            "folder": str(target) if target else ""})
+
+
+def disable(directory: Path) -> None:
+    """Widerruft die Freigabe und loescht den Verlauf atomar gegenueber laufenden Scans."""
+    with _CONFIG_LOCK:
+        (directory / "secure-pro.json").unlink(missing_ok=True)
+        history_path(directory).unlink(missing_ok=True)
 
 
 def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
@@ -173,56 +193,60 @@ def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
     Raises:
         ValueError: Secure Pro ist aus, oder ein Wert ist ungueltig.
     """
-    config = read(directory)
-    if config.get("enabled") is not True:
-        raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
-    neu = options(config)
-    for key in ("watch", "packets", "vm", "nmap", "messenger"):
-        if key in payload:
-            if not isinstance(payload[key], bool):
-                raise ValueError("Wähle an oder aus.")
-            neu[key] = payload[key]
-    if "seconds" in payload:
-        wert = payload["seconds"]
-        if type(wert) is not int or wert not in INTERVALS:
-            raise ValueError("Wähle einen der angebotenen Abstände.")
-        neu["seconds"] = wert
-    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
-    return neu
+    with _CONFIG_LOCK:
+        config = read(directory)
+        if config.get("enabled") is not True:
+            raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
+        neu = options(config)
+        for key in ("watch", "packets", "vm", "nmap", "messenger"):
+            if key in payload:
+                if not isinstance(payload[key], bool):
+                    raise ValueError("Wähle an oder aus.")
+                neu[key] = payload[key]
+        if "seconds" in payload:
+            wert = payload["seconds"]
+            if type(wert) is not int or wert not in INTERVALS:
+                raise ValueError("Wähle einen der angebotenen Abstände.")
+            neu["seconds"] = wert
+        private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+        return neu
 
 
 def add_task(directory: Path, text: str) -> dict[str, Any]:
     """Neue Aufgabe. Raises ValueError, wenn sie nicht verstaendlich ist."""
-    from aquaticy import secure_tasks
+    with _CONFIG_LOCK:
+        from aquaticy import secure_tasks
 
-    config = read(directory)
-    if config.get("enabled") is not True:
-        raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
-    neu = options(config)
-    if len(neu["tasks"]) >= secure_tasks.MAX_TASKS:
-        raise ValueError("Höchstens 20 Aufgaben.")
-    aufgabe = secure_tasks.parse(text)
-    if aufgabe["host"]:
-        import ipaddress
+        config = read(directory)
+        if config.get("enabled") is not True:
+            raise ValueError("Gib zuerst dein Netz in den Secure-Pro-Einstellungen frei.")
+        neu = options(config)
+        if len(neu["tasks"]) >= secure_tasks.MAX_TASKS:
+            raise ValueError("Höchstens 20 Aufgaben.")
+        aufgabe = secure_tasks.parse(text)
+        if aufgabe["host"]:
+            import ipaddress
 
-        if ipaddress.IPv4Address(aufgabe["host"]) not in ipaddress.IPv4Network(config["subnet"]):
-            raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.")
-    neu["tasks"].append(aufgabe)
-    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
-    return aufgabe
+            if ipaddress.IPv4Address(aufgabe["host"]) not in ipaddress.IPv4Network(
+                    config["subnet"]):
+                raise ValueError("Das Gerät liegt außerhalb des freigegebenen Netzes.")
+        neu["tasks"].append(aufgabe)
+        private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+        return aufgabe
 
 
 def remove_task(directory: Path, task_id: str) -> bool:
-    config = read(directory)
-    if config.get("enabled") is not True:
-        return False
-    neu = options(config)
-    rest = [task for task in neu["tasks"] if task["id"] != str(task_id)]
-    if len(rest) == len(neu["tasks"]):
-        return False
-    neu["tasks"] = rest
-    private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
-    return True
+    with _CONFIG_LOCK:
+        config = read(directory)
+        if config.get("enabled") is not True:
+            return False
+        neu = options(config)
+        rest = [task for task in neu["tasks"] if task["id"] != str(task_id)]
+        if len(rest) == len(neu["tasks"]):
+            return False
+        neu["tasks"] = rest
+        private_json.write(directory / "secure-pro.json", {**scope(config), **neu})
+        return True
 
 
 def own_addresses(router: str = "") -> frozenset[str]:
@@ -426,6 +450,9 @@ class Watcher:
                 self._nmap_services = {}
                 self._nmap_hosts = {}
                 self._nmap_events = []
+                self._upnp = (0.0, [])
+                self._logged.clear()
+                self.score, self.grade, self.trend = None, "", 0
         network = lan.parse_subnet(config.get("subnet", ""))
         if network.num_addresses > 256:
             raise ValueError("Netz zu groß.")
@@ -657,7 +684,7 @@ class Watcher:
             self.error = ""
             self.devices = sorted(inventory.values(), key=lambda item: tuple(
                 int(part) for part in item["address"].split(".")))[:256]
-        self._remember(befunde, options(read(self.directory)))
+        self._remember(befunde, options(read(self.directory)), config=config)
         new = [text for text in dict.fromkeys(wichtig + aufgaben)
                if text not in self.announced][:20]
         if new and not self.stop_event.is_set() and config_token(read(self.directory)) == token:
@@ -668,30 +695,37 @@ class Watcher:
                 self.announced.update(new)
         return new
 
-    def _remember(self, befunde: dict[str, dict[str, Any]], gewaehlt: dict[str, Any]) -> None:
+    def _remember(self, befunde: dict[str, dict[str, Any]], gewaehlt: dict[str, Any], *,
+                  config: dict[str, Any] | None = None) -> None:
         """Sicherheitswert und Verlauf (15.0.0). Der Verlauf bleibt lokal und privat."""
         from aquaticy import secure_devices
 
-        wert, note = secure_devices.score(list(befunde.values()), self.devices, gewaehlt)
-        verlauf = read_history(self.directory)
-        jetzt = time.time()
-        vorher = verlauf["scores"][-1] if verlauf["scores"] else None
-        with self._lock:
-            self.trend = wert - int(vorher[1]) if vorher else 0
-            self.score, self.grade = wert, note
-        neu = [item for text, item in befunde.items() if text not in self._logged]
-        self._logged = set(befunde)
-        if not neu and vorher and vorher[1] == wert and jetzt - float(vorher[0]) < 3600:
-            return
-        verlauf["events"].extend({"t": int(jetzt), "level": item["level"],
-                                  "text": item["text"][:500]} for item in neu)
-        if not vorher or vorher[1] != wert or jetzt - float(vorher[0]) >= 3600:
-            verlauf["scores"].append([int(jetzt), wert])
-        try:
-            private_json.write(history_path(self.directory), {
-                "events": verlauf["events"][-300:], "scores": verlauf["scores"][-60:]})
-        except OSError:
-            LOG.warning("Der Secure-Pro-Verlauf ließ sich nicht speichern.")
+        with _CONFIG_LOCK:
+            config = config if config is not None else read(self.directory)
+            if self.stop_event.is_set() or not grant_active(self.directory, config):
+                return
+            wert, note = secure_devices.score(list(befunde.values()), self.devices, gewaehlt)
+            verlauf = read_history(self.directory)
+            jetzt = time.time()
+            vorher = verlauf["scores"][-1] if verlauf["scores"] else None
+            with self._lock:
+                self.trend = wert - int(vorher[1]) if vorher else 0
+                self.score, self.grade = wert, note
+            neu = [item for text, item in befunde.items() if text not in self._logged]
+            self._logged = set(befunde)
+            if not neu and vorher and vorher[1] == wert and jetzt - float(vorher[0]) < 3600:
+                return
+            verlauf["events"].extend({"t": int(jetzt), "level": item["level"],
+                                      "text": item["text"][:500]} for item in neu)
+            if not vorher or vorher[1] != wert or jetzt - float(vorher[0]) >= 3600:
+                verlauf["scores"].append([int(jetzt), wert])
+            if not grant_active(self.directory, config):
+                return
+            try:
+                private_json.write(history_path(self.directory), {
+                    "events": verlauf["events"][-300:], "scores": verlauf["scores"][-60:]})
+            except OSError:
+                LOG.warning("Der Secure-Pro-Verlauf ließ sich nicht speichern.")
 
     def rename(self, bekannt: dict[str, str]) -> None:
         """Neue Namen gleich in der Geraeteliste zeigen, nicht erst nach der Pruefung."""

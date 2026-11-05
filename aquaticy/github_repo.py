@@ -83,7 +83,7 @@ def target(repo: str, ref: str = "", path: str = "", number: Any = None
 
 
 def request(client: httpx.Client, route: str, headers: dict[str, str],
-            params: dict[str, Any]) -> Any:
+            params: dict[str, Any], *, check: Callable[[], None] | None = None) -> Any:
     """Ein GET bei api.github.com.
 
     Seit 15.0.1 folgt der Abruf Weiterleitungen -- aber nur innerhalb von api.github.com.
@@ -92,12 +92,14 @@ def request(client: httpx.Client, route: str, headers: dict[str, str],
     """
     url = "https://api.github.com" + route
     for _ in range(4):
+        if check:
+            check()
         with client.stream("GET", url, headers=headers, params=params,
                            follow_redirects=False) as response:
             status = response.status_code
             if status in (301, 302, 307, 308):
                 ziel = urlsplit(response.headers.get("location", ""))
-                if ziel.scheme != "https" or ziel.hostname != "api.github.com":
+                if ziel.scheme != "https" or ziel.netloc.lower() != "api.github.com":
                     raise GitHubError("GitHub leitet an eine unerwartete Adresse weiter.")
                 url, params = ziel.geturl(), {}
                 continue
@@ -121,9 +123,13 @@ def request(client: httpx.Client, route: str, headers: dict[str, str],
                 raise GitHubError(f"GitHub antwortet mit {status}.")
             data = bytearray()
             for chunk in response.iter_bytes(chunk_size=65_536):
+                if check:
+                    check()
                 if len(data) + len(chunk) > MAX_RESPONSE:
                     raise GitHubError("GitHub-Antwort zu groß. Prüfe einen kleineren Ordner.")
                 data.extend(chunk)
+        if check:
+            check()
         return json.loads(data)
     raise GitHubError("GitHub leitet zu oft weiter.")
 

@@ -3037,7 +3037,8 @@ class Toolbox:
         Hinweis, dass es nur Daten sind; stehen darin Anweisungen an eine KI,
         kommt eine Warnung dazu (aquaticy/injection.py).
         """
-        if (name == "github" and isinstance(payload, dict) and not payload.get("error")
+        if (name in ("github", "github_write") and isinstance(payload, dict)
+                and not payload.get("error")
                 and (payload.get("privat") is True or any(
                     r.get("privat") is True for r in payload.get("repos", [])))):
             self._github_private = True
@@ -4072,6 +4073,7 @@ class Toolbox:
                     and addons.load_state(self.settings).get("github") == vorher)
 
         def zielbranch(name: str, standard: str) -> str:
+            gw.checked_text(name, "Der Branch-Name", 200)
             if not gw.valid_branch(name):
                 raise gw.WriteError("Ungültiger Branch-Name.")
             if name == standard:
@@ -4081,15 +4083,25 @@ class Toolbox:
             return name
 
         client = httpx.Client(timeout=30, follow_redirects=False)
-        api = gw.Api(client, addons._github_headers(token), addons._takt)
+        api = gw.Api(client, addons._github_headers(token), addons._takt,
+                     allowed=gleich_geblieben)
         try:
             info = api.get(f"/repos/{repo}")
+            canonical = str(info.get("full_name") or repo)
+            if not github_repo.REPO.fullmatch(canonical):
+                raise gw.WriteError("GitHub hat keinen gültigen Repository-Namen geliefert.")
+            repo = canonical
             if rechte.get("repos") == "oeffentlich" and info.get("private") is not False:
                 return {"error": "Das Repo ist privat. Erlaubt sind nur öffentliche Repos "
                                  "(Add-on GitHub -> Rechte)."}
             standard = str(info.get("default_branch") or "main")
             if aktion == "checkout":
-                return self._github_checkout(api, client, repo, standard, arguments, rechte)
+                if info.get("private") is not False:
+                    self._github_private = True
+                    self.untrusted_seen = True
+                result = self._github_checkout(api, client, repo, standard, arguments, rechte)
+                result["privat"] = info.get("private") is not False
+                return result
             if aktion == "push":
                 return self._github_push(api, repo, standard, arguments, darf, zielbranch,
                                          gleich_geblieben)
@@ -4116,7 +4128,8 @@ class Toolbox:
             if aktion == "pull_request":
                 kopf = str(arguments.get("branch") or "")
                 basis = str(arguments.get("base") or standard)
-                titel = " ".join(str(arguments.get("title") or "").split())[:250]
+                titel = " ".join(gw.checked_text(
+                    arguments.get("title"), "Der Titel", 250).split())
                 if not (gw.valid_branch(kopf) and gw.valid_branch(basis) and titel):
                     return {"error": "pull_request braucht title, branch (der Kopf) und "
                                      "optional base."}
@@ -4180,7 +4193,8 @@ class Toolbox:
         try:
             box = self._github_vm()
             sha = gw.resolve(api, repo, ref)
-            daten = gw.download_tarball(client, api.headers, repo, sha)
+            daten = gw.download_tarball(client, api.headers, repo, sha, check=api.check_allowed)
+            api.check_allowed()
             archiv = f"/work/.aquaticy-github-{uuid.uuid4().hex[:8]}.tar.gz"
             gelegt = box.put_bytes(archiv, daten)
             if gelegt.get("error"):
@@ -4192,11 +4206,13 @@ class Toolbox:
                                  "Namen (dir) oder lösche ihn selbst."}
             if aus.exit_code != 0:
                 return {"error": "Das Archiv ließ sich in der VM nicht auspacken."}
+            api.check_allowed()
             liste = box.run(shlex.join(["python3", "-c", gw.MANIFEST, ordner,
                                         json.dumps(list(gw.SKIP)), "write"]), timeout=300)
             if liste.exit_code != 0:
                 return {"error": "Die Dateiliste in der VM ließ sich nicht anlegen."}
             anzahl = gw.parse_helper(liste.stdout).get("files")
+            api.check_allowed()
         except SandboxUnavailable as exc:
             return {"error": str(exc)}
         self.stats.vm_calls += 1
@@ -4223,7 +4239,7 @@ class Toolbox:
                              "Repo zuerst mit github_write action=checkout."}
         branch = zielbranch(str(arguments.get("branch") or eintrag.get("work_branch")
                                 or eintrag.get("branch") or gw.default_branch_name()), standard)
-        nachricht = str(arguments.get("message") or "").strip()[:4000]
+        nachricht = gw.checked_text(arguments.get("message"), "Die Commit-Nachricht", 4000)
         if not nachricht:
             return {"error": "push braucht eine Commit-Nachricht (message)."}
         try:
@@ -4263,10 +4279,22 @@ class Toolbox:
                              parent=str(eintrag.get("sha") or ""))
         self._github_checkout_merken(ordner, {**eintrag, "sha": ergebnis["commit"],
                                               "work_branch": branch})
-        box.run(shlex.join(["python3", "-c", gw.MANIFEST, ordner, json.dumps(list(gw.SKIP)),
-                            "write"]), timeout=300)
+        import hashlib
+
+        acknowledged = {
+            change["path"]: ([hashlib.sha1(
+                b"blob %d\0" % len(change["data"]) + change["data"],
+                usedforsecurity=False).hexdigest(), change["mode"], len(change["data"])]
+                if change["data"] is not None else None)
+            for change in aenderungen}
+        saved = box.run(shlex.join(["python3", "-c", gw.MANIFEST, ordner,
+                                    json.dumps(list(gw.SKIP)), "ack", json.dumps(acknowledged)]),
+                        timeout=300)
         ergebnis["note"] = ("Gepusht. Einen Pull Request öffnest du mit github_write "
                             "action=pull_request.")
+        if saved.exit_code != 0:
+            ergebnis["note"] += (" Die lokale Dateiliste konnte nicht aktualisiert werden. "
+                                 "Hole das Repo vor dem nächsten Push neu.")
         return ergebnis
 
     def _github_commit(self, api: Any, repo: str, standard: str, arguments: dict[str, Any],
@@ -4292,7 +4320,7 @@ class Toolbox:
                                 "status": "geändert"})
         gw.check_changes(aenderungen, workflows_allowed=darf == "alles")
         branch = zielbranch(str(arguments.get("branch") or gw.default_branch_name()), standard)
-        nachricht = str(arguments.get("message") or "").strip()[:4000]
+        nachricht = gw.checked_text(arguments.get("message"), "Die Commit-Nachricht", 4000)
         if not nachricht:
             return {"error": "commit braucht eine Commit-Nachricht (message)."}
         kopf = gw.branch_head(api, repo, branch)

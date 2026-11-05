@@ -1474,14 +1474,20 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
     if action == "vergleich":
         v = hole(f"/repos/{repo}/compare/{quote(base, safe='')}...{quote(ref, safe='')}",
                  per_page=20, page=page)
-        dateien = v.get("files") or []
+        file_page = v if page == 1 else hole(
+            f"/repos/{repo}/compare/{quote(base, safe='')}...{quote(ref, safe='')}",
+            per_page=20, page=1)
+        dateien = file_page.get("files") or []
+        offset = (page - 1) * 20
         return {"basis": base, "kopf": ref, "status": v.get("status"),
                 "voraus": v.get("ahead_by"), "zurueck": v.get("behind_by"),
                 "commits": [{"sha": c.get("sha"),
                              "nachricht": _kurz((c.get("commit") or {}).get("message"), 200)}
                             for c in (v.get("commits") or [])[-20:]],
-                "dateien": _github_dateien(dateien[:20], inhalte),
-                "next_page": page + 1 if len(dateien) >= 20 else None}
+                "dateien": _github_dateien(dateien[offset:offset + 20], inhalte),
+                "dateien_gekuerzt": len(dateien) >= 300,
+                "next_page": page + 1 if (offset + 20 < len(dateien)
+                                         or len(v.get("commits") or []) == 20) else None}
 
     q = " ".join(str(query or "").split())[:256]
     if not q:

@@ -25,6 +25,7 @@ MAX_FILES = 100
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_TOTAL_BYTES = 20 * 1024 * 1024
 MAX_TARBALL = 20 * 1024 * 1024
+MAX_RESPONSE = 2 * 1024 * 1024
 MAX_TEXT = 60_000
 WORKFLOWS = ".github/workflows/"
 ACTIONS = ("checkout", "branch", "commit", "push", "pull_request", "comment")
@@ -57,10 +58,7 @@ def secret_problem(path: str, data: bytes) -> str:
     """Steht ein Schluessel oder Passwort in der Datei? Dann wird sie nicht uebertragen."""
     from aquaticy.review_scan import mask_secrets
 
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError:
-        return ""
+    text = data.decode("utf-8", "replace").replace("\x00", "")
     if re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", text) or any(
             mask_secrets(zeile) != zeile for zeile in text.splitlines()):
         return (f"{path} enthält wohl einen Schlüssel, ein Token oder ein Passwort. Entferne "
@@ -68,31 +66,53 @@ def secret_problem(path: str, data: bytes) -> str:
     return ""
 
 
+def checked_text(value: Any, label: str, limit: int) -> str:
+    text = str(value or "").strip()
+    if len(text) > limit:
+        raise WriteError(f"{label}: höchstens {limit} Zeichen.")
+    problem = secret_problem(label, text.encode("utf-8"))
+    if problem:
+        raise WriteError(problem)
+    return text
+
+
 class Api:
     """Ein GitHub-Zugang fuer einen Schritt: begrenzte Zahl Aufrufe, je Sekunde einer."""
 
     def __init__(self, client: httpx.Client, headers: dict[str, str],
-                 throttle: Callable[[str], None], limit: int = 300) -> None:
+                 throttle: Callable[[str], None], limit: int = 300,
+                 allowed: Callable[[], bool] | None = None) -> None:
         self.client = client
         self.headers = headers
         self.throttle = throttle
         self.limit = limit
         self.calls = 0
+        self.allowed = allowed
+
+    def check_allowed(self) -> None:
+        if self.allowed is not None and not self.allowed():
+            raise WriteError("Die GitHub-Freigabe hat sich geändert. Weitere Schritte wurden "
+                             "gestoppt. Bereits ausgeführte Schritte bleiben bestehen.")
 
     def _count(self) -> None:
+        self.check_allowed()
         if self.calls >= self.limit:
             raise WriteError("Zu viele GitHub-Aufrufe für einen Schritt. Übertrage weniger "
                              "Dateien auf einmal.")
         self.calls += 1
         self.throttle("api.github.com")
+        self.check_allowed()
 
     def get(self, route: str, **params: Any) -> Any:
         from aquaticy import github_repo
 
         self._count()
         try:
-            return github_repo.request(self.client, route, self.headers,
-                                       {k: v for k, v in params.items() if v not in ("", None)})
+            result = github_repo.request(self.client, route, self.headers,
+                                        {k: v for k, v in params.items() if v not in ("", None)},
+                                        check=self.check_allowed)
+            self.check_allowed()
+            return result
         except github_repo.Missing as exc:
             raise Missing(str(exc)) from exc
         except github_repo.GitHubError as exc:
@@ -100,21 +120,23 @@ class Api:
 
     def send(self, method: str, route: str, payload: dict[str, Any]) -> Any:
         self._count()
-        antwort = self.client.request(method, API + route, headers=self.headers, json=payload,
-                                      follow_redirects=False)
-        status = antwort.status_code
+        with self.client.stream(method, API + route, headers=self.headers, json=payload,
+                                follow_redirects=False) as antwort:
+            status = antwort.status_code
+            content = _read_response(antwort, MAX_RESPONSE, self.check_allowed)
+        try:
+            daten = json.loads(content) if content else {}
+        except ValueError:
+            daten = None
         if status in (200, 201):
-            if len(antwort.content) > 2 * 1024 * 1024:
-                raise WriteError("GitHub-Antwort zu groß.")
-            return antwort.json()
+            if not isinstance(daten, dict):
+                raise WriteError("GitHub hat unerwartet geantwortet.")
+            return daten
         if status == 204:
             return {}
         meldung = ""
-        try:
-            daten = antwort.json()
+        if isinstance(daten, dict):
             meldung = " ".join(str(daten.get("message") or "").split())[:200]
-        except ValueError:
-            pass
         klein = meldung.lower()
         if status in (401, 403):
             if "rate limit" in klein:
@@ -176,6 +198,7 @@ def check_changes(changes: list[dict[str, Any]], *, workflows_allowed: bool) -> 
         if not valid_repo_path(pfad) or pfad in pfade:
             raise WriteError(f"Ungültiger oder doppelter Pfad: {pfad[:120]}")
         pfade.add(pfad)
+        checked_text(pfad, "Der Dateipfad", 400)
         if pfad.startswith(WORKFLOWS) and not workflows_allowed:
             raise WriteError("Änderungen an GitHub Actions (.github/workflows) macht Aquaticy "
                              "nicht. Sie könnten Geheimnisse des Repos auslesen. Ändere sie "
@@ -233,30 +256,46 @@ def commit(api: Api, repo: str, branch: str, message: str, changes: list[dict[st
                 "gelöscht" if c.get("data") is None else "geändert")} for c in changes]}
 
 
+def _read_response(response: httpx.Response, limit: int,
+                   check: Callable[[], None] | None = None) -> bytes:
+    data = bytearray()
+    if check:
+        check()
+    for chunk in response.iter_bytes(65_536):
+        if check:
+            check()
+        if len(data) + len(chunk) > limit:
+            raise WriteError("GitHub-Antwort zu groß. Grenze die Anfrage ein.")
+        data.extend(chunk)
+    if check:
+        check()
+    return bytes(data)
+
+
 def download_tarball(client: httpx.Client, headers: dict[str, str], repo: str,
-                     sha: str) -> bytes:
-    """Das Archiv eines festen Commits. Folgt nur der Weiterleitung zu codeload.github.com."""
-    antwort = client.get(f"{API}/repos/{repo}/tarball/{sha}", headers=headers,
-                         follow_redirects=False)
-    if antwort.status_code in (301, 302, 303, 307, 308):
-        ziel = urlsplit(antwort.headers.get("location", ""))
-        if ziel.scheme != "https" or ziel.hostname != "codeload.github.com":
-            raise WriteError("GitHub leitet an eine unerwartete Adresse weiter.")
-        url = ziel.geturl()
-        kopf = {"User-Agent": headers.get("User-Agent", "aquaticy")}
-    elif antwort.status_code == 200:
-        return _begrenzt(antwort.content)
-    else:
-        raise WriteError(f"Das Archiv ließ sich nicht laden ({antwort.status_code}).")
-    daten = bytearray()
-    with client.stream("GET", url, headers=kopf, follow_redirects=False) as strom:
-        if strom.status_code != 200:
-            raise WriteError(f"Das Archiv ließ sich nicht laden ({strom.status_code}).")
-        for stueck in strom.iter_bytes(65_536):
-            daten.extend(stueck)
-            if len(daten) > MAX_TARBALL:
-                raise WriteError("Das Repo ist größer als 20 MB. Das geht nicht in die VM.")
-    return bytes(daten)
+                     sha: str, *, check: Callable[[], None] | None = None) -> bytes:
+    """Begrenztes Archiv; Weiterleitungen nur innerhalb der GitHub-API und zu codeload."""
+    url = f"{API}/repos/{repo}/tarball/{sha}"
+    current_headers = headers
+    for _ in range(4):
+        if check:
+            check()
+        with client.stream("GET", url, headers=current_headers,
+                           follow_redirects=False) as response:
+            if response.status_code == 200:
+                return _read_response(response, MAX_TARBALL, check)
+            if response.status_code not in (301, 302, 303, 307, 308):
+                raise WriteError(f"Das Archiv ließ sich nicht laden ({response.status_code}).")
+            target = urlsplit(response.headers.get("location", ""))
+            if target.scheme != "https" or target.netloc not in (
+                    "api.github.com", "codeload.github.com"):
+                raise WriteError("GitHub leitet an eine unerwartete Adresse weiter.")
+            if target.netloc == "api.github.com" and urlsplit(url).netloc != "api.github.com":
+                raise WriteError("GitHub leitet an eine unerwartete Adresse weiter.")
+            url = target.geturl()
+            current_headers = (headers if target.netloc == "api.github.com" else
+                               {"User-Agent": headers.get("User-Agent", "aquaticy")})
+    raise WriteError("GitHub leitet zu oft weiter.")
 
 
 def _begrenzt(daten: bytes) -> bytes:
@@ -273,44 +312,88 @@ SKIP = ("__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modu
         ".git", ".tox", ".aquaticy-github.json")
 
 EXTRACT = r'''
-import hashlib, json, os, sys, tarfile
+import json, os, shutil, sys, tarfile
 archiv, ziel = sys.argv[1], sys.argv[2]
 if os.path.lexists(ziel):
     print("EXISTS"); sys.exit(3)
 os.makedirs(ziel)
-with tarfile.open(archiv) as tar:
-    for m in tar.getmembers():
-        teile = m.name.split("/", 1)
-        if len(teile) < 2 or not teile[1]:
-            continue
-        m.name = teile[1]
-        if m.issym() or m.islnk() or m.isdev() or not (m.isfile() or m.isdir()):
-            continue
-        teile = m.name.split("/")
-        if m.name.startswith("/") or ".." in teile or ".git" in teile:
-            continue
-        m.mode = (m.mode & 0o755) | 0o600
-        try:
-            tar.extract(m, ziel, filter="data")
-        except TypeError:
-            tar.extract(m, ziel)
-os.unlink(archiv)
+try:
+    total, count = 0, 0
+    with tarfile.open(archiv) as tar:
+        for m in tar:
+            count += 1
+            if count > 20000:
+                raise ValueError("Das Archiv enthält zu viele Einträge.")
+            teile = m.name.split("/", 1)
+            if len(teile) < 2 or not teile[1]:
+                continue
+            m.name = teile[1]
+            if m.issym() or m.islnk() or m.isdev() or not (m.isfile() or m.isdir()):
+                continue
+            teile = m.name.split("/")
+            if m.name.startswith("/") or ".." in teile or ".git" in teile:
+                continue
+            if m.size < 0 or m.size > 32 * 1024 * 1024:
+                raise ValueError("Eine Archivdatei ist größer als 32 MB.")
+            total += m.size
+            if total > 128 * 1024 * 1024:
+                raise ValueError("Das entpackte Archiv ist größer als 128 MB.")
+            m.mode = (m.mode & 0o755) | (0o700 if m.isdir() else 0o600)
+            try:
+                tar.extract(m, ziel, filter="data")
+            except TypeError:
+                tar.extract(m, ziel)
+except Exception:
+    shutil.rmtree(ziel, ignore_errors=True)
+    print(json.dumps({"error": "Archiv ungültig oder Entpackgrenze überschritten."}))
+    sys.exit(4)
+finally:
+    try:
+        os.unlink(archiv)
+    except FileNotFoundError:
+        pass
 '''
 
 MANIFEST = r'''
-import hashlib, json, os, stat, sys
+import hashlib, json, os, stat, sys, tempfile
 ziel = sys.argv[1]
 SKIP = set(json.loads(sys.argv[2]))
 mode = sys.argv[3]
 def blob(p):
     with open(p, "rb") as f:
-        d = f.read()
-    return hashlib.sha1(b"blob %d\0" % len(d) + d).hexdigest(), len(d)
+        size = os.fstat(f.fileno()).st_size
+        h = hashlib.sha1(b"blob %d\0" % size, usedforsecurity=False)
+        count = 0
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+            count += len(chunk)
+    if size != count:
+        raise ValueError("Datei während der Prüfung geändert")
+    return h.hexdigest(), size
+pfad = os.path.join(ziel, ".aquaticy-github.json")
+if mode == "ack":
+    with open(pfad) as f:
+        alt = json.load(f)
+    for rel, value in json.loads(sys.argv[4]).items():
+        if value is None:
+            alt.pop(rel, None)
+        else:
+            alt[rel] = value
+    fd, temporary = tempfile.mkstemp(prefix=".aquaticy-manifest-", dir=ziel)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(alt, f)
+        os.replace(temporary, pfad)
+    finally:
+        if os.path.lexists(temporary):
+            os.unlink(temporary)
+    print(json.dumps({"files": len(alt)}))
+    sys.exit(0)
 dateien = {}
 for wurzel, ordner, namen in os.walk(ziel):
     ordner[:] = [o for o in ordner if o not in SKIP and not os.path.islink(os.path.join(wurzel, o))]
     for n in namen:
-        if n in SKIP or n.endswith(".pyc"):
+        if n in SKIP or n.endswith(".pyc") or n.startswith(".aquaticy-manifest-"):
             continue
         p = os.path.join(wurzel, n)
         if os.path.islink(p) or not os.path.isfile(p):
