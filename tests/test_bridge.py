@@ -256,7 +256,8 @@ def test_effective_settings_follow_the_levels_for_the_owner() -> None:
     assert nur_lesen.ha_url and not nur_lesen.ha_control and not nur_lesen.ha_direct
     assert nur_lesen.google_enabled and not nur_lesen.google_write
     assert nur_lesen.storage_access == "read" and nur_lesen.legal_guard is False
-    assert nur_lesen.memory_enabled is False and nur_lesen.vm_user_mode is False
+    # 15.3.4: Im eigenen Chat gilt das Gedaechtnis (fuer Fremde bleibt es aus, siehe oben).
+    assert nur_lesen.memory_enabled is True and nur_lesen.vm_user_mode is False
     voll = effective_settings(
         _basis(), cfg(dienste={"haus": "schalten", "kalender": "aendern", "lager": "schreiben",
                                "github": "lesen"}), eigener)
@@ -798,7 +799,9 @@ def test_the_agent_gets_the_levels_the_tools_and_no_questions(antwortgeber) -> N
     assert geber("Hallo", EIGEN, konfig, "k1", "whatsapp") == "Antwort auf Hallo"
     agent = FakeAgent.gebaut[0]
     assert "ha_states" in agent.erlaubt and "ha_call" not in agent.erlaubt
-    assert not agent.settings.ha_control and not agent.settings.memory_enabled
+    # 15.3.4: eigener Chat -> Gedaechtnis an, samt seinen drei Werkzeugen
+    assert not agent.settings.ha_control and agent.settings.memory_enabled
+    assert {"recall_memory", "save_memory", "forget_memory"} <= agent.erlaubt
     _frage, kwargs = agent.fragen[0]
     assert kwargs["structured"] is False and kwargs["recheck"] is False
     assert kwargs["online"] is True and kwargs["sandbox"] is False and kwargs["stream"] is False

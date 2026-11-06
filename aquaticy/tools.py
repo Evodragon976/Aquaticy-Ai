@@ -375,6 +375,23 @@ MEMORY_WRITE_SCHEMA: dict[str, Any] = {
 }
 
 
+MEMORY_FORGET_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "forget_memory",
+        "description": (
+            "Loescht eine Notiz aus dem Langzeitspeicher. NUR wenn der Nutzer darum bittet "
+            "(\"vergiss das\", \"das stimmt nicht mehr\"). Die id kommt aus recall_memory."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"id": {"type": "integer", "description": "id der Notiz."}},
+            "required": ["id"],
+        },
+    },
+}
+
+
 MEMORY_READ_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -1073,6 +1090,7 @@ CONFIRM_AFTER_UNTRUSTED: dict[str, str] = {
     "storage_edit": "etwas in der Lagerverwaltung ändern",
     "remember": "sich etwas dauerhaft merken",
     "save_memory": "etwas im Speicher ablegen",
+    "forget_memory": "etwas aus dem Speicher löschen",
 
 
     "lan_scan": "das Heimnetz durchsuchen",
@@ -1777,6 +1795,8 @@ class Toolbox:
 
 
         self._memory_store: Any = None
+        # 15.3.4: im Code-Modus kein Gedaechtnis (setzt der Agent je Turn).
+        self.memory_blocked = False
         self._fetcher = fetcher or Fetcher(
             user_agent=settings.user_agent,
             timeout=settings.fetch_timeout,
@@ -3388,6 +3408,8 @@ class Toolbox:
             )
         if name == "recall_memory":
             return self.recall_memory(query=str(arguments.get("query") or ""))
+        if name == "forget_memory":
+            return self.forget_memory(arguments.get("id"))
         if name == "lan_scan":
             return self.lan_scan(
                 subnet=str(arguments.get("subnet") or ""),
@@ -3846,6 +3868,8 @@ class Toolbox:
 
     def remember(self, text: str) -> dict[str, Any]:
         """Notiz auf den dauerhaften Merkzettel des Nutzers schreiben."""
+        if self.memory_blocked:
+            return {"error": "Im Code-Modus gibt es kein Gedächtnis."}
         text = (text or "").strip()
         if not text:
             return {"error": "Leere Notiz."}
@@ -3858,8 +3882,8 @@ class Toolbox:
 
 
     def _memory(self) -> Any:
-        """Den Speicher oeffnen -- oder None, wenn er abgeschaltet ist."""
-        if not self.settings.memory_enabled:
+        """Den Speicher oeffnen -- oder None, wenn er abgeschaltet ist (oder Code-Modus)."""
+        if not self.settings.memory_enabled or self.memory_blocked:
             return None
         if self._memory_store is None:
             from aquaticy.memory import Memory
@@ -3893,6 +3917,20 @@ class Toolbox:
         self.stats.memories += 1
         self._emit("memory_save", text=entry.text, topic=entry.topic)
         return {"saved": True, "id": entry.id, "topic": entry.topic}
+
+    def forget_memory(self, entry_id: Any) -> dict[str, Any]:
+        """Loescht eine Notiz -- nur auf Bitte des Nutzers (15.3.4)."""
+        store = self._memory()
+        if store is None:
+            return {"error": "Der Speicher ist abgeschaltet."}
+        try:
+            nummer = int(entry_id)
+        except (TypeError, ValueError):
+            return {"error": "id bitte als Zahl aus recall_memory."}
+        if nummer <= 0 or not store.forget(nummer):
+            return {"error": "Eine Notiz mit dieser id gibt es nicht."}
+        self._emit("memory_forget", text=f"Notiz {nummer}")
+        return {"deleted": True, "id": nummer}
 
     def recall_memory(self, query: str = "") -> dict[str, Any]:
         """Sucht im Langzeitspeicher."""

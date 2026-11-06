@@ -459,6 +459,7 @@ PUBLIC_TOOLS = frozenset({
 TRUSTED_WEB_TOOLS = frozenset({"read_feeds"})
 
 ALWAYS_TOOLS = frozenset({"calculate"})
+MEMORY_TOOLS = frozenset({"recall_memory", "save_memory", "forget_memory"})
 
 SERVICE_TOOLS: dict[str, dict[str, frozenset[str]]] = {
     "haus": {"lesen": frozenset({"ha_states"}),
@@ -499,7 +500,10 @@ def effective_settings(base: Any, config: dict[str, Any], decision: Decision) ->
     """Die Einstellungen, die der Agent in diesem Chat sieht -- nur enger als die der App."""
     s = dataclasses.replace(base)
 
-    s.memory_enabled = False
+    # 15.3.4: Das Gedaechtnis gilt im eigenen Chat (du schreibst dir selbst) -- nie fuer
+    # andere Absender: Sie duerften weder lesen, was Aquaticy ueber dich weiss, noch etwas
+    # hineinschreiben.
+    s.memory_enabled = bool(getattr(base, "memory_enabled", False)) and decision.selbst
     s.lan_enabled = False
     s.vm_user_mode = False
     s.vm_internet = False
@@ -1028,6 +1032,8 @@ class AgentAnswerer:
 
         base = self._settings()
         erlaubt = allowed_tools(config, decision.trusted)
+        if decision.selbst and getattr(base, "memory_enabled", False):
+            erlaubt |= MEMORY_TOOLS
         if config["dienste"].get("web") == "an":
             erlaubt |= frozenset({"research_subtasks"})
         basis_stand = hashlib.sha256(json.dumps(

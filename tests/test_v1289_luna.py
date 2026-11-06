@@ -87,7 +87,11 @@ def test_pro_keeps_private_services_and_offline_restrictions(mobile):
     assert agent.settings.max_subagents == 0
     assert "research_subtasks" not in agent.erlaubt
     assert "ha_call" not in agent.erlaubt and "mail_read" not in agent.erlaubt
-    assert not agent.settings.memory_enabled and not agent.settings.lan_enabled
+    # 15.3.4: im eigenen Chat gilt das Gedaechtnis, das Heimnetz bleibt aus
+    assert agent.settings.memory_enabled and not agent.settings.lan_enabled
+    ask(mobile, "Hallo", key="wa:fremd", owner=False, config=cfg(dienste={"web": "aus"}))
+    fremd = mobile[2]._agents["wa:fremd"][0]
+    assert not fremd.settings.memory_enabled and "recall_memory" not in fremd.erlaubt
 
 
 def test_model_pages_keep_switch_instructions(mobile):

@@ -60,6 +60,19 @@ def _rechtspruefer_ohne_netz(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _gedaechtnis_ohne_netz(monkeypatch):
+    """Das Gedaechtnis fragt nach einer Antwort das schnelle Modell nach Beilaeufigem (15.3.4).
+
+    Das geschieht in einem eigenen Thread und wuerde sonst vorbereitete Antworten anderer
+    Tests verbrauchen oder ins Netz gehen. Hier findet es nichts; geprueft wird es gezielt
+    in tests/test_v1534.py.
+    """
+    from aquaticy import memory_auto
+
+    monkeypatch.setattr(memory_auto, "ask_model", lambda settings, prompt: '{"fakten": []}')
+
+
+@pytest.fixture(autouse=True)
 def _laufzeit_unbekannt(monkeypatch):
     """Jeder Test beginnt, ohne zu wissen, ob es Podman oder Docker gibt (11.2.2 Sol).
 

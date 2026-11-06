@@ -131,6 +131,7 @@ def test_tools_are_offered_to_the_llm(
         "calculate",
         "recall_memory",
         "save_memory",
+        "forget_memory",  # 15.3.4: loeschen auf Bitte des Nutzers
         "lan_scan",
         "lan_check",
         "research_subtasks",
@@ -2784,7 +2785,8 @@ def test_personal_notes_stand_in_the_system_prompt(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     system = agent.messages[0]["content"]
     assert "heisst Jonas" in system
-    assert "Was du ueber den Nutzer schon weisst" in system
+    # 15.3.4: neue Ueberschrift, die zum aktiven Nutzen auffordert
+    assert "Was du ueber den Nutzer weisst" in system
 
 
 def test_a_saved_name_is_there_in_the_next_conversation(
@@ -2827,7 +2829,8 @@ def test_the_memory_rule_tells_the_model_to_save_on_its_own(
     agent = Agent(settings, cache=None, toolbox=toolbox)
     system = agent.messages[0]["content"]
     assert "VON SELBST ABLEGEN" in system
-    assert "ich heisse jonas" in system.lower()
+    # 15.3.4: das Beispiel im Prompt heisst jetzt Louis (klare Saetze merkt Aquaticy selbst)
+    assert "ich heisse louis" in system.lower()
     assert '"person"' in system, "das Thema, unter dem es wiedergefunden wird"
     assert "gemerkt" in system, "und er sagt es dazu"
 

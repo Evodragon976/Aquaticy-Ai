@@ -1,4 +1,4 @@
-# Aquaticy AI 15.2.4
+# Aquaticy AI 15.3.4
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,32 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.3.4:**
+
+- **Gedächtnis wie bei großen Chat-Apps.** Sagst du nebenbei „ich heiße Louis“, „ich wohne in
+  Bremen“ oder „ich mag keine Pilze“, merkt Aquaticy sich das sofort, auch ohne „merk dir“.
+  Schon die nächste Antwort nutzt es. Nach der Antwort sucht ein schnelles Cloud-Modell nach
+  weiterem Beiläufigem (Hobbys, Familie, Geräte). Pro Sache gibt es einen Stand: „Ich bin
+  nach Hamburg gezogen“ ersetzt Bremen, „mag keine Pilze“ hebt „mag Pilze“ auf. Doppeltes
+  legt Aquaticy nicht ab.
+- **Überall außer im Code-Modus.** Das Gedächtnis gilt im normalen Chat, in Pro, in Secure Pro
+  und in WhatsApp/Signal, wenn du dir selbst schreibst. Andere Absender lesen und schreiben
+  nichts davon. Im Code-Modus gibt es kein Gedächtnis: kein Lesen, kein Schreiben, auch keine
+  Notizen aus normalen Chats.
+- **Was nie von allein gespeichert wird:** Gesundheit, Religion, Politik, Sexualität,
+  Passwörter, Konto- und Kartennummern. Das geht nur, wenn du ausdrücklich „merk dir“ sagst.
+  „Merk dir das nicht“ in einer Nachricht verhindert das Merken. „Vergiss, dass ich Pilze
+  mag“ löscht den Eintrag. Alles Gemerkte siehst und löschst du in den Einstellungen unter
+  Speicher. Der Speicher bleibt verschlüsselt und lässt sich ganz abschalten.
+- **Abbrechen wirkt sofort.** Drückst du „Abbrechen“, während Aquaticy denkt, sucht oder in
+  der virtual machine arbeitet, endet die Anfrage gleich. Du kannst direkt die nächste Frage
+  stellen und musst nicht warten.
+- **Code-Review und Security-Review in der virtual machine.** Der Code liegt vor dem Start
+  schon unter `/work/review/`. Aquaticy prüft Python und JSON selbst auf Syntaxfehler (nur
+  lesen, nie ausführen) und gibt die Zeile an. Das Modell belegt wichtige Befunde mit kleinen
+  Tests, höchstens fünf Läufe, ohne Netz, und schreibt dazu „in der VM belegt“ oder „durch
+  Lesen“. Fix-Vorschläge werden nicht mehr zum Ausführen zurückgeschickt.
 
 **Neu in 15.2.4: 121 nachgewiesene Fehlerursachen korrigiert.**
 
@@ -597,7 +623,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.2.4
+aquaticy --version            # 15.3.4
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

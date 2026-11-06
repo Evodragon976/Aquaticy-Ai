@@ -8,6 +8,7 @@ Settings). Danach gibt er den Zwischenstand aus.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import json
 import re
 import threading
@@ -48,6 +49,7 @@ from aquaticy.tools import (
     MAIL_SEARCH_SCHEMA,
     MAX_BATCH,
     MAX_QUESTIONS,
+    MEMORY_FORGET_SCHEMA,
     MEMORY_READ_SCHEMA,
     MEMORY_SCHEMA,
     MEMORY_WRITE_SCHEMA,
@@ -595,27 +597,29 @@ TRIAGE_PROMPT = (
 
 MEMORY_PROMPT = """\
 
-Du hast einen Langzeitspeicher, der ueber Gespraeche hinweg haelt:
+Du hast ein Gedaechtnis, das ueber Gespraeche hinweg haelt -- auch ueber WhatsApp, Signal, \
+Pro und Secure Pro:
 - `recall_memory(query)` -- nachsehen, was du frueher festgehalten hast.
 - `save_memory(text, topic)` -- etwas fuer spaeter ablegen.
+- `forget_memory(id)` -- eine Notiz loeschen, nur wenn der Nutzer darum bittet.
+
+Klare Saetze wie "ich heisse Louis" oder "ich mag Pizza" legt Aquaticy schon von selbst \
+ab; sie stehen unten unter "Was du ueber den Nutzer weisst". NUTZE dieses Wissen aktiv: \
+sprich den Nutzer mit Namen an, wo es natuerlich ist, beachte Vorlieben, Abneigungen, \
+Wohnort und Ausstattung bei Empfehlungen, ohne es jedes Mal aufzuzaehlen.
 
 VON SELBST ABLEGEN, ohne dass jemand darum bittet: Erzaehlt der Nutzer beilaeufig \
-etwas ueber sich, das dauerhaft gilt, legst du es sofort ab -- seinen Namen ("ich \
-heisse Jonas"), wie er angesprochen werden moechte, seinen Wohnort, seinen Beruf, \
-seine Ausstattung, feste Vorlieben und Abneigungen, laufende Vorhaben. Solche Saetze \
-kommen nebenbei und kehren nicht wieder; wer sie nicht mitschreibt, fragt in zwei \
-Wochen noch einmal danach. Fuer alles, was zur Person gehoert, nimmst du das Thema \
-"person" -- dann steht es beim naechsten Mal von allein vor dir. Sag danach in einem \
-kurzen Halbsatz, dass du es dir gemerkt hast; heimlich mitschreiben waere unhoeflich.
+etwas ueber sich, das dauerhaft gilt und noch nicht dasteht, legst du es sofort ab -- \
+Hobbys, Familie, Ausstattung, laufende Vorhaben, wie er Antworten mag. Fuer alles, was \
+zur Person gehoert, nimmst du das Thema "person". Sag danach in einem kurzen Halbsatz, \
+dass du es dir gemerkt hast; heimlich mitschreiben waere unhoeflich.
 
-NICHT ablegen: Belangloses, Tagesaktuelles, Vermutungen ueber den Nutzer, und nichts, \
-was er ausdruecklich nicht gespeichert haben will. Was schon dasteht, legst du nicht \
-noch einmal ab -- bei einer Aenderung ("ich bin umgezogen") schreibst du den neuen \
-Stand mit dem alten Thema.
-
-Nachsehen: sobald die Antwort von persoenlichen Umstaenden abhaengt. Schreib ganze \
-Saetze, damit die Notiz spaeter fuer sich steht. In den Speicher gehoert nur Text, nie \
-Bilder oder Dateien."""
+NICHT ablegen: Belangloses, Tagesaktuelles, Vermutungen ueber den Nutzer, Dinge ueber \
+andere Personen, Inhalte aus Webseiten oder Mails, und nichts, was er nicht gespeichert \
+haben will. Gesundheit, Religion, Politik, Sexualitaet, Passwoerter und Nummern nur auf \
+ausdrueckliche Bitte ("merk dir"). Was schon dasteht, legst du nicht noch einmal ab -- \
+bei einer Aenderung ("ich bin umgezogen") schreibst du den neuen Stand.
+"""
 
 
 
@@ -1434,6 +1438,10 @@ def model_error_hint(exc: BaseException, model: str) -> str:
     return ""
 
 
+class Abgebrochen(Exception):
+    """Der Nutzer hat die laufende Anfrage abgebrochen (15.3.4)."""
+
+
 @dataclass
 class AgentResult:
     """Was ein Durchlauf ergeben hat."""
@@ -1496,6 +1504,8 @@ class Agent:
 
 
         self._stop = threading.Event()
+        # 15.3.4: Hilfsthreads abgebrochener Schritte -- sie melden nichts mehr.
+        self._verlassen: set[int] = set()
 
 
 
@@ -1598,14 +1608,19 @@ class Agent:
                 # die VM in den Secure-Pro-Einstellungen erlaubt hat (14.1.3 Luna).
                 if self._ssh_ready():
                     schemas.extend(DEFENSE_SCHEMAS)
+            if self.settings.memory_enabled:
+                # 15.3.4: Das Gedaechtnis gilt auch in Secure Pro.
+                schemas.extend((MEMORY_READ_SCHEMA, MEMORY_WRITE_SCHEMA, MEMORY_FORGET_SCHEMA))
             return schemas
         extra: list[dict[str, Any]] = []
-        if self.cache is not None:
+        # 15.3.4: Im Code-Modus gibt es kein Gedaechtnis -- weder Lesen noch Schreiben.
+        code = clean_mode(self.mode) == "code"
+        if self.cache is not None and not code:
             extra.append(MEMORY_SCHEMA)
 
 
-        if self.settings.memory_enabled:
-            extra.extend((MEMORY_READ_SCHEMA, MEMORY_WRITE_SCHEMA))
+        if self.settings.memory_enabled and not code:
+            extra.extend((MEMORY_READ_SCHEMA, MEMORY_WRITE_SCHEMA, MEMORY_FORGET_SCHEMA))
         if self.settings.lan_enabled:
             extra.extend((LAN_SCHEMA, LAN_HOST_SCHEMA))
 
@@ -2449,7 +2464,7 @@ class Agent:
     def _home_prompt(self) -> str:
         """Die Absaetze zu Heimnetz und Zuhause -- nur, was freigegeben ist."""
         parts = [SETTING_PROMPT]
-        if self.settings.memory_enabled:
+        if self.settings.memory_enabled and clean_mode(self.mode) != "code":
             parts.append(MEMORY_PROMPT)
         if self.settings.lan_enabled:
             parts.append(LAN_PROMPT)
@@ -2792,10 +2807,12 @@ class Agent:
             from aquaticy.secure_chat import PROMPT
 
             text = PROMPT + (ASK_PROMPT if self.toolbox.ask_handler else NO_ASK_PROMPT)
+            if self.settings.memory_enabled:
+                text += MEMORY_PROMPT
             if self.settings.legal_guard:
                 text += rules_prompt()
             return text + (ENGLISH_PROMPT if getattr(self, "answer_language", "de") == "en"
-                           else GERMAN_ORTHOGRAPHY_PROMPT)
+                           else GERMAN_ORTHOGRAPHY_PROMPT) + self._person_prompt()
         text = self._system_prompt(
             self.cache, self._home_prompt(), mode=self.mode, structured=self.structured
         )
@@ -2847,7 +2864,8 @@ class Agent:
             text += ENGLISH_PROMPT
         else:
             text += GERMAN_ORTHOGRAPHY_PROMPT
-        return text + self._person_prompt()
+        self._person_seen = self._person_prompt()
+        return text + self._person_seen
 
     def set_answer_language(self, language: str) -> None:
         """Sprache der Antworten (9.5.25): "de" oder "en" -- aus dem Design-Fenster."""
@@ -2861,8 +2879,12 @@ class Agent:
 
         Der Speicher liesse sich auch per Werkzeug abfragen, aber dann haengt
         es am Modell, ob es daran denkt. Ein Name gehoert nicht zu den Dingen,
-        nach denen man sucht: er soll einfach dastehen.
+        nach denen man sucht: er soll einfach dastehen. Seit 15.3.4 stehen alle
+        Eintraege ueber den Nutzer da (bis 40), dazu bis zu vier weitere Notizen,
+        die zur jetzigen Frage passen. Im Code-Modus steht hier nichts.
         """
+        if clean_mode(self.mode) == "code" and not self.secure_pro:
+            return ""
         store = None
         try:
             store = self.toolbox._memory()
@@ -2870,18 +2892,100 @@ class Agent:
             store = None
         if store is None:
             return ""
+        from aquaticy import memory_auto
+
         try:
-            entries = store.recall("person", limit=8)
+            entries = memory_auto.person_entries(store)
         except Exception:
             return ""
-        lines = [entry.text.strip() for entry in entries if entry.text.strip()]
-        if not lines:
-            return ""
-        return (
-            "\n\nWas du ueber den Nutzer schon weisst (aus deinem Speicher, "
-            "beruecksichtigen ohne es aufzuzaehlen):\n"
-            + "\n".join(f"- {line}" for line in lines[:8])
-        )
+        lines: list[str] = []
+        laenge = 0
+        for entry in entries:
+            zeile = " ".join(str(entry.text or "").split())
+            if not zeile or zeile in lines:
+                continue
+            laenge += len(zeile)
+            if laenge > 3000:
+                break
+            lines.append(zeile)
+        passend: list[str] = []
+        frage = str(getattr(self, "_memory_question", "") or "")
+        woerter = [w for w in re.findall(r"[\wäöüß]{5,}", frage.casefold())][:8]
+        if woerter:
+            with contextlib.suppress(Exception):
+                for entry in store.recall(" ".join(woerter), limit=8):
+                    thema = str(entry.topic or "").casefold().split(":", 1)[0].strip()
+                    zeile = " ".join(str(entry.text or "").split())[:400]
+                    if thema != memory_auto.PERSON and zeile and zeile not in passend:
+                        passend.append(zeile)
+        text = ""
+        if lines:
+            text += (
+                "\n\nWas du ueber den Nutzer weisst (aus deinem Gedaechtnis). Nutze es von "
+                "selbst, wo es passt -- Anrede, Vorlieben, Ort --, ohne es aufzuzaehlen. Sagt "
+                "der Nutzer jetzt etwas anderes, gilt das Neue:\n"
+                + "\n".join(f"- {line}" for line in lines)
+            )
+        if passend:
+            text += ("\n\nNotizen aus deinem Gedaechtnis, die zur Frage passen koennten:\n"
+                     + "\n".join(f"- {line}" for line in passend[:4]))
+        return text
+
+    def _memory_allowed(self, mode: str = "") -> bool:
+        """Darf dieser Turn ins Gedaechtnis? Nie im Code-Modus, nie bei Plugin-Befehlen."""
+        if not self.settings.memory_enabled or self._plugin_turn:
+            return False
+        return self.secure_pro or clean_mode(mode or self.mode) != "code"
+
+    def _memory_learn(self, question: str, mode: str = "") -> None:
+        """Feste Muster sofort ablegen ("ich heisse Louis") -- vor der Antwort (15.3.4)."""
+        self.toolbox.memory_blocked = not self._memory_allowed(mode)
+        if self.toolbox.memory_blocked:
+            return
+        from aquaticy import memory_auto
+
+        try:
+            store = self.toolbox._memory()
+            if store is None:
+                return
+            wunsch = memory_auto.forget_request(question)
+            if wunsch:
+                for text in memory_auto.forget_matching(store, wunsch):
+                    self._emit("memory_forget", text=text)
+                return
+            for fakt in memory_auto.store_facts(store, memory_auto.extract(question)):
+                self._emit("memory_save", text=fakt.text, topic=fakt.topic, auto=True)
+        except Exception:
+            return
+
+    def _memory_learn_later(self, question: str, result: AgentResult) -> None:
+        """Nach der Antwort: Beilaeufiges mit dem schnellen Modell finden (15.3.4).
+
+        Ein eigener kurzer Thread je Turn, damit die Antwort nicht wartet. Nur bei Ich-Bezug
+        (memory_auto.worth_asking), nur mit Wolkenmodell, nur wenn das Hauptmodell in diesem
+        Turn nicht schon selbst etwas abgelegt hat.
+        """
+        if (not question or self.stopped or result.error
+                or getattr(self.toolbox, "memory_blocked", True)
+                or not getattr(self.settings, "memory_auto_model", True)):
+            return
+        from aquaticy import memory_auto
+
+        if not memory_auto.worth_asking(question) or not memory_auto.cloud_model(self.settings):
+            return
+        try:
+            store = self.toolbox._memory()
+        except Exception:
+            return
+        if store is None:
+            return
+        settings = self.settings
+
+        def lernen() -> None:
+            with contextlib.suppress(Exception):
+                memory_auto.learn_with_model(settings, store, question)
+
+        threading.Thread(target=lernen, name="aquaticy-gedaechtnis", daemon=True).start()
 
     def _guard_models(self) -> list[str]:
         """Womit der Chat in diesem Durchlauf wirklich arbeitet -- fuer den Rechtspruefer.
@@ -2973,7 +3077,7 @@ class Agent:
             f"Richte Suchanfragen nach Aktualitaet daran aus, nicht an deinem "
             f"Wissensstand."
         )
-        if cache is not None:
+        if cache is not None and clean_mode(mode) != "code":
             try:
                 notes = cache.list_notes(limit=8)
             except Exception:
@@ -3010,8 +3114,52 @@ class Agent:
             self._refresh_system()
 
     def _emit(self, event: str, **payload: Any) -> None:
+        if threading.get_ident() in getattr(self, "_verlassen", ()):
+            return  # 15.3.4: ein abgebrochener Aufruf meldet nichts mehr
         if self.on_event:
             self.on_event(event, payload)
+
+    def _abbrechbar(self, aufruf: Callable[[], Any]) -> Any:
+        """Fuehrt einen blockierenden Schritt aus -- endet aber sofort bei "Abbrechen" (15.3.4).
+
+        Ein Modellaufruf ohne Stream oder ein Werkzeug (Seitenabruf, virtual machine) blockiert
+        bis zu zwei Minuten. Bis 15.2.4 wartete der Abbruch darauf, und die naechste Frage
+        hing so lange in "Es läuft noch eine früher gestellte Anfrage". Jetzt laeuft der
+        Schritt in einem Hilfsthread; bei Abbruch wird er verlassen: Sein Ergebnis wird
+        verworfen, er meldet nichts mehr, und die Marke seines Turns bleibt gesetzt.
+        """
+        stop = getattr(self, "_stop", None)
+        verlassen = getattr(self, "_verlassen", None)
+        if stop is None or verlassen is None:
+            return aufruf()  # ein Agent ohne __init__ (Tests, Nachbauten): wie bisher
+        if stop.is_set():
+            raise Abgebrochen()
+        ergebnis: dict[str, Any] = {}
+        fertig = threading.Event()
+        kontext = contextvars.copy_context()
+
+        def lauf() -> None:
+            try:
+                ergebnis["wert"] = kontext.run(aufruf)
+            except BaseException as exc:  # wird im Turn-Thread neu geworfen
+                ergebnis["fehler"] = exc
+            finally:
+                fertig.set()
+                # Thread-Nummern werden wiederverwendet: nach dem Ende nicht mehr sperren.
+                verlassen.discard(threading.get_ident())
+
+        helfer = threading.Thread(target=lauf, name="aquaticy-schritt", daemon=True)
+        helfer.start()
+        while not fertig.wait(0.1):
+            if stop.is_set():
+                if helfer.ident is not None:
+                    verlassen.add(helfer.ident)
+                    if fertig.is_set():
+                        verlassen.discard(helfer.ident)
+                raise Abgebrochen()
+        if "fehler" in ergebnis:
+            raise ergebnis["fehler"]
+        return ergebnis.get("wert")
 
 
     def _model_ready(self) -> None:
@@ -3076,10 +3224,11 @@ class Agent:
             try:
                 self._request_model = aufgerufen
                 try:
-                    antwort = self._completion(messages, stream=stream)
+                    antwort = self._abbrechbar(
+                        lambda: self._completion(messages, stream=stream))
                 finally:
                     self._request_model = ""
-            except metering.QuotaExceeded:
+            except (metering.QuotaExceeded, Abgebrochen):
                 raise
             except Exception as exc:
                 last_error = exc
@@ -3325,7 +3474,7 @@ class Agent:
             zahlen = metering.usage_of(getattr(chunk, "usage", None))
             if zahlen is not None:
                 self._stream_zahlen = zahlen
-            if self.stopped:
+            if self.stopped or threading.get_ident() in getattr(self, "_verlassen", ()):
                 break
             choices = getattr(chunk, "choices", None)
             if not choices:
@@ -3452,6 +3601,12 @@ class Agent:
 
 
         question, gewuenscht_max = strip_max(question)
+        self._memory_question = question
+        # Nur die eigenen Worte: keine Anhaenge, keine fremden Bloecke, kein Ortsfilter.
+        from aquaticy.injection import user_words
+
+        self._memory_words = " ".join(user_words([own_words(question)]).split())
+        self._memory_learn(self._memory_words, mode or self.mode)
 
 
         with contextlib.suppress(Exception):
@@ -3465,7 +3620,7 @@ class Agent:
             question, frage_offen=self._last_reply_asks())
         if standard:
             self.max_run = False
-            self._stop.clear()
+            self._stop = threading.Event()
             self.toolbox.stats.reset()
             self._emit("triage", decision="chat", source="standardantwort")
             self.messages.append({"role": "user", "content": question})
@@ -3499,7 +3654,9 @@ class Agent:
         self._vm_da = self._vm_can_start() if self.workshop_on else None
         if (self.mode, self.structured, self.online, self.workshop_on,
                 self.visual_sources, self._vm_da) != before or (
-                self._addon_prompt() != getattr(self, "_addon_prompt_seen", "")):
+                self._addon_prompt() != getattr(self, "_addon_prompt_seen", "")) or (
+                self._person_prompt() != getattr(self, "_person_seen", "")):
+            # 15.3.4: auch wenn sich das Gedaechtnis geaendert hat (neu Gemerktes).
             self._refresh_system()
         self.max_run = bool(gewuenscht_max) and self.pro_mode
         if gewuenscht_max and not self.pro_mode:
@@ -3508,7 +3665,9 @@ class Agent:
                 text="/max gibt es nur im Pro-Modus – die Frage läuft normal.",
                 text_en="/max is only available in Pro mode – the question runs normally.",
             )
-        self._stop.clear()
+        # 15.3.4: eine neue Marke statt clear(): Was von einer abgebrochenen Anfrage noch im
+        # Hintergrund laeuft (Modellaufruf, Werkzeug, Subagenten), sieht weiter "abgebrochen".
+        self._stop = threading.Event()
 
 
         self._loading_told = False
@@ -3680,6 +3839,8 @@ class Agent:
             used += self._prefetch_own(question)
         elif self.online and not self.stopped:
             used += self._prefetch_news(question)
+        if self._review_turn() and self._vm_ready() and not self.stopped:
+            self._review_files_to_vm(question)
 
         while True:
             if self.stopped:
@@ -3712,6 +3873,9 @@ class Agent:
             try:
                 self._trim_history()
                 message = self._completion_with_retry(self.messages, stream=stream)
+            except Abgebrochen:
+                result.stopped = True
+                break
             except metering.QuotaExceeded as exc:
 
 
@@ -3869,7 +4033,12 @@ class Agent:
             from aquaticy.guardrails import own_service_note
 
             kontext += own_service_note(getattr(self, "_eigene", ()))
-            verdict = self.guard.check_request(question, kontext)
+            try:
+                # 15.3.4: auch die Rechtspruefung endet sofort bei "Abbrechen".
+                guard = self.guard
+                verdict = self._abbrechbar(lambda: guard.check_request(question, kontext))
+            except Abgebrochen:
+                return self._finish(AgentResult(answer="", stopped=True), question)
             self._model_ready()
         if verdict.abuse:
 
@@ -4148,8 +4317,18 @@ class Agent:
         """
         suchen = self.toolbox.stats.searches
         vorher = len(suchen)
-        self.messages.extend(run_calls(tool_calls, self._tool_result,
-                                       parallel_groups=clean_mode(self.mode) == "normal"))
+        try:
+            antworten = self._abbrechbar(lambda: run_calls(
+                tool_calls, self._tool_result,
+                parallel_groups=clean_mode(self.mode) == "normal"))
+        except Abgebrochen:
+            # Zu jedem Aufruf genau eine Antwort -- sonst lehnt die Schnittstelle die
+            # naechste Frage ab.
+            antworten = [{"role": "tool", "tool_call_id": call["id"],
+                          "name": call["function"]["name"],
+                          "content": json.dumps({"error": "Abgebrochen."}, ensure_ascii=False)}
+                         for call in tool_calls]
+        self.messages.extend(antworten)
         if parallel_ready(tool_calls) and len(suchen) - vorher > 1:
             _in_call_order(suchen, vorher, tool_calls)
 
@@ -4275,10 +4454,48 @@ class Agent:
         self.messages.append({"role": "assistant", "content": text})
         return text
 
+    def _review_turn(self) -> bool:
+        """Laeuft gerade /code-review oder /security-review? (15.3.4)"""
+        from aquaticy.plugins import is_review_prompt
+
+        return is_review_prompt(getattr(self, "_plugin_turn", ""))
+
+    def _review_files_to_vm(self, question: str) -> None:
+        """Legt den zu pruefenden Code unter /work/review ab -- bevor das Modell anfaengt.
+
+        Bis 15.2.4 musste das Modell jede Datei selbst mit vm_write abtippen; kleine Modelle
+        vergassen das oder schrieben sie falsch ab. Danach wurde jede Antwort mit einem
+        Fix-Vorschlag zurueckgeschickt ("erst in der VM ausfuehren"), obwohl ein Ausschnitt
+        allein nicht laeuft. Jetzt liegt alles bereit, und der Anstoss entfaellt bei Reviews.
+        """
+        from aquaticy import review_scan
+
+        letzte = next((str(m.get("content") or "") for m in reversed(self.messages)
+                       if m.get("role") == "user" and isinstance(m.get("content"), str)), "")
+        # Nur der Teil hinter "Zu prüfen:" -- die Anleitung davor ist kein Code des Nutzers.
+        quelle = letzte.split("\n\nZu prüfen:\n", 1)[-1] if "Zu prüfen:" in letzte else ""
+        quelle = quelle or str(getattr(self, "_plugin_turn", "")).split(
+            "\n\nZu prüfen:\n", 1)[-1]
+        geschrieben = []
+        for pfad, inhalt in review_scan.vm_files(quelle)[:20]:
+            antwort = self.toolbox.vm_write(pfad, inhalt)
+            if isinstance(antwort, dict) and antwort.get("error"):
+                break
+            geschrieben.append(pfad)
+        if geschrieben:
+            self._emit("note", text=(f"{len(geschrieben)} Datei(en) für die Prüfung liegen in "
+                                     "der virtual machine unter /work/review."),
+                       text_en=(f"{len(geschrieben)} file(s) for the review are in the "
+                                "virtual machine under /work/review."))
+
     def _should_force_vm(self, answer: str) -> bool:
-        """Kam Code zurueck, ohne dass er ein einziges Mal in der virtual machine lief?"""
+        """Kam Code zurueck, ohne dass er ein einziges Mal in der virtual machine lief?
+
+        Nicht bei Reviews (15.3.4): Fix-Vorschlaege sind Ausschnitte und laufen allein nicht.
+        """
         return (
-            self._vm_ready()
+            not self._review_turn()
+            and self._vm_ready()
             and "```" in str(answer or "")
             and getattr(self.toolbox.stats, "vm_calls", 0) == 0
             and any(t["function"]["name"] == "vm_run" for t in self.tools)
@@ -4557,6 +4774,7 @@ class Agent:
                            text_en="Shared learning isn't available right now.")
         stats.learning_pages.clear()
         stats.research_pages.clear()
+        self._memory_learn_later(str(getattr(self, "_memory_words", "") or ""), result)
         self._emit(
             "done",
             tool_calls=result.tool_calls,

@@ -131,7 +131,9 @@ LOCAL = frozenset({"secure_status", "secure_scan", "secure_inspect", "secure_dev
                    "secure_findings", "secure_knowledge", "secure_ssh", "secure_defend",
                    "secure_nmap"})
 DEFENSE = frozenset({"secure_ssh", "secure_defend"})
-ALLOWED = LOCAL | {"secure_advisories", "secure_read_advisory", "ask_user", "calculate"}
+ALLOWED = LOCAL | {"secure_advisories", "secure_read_advisory", "ask_user", "calculate",
+                   # 15.3.4: das Gedaechtnis gilt auch hier (nur wenn eingeschaltet)
+                   "recall_memory", "save_memory", "forget_memory"}
 
 
 def public_query(query: str) -> bool:
