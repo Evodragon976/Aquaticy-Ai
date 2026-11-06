@@ -57,7 +57,7 @@ und [externer Bericht](tests/test_v1524_external.py).
 
 ### Prüfung des externen LLM-Berichts
 
-Der eingereichte Bericht nennt 18 Punkte. Keine seiner vier als kritisch bezeichneten
+Der eingereichte Bericht nennt 18 Punkte. Keine der als kritisch bezeichneten
 Lücken ist in der beschriebenen Form nachweisbar. Mehrere zitierte Funktionen existieren nicht.
 Punkt 7 beschreibt einen tatsächlichen Leistungsnachteil; dieser ist korrigiert.
 
