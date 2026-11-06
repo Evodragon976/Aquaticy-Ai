@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import plistlib
 import subprocess
@@ -93,7 +94,8 @@ def test_ensure_installs_only_if_missing_then_configures(monkeypatch, installed)
     monkeypatch.setattr(lm, "install_ollama", install)
     monkeypatch.setattr(setup, "configure_parallel",
                         lambda **kw: pytest.fail("Keine Dienstumstellung im Setup"))
-    monkeypatch.setattr(lm, "start_server", lambda: calls.append("start") or True)
+    monkeypatch.setattr(lm, "server_running", lambda *a, **kw: False)
+    monkeypatch.setattr(lm, "start_server", lambda *a, **kw: calls.append("start") or True)
     assert cli._ensure_ollama(assume_yes=True)
     assert calls == (["start"] if installed else ["install", "start"])
 
@@ -102,7 +104,8 @@ def test_existing_server_needs_no_restart_confirmation(monkeypatch):
     monkeypatch.setattr(cli.typer, "confirm", lambda *a, **kw: False)
     monkeypatch.setattr(setup, "configure_parallel", lambda **kw: pytest.fail("Nicht bestaetigt"))
     monkeypatch.setattr(lm, "ollama_binary", lambda: "/ollama")
-    monkeypatch.setattr(lm, "start_server", lambda: True)
+    monkeypatch.setattr(lm, "server_running", lambda *a, **kw: True)
+    monkeypatch.setattr(lm, "start_server", lambda *a, **kw: pytest.fail("Kein Neustart"))
     assert cli._ensure_ollama() is True
 
 
@@ -111,12 +114,12 @@ def test_failures_abort_before_model_download(monkeypatch, failure):
     monkeypatch.setattr(lm, "ollama_binary", lambda: None if failure == "install" else "/ollama")
     monkeypatch.setattr(lm, "install_command", lambda: ["installer", "ollama"])
     monkeypatch.setattr(lm, "install_ollama", lambda: False)
-    monkeypatch.setattr(lm, "server_running", lambda: False)
-    monkeypatch.setattr(lm, "wait_for_server", lambda: False)
+    monkeypatch.setattr(lm, "server_running", lambda *a, **kw: False)
+    monkeypatch.setattr(lm, "wait_for_server", lambda *a, **kw: False)
 
     monkeypatch.setattr(setup, "configure_parallel",
                         lambda **kwargs: pytest.fail("Keine Dienstumstellung"))
-    monkeypatch.setattr(lm, "start_server", lambda: False)
+    monkeypatch.setattr(lm, "start_server", lambda *a, **kw: False)
     monkeypatch.setattr(lm, "pull_model", lambda *a, **kw: pytest.fail("Kein Modell laden"))
     assert cli._run_local_setup("qwen3:8b", assume_yes=True) == ""
 
@@ -333,7 +336,8 @@ def test_pull_uses_the_server_that_was_set_up(monkeypatch):
     captured = []
     monkeypatch.setattr(lm, "ollama_binary", lambda: "/ollama")
     monkeypatch.setattr(lm.subprocess, "Popen", lambda *a, **kw:
-                        captured.append(kw) or SimpleNamespace(stdout=iter([]), wait=lambda: 0))
+                        captured.append(kw) or SimpleNamespace(
+                            stdout=io.StringIO(), wait=lambda: 0, poll=lambda: 0))
     assert list(lm.pull_model("qwen3:8b")) == []
     assert captured[0]["env"]["OLLAMA_HOST"] == lm.DEFAULT_OLLAMA_URL
 

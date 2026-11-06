@@ -184,7 +184,7 @@ def test_proxy_requires_complete_reply_with_original_key(tmp_path, monkeypatch, 
             writer.end()
         if stream == "rotated_key":
             entrance.info["secret"] = cluster._b64(b"n" * 32)
-        return httpx.Response(200, content=output.getvalue(),
+        return httpx.Response(200, stream=httpx.ByteStream(output.getvalue()),
                               headers={"X-Aquaticy-Salt": cluster._b64(salt)})
 
     real_client = httpx.Client

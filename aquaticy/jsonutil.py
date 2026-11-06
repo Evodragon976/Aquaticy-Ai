@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from typing import Any
 
 MAX_DEPTH = 64
 _STRUCTURE = re.compile(r'\\.|"|[\[\]{}]')
+
+
+def _constant(value: str) -> Any:
+    raise ValueError("JSON enthält keinen gültigen Zahlenwert: " + value)
+
+
+def _number(value: str) -> float:
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError("Die JSON-Zahl ist nicht darstellbar.")
+    return result
+
+
+_DECODER = json.JSONDecoder(parse_constant=_constant, parse_float=_number)
 
 
 class JsonDepthError(ValueError):
@@ -35,13 +50,13 @@ def loads(raw: bytes | str) -> Any:
                     raise JsonDepthError("Die Anfrage ist zu stark verschachtelt.")
             elif token in ("]", "}"):
                 depth -= 1
-    return json.loads(text)
+    return json.loads(text, parse_constant=_constant, parse_float=_number)
 
 
 def raw_decode(raw: str, index: int = 0) -> tuple[Any, int]:
     """Decode one bounded value, retaining concatenated tool-call support."""
     if raw[index:index + 1] not in ("[", "{"):
-        return json.JSONDecoder().raw_decode(raw, index)
+        return _DECODER.raw_decode(raw, index)
     quoted = False
     depth = 0
     for match in _STRUCTURE.finditer(raw, index):
@@ -57,6 +72,6 @@ def raw_decode(raw: str, index: int = 0) -> tuple[Any, int]:
                 depth -= 1
                 if depth == 0:
                     end = match.end()
-                    return json.loads(raw[index:end]), end
+                    return loads(raw[index:end]), end
 
     return loads(raw[index:]), len(raw)

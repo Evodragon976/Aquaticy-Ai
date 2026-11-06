@@ -26,16 +26,21 @@ SYSTEMS = ("linux", "windows")
 _UNIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,79}")
 
 
+_UFW_ACTIVE = ("command -v ufw >/dev/null 2>&1 && "
+               "LC_ALL=C sudo -n ufw status | grep -q '^Status: active$'")
+_FIREWALL_ACTIVE = ("command -v firewall-cmd >/dev/null 2>&1 && "
+                    "sudo -n firewall-cmd --state >/dev/null 2>&1")
+
+
 def _linux_port(port: int, proto: str, block: bool) -> str:
     if block:
-        return ("if command -v ufw >/dev/null 2>&1; then "
-                f"sudo -n ufw insert 1 deny {port}/{proto}; "
-                f"elif command -v firewall-cmd >/dev/null 2>&1; then "
+        return (f"if {_UFW_ACTIVE}; then sudo -n ufw insert 1 deny {port}/{proto}; "
+                f"elif {_FIREWALL_ACTIVE}; then "
                 f"sudo -n firewall-cmd --add-rich-rule='rule port "
                 f"port=\"{port}\" protocol=\"{proto}\" drop'; "
                 f"else sudo -n iptables -I INPUT -p {proto} --dport {port} -j DROP; fi")
-    return (f"if command -v ufw >/dev/null 2>&1; then sudo -n ufw delete deny {port}/{proto}; "
-            f"elif command -v firewall-cmd >/dev/null 2>&1; then "
+    return (f"if {_UFW_ACTIVE}; then sudo -n ufw delete deny {port}/{proto}; "
+            f"elif {_FIREWALL_ACTIVE}; then "
             f"sudo -n firewall-cmd --remove-rich-rule='rule port port=\"{port}\" "
             f"protocol=\"{proto}\" drop'; "
             f"else sudo -n iptables -D INPUT -p {proto} --dport {port} -j DROP; fi")
@@ -43,20 +48,21 @@ def _linux_port(port: int, proto: str, block: bool) -> str:
 
 def _linux_ip(address: str, block: bool) -> str:
     if block:
-        return (f"if command -v ufw >/dev/null 2>&1; then sudo -n ufw insert 1 deny from "
-                f"{address}; elif command -v firewall-cmd >/dev/null 2>&1; then "
+        return (f"if {_UFW_ACTIVE}; then sudo -n ufw insert 1 deny from {address}; "
+                f"elif {_FIREWALL_ACTIVE}; then "
                 f"sudo -n firewall-cmd --add-rich-rule='rule family=\"ipv4\" source "
                 f"address=\"{address}\" drop'; "
                 f"else sudo -n iptables -I INPUT -s {address} -j DROP; fi")
-    return (f"if command -v ufw >/dev/null 2>&1; then sudo -n ufw delete deny from {address}; "
-            f"elif command -v firewall-cmd >/dev/null 2>&1; then "
+    return (f"if {_UFW_ACTIVE}; then sudo -n ufw delete deny from {address}; "
+            f"elif {_FIREWALL_ACTIVE}; then "
             f"sudo -n firewall-cmd --remove-rich-rule='rule family=\"ipv4\" source "
             f"address=\"{address}\" drop'; "
             f"else sudo -n iptables -D INPUT -s {address} -j DROP; fi")
 
 
 def _windows(script: str) -> str:
-    return f'powershell -NoProfile -NonInteractive -Command "{script}"'
+    return ('powershell -NoProfile -NonInteractive -Command '
+            f'"Set-Variable -Name ErrorActionPreference -Value Stop; {script}"')
 
 
 def build(action: str, *, system: str = "linux", host: str, port: Any = 0,
@@ -137,4 +143,8 @@ def build(action: str, *, system: str = "linux", host: str, port: Any = 0,
                            if system == "linux" else
                            _windows("Get-NetTCPConnection -State Listen | Select-Object "
                                     "LocalAddress,LocalPort,OwningProcess"))
+    if system == "linux" and "sudo -n" in data["command"]:
+        prefix = ('aquaticy_priv() { if [ "$(id -u)" = 0 ]; then "$@"; '
+                  'else sudo -n "$@"; fi; }; ')
+        data["command"] = prefix + data["command"].replace("sudo -n", "aquaticy_priv")
     return data

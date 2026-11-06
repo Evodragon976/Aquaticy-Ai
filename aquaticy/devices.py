@@ -80,7 +80,7 @@ def _text(value: Any, laenge: int) -> str:
 def _zahl(value: Any, hoechstens: float) -> float:
     try:
         zahl = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.0
     if zahl != zahl or zahl < 0:
         return 0.0

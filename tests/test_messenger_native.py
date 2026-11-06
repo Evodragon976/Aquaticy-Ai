@@ -644,7 +644,7 @@ def test_a_wrong_address_line_never_becomes_a_qr(tmp_path: Path) -> None:
     eins.stop()
 
 
-def test_signal_delivers_received_messages_and_sends_json_rpc(signal) -> None:
+def test_signal_delivers_received_messages_and_sends_json_rpc(signal, monkeypatch) -> None:
     eins, fake, empfangen = signal
     fake.rpc_zeilen = [
         json.dumps({"jsonrpc": "2.0", "method": "receive", "params": sig_data("Hi")}),
@@ -655,6 +655,16 @@ def test_signal_delivers_received_messages_and_sends_json_rpc(signal) -> None:
     assert wait_for(lambda: len(empfangen) == 1)
     assert empfangen[0].text == "Hi" and empfangen[0].messenger == "signal"
     proc = fake.rpc[0]
+    original_flush = proc.stdin.flush
+
+    def acknowledge():
+        original_flush()
+        request = json.loads(proc.stdin.getvalue().splitlines()[-1])
+        event, replies = eins._pending_rpc[request["id"]]
+        replies.append({"jsonrpc": "2.0", "id": request["id"], "result": {}})
+        event.set()
+
+    monkeypatch.setattr(proc.stdin, "flush", acknowledge)
     eins.send("+4915123456789", "Antwort")
     eins.send("self", "Notiz")
     eins.send("group:abcdefgh12=", "Gruppe")

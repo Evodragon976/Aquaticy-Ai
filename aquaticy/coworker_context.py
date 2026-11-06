@@ -66,12 +66,16 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
 
     def consider(source: str, text: str) -> None:
 
-        text = str(text or "")[:12000]
+        text = str(text or "")
         from aquaticy.keyvault import scrub
 
-        text = scrub(text, [str(getattr(settings, key, "") or "") for key in (
+        secret_values = [str(getattr(settings, key, "") or "") for key in (
             "ha_token", "api_key", "storage_token", "google_client_secret", "github_token",
-            "memory_key", "nvidia_nim_api_key", "mistral_api_key", "search_api_key")])
+            "memory_key", "nvidia_nim_api_key", "mistral_api_key", "search_api_key")]
+        secrets_method = getattr(settings, "secrets", None)
+        if callable(secrets_method):
+            secret_values.extend(secrets_method())
+        text = scrub(text, secret_values)[:12000]
         text = re.sub(r"(?i)((?:password|passwort|token|api[_ -]?key|secret)\s*[:=]\s*)"
                       r"[^\s,;]+", r"\1[entfernt]", text)
         lower = text.casefold()

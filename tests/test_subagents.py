@@ -953,8 +953,17 @@ def test_normal_mode_deadline_stops_searching_and_summarises(monkeypatch, settin
         def close(self, **_):
             pass
 
+    from aquaticy import pace
+
+    monkeypatch.setattr(pace, "_gates", {})
     uhr = iter([0.0, 0.0, 100.0, 100.0, 100.0, 100.0])
-    monkeypatch.setattr(subagents.time, "monotonic", lambda: next(uhr, 100.0))
+    jetzt = [0.0]
+    def monotonic():
+        jetzt[0] = max(jetzt[0], next(uhr, jetzt[0]))
+        return jetzt[0]
+    monkeypatch.setattr(subagents.time, "monotonic", monotonic)
+    monkeypatch.setattr(subagents.time, "sleep", lambda delay:
+                        jetzt.__setitem__(0, jetzt[0] + delay))
     ergebnis = subagents._run_one("frage", settings, None, None, toolbox=Box(),
                                   budget=6, deadline=40.0)
     assert ergebnis.summary == "Zusammenfassung"

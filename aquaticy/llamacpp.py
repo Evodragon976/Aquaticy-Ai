@@ -71,6 +71,7 @@ FOLDER_RE = re.compile(r"^(?P<tag>b\d{1,7})-(?P<plattform>[a-z0-9][a-z0-9.\-]{1,
 MAX_API_BYTES = 8 * 1024 * 1024
 
 MAX_ARCHIVE_BYTES = 600 * 1024 * 1024
+DOWNLOAD_SECONDS = 1800.0
 MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_FILES = 4000
 
@@ -250,13 +251,17 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
     if not 0 < groesse <= MAX_ARCHIVE_BYTES:
         raise LlamaError("Die Datei ist größer, als Aquaticy lädt.")
     adresse = str(asset.get("browser_download_url") or "")
+    deadline = time.monotonic() + DOWNLOAD_SECONDS
     for _ in range(6):
+        if time.monotonic() >= deadline:
+            raise LlamaError("Der Download hat zu lange gedauert.")
         teile = urlsplit(adresse)
         if (teile.scheme != "https" or (teile.hostname or "").lower() not in DOWNLOAD_HOSTS
                 or teile.port not in (None, 443) or teile.username or teile.password):
             raise LlamaError("Aquaticy lädt nur von den Download-Servern von GitHub.")
         with http.stream("GET", adresse, headers={"Accept": "application/octet-stream",
-                                                   "Accept-Encoding": "identity"}) as antwort:
+                                                   "Accept-Encoding": "identity"},
+                         follow_redirects=False) as antwort:
             if antwort.status_code in (301, 302, 303, 307, 308):
                 adresse = urljoin(adresse, antwort.headers.get("location", ""))
                 continue
@@ -270,6 +275,8 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
             geladen = 0
             with ziel.open("wb") as datei:
                 for stueck in antwort.iter_bytes(1024 * 1024):
+                    if time.monotonic() >= deadline:
+                        raise LlamaError("Der Download hat zu lange gedauert.")
                     geladen += len(stueck)
                     if geladen > groesse:
                         raise LlamaError("Die Datei ist größer als angekündigt.")

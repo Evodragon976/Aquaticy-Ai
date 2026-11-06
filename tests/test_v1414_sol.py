@@ -82,7 +82,9 @@ def test_firewalld_block_and_unblock_do_not_change_existing_port_allowances(tmp_
         command = secure_defense.build(action, host="192.168.1.2", subnet=NETZ, port=4444)
         subprocess.run(["/bin/sh", "-c", command["command"]], check=True,
                        env={"PATH": str(folder)}, timeout=5)
-    calls = log.read_text().splitlines()
+    all_calls = log.read_text().splitlines()
+    assert all_calls.count("['--state']") == 2
+    calls = [call for call in all_calls if call != "['--state']"]
     assert len(calls) == 2 and "--add-rich-rule=" in calls[0]
     assert "--remove-rich-rule=" in calls[1]
     assert "--add-port=" not in str(calls) and "--remove-port=" not in str(calls)

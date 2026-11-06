@@ -9,6 +9,8 @@ from __future__ import annotations
 import contextlib
 import os
 import re
+import threading
+from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -77,7 +79,9 @@ MODEL_RULE_TEXT = ("Aquaticy nutzt nur Mistral und NVIDIA NIM (unter Add-ons) od
 
 _LOKALE_NAMEN = (".local", ".lan", ".internal", ".home.arpa", ".localhost")
 
-_LOKAL_MERK: dict[str, tuple[float, bool]] = {}
+_LOKAL_MERK: OrderedDict[str, tuple[float, bool]] = OrderedDict()
+_LOKAL_LOCK = threading.Lock()
+_LOKAL_MAX = 64
 _LOKAL_DAUER = 300.0
 
 
@@ -117,17 +121,21 @@ def local_address(url: str) -> bool:
     if host == "localhost" or host.endswith(_LOKALE_NAMEN):
         return True
     jetzt = time.monotonic()
-    gemerkt = _LOKAL_MERK.get(host)
-    if gemerkt and jetzt - gemerkt[0] < _LOKAL_DAUER:
-        return gemerkt[1]
+    with _LOKAL_LOCK:
+        gemerkt = _LOKAL_MERK.get(host)
+        if gemerkt and jetzt - gemerkt[0] < _LOKAL_DAUER:
+            _LOKAL_MERK.move_to_end(host)
+            return gemerkt[1]
     try:
         adressen = netguard.resolve(host, port)
     except OSError:
         adressen = []
     lokal = bool(adressen) and not any(netguard.ip_allowed(a) for a in adressen)
-    if len(_LOKAL_MERK) > 64:
-        _LOKAL_MERK.clear()
-    _LOKAL_MERK[host] = (jetzt, lokal)
+    with _LOKAL_LOCK:
+        _LOKAL_MERK[host] = (jetzt, lokal)
+        _LOKAL_MERK.move_to_end(host)
+        while len(_LOKAL_MERK) > _LOKAL_MAX:
+            _LOKAL_MERK.popitem(last=False)
     return lokal
 
 

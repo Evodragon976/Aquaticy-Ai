@@ -75,9 +75,13 @@ def parse_frame(frame: bytes) -> dict[str, Any] | None:
         return None
     art = struct.unpack("!H", frame[12:14])[0]
     start = 14
-    if art == 0x8100 and len(frame) >= 18:
-        art = struct.unpack("!H", frame[16:18])[0]
-        start = 18
+    for _ in range(2):
+        if art not in (0x8100, 0x88A8):
+            break
+        if len(frame) < start + 4:
+            return None
+        art = struct.unpack("!H", frame[start + 2:start + 4])[0]
+        start += 4
     data = frame[start:]
     if art == 0x0806 and len(data) >= 28:
         if data[:6] != b"\x00\x01\x08\x00\x06\x04":
@@ -104,7 +108,7 @@ def parse_frame(frame: bytes) -> dict[str, Any] | None:
         sport, dport = struct.unpack("!HH", rest[:4])
         flags = rest[13]
         record.update(t="tcp", sport=sport, dport=dport, syn=bool(flags & 0x02),
-                      ack=bool(flags & 0x10))
+                      ack=bool(flags & 0x10), seq=struct.unpack("!I", rest[4:8])[0])
         return record
     if proto == 17 and len(rest) >= 8:
         udp_laenge = struct.unpack("!H", rest[4:6])[0]
@@ -216,6 +220,7 @@ def analyze(records: list[dict[str, Any]], subnet: str, *, router: str = "",
     ports_je_ziel: dict[tuple[str, str], set[int]] = defaultdict(set)
     ziele_je_port: dict[tuple[str, int], set[str]] = defaultdict(set)
     versuche: Counter[tuple[str, str, int]] = Counter()
+    connections: set[tuple[str, str, int, int, int]] = set()
     mail_ziele: dict[str, set[str]] = defaultdict(set)
     nx: Counter[str] = Counter()
     zufall: dict[str, set[str]] = defaultdict(set)
@@ -231,7 +236,7 @@ def analyze(records: list[dict[str, Any]], subnet: str, *, router: str = "",
                 mac_ips[mac].add(adresse)
             continue
         src, dst = str(record.get("src", "")), str(record.get("dst", ""))
-        if src in own:
+        if src in own and lokal(dst) and art == "tcp" and record.get("syn"):
             continue
         dport = int(record.get("dport", 0))
         if art == "tcp" and record.get("syn") and not record.get("ack"):
@@ -239,7 +244,11 @@ def analyze(records: list[dict[str, Any]], subnet: str, *, router: str = "",
                 ports_je_ziel[(src, dst)].add(dport)
                 ziele_je_port[(src, dport)].add(dst)
                 if dport in LOGIN_PORTS:
-                    versuche[(src, dst, dport)] += 1
+                    identity = (src, dst, int(record.get("sport", 0)), dport,
+                                int(record.get("seq", 0)))
+                    if "seq" not in record or identity not in connections:
+                        versuche[(src, dst, dport)] += 1
+                        connections.add(identity)
             if lokal(src) and dport == 25 and oeffentlich(dst):
                 mail_ziele[src].add(dst)
             if lokal(src) and dport == 445 and oeffentlich(dst):

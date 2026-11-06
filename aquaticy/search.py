@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from html import unescape
 from html.parser import HTMLParser
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -65,7 +66,7 @@ class _DuckDuckGoHTML(HTMLParser):
             self._depth += 1
 
     def handle_endtag(self, tag: str) -> None:
-        if not self._field:
+        if not self._field or tag in _LEERE_TAGS:
             return
         self._depth -= 1
         if self._depth > 0:
@@ -87,8 +88,13 @@ _LEERE_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "inp
 def _result_url(value: str) -> str:
     """Entpackt DuckDuckGos Weiterleitungs-URL, falls eine geliefert wird."""
     value = unescape(value).strip()
-    parsed = urlsplit(value)
-    if parsed.netloc.endswith("duckduckgo.com") and parsed.path.startswith("/l/"):
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return ""
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if (host == "duckduckgo.com" or host.endswith(".duckduckgo.com")) \
+            and parsed.path.startswith("/l/"):
 
         return (parse_qs(parsed.query).get("uddg") or [""])[0]
     return value
@@ -216,7 +222,7 @@ def _search_open(query: str, options: SearchOptions) -> list[SearchResult]:
 
     return [
         SearchResult(
-            title=(item.get("title") or "").strip(),
+            title=_plain(item.get("title")),
             url=(item.get("href") or item.get("url") or "").strip(),
             snippet=(item.get("body") or item.get("description") or "").strip(),
         )
@@ -275,15 +281,38 @@ def _search_searxng(query: str, options: SearchOptions) -> list[SearchResult]:
 
     return [
         SearchResult(
-            title=(item.get("title") or "").strip(),
+            title=_plain(item.get("title")),
             url=(item.get("url") or "").strip(),
-            snippet=(item.get("content") or "").strip(),
+            snippet=_plain(item.get("content")),
         )
         for item in payload
     ]
 
 
 
+
+
+def _plain(value: Any) -> str:
+    class Text(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.parts: list[str] = []
+
+        def handle_data(self, data: str) -> None:
+            self.parts.append(data)
+
+        def handle_starttag(self, tag: str, attrs: Any) -> None:
+            if tag in {"p", "br", "div", "li"}:
+                self.parts.append(" ")
+
+        def handle_endtag(self, tag: str) -> None:
+            if tag in {"p", "br", "div", "li"}:
+                self.parts.append(" ")
+
+    parser = Text()
+    parser.feed(str(value or ""))
+    parser.close()
+    return " ".join("".join(parser.parts).split())
 
 
 def _search_brave(query: str, options: SearchOptions) -> list[SearchResult]:
@@ -297,7 +326,7 @@ def _search_brave(query: str, options: SearchOptions) -> list[SearchResult]:
             "q": query,
             "count": min(max(options.count, 1), 20),
             "country": (options.country or "de").upper(),
-            "search_lang": options.lang or "de",
+            "search_lang": (options.lang or "de").strip().lower(),
         },
         headers={"Accept": "application/json", "X-Subscription-Token": key},
         timeout=20,
@@ -307,9 +336,9 @@ def _search_brave(query: str, options: SearchOptions) -> list[SearchResult]:
     payload = response.json().get("web", {}).get("results", [])
     return [
         SearchResult(
-            title=(item.get("title") or "").strip(),
+            title=_plain(item.get("title")),
             url=(item.get("url") or "").strip(),
-            snippet=(item.get("description") or "").strip(),
+            snippet=_plain(item.get("description")),
         )
         for item in payload
     ]
@@ -329,9 +358,9 @@ def _search_tavily(query: str, options: SearchOptions) -> list[SearchResult]:
         raise SearchError(f"Tavily-Suche antwortete mit {response.status_code}")
     return [
         SearchResult(
-            title=(item.get("title") or "").strip(),
+            title=_plain(item.get("title")),
             url=(item.get("url") or "").strip(),
-            snippet=(item.get("content") or "").strip(),
+            snippet=_plain(item.get("content")),
         )
         for item in response.json().get("results", [])
     ]
@@ -446,7 +475,7 @@ def search_news(
         prefix = " · ".join(part for part in (date[:10], source) if part)
         results.append(
             SearchResult(
-                title=(item.get("title") or "").strip(),
+                title=_plain(item.get("title")),
                 url=(item.get("url") or item.get("href") or "").strip(),
                 snippet=f"[{prefix}] {snippet}" if prefix else snippet,
             )

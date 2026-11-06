@@ -127,8 +127,10 @@ def clean_domain(roh: str) -> str:
     if not text or ":" in text or "@" in text or "*" in text:
         raise WebsiteError("Das ist keine Domain. Beispiel: chat.example.de")
     try:
-        text = text.encode("idna").decode("ascii")
-    except UnicodeError as exc:
+        import idna
+
+        text = idna.encode(text, uts46=True).decode("ascii")
+    except (UnicodeError, idna.IDNAError) as exc:
         raise WebsiteError("Das ist keine Domain. Beispiel: chat.example.de") from exc
     if not DOMAIN_RE.fullmatch(text):
         raise WebsiteError("Das ist keine Domain. Beispiel: chat.example.de")
@@ -585,6 +587,8 @@ class Acme:
     def _poll(self, url: str, gut: set[str], schlecht: set[str]) -> dict[str, Any]:
         frist = time.monotonic() + ACME_POLL_SECONDS
         while True:
+            if time.monotonic() >= frist:
+                raise WebsiteError("Let's Encrypt braucht zu lange.")
             kopf, roh = self.post(url, None)
             daten = self._json(roh)
             stand = str(daten.get("status") or "")
@@ -595,9 +599,16 @@ class Acme:
                                    + (_acme_detail(daten) or stand))
             if time.monotonic() > frist:
                 raise WebsiteError("Let's Encrypt braucht zu lange.")
-            warten = 2.0
-            with contextlib.suppress(ValueError):
-                warten = min(30.0, max(1.0, float(kopf.get("Retry-After", "2"))))
+            retry = kopf.get("Retry-After", "2")
+            try:
+                warten = float(retry)
+            except ValueError:
+                from email.utils import parsedate_to_datetime
+
+                warten = 2.0
+                with contextlib.suppress(ValueError, TypeError, OverflowError):
+                    warten = parsedate_to_datetime(retry).timestamp() - time.time()
+            warten = max(1.0, min(warten, max(0.0, frist - time.monotonic())))
             self._sleep(warten)
 
     def certificate(self, domain: str, publish: Callable[[str, str], Callable[[], None]],
@@ -671,7 +682,8 @@ def _acme_detail(daten: dict[str, Any]) -> str:
     return _kurz(fehler.get("detail")) if isinstance(fehler, dict) else ""
 
 
-def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str) -> None:
+def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str,
+                 *, now: datetime | None = None) -> None:
     """Passt das Zertifikat zu Schluessel und Domain? Sonst wird nichts gespeichert."""
     from cryptography import x509
     from cryptography.hazmat.primitives import serialization
@@ -688,6 +700,9 @@ def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str) -> None:
         raise WebsiteError("Das Zertifikat passt nicht zum Schlüssel.")
     if domain not in _domains_of(erstes):
         raise WebsiteError("Das Zertifikat gilt nicht für diese Domain.")
+    current = now or datetime.now(UTC)
+    if not erstes.not_valid_before_utc <= current < erstes.not_valid_after_utc:
+        raise WebsiteError("Das Zertifikat ist noch nicht gültig oder bereits abgelaufen.")
 
 
 def _domains_of(zertifikat: Any) -> list[str]:
@@ -716,6 +731,17 @@ def _account_key(data_dir: Path) -> Any:
     return schluessel
 
 
+def _txt_value(raw: str) -> str:
+    value = raw.strip()
+    if not value.startswith('"'):
+        return value
+    pieces = re.findall(r'"((?:\\.|[^"\\])*)"', value)
+    if re.sub(r'"(?:\\.|[^"\\])*"', '', value).strip():
+        return ""
+    return re.sub(r"\\(\d{3}|.)", lambda m: chr(int(m[1]))
+                  if m[1].isdigit() and len(m[1]) == 3 else m[1], "".join(pieces))
+
+
 def wait_for_txt(name: str, wert: str, *, http: httpx.Client | None = None,
                  timeout: float = DNS_WAIT_SECONDS,
                  sleep: Callable[[float], None] = time.sleep) -> bool:
@@ -734,7 +760,8 @@ def wait_for_txt(name: str, wert: str, *, http: httpx.Client | None = None,
                                  headers={"Accept": "application/dns-json"}) as antwort:
                     daten = json.loads(_lesen(antwort))
                 for eintrag in (daten.get("Answer") or []) if isinstance(daten, dict) else []:
-                    if isinstance(eintrag, dict) and wert in str(eintrag.get("data") or ""):
+                    if (isinstance(eintrag, dict) and eintrag.get("type") == 16
+                            and _txt_value(str(eintrag.get("data") or "")) == wert):
                         return True
             sleep(3.0)
     finally:
@@ -762,15 +789,19 @@ def certificate_expiry(data_dir: Path, domain: str) -> datetime | None:
 
 
 def certificate_valid(data_dir: Path, domain: str, *, now: datetime | None = None) -> bool:
-    ablauf = certificate_expiry(data_dir, domain)
-    jetzt = now or datetime.now(UTC)
-    return ablauf is not None and ablauf > jetzt
+    zert, key = cert_paths(data_dir)
+    try:
+        _check_chain(zert.read_bytes(), key.read_bytes(), domain, now=now)
+    except (OSError, WebsiteError):
+        return False
+    return True
 
 
 def needs_certificate(data_dir: Path, domain: str, *, now: datetime | None = None) -> bool:
     ablauf = certificate_expiry(data_dir, domain)
     jetzt = now or datetime.now(UTC)
-    return ablauf is None or ablauf - jetzt < timedelta(days=RENEW_DAYS)
+    return (not certificate_valid(data_dir, domain, now=jetzt) or ablauf is None
+            or ablauf - jetzt < timedelta(days=RENEW_DAYS))
 
 
 def obtain_certificate(config: SiteConfig, data_dir: Path, zone: str, *,
@@ -795,7 +826,9 @@ def obtain_certificate(config: SiteConfig, data_dir: Path, zone: str, *,
                 wait(name, wert)
                 return
             sleep(5.0)
-            wait_for_txt(name, wert, sleep=sleep)
+            if not wait_for_txt(name, wert, sleep=sleep):
+                raise WebsiteError("Der DNS-Eintrag ist noch nicht sichtbar. "
+                                   "Die Zertifikatsprüfung wurde nicht gestartet.")
 
         schluessel, kette = acme.certificate(config.domain, veroeffentlichen, warten)
     finally:
@@ -822,7 +855,8 @@ def self_signed(data_dir: Path, domain: str) -> tuple[Path, Path]:
 
     ordner = site_dir(data_dir)
     zert, key = ordner / "selfsigned-cert.pem", ordner / "selfsigned-key.pem"
-    with contextlib.suppress(OSError, ValueError, IndexError):
+    with contextlib.suppress(OSError, ValueError, IndexError, WebsiteError):
+        _check_chain(zert.read_bytes(), key.read_bytes(), domain)
         bisher = x509.load_pem_x509_certificates(zert.read_bytes())[0]
         if (domain in _domains_of(bisher) and key.is_file()
                 and bisher.not_valid_after_utc - datetime.now(UTC) > timedelta(days=30)):

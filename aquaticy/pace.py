@@ -64,13 +64,18 @@ class Gate:
         belegt = self._slots.acquire(timeout=MAX_WAIT) if self._slots is not None else False
         if self._slots is not None and not belegt:
             self.waited += MAX_WAIT
+            raise TimeoutError("Die parallelen Modellaufrufe sind noch belegt.")
         try:
             if self.spacing:
                 with self._takt:
                     rest = self.spacing - (time.monotonic() - self._last)
-                    if rest > 0:
-                        time.sleep(min(rest, MAX_WAIT))
-                        self.waited += min(rest, MAX_WAIT)
+                    while rest > 0:
+                        pause = min(rest, MAX_WAIT)
+                        if pause <= 0:
+                            raise TimeoutError("Das Anfragenlimit ist noch belegt.")
+                        time.sleep(pause)
+                        self.waited += pause
+                        rest = self.spacing - (time.monotonic() - self._last)
                     self._last = time.monotonic()
             yield
         finally:

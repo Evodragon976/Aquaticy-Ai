@@ -148,6 +148,7 @@ class TokenStore:
         self._key_path = Path(data_dir) / "memory.key"
         self._passphrase = passphrase
         self._lock = _store_lock(self.path)
+        self._refresh_lock = _store_lock(self.path.with_name(self.path.name + ".refresh"))
         self._cipher_value: Any = None
 
     def _cipher(self) -> Any:
@@ -293,7 +294,7 @@ def exchange_code(client_id: str, client_secret: str, code: str, redirect_uri: s
 
 
 def refresh_tokens(client_id: str, client_secret: str, tokens: Tokens) -> Tokens:
-    """Holt ein frisches Access-Token. Das Refresh-Token bleibt bestehen."""
+    """Holt ein frisches Access-Token und uebernimmt ein rotiertes Refresh-Token."""
     if not tokens.refresh_token:
         raise NotConnected("Kein Konto verbunden.")
     data = _token_request(
@@ -305,7 +306,11 @@ def refresh_tokens(client_id: str, client_secret: str, tokens: Tokens) -> Tokens
         }
     )
     tokens.access_token = str(data.get("access_token", ""))
+    if data.get("refresh_token"):
+        tokens.refresh_token = str(data["refresh_token"])
     tokens.expires_at = time.time() + float(data.get("expires_in", 3600) or 3600)
+    if "scope" in data:
+        tokens.scopes = str(data["scope"]).split()
     return tokens
 
 
@@ -328,6 +333,8 @@ def _token_request(payload: dict[str, str]) -> dict[str, Any]:
         if not math.isfinite(seconds) or seconds <= 0 or not math.isfinite(time.time() + seconds):
             raise ValueError
         if "refresh_token" in data and not isinstance(data["refresh_token"], str):
+            raise ValueError
+        if "scope" in data and not isinstance(data["scope"], str):
             raise ValueError
         return data
     except (ValueError, TypeError, OverflowError) as exc:
@@ -417,14 +424,20 @@ class Google:
                 "'Gmail & Kalender' verbinden."
             )
         if tokens.stale:
-            previous = replace(tokens, scopes=list(tokens.scopes))
-            refresh_tokens(self.client_id, self.client_secret, tokens)
-            if not self.store.replace_if_current(previous, tokens):
-                current = self.tokens()
-                if current.refresh_token == previous.refresh_token and not current.stale:
-                    return current.access_token
-                raise NotConnected(
-                    "Die Verbindung zu Google hat sich geändert. Versuch es bitte noch einmal.")
+            with self.store._refresh_lock:
+                tokens = self.tokens()
+                if not tokens.refresh_token:
+                    raise NotConnected("Die Verbindung zu Google wurde inzwischen getrennt.")
+                if not tokens.stale:
+                    return tokens.access_token
+                previous = replace(tokens, scopes=list(tokens.scopes))
+                refresh_tokens(self.client_id, self.client_secret, tokens)
+                if not self.store.replace_if_current(previous, tokens):
+                    current = self.tokens()
+                    if current.refresh_token == previous.refresh_token and not current.stale:
+                        return current.access_token
+                    raise NotConnected(
+                        "Die Verbindung zu Google hat sich geändert. Versuch es bitte noch einmal.")
         return tokens.access_token
 
     def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -436,7 +449,10 @@ class Google:
         if response.status_code >= 400:
             raise GoogleError(_explain(response))
         try:
-            return response.json()
+            result = response.json()
+            if not isinstance(result, dict):
+                raise ValueError
+            return result
         except ValueError as exc:
             raise GoogleError("Google hat keine verwertbare Antwort geschickt.") from exc
 
@@ -549,7 +565,10 @@ class Google:
         if response.status_code >= 400:
             raise GoogleError(_explain(response))
         try:
-            return dict(response.json())
+            data = response.json()
+            if not isinstance(data, dict):
+                raise ValueError("Ungültiges JSON-Objekt")
+            return data
         except ValueError as exc:
             raise GoogleError("Google hat keine verwertbare Antwort geschickt.") from exc
 
@@ -595,8 +614,8 @@ class Google:
         summary: str = "",
         start: str = "",
         end: str = "",
-        description: str = "",
-        location: str = "",
+        description: str | None = None,
+        location: str | None = None,
         whole_day: bool = False,
     ) -> dict[str, Any]:
         """Aendert einen bestehenden Termin.
@@ -611,9 +630,9 @@ class Google:
         payload: dict[str, Any] = {}
         if summary:
             payload["summary"] = " ".join(str(summary).split())[:300]
-        if description:
+        if description is not None:
             payload["description"] = str(description)[:4000]
-        if location:
+        if location is not None:
             payload["location"] = str(location)[:300]
         if start:
             if end:
@@ -818,17 +837,24 @@ def _find_part(part: dict[str, Any], wanted: str) -> str:
                for h in part.get("headers", []) if isinstance(h, dict)}
     if headers.get("content-disposition", "").lower().startswith("attachment"):
         return ""
-    if str(part.get("mimeType", "")).split(";", 1)[0] == wanted:
+    mime = str(part.get("mimeType", "")).split(";", 1)[0].strip().lower()
+    if mime == wanted:
         message = Message()
         message["Content-Type"] = headers.get("content-type", wanted)
         return _decode(str((part.get("body") or {}).get("data", "")),
                        charset=message.get_content_charset() or "utf-8",
                        limit=1_000_000 if wanted == "text/html" else MAX_BODY_CHARS + 1)
+    found_parts: list[str] = []
+    limit = 1_000_000 if wanted == "text/html" else MAX_BODY_CHARS + 1
+    length = 0
     for child in part.get("parts") or []:
         found = _find_part(child, wanted)
         if found:
-            return found
-    return ""
+            found_parts.append(found)
+            length += len(found) + 1
+            if mime == "multipart/alternative" or length >= limit:
+                break
+    return "\n".join(found_parts)[:limit]
 
 
 def _decode(data: str, charset: str = "utf-8", limit: int = MAX_BODY_CHARS + 1) -> str:

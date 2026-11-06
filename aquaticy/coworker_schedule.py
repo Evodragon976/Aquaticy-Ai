@@ -191,12 +191,15 @@ def price_condition_met(question: str, products: list[Any]) -> bool | None:
         return None
     match = auswahl[-1]
     limit = _number(match.group(1))
-    prices = [_number(str(getattr(product, "price", "") or "")) for product in products]
+    prices = [_number(str(getattr(product, "price", "") or "")) for product in products
+              if not mit_euro or str(getattr(product, "currency", "") or "EUR").upper() == "EUR"]
     known = [price for price in prices if price is not None]
     if limit is None or not known:
         return None
     strict = "unter" in match.group(0) or "weniger als" in match.group(0)
-    return any(price < limit if strict else price <= limit for price in known)
+    negated = bool(re.search(r"\bnicht\s+$", question[:match.start()], re.I))
+    return any((price >= limit if strict else price > limit) if negated
+               else (price < limit if strict else price <= limit) for price in known)
 
 
 @dataclass(slots=True)
@@ -594,6 +597,8 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
 
 
             return (UNAVAILABLE, "")
+        if getattr(result, "error", "") or getattr(result, "stopped", False):
+            return ("Fehler: Antwort nicht abgeschlossen", "")
         regel = str(getattr(result, "guarded", "") or "")
         if regel:
 
@@ -608,9 +613,17 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
             if job.kind == "visual" and not getattr(result, "visuals", []):
                 return ("kein Bild gefunden", "")
             if job.kind == "price":
+                wanted = _offer_identity(job.source_url)
+                allowed_sources = {wanted}
+                for source in getattr(result, "sources", []) or []:
+                    if (isinstance(source, dict) and source.get("requested_url")
+                            and _offer_identity(source["requested_url"]) == wanted):
+                        allowed_sources.add(_offer_identity(str(source.get("url") or "")))
+                allowed_sources.discard(None)
                 verified = price_condition_met(
-                    job.question, list(getattr(result, "products", []) or [])
-                )
+                    job.question, [p for p in getattr(result, "products", []) or []
+                                   if _offer_identity(str(getattr(p, "url", "")))
+                                   in allowed_sources])
                 if verified is None:
                     return ("kein prüfbarer Preis gefunden", "")
                 matched = verified

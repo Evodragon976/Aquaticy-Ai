@@ -2476,7 +2476,8 @@ class Agent:
         return "".join(parts)
 
     def _note_usage(self, messages: list[dict[str, Any]], answer: Any,
-                    buchung: Any = None, echt: tuple[int, int] | None = None) -> None:
+                    buchung: Any = None, echt: tuple[int, int] | None = None,
+                    reasoning_chars: int = 0) -> None:
         """Schreibt mit, was dieser Aufruf gekostet hat.
 
         Gezaehlt werden die Zahlen des Anbieters (``echt``) -- gibt es keine,
@@ -2486,13 +2487,13 @@ class Agent:
         Reservierung bleibt dann stehen (lieber zu viel gezaehlt).
         """
         try:
-            from aquaticy.usage import message_tokens
+            from aquaticy.usage import CHARS_PER_TOKEN, message_tokens, reply_tokens
 
             if echt is not None:
                 hinein, heraus = echt
             else:
                 hinein = message_tokens(messages)
-                heraus = message_tokens([answer]) if isinstance(answer, dict) else 0
+                heraus = reply_tokens(answer) + -(-reasoning_chars // CHARS_PER_TOKEN)
             if buchung is not None:
                 buchung.settle(hinein, heraus)
             else:
@@ -3246,41 +3247,56 @@ class Agent:
                 buchung.cancel()
                 raise
             if not stream:
-                message = response.choices[0].message
-                content = message.content or ""
-                tool_calls = repair_tool_calls(
-                    _tool_calls_to_dicts(getattr(message, "tool_calls", None))
-                )
-                if not tool_calls and werkzeuge:
-                    aus_text = tool_calls_from_text(
-                        content, (t["function"]["name"] for t in werkzeuge), frage)
-                    if aus_text:
-                        tool_calls, content = aus_text, ""
+                message = None
+                try:
+                    message = response.choices[0].message
+                    content = message.content or ""
+                    tool_calls = repair_tool_calls(
+                        _tool_calls_to_dicts(getattr(message, "tool_calls", None))
+                    )
+                    if not tool_calls and werkzeuge:
+                        aus_text = tool_calls_from_text(
+                            content, (t["function"]["name"] for t in werkzeuge), frage)
+                        if aus_text:
+                            tool_calls, content = aus_text, ""
 
 
 
 
-                if content and not tool_calls:
-                    self._emit("answer_chunk", text=content)
-                elif content.strip() and tool_calls:
+                    if content and not tool_calls:
+                        self._emit("answer_chunk", text=content)
+                    elif content.strip() and tool_calls:
 
 
-                    self._emit("interim", text=content.strip())
-                fertig = {"role": "assistant", "content": content, "tool_calls": tool_calls}
-                self._note_usage(messages, fertig, buchung,
-                                 metering.usage_of(getattr(response, "usage", None)))
-                return fertig
+                        self._emit("interim", text=content.strip())
+                    fertig = {"role": "assistant", "content": content, "tool_calls": tool_calls}
+                    self._note_usage(messages, message, buchung,
+                                     metering.usage_of(getattr(response, "usage", None)))
+                    return fertig
+                except BaseException:
+                    self._note_usage(messages, message, buchung,
+                                     metering.usage_of(getattr(response, "usage", None)))
+                    raise
             self._stream_zahlen: tuple[int, int] | None = None
+            self._stream_reasoning_chars = 0
+            self._stream_partial: tuple[list[str], dict[int, dict[str, str]]] = ([], {})
             try:
                 gestreamt = self._consume_stream(response)
             except BaseException:
 
-                self._note_usage(messages, {}, buchung, self._stream_zahlen)
+                parts, calls = self._stream_partial
+                partial = {"content": "".join(parts), "tool_calls": [
+                    {"function": {"name": entry["name"], "arguments": entry["arguments"]}}
+                    for entry in calls.values()]}
+                self._note_usage(messages, partial, buchung, self._stream_zahlen,
+                                 self._stream_reasoning_chars)
                 raise
             finally:
                 with contextlib.suppress(Exception):
                     llmcall.close_stream(response)
-            self._note_usage(messages, gestreamt, buchung, self._stream_zahlen)
+                self._stream_partial = ([], {})
+            self._note_usage(messages, gestreamt, buchung, self._stream_zahlen,
+                             self._stream_reasoning_chars)
             if not gestreamt.get("tool_calls") and werkzeuge:
                 aus_text = tool_calls_from_text(
                     str(gestreamt.get("content") or ""), (t["function"]["name"] for t in werkzeuge),
@@ -3302,7 +3318,8 @@ class Agent:
         """Sammelt Text- und Tool-Call-Deltas eines Streams ein."""
         content_parts: list[str] = []
         calls: dict[int, dict[str, str]] = {}
-
+        self._stream_partial = (content_parts, calls)
+        self._stream_reasoning_chars = 0
         for chunk in response:
 
             zahlen = metering.usage_of(getattr(chunk, "usage", None))
@@ -3318,9 +3335,7 @@ class Agent:
                 delta, "reasoning", None
             )
             if thought:
-
-
-
+                self._stream_reasoning_chars += len(str(thought))
                 self._emit("thought", text=str(thought))
             text = getattr(delta, "content", None)
             if text:
@@ -4650,8 +4665,8 @@ class Agent:
         from aquaticy.privacy import read_private
 
         encoded = base64.b64encode(read_private(image_path)).decode("ascii")
+        self.toolbox.untrusted_seen = True
         self._emit("image", path=str(image_path))
-
         kwargs = self.settings.llm_kwargs_for(self.settings.effective_vision_model)
         try:
             with paced(self.settings.effective_vision_model,

@@ -111,7 +111,7 @@ CATEGORIES: dict[str, str] = {
     "museum": 'nwr[tourism=museum]',
     "spielplatz": 'nwr[leisure=playground]',
     "park": 'nwr[leisure=park]',
-    "schwimmbad": 'nwr[leisure=sports_centre][sport=swimming]',
+    "schwimmbad": 'nwr[~"^(leisure|sport)$"~"^(swimming_pool|water_park|swimming)$"]',
     "sport": 'nwr[leisure~"^(sports_centre|fitness_centre)$"]',
     "schule": 'nwr[amenity=school]',
     "kindergarten": 'nwr[amenity=kindergarten]',
@@ -244,6 +244,11 @@ def _kategorie(text: str) -> str:
     import re
 
     woerter = re.findall(r"[^\W\d_]+", text)
+    irregular = {"ärzte": "arzt", "aerzte": "arzt", "zahnärzte": "zahnarzt",
+                 "zahnaerzte": "zahnarzt", "bücher": "buch", "buecher": "buch",
+                 "museen": "museum", "schwimmbäder": "schwimmbad",
+                 "schwimmbaeder": "schwimmbad"}
+    woerter += [irregular[w] for w in list(woerter) if w in irregular]
     woerter += [w.translate(_UMLAUTE) for w in woerter]
     for schluessel in sorted(CATEGORIES, key=len, reverse=True):
         if " " in schluessel and re.search(r"(?<!\w)" + re.escape(schluessel) + r"(?!\w)", text):

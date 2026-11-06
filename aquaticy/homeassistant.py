@@ -19,7 +19,7 @@ import hashlib
 import re
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -278,7 +278,7 @@ class HomeAssistant:
             )
         if response.status_code == 404:
             raise HomeAssistantError(f"Unbekannter Aufruf: {path}")
-        if response.status_code >= 400:
+        if not 200 <= response.status_code < 300:
             raise HomeAssistantError(f"Home Assistant antwortet mit {response.status_code}.")
         try:
             return response.json()
@@ -290,11 +290,13 @@ class HomeAssistant:
         """Prueft die Verbindung und gibt die Version zurueck."""
         self._request("GET", "/")
         config = self._request("GET", "config")
-        if isinstance(config, dict):
-            name = str(config.get("location_name") or "")
-            version = str(config.get("version") or "")
-            return f"{name} {version}".strip() or "verbunden"
-        return "verbunden"
+        if not isinstance(config, dict) or not isinstance(config.get("version"), str):
+            raise HomeAssistantError("Unter dieser Adresse antwortet keine Home-Assistant-API.")
+        name = str(config.get("location_name") or "")
+        version = str(config["version"])
+        if not version.strip():
+            raise HomeAssistantError("Home Assistant hat keine gültige Version geliefert.")
+        return f"{name} {version}".strip()
 
     def states(self, *, fresh: bool = False) -> list[Entity]:
         """Alle Entitaeten mit ihrem aktuellen Zustand.
@@ -309,7 +311,7 @@ class HomeAssistant:
                     _states_cache.pop(expired, None)
             cached = _states_cache.get(key)
             if cached and not fresh:
-                return cached[1]
+                return [replace(entity) for entity in cached[1]]
             generation = _states_generation
         raw = self._request("GET", "states")
         if not isinstance(raw, list):
@@ -322,7 +324,7 @@ class HomeAssistant:
                 _states_cache.pop(key, None)
                 while len(_states_cache) >= MAX_STATE_CACHES:
                     _states_cache.pop(next(iter(_states_cache)))
-                _states_cache[key] = (time.monotonic(), entities)
+                _states_cache[key] = (time.monotonic(), [replace(entity) for entity in entities])
         return entities
 
     def find(self, search: str = "", domain: str = "", limit: int = MAX_ENTITIES) -> list[Entity]:

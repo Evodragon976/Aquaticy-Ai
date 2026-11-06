@@ -739,8 +739,8 @@ def test_a_full_gate_waits_at_most_max_wait(monkeypatch: pytest.MonkeyPatch) -> 
     gate = pace.Gate(rpm=0, parallel=1)
     with gate.slot():
         start = zeit.monotonic()
-        with gate.slot():
-            pass
+        with pytest.raises(TimeoutError), gate.slot():
+            pytest.fail("Das Parallel-Limit darf nach dem Timeout nicht umgangen werden.")
         assert zeit.monotonic() - start < 2.0
     with gate.slot():
         pass
@@ -811,6 +811,7 @@ def test_notes_are_never_deleted_silently(tmp_path: Path, monkeypatch: pytest.Mo
     store = Memory(tmp_path / "db.sqlite3", tmp_path, "schluessel-fuer-test-123456")
     for i in range(5):
         store.remember(f"Notiz {i}")
+    (tmp_path / "preserved.bin").write_bytes(b"x" * 1_000_000)
     groesse = store.used_bytes()
 
     monkeypatch.setattr(mem, "MAX_BYTES", int(groesse / 0.95))

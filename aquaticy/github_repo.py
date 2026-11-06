@@ -284,7 +284,8 @@ def read_file(hole: Callable[..., Any], repo: str, path: str, ref: str, *,
     if len(raw) > MAX_FILE or b"\x00" in raw:
         return {**result, "hinweis": "Binärdatei oder zu groß; nicht als Code geprüft."}
     source = raw.decode("utf-8-sig", "replace").splitlines(keepends=True)
-    chosen = source[start - 1:start - 1 + lines]
+    safe_source = redact("".join(source)).splitlines(keepends=True)
+    chosen = safe_source[start - 1:start - 1 + lines]
     text = ""
     count = 0
     for line in chosen:
@@ -300,7 +301,7 @@ def read_file(hole: Callable[..., Any], repo: str, path: str, ref: str, *,
 
     hints = [{"regel": h.rule, "schwere": h.severity,
               "zeilen": [n + start - 1 for n in h.lines], "hinweis": h.text}
-             for h in review_scan.scan_file(path, text)[:2]]
+             for h in review_scan.scan_file(path, "".join(source[start - 1:end]))[:2]]
     return {**result, "text": redact(text), "start_line": start, "end_line": end,
             "vorpruefung": hints,
             "total_lines": len(source), "next_line": end + 1 if end < len(source) else None,
@@ -334,6 +335,17 @@ def tree(hole: Callable[..., Any], repo: str, ref: str, path: str, page: int,
          recursive: bool = True) -> dict[str, Any]:
     commit, tree_sha = snapshot(hole, repo, ref)
     data = hole(f"/repos/{repo}/git/trees/{tree_sha}", recursive="1" if recursive else "")
+    if path and not recursive:
+        for component in path.split("/"):
+            folder = next((e for e in data.get("tree", []) if isinstance(e, dict)
+                           and e.get("path") == component and e.get("type") == "tree"), None)
+            if folder is None or not SHA.fullmatch(str(folder.get("sha") or "")):
+                raise GitHubError("Der angeforderte Ordner wurde nicht gefunden.")
+            data = hole(f"/repos/{repo}/git/trees/{folder['sha']}")
+        data = {**data, "tree": [
+            {**entry, "path": path + "/" + entry["path"]}
+            for entry in data.get("tree", [])
+            if isinstance(entry, dict) and isinstance(entry.get("path"), str)]}
     entries = [e for e in data.get("tree", []) if isinstance(e, dict)
                and isinstance(e.get("path"), str) and valid_path(e["path"])
                and (not path or e["path"] == path or e["path"].startswith(path + "/"))]

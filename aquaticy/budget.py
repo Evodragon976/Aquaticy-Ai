@@ -56,10 +56,12 @@ def _dateien(data_dir: Path) -> list[Path]:
         return []
     gefunden: list[Path] = []
     for eintrag in data_dir.iterdir():
+        if eintrag.is_symlink():
+            continue
         if eintrag.is_dir():
             if eintrag.name == "users" and eintrag.parent == data_dir:
                 continue
-            gefunden.extend(p for p in eintrag.rglob("*") if p.is_file())
+            gefunden.extend(p for p in eintrag.rglob("*") if p.is_file() and not p.is_symlink())
         elif eintrag.is_file():
             gefunden.append(eintrag)
     return gefunden
@@ -140,9 +142,10 @@ def _zwischenspeicher_leeren(data_dir: Path, alles: bool) -> None:
 
 
 def _aelteste_zuerst(ordner: Path, passt: object) -> list[Path]:
-    if not ordner.is_dir():
+    if ordner.is_symlink() or not ordner.is_dir():
         return []
-    dateien = [p for p in ordner.iterdir() if p.is_file() and passt(p.name)]  # type: ignore[operator]
+    dateien = [p for p in ordner.iterdir()
+               if not p.is_symlink() and p.is_file() and passt(p.name)]  # type: ignore[operator]
 
     def alter(datei: Path) -> float:
         try:

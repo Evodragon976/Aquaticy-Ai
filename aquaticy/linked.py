@@ -170,17 +170,43 @@ def inspect(provider: str, key: str, client: httpx.Client | None = None) -> dict
             http.close()
 
 
+def _catalog(response: httpx.Response) -> list[dict[str, Any]]:
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise LinkError("Der Anbieter hat keine lesbare Modellliste geschickt.") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        raise LinkError("Der Anbieter hat keine gültige Modellliste geschickt.")
+    return [entry for entry in data["data"] if isinstance(entry, dict)]
+
+
+def _deprecated(value: Any) -> bool:
+    if not value:
+        return False
+    from datetime import UTC, datetime
+
+    try:
+        when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=UTC)
+        return when.timestamp() <= time.time()
+    except (ValueError, OverflowError, OSError):
+        return True
+
+
 def _inspect_mistral(http: httpx.Client, key: str) -> dict[str, Any]:
     antwort = http.get(f"{MISTRAL_API}/models", headers={"Authorization": f"Bearer {key}"})
     if antwort.status_code != 200:
         raise _fehler(antwort, "Mistral")
     gesehen: set[str] = set()
     modelle: list[dict[str, str]] = []
-    for m in antwort.json().get("data", []) or []:
+    for m in _catalog(antwort):
         mid = str(m.get("id") or "")
         faehig = m.get("capabilities") or {}
+        if not isinstance(faehig, dict):
+            continue
         if (not mid or mid in gesehen or _MISTRAL_SKIP.search(mid)
-                or faehig.get("completion_chat") is False or m.get("deprecation")):
+                or faehig.get("completion_chat") is False or _deprecated(m.get("deprecation"))):
             continue
         gesehen.add(mid)
         modelle.append({"id": "mistral/" + mid, "label": str(m.get("name") or mid)})
@@ -229,7 +255,7 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
     ids: list[str] = []
     antwort = http.get(f"{NVIDIA_API}/models", headers={"Authorization": f"Bearer {key}"})
     if antwort.status_code == 200:
-        ids = [str(m.get("id") or "") for m in antwort.json().get("data", []) or []]
+        ids = [str(m.get("id") or "") for m in _catalog(antwort)]
     ids = [i for i in dict.fromkeys(ids) if i and _NVIDIA_CHAT.search(i)
            and not _NVIDIA_SKIP.search(i)]
     vorne = [i for i in _NVIDIA_FIRST if i in ids or not ids]
@@ -425,7 +451,7 @@ def run_council(settings: Any, question: str, context: str = "", judge_model: st
     bearbeiter, pruefer = council_roles(settings)
     richter = judge_model or settings.model
     melden = emit or (lambda *a, **k: None)
-    if not bearbeiter:
+    if not bearbeiter or pruefer is None:
         raise LinkError("Für den AI Council braucht es mindestens zwei verknüpfte Konten.")
     aufgabe = f"{context}\n\nAufgabe:\n{question}".strip() if context else question
     loesungen: dict[str, str] = {}
@@ -461,6 +487,8 @@ def run_council(settings: Any, question: str, context: str = "", judge_model: st
         with ThreadPoolExecutor(max_workers=len(bearbeiter)) as pool:
             for modell, text in pool.map(arbeite, bearbeiter):
                 loesungen[modell] = text
+        if stop is not None and stop.is_set():
+            return ""
         alle = "\n\n".join(f"--- Lösung von {m} ---\n{t}" for m, t in loesungen.items())
         if pruefer is not None:
             melden("council", phase="check", round=runde, model=pruefer[1])
@@ -469,6 +497,8 @@ def run_council(settings: Any, question: str, context: str = "", judge_model: st
                                     f"Aufgabe:\n{aufgabe}\n\n{alle}")
             except Exception as exc:
                 pruefbericht = f"(Prüfer nicht erreichbar: {type(exc).__name__})"
+        if stop is not None and stop.is_set():
+            return ""
         melden("council", phase="judge", round=runde, model=richter)
         try:
             urteil = _ask(settings, richter, JUDGE_PROMPT,

@@ -101,7 +101,8 @@ class Storage:
     ) -> None:
         self.url = normalize_url(url)
         self.access = normalize_access(access)
-        self._http = client or httpx.Client(timeout=timeout, follow_redirects=True)
+        self._http = client or httpx.Client(timeout=timeout, follow_redirects=False,
+                                          trust_env=False)
 
 
     @property
@@ -131,12 +132,27 @@ class Storage:
                 "in den Einstellungen unter 'Zuhause & Netz'."
             )
         try:
-            response = self._http.request(method, f"{self.url}{path}", **kwargs)
+            target = httpx.URL(f"{self.url}{path}")
+            origin = (target.scheme, target.host, target.port)
+            for _ in range(6):
+                response = self._http.request(method, target, follow_redirects=False, **kwargs)
+                if not response.is_redirect:
+                    break
+                location = response.headers.get("location", "")
+                if not location or (method not in {"GET", "HEAD"}
+                                    and response.status_code not in {307, 308}):
+                    raise StorageError("Die Lagerverwaltung hat den Aufruf umgeleitet.")
+                target = target.join(location)
+                if ((target.scheme, target.host, target.port) != origin
+                        or target.username or target.password):
+                    raise StorageError("Die Lagerverwaltung leitet an eine andere Adresse um.")
+            else:
+                raise StorageError("Zu viele Weiterleitungen der Lagerverwaltung.")
         except httpx.HTTPError as exc:
             raise StorageError(f"Lagerverwaltung nicht erreichbar: {exc}") from exc
         except (httpx.InvalidURL, ValueError, UnicodeError) as exc:
             raise StorageError("Die Adresse der Lagerverwaltung ist ungültig.") from exc
-        if response.status_code >= 400:
+        if not 200 <= response.status_code < 300:
             raise StorageError(_explain(response))
         try:
             return response.json()

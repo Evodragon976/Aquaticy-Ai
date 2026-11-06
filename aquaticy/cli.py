@@ -17,6 +17,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from aquaticy import VERSION_LABEL
 from aquaticy.cache import Cache
@@ -133,10 +134,9 @@ def setup_command(
         if not local_id:
             console.print("[yellow]Lokale Einrichtung abgebrochen.[/yellow]")
             raise typer.Exit(code=1)
-        from aquaticy.local_model import DEFAULT_OLLAMA_URL
 
         model = local_id
-        local_api_base = DEFAULT_OLLAMA_URL
+        local_api_base = _ollama_basis()
     else:
         try:
             model = MODEL_PRESETS[int(choice) - 1][0]
@@ -1981,7 +1981,8 @@ def _ollama_beim_start(settings: Any) -> list[str]:
     from aquaticy.system import model_usable, ollama_base
 
     basis = ollama_base(settings)
-    lokal = bool(lm.local_name(settings.model))
+    lokal = any(lm.local_name(str(getattr(settings, attr, "") or ""))
+                for attr in ("model", "vision_model", "subagent_model", "code_model"))
     try:
         laeuft = lm.server_running(basis, timeout=2.0)
         hier = urlsplit(basis).hostname in ("localhost", "127.0.0.1", "::1")
@@ -2011,6 +2012,13 @@ def _ollama_beim_start(settings: Any) -> list[str]:
 
 
 
+def _ollama_basis() -> str:
+    from aquaticy.local_model import native_base
+    from aquaticy.system import ollama_base
+
+    return native_base(ollama_base(get_settings()))
+
+
 def _ensure_ollama(assume_yes: bool = False) -> bool:
     """Sorgt dafür, dass Ollama installiert ist und läuft.
 
@@ -2020,6 +2028,15 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
     from aquaticy import local_model as lm
 
 
+    basis = _ollama_basis()
+    if lm.server_running(basis):
+        console.print("  [green]Ollama erreichbar.[/green]")
+        return True
+    from urllib.parse import urlsplit
+
+    if urlsplit(basis).hostname not in {"localhost", "127.0.0.1", "::1"}:
+        console.print("Der eingestellte Ollama-Server ist nicht erreichbar.", markup=False)
+        return False
     if lm.ollama_binary() is None:
         command = lm.install_command()
         if command is None:
@@ -2048,7 +2065,7 @@ def _ensure_ollama(assume_yes: bool = False) -> bool:
 
     console.print("\n[bold]2. Server[/bold]")
     with console.status("  starte ollama serve ..."):
-        started = lm.start_server()
+        started = lm.start_server(basis)
     if not started:
         console.print(
             "  [red]Server startet nicht.[/red] Starte ihn von Hand: [bold]ollama serve[/bold]"
@@ -2127,7 +2144,7 @@ def _pull_if_needed(name: str, already: set[str]) -> bool:
     console.print(f"  Lade [bold]{name}[/bold] – das dauert beim ersten Mal.")
     try:
         with console.status(f"  ollama pull {name} ...") as status:
-            for line in lm.pull_model(name):
+            for line in lm.pull_model(name, base_url=_ollama_basis()):
                 status.update(f"  {line[:90]}")
     except lm.LocalModelError as exc:
         console.print(f"  [red]{exc}[/red]")
@@ -2135,7 +2152,7 @@ def _pull_if_needed(name: str, already: set[str]) -> bool:
             "  [dim]Gibt es den Namen noch? Katalog: https://ollama.com/library[/dim]"
         )
         return False
-    size = lm.model_size_gb(name)
+    size = lm.model_size_gb(name, base_url=_ollama_basis())
     suffix = f" [dim]({size} GB)[/dim]" if size else ""
     console.print(f"  [green]geladen[/green]{suffix}")
     return True
@@ -2160,7 +2177,7 @@ def _run_subagent_setup(model_name: str = "", assume_yes: bool = False) -> str:
         console.print("  [dim]Übersprungen – die Subagenten nutzen das Hauptmodell.[/dim]")
         return ""
 
-    already = set(lm.installed_models())
+    already = set(lm.installed_models(_ollama_basis()))
     if model_name:
         chosen = model_name
         _note_size(chosen, lm.usable_memory_gb())
@@ -2175,9 +2192,9 @@ def _run_subagent_setup(model_name: str = "", assume_yes: bool = False) -> str:
         return ""
 
     model_id = f"{lm.MODEL_PREFIX}/{chosen}"
-    lm.free_memory()
+    lm.free_memory(_ollama_basis())
     console.print("  [dim]Tool-Calling prüfen ...[/dim]")
-    works, detail = lm.verify_tool_calling(model_id)
+    works, detail = lm.verify_tool_calling(model_id, api_base=_ollama_basis())
     if works:
         console.print(f"  [green]OK[/green]  {detail}")
         return model_id
@@ -2220,7 +2237,7 @@ def _run_vision_setup(
         console.print("  [dim]Übersprungen. Später: aquaticy install-model --vision-only[/dim]")
         return ""
 
-    already = set(lm.installed_models())
+    already = set(lm.installed_models(_ollama_basis()))
     if model_name:
         chosen = model_name
         _note_size(chosen, lm.usable_memory_gb())
@@ -2238,13 +2255,13 @@ def _run_vision_setup(
 
 
 
-    freed = lm.free_memory()
+    freed = lm.free_memory(_ollama_basis())
     if freed:
         console.print(f"  [dim]Speicher freigegeben: {', '.join(freed)}[/dim]")
 
     console.print("  [dim]Sehtest: das Modell bekommt ein rotes Bild gezeigt.[/dim]")
     with console.status("  teste ..."):
-        works, detail = lm.verify_vision(model_id)
+        works, detail = lm.verify_vision(model_id, api_base=_ollama_basis())
     if works:
         console.print(f"  [green]OK[/green]  {detail}")
         return model_id
@@ -2307,7 +2324,7 @@ def _run_local_setup(
         quelle = "VRAM" if vram else "Arbeitsspeicher, ohne GPU"
         console.print(f"  [dim]Nutzbar für Modelle: {budget} GB ({quelle})[/dim]")
 
-    already = set(lm.installed_models())
+    already = set(lm.installed_models(_ollama_basis()))
     if model_name:
         chosen = model_name
         _note_size(chosen, budget)
@@ -2327,11 +2344,11 @@ def _run_local_setup(
     global _MAIN_MODEL_NAME
     _MAIN_MODEL_NAME = chosen
     model_id = f"{lm.MODEL_PREFIX}/{chosen}"
-    lm.free_memory()
+    lm.free_memory(_ollama_basis())
     console.print("\n[bold]4. Tool-Calling prüfen[/bold]")
     console.print("  [dim]Ohne Werkzeugaufrufe kann der Agent weder suchen noch lesen.[/dim]")
     with console.status("  teste ..."):
-        works, detail = lm.verify_tool_calling(model_id)
+        works, detail = lm.verify_tool_calling(model_id, api_base=_ollama_basis())
     if works:
         console.print(f"  [green]OK[/green]  {detail}")
     else:
@@ -2369,7 +2386,7 @@ def install_model_command(
     env_file: Path | None = typer.Option(None, "--env-file", help="Zieldatei für die .env."),
 ) -> None:
     """Installiert lokale Modelle und trägt sie ein – ohne API-Key."""
-    from aquaticy.local_model import DEFAULT_OLLAMA_URL, env_values, vision_env_values
+    from aquaticy.local_model import env_values, vision_env_values
 
     values: dict[str, str] = {}
 
@@ -2384,7 +2401,7 @@ def install_model_command(
         model_id = _run_local_setup(model, assume_yes=yes)
         if not model_id:
             raise typer.Exit(code=1)
-        values.update(env_values(model_id, DEFAULT_OLLAMA_URL))
+        values.update(env_values(model_id, _ollama_basis()))
 
 
 
@@ -2511,8 +2528,6 @@ def _apply_overrides(
         settings.location = location
     if lang:
         settings.lang = lang.lower()
-        if not country:
-            settings.country = lang.lower()
     if country:
         settings.country = country.lower()
     if model:
@@ -2577,7 +2592,9 @@ def _run_turn(agent, renderer, question: str, stream: bool, show_images: bool,
     if not stream:
         renderer.print_answer(result.answer)
     if result.error:
-        console.print(f"[red]Fehler:[/red] {result.error}")
+        from rich.markup import escape
+
+        console.print(f"[red]Fehler:[/red] {escape(str(result.error))}")
         return result
     if result.products:
         from aquaticy.render import print_products
@@ -2818,16 +2835,16 @@ def _describe_image(agent, image: Path) -> str | None:
         with console.status(f"  Sehe mir {image.name} an ..."):
             description = agent.describe_image(image)
     except FileNotFoundError as exc:
-        console.print(f"[red]{exc}[/red]")
+        console.print(Text(str(exc), style="red"))
         return None
     except RuntimeError as exc:
-        console.print(f"[red]{exc}[/red]")
+        console.print(Text(str(exc), style="red"))
         console.print(
             "[dim]Kann dein Modell überhaupt Bilder sehen? Ein eigenes Vision-Modell "
             "richtet [bold]aquaticy install-model --vision-only[/bold] ein.[/dim]"
         )
         return None
-    console.print(Panel(description, title=f"[Bild] {image.name}", border_style="cyan"))
+    console.print(Panel(Text(description), title=Text(f"[Bild] {image.name}"), border_style="cyan"))
     return f"Auf dem Bild ist Folgendes zu sehen:\n{description}"
 
 
@@ -2841,9 +2858,9 @@ def _handle_slash(
     show_images: bool = True,
 ) -> bool:
     """Führt einen Slash-Befehl aus. Gibt `True` zurueck, wenn beendet werden soll."""
-    command, _, argument = line[1:].partition(" ")
-    command = command.lower()
-    argument = argument.strip()
+    parts = line[1:].split(None, 1)
+    command = parts[0].lower() if parts else ""
+    argument = parts[1].strip() if len(parts) == 2 else ""
 
     if command in ("quit", "exit", "q"):
         console.print("[dim]Bis dann.[/dim]")

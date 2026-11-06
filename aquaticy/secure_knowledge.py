@@ -219,8 +219,9 @@ def network_tips(devices: list[dict[str, Any]], events: list[dict[str, Any]],
     tipps: list[str] = []
     for event in events:
         if event.get("kind") == "vulnerability" and len(tipps) < 4:
+            stelle = f"auf Port {event['port']}" if event.get('port') else "am Gerät"
             tipps.append(f"Aktualisiere {event['host']}: nmap meldet dort eine Schwachstelle "
-                         f"auf Port {event['port']}. Suche beim Hersteller nach einem Update.")
+                         f"{stelle}. Suche beim Hersteller nach einem Update.")
     for port in sorted(je_port):
         if port in MALWARE_PORTS:
             name = MALWARE_PORTS[port][0]

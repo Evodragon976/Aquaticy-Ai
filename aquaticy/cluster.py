@@ -68,7 +68,12 @@ from typing import Any
 
 MAX_NODES = 10
 
-DISCOVERY_PORT = int(os.environ.get("AQUATICY_CLUSTER_PORT", "8766") or 8766)
+try:
+    DISCOVERY_PORT = int(os.environ.get("AQUATICY_CLUSTER_PORT", "8766") or 8766)
+    if not 0 < DISCOVERY_PORT < 65536:
+        DISCOVERY_PORT = 8766
+except ValueError:
+    DISCOVERY_PORT = 8766
 
 RELEASE_RETRY_FIRST = 2.0
 RELEASE_RETRY_MAX = 60.0
@@ -87,6 +92,8 @@ INVITE_SECONDS = 300.0
 CLOCK_SKEW = 120.0
 
 CHUNK = 1 << 20
+SNAPSHOT_SECONDS = 900.0
+MAX_SNAPSHOTS = 16
 
 LOG_BATCH = 500
 
@@ -735,14 +742,16 @@ def write_atomic(target: Path, data: bytes) -> None:
 
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.parent / f"{_TMP_PREFIX}{secrets.token_hex(6)}"
-    tmp.write_bytes(data)
-    secure_file(tmp)
-    if target.name.endswith(_SQLITE_SUFFIXES):
-
-        for endung in _SIDE_FILES:
-            with contextlib.suppress(FileNotFoundError):
-                Path(str(target) + endung).unlink()
-    os.replace(tmp, target)
+    try:
+        tmp.write_bytes(data)
+        secure_file(tmp)
+        os.replace(tmp, target)
+        if target.name.endswith(_SQLITE_SUFFIXES):
+            for endung in _SIDE_FILES:
+                with contextlib.suppress(FileNotFoundError):
+                    Path(str(target) + endung).unlink()
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 
@@ -840,6 +849,10 @@ class Cluster:
         self._moving: set[str] = set()
         self._assign_locks: dict[str, threading.Lock] = {}
         self._snapshots: dict[str, tuple[Path, str]] = {}
+        self._snapshot_lock = threading.RLock()
+        self._snapshot_times: dict[str, float] = {}
+        self._snapshot_sources: dict[str, Path] = {}
+        self._sweep_snapshots()
         self.notice = ""
 
 
@@ -1778,7 +1791,7 @@ class Cluster:
                 if self.alive(m["node"]):
                     self.pull_files(m["node"])
             self._sweep_orphans()
-
+            self._sweep_snapshots()
     def pull_db(self, node: str) -> int:
         gesamt = 0
         for _ in range(200):
@@ -1874,8 +1887,10 @@ class Cluster:
     def _fetch(self, node: str, args: dict[str, Any], op: str = "file") -> bytes | None:
         teile: list[bytes] = []
         versatz = 0
+        transfer = secrets.token_hex(12)
         while True:
-            antwort = self.call(node, op, dict(args, offset=versatz), timeout=60.0)
+            antwort = self.call(node, op, dict(args, offset=versatz, transfer=transfer),
+                                timeout=60.0)
             if antwort.get("changed"):
                 return None
             stueck = _unb64(antwort.get("data", ""))
@@ -1884,39 +1899,86 @@ class Cluster:
             if antwort.get("eof") or not stueck:
                 return b"".join(teile)
 
+    @staticmethod
+    def _transfer_key(key: str, args: dict[str, Any]) -> str:
+        transfer = str(args.get("transfer", ""))
+        if transfer and not re.fullmatch(r"[0-9a-f]{24}", transfer):
+            raise ClusterError("Ungültige Übertragungskennung.")
+        return f"{key}:{transfer}" if transfer else key
+
     def _serve_file(self, args: dict[str, Any]) -> dict[str, Any]:
         ordner = self._user_dir(args.get("user"))
         rel = str(args.get("rel", ""))
         pfad = safe_rel(ordner, rel)
+        offset = int(args.get("offset", 0))
+        key = self._transfer_key(f"{args.get('user')}/{rel}", args)
+        with self._snapshot_lock:
+            self._sweep_snapshots()
+            snapshot = self._snapshots.get(key)
+            if offset > 0 and snapshot and snapshot[1] == args.get("sig"):
+                return self._chunk(pfad, key, snapshot[1], offset)
         sig = manifest(ordner).get(rel)
         if sig is None or (args.get("sig") and sig != args.get("sig")):
             return {"changed": True}
-        return self._chunk(pfad, f"{args.get('user')}/{rel}", sig, int(args.get("offset", 0)))
+        return self._chunk(pfad, key, sig, int(args.get("offset", 0)))
+
+    def _sweep_snapshots(self) -> None:
+        with self._snapshot_lock:
+            now = _now()
+            expired = [key for key in self._snapshots
+                       if now - self._snapshot_times.get(key, 0) >= SNAPSHOT_SECONDS
+                       or (key in self._snapshot_sources
+                           and not self._snapshot_sources[key].is_file())]
+            for key in expired:
+                path, _ = self._snapshots.pop(key)
+                self._snapshot_times.pop(key, None)
+                self._snapshot_sources.pop(key, None)
+                with contextlib.suppress(OSError):
+                    path.unlink()
+            active = {path for path, _ in self._snapshots.values()}
+            directory = self.dir / "tmp"
+            if directory.is_dir():
+                for path in directory.iterdir():
+                    if re.fullmatch(r"[0-9a-f]{40}\.db", path.name) and path not in active:
+                        with contextlib.suppress(OSError):
+                            path.unlink()
 
     def _chunk(self, pfad: Path, schluessel: str, sig: str, versatz: int) -> dict[str, Any]:
-        quelle = pfad
-        if _is_sqlite(pfad):
-
-            with self._lock:
-                abzug = self._snapshots.get(schluessel)
-            if abzug is None or abzug[1] != sig or not abzug[0].exists():
-                kennung = hashlib.sha1(schluessel.encode(), usedforsecurity=False).hexdigest()
-                ziel = self.dir / "tmp" / f"{kennung}.db"
-                snapshot_sqlite(pfad, ziel)
-                abzug = (ziel, sig)
-                with self._lock:
+        with self._snapshot_lock:
+            self._sweep_snapshots()
+            quelle = pfad
+            abzug = self._snapshots.get(schluessel)
+            if abzug is not None and abzug[1] == sig and versatz > 0:
+                quelle = abzug[0]
+            elif _is_sqlite(pfad):
+                if abzug is None or abzug[1] != sig or not abzug[0].exists():
+                    if schluessel not in self._snapshots and len(self._snapshots) >= MAX_SNAPSHOTS:
+                        oldest = min(self._snapshots, key=lambda k: self._snapshot_times.get(k, 0))
+                        old_path, _ = self._snapshots.pop(oldest)
+                        self._snapshot_times.pop(oldest, None)
+                        self._snapshot_sources.pop(oldest, None)
+                        with contextlib.suppress(OSError):
+                            old_path.unlink()
+                    kennung = hashlib.sha1(schluessel.encode(), usedforsecurity=False).hexdigest()
+                    ziel = self.dir / "tmp" / f"{kennung}.db"
+                    snapshot_sqlite(pfad, ziel)
+                    abzug = (ziel, sig)
                     self._snapshots[schluessel] = abzug
-            quelle = abzug[0]
-        with quelle.open("rb") as datei:
-            datei.seek(max(0, versatz))
-            daten = datei.read(CHUNK)
-            eof = datei.tell() >= os.fstat(datei.fileno()).st_size
-        if eof and quelle != pfad:
-            with self._lock:
+                    self._snapshot_times[schluessel] = _now()
+                    self._snapshot_sources[schluessel] = pfad
+                quelle = abzug[0]
+            with quelle.open("rb") as datei:
+                datei.seek(max(0, versatz))
+                daten = datei.read(CHUNK)
+                eof = datei.tell() >= os.fstat(datei.fileno()).st_size
+            if eof and quelle != pfad:
                 self._snapshots.pop(schluessel, None)
-            with contextlib.suppress(OSError):
-                quelle.unlink()
-        return {"data": _b64(daten), "eof": eof}
+                self._snapshot_times.pop(schluessel, None)
+                self._snapshot_sources.pop(schluessel, None)
+                with contextlib.suppress(OSError):
+                    quelle.unlink()
+            return {"data": _b64(daten), "eof": eof}
+
 
     def _sweep_orphans(self) -> None:
         """Profilordner geloeschter Konten verschwinden auch auf den Kopien."""
@@ -1951,10 +2013,11 @@ class Cluster:
         if name not in self._root_files():
             raise ClusterError("Unbekannte Datei.")
         pfad = self.data_dir / name
+        key = self._transfer_key("@" + name, args)
         if name == SHARED_DB:
-            return self._chunk(pfad, "@" + name, str(args.get("sig") or "join"),
+            return self._chunk(pfad, key, str(args.get("sig") or "join"),
                                int(args.get("offset", 0)))
-        return self._chunk(pfad, "@" + name, "", int(args.get("offset", 0)))
+        return self._chunk(pfad, key, "", int(args.get("offset", 0)))
 
     def complete_join(self) -> None:
         """Holt beim Beitritt alle gemeinsamen Daten und startet neu.
@@ -1967,14 +2030,21 @@ class Cluster:
         shutil.rmtree(staging, ignore_errors=True)
         staging.mkdir(parents=True)
         kennung = secrets.token_hex(4)
-        for name in self.call(master, "rootlist", {}, timeout=30.0, key=self.key).get(
-                "files", []):
+        names = self.call(master, "rootlist", {}, timeout=30.0, key=self.key).get("files", [])
+        if not isinstance(names, list) or SHARED_DB not in names:
+            raise ClusterError("Dem Beitritt fehlt die Datenbank des Masters.")
+        for name in names:
             name = str(name)
-            if "/" in name or "\\" in name or name.startswith("."):
+            if (not name or "/" in name or "\\" in name or name.startswith(".")
+                    or any(c in name for c in ':<>"|?*') or not name.isprintable()
+                    or name.endswith((" ", "."))):
                 continue
             daten = self._fetch(master, {"name": name, "sig": kennung}, op="rootfile")
-            if daten is not None:
-                (staging / name).write_bytes(daten)
+            if daten is None:
+                raise ClusterError("Eine Datei des Masters hat sich beim Beitritt geändert.")
+            (staging / name).write_bytes(daten)
+        if not (staging / SHARED_DB).is_file():
+            raise ClusterError("Die Datenbank des Masters wurde nicht vollständig übertragen.")
         db = SharedDb(staging / SHARED_DB)
         db.install()
 
@@ -1984,22 +2054,42 @@ class Cluster:
         zeiger.pop(self.node_id, None)
         zeiger[master] = db.last_seq()
         db.set_cursors(zeiger, clear_log=True)
-        sicherung = self.dir / f"backup-{time.strftime('%Y%m%d-%H%M%S')}"
+        sicherung = self.dir / (f"backup-{time.strftime('%Y%m%d-%H%M%S')}-"
+                                + secrets.token_hex(4))
         sicherung.mkdir(parents=True)
-        for eintrag in list(self.data_dir.iterdir()):
-            if eintrag.name in _NODE_LOCAL:
-                continue
-            shutil.move(str(eintrag), str(sicherung / eintrag.name))
-        for eintrag in staging.iterdir():
-            shutil.move(str(eintrag), str(self.data_dir / eintrag.name))
+        originals: list[Path] = []
+        installed: list[Path] = []
+        previous = json.loads(json.dumps(self.state))
+        previous_synced = self.synced
+        try:
+            for eintrag in list(self.data_dir.iterdir()):
+                if eintrag.name in _NODE_LOCAL:
+                    continue
+                shutil.move(str(eintrag), str(sicherung / eintrag.name))
+                originals.append(eintrag)
+            for eintrag in list(staging.iterdir()):
+                target = self.data_dir / eintrag.name
+                shutil.move(str(eintrag), str(target))
+                installed.append(target)
+            users = self.data_dir / "users"
+            if not users.exists():
+                users.mkdir()
+                installed.append(users)
+            with self._lock:
+                self.synced = {}
+                self._save_json("sync.json", self.synced)
+                self.state["cluster"].pop("joining", None)
+                self.state["enabled"] = True
+                self._save()
+        except BaseException:
+            self.state, self.synced = previous, previous_synced
+            for target in reversed(installed):
+                if target.exists():
+                    shutil.move(str(target), str(staging / target.name))
+            for original in reversed(originals):
+                shutil.move(str(sicherung / original.name), str(original))
+            raise
         shutil.rmtree(staging, ignore_errors=True)
-        (self.data_dir / "users").mkdir(exist_ok=True)
-        with self._lock:
-            self.state["cluster"].pop("joining", None)
-            self.state["enabled"] = True
-            self._save()
-            self.synced = {}
-            self._save_json("sync.json", {})
         print(f"  [Verbund] Beigetreten. Die bisherigen Daten liegen unter {sicherung}.")
         self.hooks.restart()
 
@@ -2181,6 +2271,12 @@ class Cluster:
             "port": port,
             "version": str(payload.get("version", ""))[:40]})
         with self._lock:
+            current = [e for e in self.invites_in.values() if e.status == "pending"
+                       and _now() - e.created < INVITE_SECONDS]
+            if len(current) >= 3:
+                return {"error": "Zu viele offene Anfragen."}
+            if einladung_id in self.invites_in:
+                return {"error": "Diese Einladung ist schon da."}
             self.invites_in[einladung_id] = einladung
         self._write_pending()
         if self.hooks.ask is not None:
@@ -2331,12 +2427,16 @@ class Cluster:
         url = f"http://{_host(ziel)}:{int(ziel['port'])}/cluster/proxy"
         geschrieben = False
         with httpx.Client(timeout=httpx.Timeout(10.0, read=90.0), trust_env=False) as client, \
-                client.stream("POST", url, content=anfrage.encode()) as antwort:
+                client.stream("POST", url, content=anfrage.encode(), follow_redirects=False,
+                              headers={"Accept-Encoding": "identity"}) as antwort:
+            if antwort.headers.get("Content-Encoding", "identity").lower() not in ("", "identity"):
+                raise ClusterError("Verschlüsselte Verbund-Antworten dürfen nicht "
+                                   "komprimiert sein.")
             if antwort.status_code != 200:
                 raise ClusterError(f"Weiterleitung abgelehnt ({antwort.status_code}).")
             salz = _unb64(antwort.headers.get("X-Aquaticy-Salt", ""))
             try:
-                for stueck in read_frames(antwort.iter_bytes(), key, salz,
+                for stueck in read_frames(antwort.iter_raw(chunk_size=65536), key, salz,
                                           f"stream:{nonce}"):
                     if not geschrieben:
                         if f"\r\n{MOVED_HEADER}: moved\r\n".encode() in stueck:
@@ -2467,22 +2567,75 @@ def _host(ziel: dict[str, Any]) -> str:
     return f"[{adresse}]" if ":" in adresse else adresse
 
 
+class _DeadlineSocket:
+    def __init__(self, sock: Any, deadline: float) -> None:
+        self.sock, self.deadline = sock, deadline
+
+    def _remaining(self) -> None:
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Die Verbund-Anfrage hat zu lange gedauert.")
+        self.sock.settimeout(remaining)
+
+    def sendall(self, data: bytes) -> None:
+        self._remaining()
+        self.sock.sendall(data)
+
+    def makefile(self, mode: str) -> Any:
+        outer = self
+        raw = self.sock.makefile(mode, buffering=0)
+
+        class Reader(io.RawIOBase):
+            def readable(self) -> bool:
+                return True
+
+            def readinto(self, buffer: Any) -> int:
+                outer._remaining()
+                return int(raw.readinto(buffer))
+
+            def close(self) -> None:
+                try:
+                    raw.close()
+                finally:
+                    super().close()
+
+        return io.BufferedReader(Reader())
+
+    def close(self) -> None:
+        self.sock.close()
+
+
 def _http_post(ziel: dict[str, Any], pfad: str, body: bytes, timeout: float) -> bytes:
-    """Ein Aufruf ueber das Netz -- schlicht, ohne Umleitungen, ohne Proxy."""
     adresse = str(ziel.get("address", ""))
     if not adresse or not lan_ip_ok(adresse):
         raise ClusterError("Keine Adresse im eigenen Netz.")
+    deadline = time.monotonic() + timeout
     verbindung = http.client.HTTPConnection(adresse, int(ziel.get("port", 0)), timeout=timeout)
     try:
+        verbindung.connect()
+        from typing import cast
+
+        verbindung.sock = cast(Any, _DeadlineSocket(verbindung.sock, deadline))
         verbindung.request("POST", pfad, body=body,
                            headers={"Content-Type": "application/json"})
         antwort = verbindung.getresponse()
-        daten = antwort.read(64 * CHUNK)
+        data = bytearray()
+        while True:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Die Verbund-Anfrage hat zu lange gedauert.")
+            chunk = antwort.read1(min(CHUNK, 64 * CHUNK + 1 - len(data)))
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Die Verbund-Anfrage hat zu lange gedauert.")
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > 64 * CHUNK:
+                raise ClusterError("Die Verbund-Antwort ist zu groß.")
     finally:
         verbindung.close()
     if antwort.status != 200:
         raise ClusterError(f"Der andere Server antwortet mit {antwort.status}.")
-    return daten
+    return bytes(data)
 
 
 class TerminalPrompt:

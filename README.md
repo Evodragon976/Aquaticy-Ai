@@ -1,4 +1,4 @@
-# Aquaticy AI 15.2.3
+# Aquaticy AI 15.2.4
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,64 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.2.4: 121 nachgewiesene Fehlerursachen korrigiert.**
+
+Jede gezählte Ursache wurde gegen den unveränderten Stand 15.2.3 nachgestellt.
+Die zugehörigen Regressionstests scheitern dort und bestehen nach der Korrektur.
+Die angefragten 200 unterschiedlichen Fehler sind damit noch nicht nachgewiesen.
+
+- Modellaufrufe halten Parallel- und Zeitlimits ein. Auch unterbrochene Antworten werden
+  bei der Verbrauchserfassung berücksichtigt. Kontolimits und abgelaufene Sitzungen sind strenger.
+- Coworker behalten unbearbeitete Aufträge nach Fehlern und bei der Logrotation.
+  Kontext und GitHub-Dateiausschnitte verbergen vertrauliche Zugangsdaten zuverlässiger.
+- Signal wartet auf Sendebestätigungen. Lange Messenger-Texte behalten Einrückungen und
+  gültige Nachrichtengrößen. Die lokale Einrichtung verwendet den eingestellten Ollama-Endpunkt.
+- Kalenderfelder lassen sich ausdrücklich leeren. Google übernimmt rotierte Refresh-Tokens;
+  gleichzeitige Erneuerungen desselben Kontos sind verriegelt.
+- Feeds, Produktdaten, Wetter, Wechselkurse, Orte und Exporte verarbeiten weitere gültige Formate.
+  Fremde Redirect-Ziele bleiben gesperrt. Der lokale Adresscache verdrängt nur alte Einträge.
+- Secure Pro verarbeitet weitere Paketformate und nmap-Befunde. Freigaben, Zielgrenzen und
+  Bestätigungen bleiben erhalten. Datenbankübertragungen bleiben bei paralleler Nutzung stabil;
+  ein gescheiterter Cluster-Beitritt stellt die bisherigen Dateien wieder her.
+- Zertifikate werden zusätzlich auf Schlüsselzugehörigkeit und Gültigkeitsbeginn geprüft.
+  Installer halten Redirect- und Zeitgrenzen auch mit übergebenen HTTP-Clients ein.
+
+Die nachgestellten Ursachen F001 bis F121 stehen in den Tests
+[A](tests/test_v1524_a.py), [B](tests/test_v1524_b.py), [C](tests/test_v1524_c.py),
+[D](tests/test_v1524_d.py), [E](tests/test_v1524_e.py), [F](tests/test_v1524_f.py)
+und [externer Bericht](tests/test_v1524_external.py).
+[Ergänzende Tests](tests/test_v1524_followups.py) prüfen Erfolgswege, Abbruch und parallele Nutzung.
+
+### Prüfung des externen LLM-Berichts
+
+Der eingereichte Bericht nennt 18 Punkte. Keine seiner vier als kritisch bezeichneten
+Lücken ist in der beschriebenen Form nachweisbar. Mehrere zitierte Funktionen existieren nicht.
+Punkt 7 beschreibt einen tatsächlichen Leistungsnachteil; dieser ist korrigiert.
+
+| Punkte | Ergebnis |
+|---|---|
+| 1–2: DNS-Rebinding | Gesperrte DNS-Fehler; Verbindung ausschließlich zur geprüften IP. |
+| 3: Shell-Injection | Argumentlisten und Prüfung der Ziele gegen die Netzfreigabe. |
+| 4: Report-Pfad | Zitierte Funktion fehlt; der Bericht verwendet einen festen Namen. |
+| 5: YAML | `safe_load` weist Python-Objekttags zurück. |
+| 6: Modellname | API-Bezeichner; das Beispiel zeigt keinen Dateizugriff. |
+| 7: Cache | Begrenzter Cache. Vollständiges Leeren durch LRU-Verdrängung ersetzt. |
+| 8: Redirects | Netzschutz prüft jedes Weiterleitungsziel erneut. |
+| 9–10: VM/Recherche | Zitierter Code fehlt. Der VM-Lebenszyklus besitzt eine Verriegelung. |
+| 11: Größenlimits | Schutzgrenzen; fehlende Einstellmöglichkeiten belegen keinen DoS. |
+| 12: API-Limits | Modellaufrufe begrenzt; kein universeller Begrenzer aller REST-APIs. |
+| 13: Secret-Logs | Zitierte Anweisungen fehlen; keine Zusicherung für jede Fehlerausgabe. |
+| 14: Suchanfragen | Datenfeld. Fremde Ergebnisse markiert; ausgehende private Angaben geprüft. |
+| 15–16: Typen/Defaults | Mypy und einstellbare Modelle bestehen bereits. |
+| 17: Tests | Sicherheitsprüfungen bereits vorhanden und um weitere Gegenproben ergänzt. |
+| 18: Abhängigkeiten | Versionsgrenzen, feste Pins und Audit vorhanden; keine bekannte Lücke. |
+
+Die Gegenproben ersetzen keine Live-Prüfung echter Messenger-Konten, physischer Heimnetze,
+Windows-Systeme oder eines Container-Ausbruchs. Festgeschriebene Versionen besitzen noch keine
+vollständige Liste von Download-Hashes. Keine dieser Prüfungen beweist allgemeine Fehlerfreiheit.
+
+### Bisherige Korrekturen aus 15.2.3
 
 **Neu in 15.2.3: Ollama-Auswahl repariert und 25 weitere Funktionsfehler behoben.**
 
@@ -539,7 +597,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.2.3
+aquaticy --version            # 15.2.4
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

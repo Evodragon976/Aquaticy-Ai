@@ -635,7 +635,10 @@ def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0,
     text = _MD_LINK.sub(r"\1 (\2)", text)
     text = re.sub(r"https?://[^\s<>]+", lambda match: preserve(str(match[0])), text)
     text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
-    text = re.sub(r"(\*\*|__|\*|`)", "", text)
+    text = re.sub(r"\*\*([^\n]+?)\*\*|__([^\n]+?)__",
+                  lambda match: str(match[1] or match[2]), text)
+    text = re.sub(r"(?<!\w)\*([^*\n]+)\*(?!\w)", r"\1", text)
+    text = text.replace("`", "")
     text = re.sub(r"(?m)^\s*[-*+]\s+", "• ", text)
     text = re.sub(r"(?m)^\s*\|?\s*[-: |]{3,}\s*\|?\s*$", "", text)
     text = re.sub(r"(?m)^\s*\|(.*)\|\s*$",

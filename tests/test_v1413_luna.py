@@ -273,7 +273,7 @@ def test_frames_are_read_as_headers_only() -> None:
     tcp = struct.pack("!HHIIBBHHH", 50000, 4444, 0, 0, 0x50, 0x02, 0, 0, 0)
     gelesen = secure_packets.parse_frame(_eth(0x0800, _ipv4("192.168.1.5", "10.0.0.1", 6, tcp)))
     assert gelesen == {"t": "tcp", "src": "192.168.1.5", "dst": "10.0.0.1", "sport": 50000,
-                       "dport": 4444, "syn": True, "ack": False}
+                       "dport": 4444, "syn": True, "ack": False, "seq": 0}
     frage = struct.pack("!HHHHHH", 1, 0x0100, 1, 0, 0, 0) + b"\x07example\x03com\x00" \
         + b"\x00\x01\x00\x01"
     udp = struct.pack("!HHHH", 53000, 53, 8 + len(frage), 0) + frage
@@ -365,7 +365,8 @@ def test_defense_builds_fixed_commands() -> None:
     assert win["command"].startswith("powershell") and "-LocalPort 3389" in win["command"]
     dienst = secure_defense.build("stop_service", host="192.168.1.20", service="telnet.socket",
                                   subnet=NETZ)
-    assert dienst["command"] == "sudo -n systemctl disable --now telnet.socket"
+    assert "aquaticy_priv systemctl disable --now telnet.socket" in dienst["command"]
+    assert 'id -u' in dienst["command"] and 'sudo -n "$@"' in dienst["command"]
     assert "ss -tulpn" in secure_defense.build("listeners", host="192.168.1.20",
                                                subnet=NETZ)["command"]
 

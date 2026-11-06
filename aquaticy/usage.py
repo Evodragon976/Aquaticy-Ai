@@ -71,6 +71,20 @@ def message_tokens(messages: list[dict[str, Any]]) -> int:
     return gesamt
 
 
+def reply_tokens(message: Any) -> int:
+    def value(obj: Any, name: str) -> Any:
+        return obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
+
+    calls = []
+    for call in value(message, "tool_calls") or []:
+        function = value(call, "function")
+        calls.append({"function": {"name": value(function, "name") or "",
+                                    "arguments": value(function, "arguments") or ""}})
+    thought = value(message, "reasoning_content") or value(message, "reasoning") or ""
+    return message_tokens([{"content": value(message, "content"), "tool_calls": calls}]) \
+        + tokens(thought if isinstance(thought, str) else "")
+
+
 class UsageLog:
     """Schreibt den Verbrauch mit und rechnet ihn zusammen."""
 

@@ -302,10 +302,11 @@ def test_location_flag_reaches_the_search_api(monkeypatch: pytest.MonkeyPatch) -
 
     result = runner.invoke(
         cli.app,
-        ["chat", "Cafés?", "--location", "Köln", "--lang", "at", "--no-stream"],
+        ["chat", "Cafés?", "--location", "Köln", "--lang", "de", "--country", "at",
+         "--no-stream"],
     )
     assert result.exit_code == 0
-    assert captured == {"country": "at", "lang": "at"}
+    assert captured == {"country": "at", "lang": "de"}
 
 
 def test_version_flag(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
@@ -347,7 +348,7 @@ def _fake_ollama(monkeypatch: pytest.MonkeyPatch, *, tool_calling: bool = True) 
     monkeypatch.setattr(lm, "total_memory_gb", lambda: 16.0)
     monkeypatch.setattr(lm, "gpu_hint", lambda: "")
 
-    def pull(name: str, binary: str | None = None):
+    def pull(name: str, binary: str | None = None, **kwargs):
         state["pulled"].append(name)
         yield "pulling manifest"
 

@@ -396,18 +396,23 @@ class Memory:
         text = text[:MAX_ENTRY_CHARS]
         topic = (topic or "").strip()[:80]
 
-        if self.used_bytes() > MAX_BYTES * CLEANUP_AT:
+        encrypted_topic, encrypted_text = self._cipher.encrypt(topic), self._cipher.encrypt(text)
+        incoming = len(encrypted_topic.encode()) + len(encrypted_text.encode()) + 8192
+        if self.used_bytes() + incoming > MAX_BYTES * CLEANUP_AT:
             self.make_room()
-        if self.full():
+        if self.used_bytes() + incoming > MAX_BYTES:
             raise MemoryFull(
                 f"Der Speicher ist voll ({MAX_BYTES // 1_000_000} MB). "
                 "Lösche alte Chats, Hochgeladenes oder Notizen, die du nicht mehr brauchst."
             )
 
         with closing(self._connect()) as conn, conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if self.used_bytes() + incoming > MAX_BYTES:
+                raise MemoryFull("Die neue Notiz passt nicht mehr in deinen Speicher.")
             cur = conn.execute(
                 "INSERT INTO memory (topic, text) VALUES (?, ?)",
-                (self._cipher.encrypt(topic), self._cipher.encrypt(text)),
+                (encrypted_topic, encrypted_text),
             )
             new_id = int(cur.lastrowid or 0)
             row = conn.execute("SELECT * FROM memory WHERE id = ?", (new_id,)).fetchone()
@@ -421,7 +426,7 @@ class Memory:
         Felder kann SQL nicht durchsehen. Dafuer holt die Abfrage nur ein
         begrenztes Fenster der juengsten Notizen.
         """
-        needle = (query or "").strip().lower()
+        needle = (query or "").strip().casefold()
         limit = max(1, min(limit, MAX_RECALL))
         with closing(self._connect()) as conn:
             rows = conn.execute(
@@ -432,7 +437,7 @@ class Memory:
         if not needle:
             return entries[:limit]
 
-        hits = [entry for entry in entries if needle in f"{entry.topic} {entry.text}".lower()]
+        hits = [entry for entry in entries if needle in f"{entry.topic} {entry.text}".casefold()]
         if not hits:
 
 
@@ -440,7 +445,7 @@ class Memory:
             hits = [
                 entry
                 for entry in entries
-                if any(word in f"{entry.topic} {entry.text}".lower() for word in words)
+                if any(word in f"{entry.topic} {entry.text}".casefold() for word in words)
             ]
         return hits[:limit]
 
@@ -486,10 +491,10 @@ class Memory:
         """Loescht alle hochgeladenen Dateien. (Anzahl, Bytes)"""
         folder = self.data_dir / "uploads"
         removed = freed = 0
-        if not folder.is_dir():
+        if folder.is_symlink() or not folder.is_dir():
             return 0, 0
         for path in folder.iterdir():
-            if not path.is_file():
+            if path.is_symlink() or not path.is_file():
                 continue
             try:
                 size = path.stat().st_size
@@ -517,10 +522,16 @@ class Memory:
         freed = gemeinsam(self.data_dir)
         forget(self.data_dir)
         folder = self.data_dir / "uploads"
-        if folder.is_dir():
+        if folder.is_dir() and not folder.is_symlink():
+            def modified(item: Path) -> float:
+                try:
+                    return item.stat().st_mtime
+                except OSError:
+                    return 0.0
+
             files = sorted(
-                (item for item in folder.iterdir() if item.is_file()),
-                key=lambda item: item.stat().st_mtime,
+                (item for item in folder.iterdir() if item.is_file() and not item.is_symlink()),
+                key=modified,
             )
             for path in files:
                 if self.used_bytes() <= MAX_BYTES * 0.7:

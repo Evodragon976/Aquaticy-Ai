@@ -87,6 +87,18 @@ def _feld(text: str | None) -> str:
     return " ".join(_FELD.sub("", str(text or "")).split())[:60]
 
 
+def _findings(node: ET.Element) -> list[dict[str, Any]]:
+    findings = []
+    for script in node.iter("script"):
+        identifier = str(script.get("id", ""))
+        output = str(script.get("output", ""))
+        if _SKRIPT.fullmatch(identifier) and re.search(
+                r"(?im)^\s*(?:State:\s*)?(?:LIKELY\s+)?VULNERABLE\b", output):
+            findings.append({"script": identifier,
+                             "cves": sorted(set(_CVE.findall(output)))[:10]})
+    return findings
+
+
 def parse(xml_text: str) -> list[dict[str, Any]]:
     """Liest die XML-Ausgabe von nmap. Nur bereinigte Felder kommen heraus."""
     # Schutz vor XXE und "Billion Laughs": nmap schreibt nur "<!DOCTYPE nmaprun>". Das faellt
@@ -130,19 +142,13 @@ def parse(xml_text: str) -> list[dict[str, Any]]:
                 "product": _feld(service.get("product") if service is not None else ""),
                 "version": _feld(service.get("version") if service is not None else ""),
                 "findings": []}
-            for script in port.iter("script"):
-                kennung = str(script.get("id", ""))
-                ausgabe = str(script.get("output", ""))
-                if not _SKRIPT.fullmatch(kennung):
-                    continue
-                verwundbar = bool(re.search(
-                    r"(?im)^\s*(?:State:\s*)?(?:LIKELY\s+)?VULNERABLE\b", ausgabe))
-                if verwundbar:
-                    eintrag["findings"].append({
-                        "script": kennung,
-                        "cves": sorted(set(_CVE.findall(ausgabe)))[:10]})
+            eintrag["findings"] = _findings(port)
             ports.append(eintrag)
-        hosts.append({"address": adresse, "ports": ports[:200]})
+        entry: dict[str, Any] = {"address": adresse, "ports": ports[:200]}
+        scripts = host.find("hostscript")
+        if scripts is not None:
+            entry["findings"] = _findings(scripts)
+        hosts.append(entry)
     return hosts[:256]
 
 
@@ -191,24 +197,32 @@ def run(subnet: str, targets: list[str], mode: str = "schwachstellen", *,
     network = parse_subnet(subnet)
     hosts = [h for h in parse(xml) if ipaddress.IPv4Address(h["address"]) in network
              and (str(network) in ziele or h["address"] in ziele)]
-    return {"mode": mode, "targets": ziele, "hosts": hosts,
+    effective = "dienste" if any("/" in target for target in ziele) else mode
+    limits = (" Im ganzen Netz wurden nur Dienste geprüft, keine Schwachstellen-Skripte."
+              if effective != mode else "")
+    return {"mode": effective, "requested_mode": mode, "targets": ziele, "hosts": hosts,
             "limits": "Nur sichere Prüfskripte ohne Internet. Versionen sind selbst gemeldet "
-                      "und können falsch sein. Kein Treffer heißt nicht sicher."}
+                      "und können falsch sein. Kein Treffer heißt nicht sicher." + limits}
 
 
 def events(hosts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Wichtige Befunde aus dem nmap-Ergebnis: Skripte, die eine Luecke melden."""
     befunde: list[dict[str, Any]] = []
     for host in hosts:
-        for port in host["ports"]:
+        checks = list(host["ports"])
+        if host.get("findings"):
+            checks.append({"port": 0, "product": "Host-Prüfung", "version": "",
+                           "service": "", "findings": host["findings"]})
+        for port in checks:
             dienst = " ".join(x for x in (port["product"], port["version"]) if x) \
                 or port["service"] or "unbekannter Dienst"
+            where = f"Port {port['port']}" if port["port"] else "Host-Prüfung"
             for treffer in port["findings"]:
                 cves = ", ".join(treffer["cves"]) or "ohne CVE-Nummer"
                 befunde.append({
                     "kind": "vulnerability", "level": "wichtig", "host": host["address"],
                     "port": port["port"],
-                    "text": f"nmap meldet eine Schwachstelle bei {host['address']}, Port "
-                            f"{port['port']} ({dienst}): {treffer['script']} ({cves}). "
+                    "text": f"nmap meldet eine Schwachstelle bei {host['address']}, "
+                            f"{where} ({dienst}): {treffer['script']} ({cves}). "
                             "Prüfe Updates beim Hersteller."})
     return befunde

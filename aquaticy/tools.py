@@ -2033,6 +2033,7 @@ class Toolbox:
             self.stats.sources.append(
                 {
                     "url": page.final_url or url,
+                    "requested_url": url,
                     "title": page.title,
                     "domain": domain,
                 }
@@ -2290,8 +2291,8 @@ class Toolbox:
         summary: str = "",
         start: str = "",
         end: str = "",
-        description: str = "",
-        location: str = "",
+        description: str | None = None,
+        location: str | None = None,
         whole_day: bool = False,
     ) -> dict[str, Any]:
         """Aendert einen Termin -- nach Rueckfrage."""
@@ -2305,8 +2306,8 @@ class Toolbox:
             for teil in (
                 f"Titel \u201e{summary}\u201c" if summary else "",
                 f"Zeit {start}" + (f" bis {end}" if end else "") if start else "",
-                f"Ort {location}" if location else "",
-                "Notiz" if description else "",
+                (f"Ort {location}" if location else "Ort löschen") if location is not None else "",
+                ("Notiz" if description else "Notiz löschen") if description is not None else "",
             )
             if teil
         )
@@ -2892,7 +2893,10 @@ class Toolbox:
         if name == "currency":
             basis = str(arguments.get("base") or "EUR")
             ziel = str(arguments.get("to") or "")
-            if rechte["waehrungen"] == "euro" and "EUR" not in (basis + "," + ziel).upper():
+            targets = {part.strip().upper() for part in ziel.replace(";", ",").split(",")
+                       if part.strip()}
+            if (rechte["waehrungen"] == "euro" and basis.strip().upper() != "EUR"
+                    and (not targets or targets != {"EUR"})):
                 return {"error": "Der Nutzer hat den Währungsrechner auf 'Nur von oder nach "
                                  "Euro' gestellt -- rechne über EUR."}
             return addons.currency(arguments.get("amount"), basis, ziel)
@@ -3413,7 +3417,7 @@ class Toolbox:
                 name=str(arguments.get("name", "")),
                 furniture_id=int(arguments.get("furniture_id") or 0),
                 room_id=int(arguments.get("room_id") or 0),
-                quantity=int(arguments.get("quantity") or 1),
+                quantity=int(arguments.get("quantity", 1)),
             )
         if name == "storage_edit":
             raw_quantity = arguments.get("quantity")
@@ -3449,8 +3453,10 @@ class Toolbox:
                 summary=str(arguments.get("summary", "") or ""),
                 start=str(arguments.get("start", "") or ""),
                 end=str(arguments.get("end", "") or ""),
-                description=str(arguments.get("description", "") or ""),
-                location=str(arguments.get("location", "") or ""),
+                description=(str(arguments["description"] or "")
+                             if "description" in arguments else None),
+                location=(str(arguments["location"] or "")
+                          if "location" in arguments else None),
                 whole_day=bool(arguments.get("whole_day", False)),
             )
         if name == "mail_draft":

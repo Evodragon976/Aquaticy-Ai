@@ -51,7 +51,7 @@ MAX_SPEC_VALUE_LEN = 160
 
 
 _PRICE_RE = re.compile(
-    r"(\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)"
+    r"(\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?!\d)"
 )
 _CURRENCY_SYMBOLS = {"€": "EUR", "$": "USD", "£": "GBP", "chf": "CHF", "fr.": "CHF"}
 
@@ -99,7 +99,15 @@ def parse_price(raw: Any) -> tuple[str | None, str | None]:
     """Trennt `"1.099,00 €"` in `("1.099,00", "EUR")`."""
     if raw is None:
         return None, None
-    text = str(raw).strip()
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        from decimal import Decimal
+
+        number = Decimal(str(raw))
+        if not number.is_finite():
+            return None, None
+        text = format(number, "f")
+    else:
+        text = str(raw).strip()
     if not text:
         return None, None
 
@@ -179,7 +187,10 @@ def _first_image(value: Any, base_url: str) -> str | None:
 def _offer_fields(obj: dict[str, Any]) -> tuple[str | None, str | None, str | None]:
     offers = obj.get("offers")
     if isinstance(offers, list):
-        offers = offers[0] if offers else None
+        candidates = [item for item in offers if isinstance(item, dict)]
+        offers = next((item for item in candidates if parse_price(
+            item.get("price") if item.get("price") is not None else item.get("lowPrice"))[0]
+                       is not None), candidates[0] if candidates else None)
     if not isinstance(offers, dict):
         return None, None, None
     raw_price = offers.get("price")
@@ -206,7 +217,12 @@ def product_from_jsonld(tree: HTMLParser, base_url: str) -> Product | None:
             rating = _as_float(aggregate.get("ratingValue"))
 
         specs: dict[str, str] = {}
-        brand = _text_or_none(obj.get("brand"))
+        raw_brand = obj.get("brand")
+        if isinstance(raw_brand, list) and raw_brand:
+            raw_brand = raw_brand[0]
+        if isinstance(raw_brand, dict) and raw_brand.get("name"):
+            raw_brand = raw_brand["name"]
+        brand = _text_or_none(raw_brand)
         if brand:
             specs["Marke"] = brand
         for key, label in (("gtin13", "GTIN"), ("gtin", "GTIN"), ("sku", "SKU"), ("mpn", "MPN")):
@@ -272,7 +288,30 @@ def product_from_opengraph(tree: HTMLParser, base_url: str) -> Product | None:
 
 
 def _itemprop(tree: HTMLParser | Node, prop: str) -> str | None:
-    node = tree.css_first(f'[itemprop~="{prop}"]')
+    nested = {
+        "price": {"Offer", "AggregateOffer"},
+        "priceCurrency": {"Offer", "AggregateOffer"},
+        "availability": {"Offer", "AggregateOffer"},
+        "ratingValue": {"AggregateRating"},
+    }.get(prop, set())
+    node = None
+    for candidate in tree.css(f'[itemprop~="{prop}"]'):
+        if isinstance(tree, Node):
+            parent = candidate.parent
+            blocked = False
+            while parent is not None and parent.mem_id != tree.mem_id:
+                if "itemscope" in parent.attributes:
+                    types = (parent.attributes.get("itemtype") or "").split()
+                    allowed = {f"{scheme}://schema.org/{kind}"
+                               for scheme in ("http", "https") for kind in nested}
+                    if not set(types) & allowed:
+                        blocked = True
+                        break
+                parent = parent.parent
+            if blocked or parent is None:
+                continue
+        node = candidate
+        break
     if node is None:
         return None
     attrs = node.attributes

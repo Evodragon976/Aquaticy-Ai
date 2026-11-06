@@ -144,5 +144,5 @@ def public_query(query: str) -> bool:
             continue
         return False
     forbidden = (r"(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}"
-                 r"|@|://|(?:[0-9a-f]{0,4}:){2,}|\b\S+\.(?:local|lan|internal|ts\.net)\b")
+                 r"|@|://|(?:[0-9a-f]{0,4}:){2,}|\b\S+\.(?:local|lan|internal|home\.arpa|ts\.net)\b")
     return not re.search(forbidden, query, re.I)

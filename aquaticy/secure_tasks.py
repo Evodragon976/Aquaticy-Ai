@@ -29,7 +29,7 @@ TRIGGERS: dict[str, str] = {
 }
 
 _IP = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
-_PORT = re.compile(r"\bport\s*(\d{1,5})\b", re.I)
+_PORT = re.compile(r"\bport\s*(\d+)\b", re.I)
 
 # Reihenfolge zaehlt: das Genaueste zuerst.
 _REGELN: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -74,7 +74,10 @@ def parse(text: str) -> dict[str, Any]:
                          "Gerät ins Netz kommt.“ „Sag Bescheid, wenn 192.168.1.20 offline "
                          "geht.“ „Melde jeden Malware-Verdacht.“")
     host = ""
-    for treffer in _IP.findall(roh):
+    addresses = list(dict.fromkeys(_IP.findall(roh)))
+    if len(addresses) > 1:
+        raise ValueError("Lege für jedes Gerät eine eigene Aufgabe an.")
+    for treffer in addresses:
         try:
             adresse = ipaddress.IPv4Address(treffer)
         except ValueError as exc:

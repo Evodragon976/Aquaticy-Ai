@@ -146,15 +146,23 @@ def test_windows_gets_a_hint_instead_of_a_command(monkeypatch: pytest.MonkeyPatc
 
 def test_pull_without_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(lm, "ollama_binary", lambda: None)
-    with pytest.raises(lm.LocalModelError, match="nicht installiert"):
+    def unreachable(*args: Any, **kwargs: Any) -> Any:
+        raise httpx.ConnectError("Ollama-Server nicht erreichbar")
+    monkeypatch.setattr(lm.httpx, "stream", unreachable)
+    with pytest.raises(lm.LocalModelError, match="Download ist fehlgeschlagen"):
         list(lm.pull_model("qwen2.5:7b"))
 
 
 def test_pull_streams_progress_and_detects_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeProcess:
         def __init__(self, returncode: int) -> None:
-            self.stdout = iter(["pulling manifest\n", "downloading 42%\n", "\n"])
+            import io
+
+            self.stdout = io.StringIO("pulling manifest\ndownloading 42%\n\n")
             self._returncode = returncode
+
+        def poll(self) -> int:
+            return self._returncode
 
         def wait(self) -> int:
             return self._returncode

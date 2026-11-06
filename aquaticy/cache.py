@@ -394,7 +394,7 @@ class Cache:
             row = cur.fetchone()
             if row is None:
                 return None
-            if row["expires_at"] < now:
+            if row["expires_at"] <= now:
                 cur.execute("DELETE FROM cache WHERE key = ?", (key,))
                 return None
             try:
@@ -425,20 +425,24 @@ class Cache:
         groesse = len(payload.encode("utf-8")) + len(label.encode("utf-8"))
 
 
-        if not fits(self.db_path.parent, groesse):
-            return
         with self._connect() as conn:
+            row = conn.execute(
+                "SELECT length(CAST(payload AS BLOB)) + length(CAST(label AS BLOB)) "
+                "FROM cache WHERE key = ?", (key,)).fetchone()
+            incoming = max(0, groesse - (int(row[0]) if row is not None else 0))
+            if not fits(self.db_path.parent, incoming):
+                return
             conn.execute(
                 "INSERT OR REPLACE INTO cache (key, kind, label, payload, created_at, expires_at)"
                 " VALUES (?, ?, ?, ?, ?, ?)",
                 (key, kind or key.split(":", 1)[0], label, payload, now, now + ttl_seconds),
             )
-        note_written(self.db_path.parent, groesse)
+        note_written(self.db_path.parent, incoming)
 
     def purge_expired(self) -> int:
         """Loescht abgelaufene Eintraege, gibt deren Anzahl zurueck."""
         with self._connect() as conn, closing(conn.cursor()) as cur:
-            cur.execute("DELETE FROM cache WHERE expires_at < ?", (time.time(),))
+            cur.execute("DELETE FROM cache WHERE expires_at <= ?", (time.time(),))
             return cur.rowcount
 
     def clear(self, kind: str | None = None) -> int:
@@ -744,6 +748,8 @@ class Cache:
         `recent_history` liefert schon in dieser Reihenfolge -- ein zweites
         Umdrehen wuerde den Chat rueckwaerts anzeigen.
         """
+        if not str(session_id or "").strip():
+            return []
         return self.recent_history(limit=limit, session_id=session_id)
 
     def add_note(self, text: str) -> int:

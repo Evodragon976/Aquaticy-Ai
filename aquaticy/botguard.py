@@ -208,9 +208,12 @@ class _Used:
                 self._seen.popitem(last=False)
             if seed in self._seen:
                 return False
+            if len(self._seen) >= self._max:
+                for expired in [key for key, expiry in self._seen.items() if expiry < jetzt]:
+                    self._seen.pop(expired, None)
+                if len(self._seen) >= self._max:
+                    return False
             self._seen[seed] = until
-            while len(self._seen) > self._max:
-                self._seen.popitem(last=False)
             return True
 
 
@@ -222,7 +225,8 @@ def check(proof: Any, kinds: Iterable[str]) -> bool:
     if not isinstance(proof, Mapping):
         return False
     token, nonce = proof.get("token"), proof.get("nonce")
-    if (not isinstance(token, str) or len(token) > 400 or not isinstance(nonce, str)
+    if (not isinstance(token, str) or len(token) > 400 or not token.isascii()
+            or not isinstance(nonce, str)
             or not _NONCE.fullmatch(nonce)):
         return False
     roh, _, signatur = token.partition(".")

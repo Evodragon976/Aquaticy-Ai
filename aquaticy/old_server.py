@@ -28,11 +28,15 @@ def running_version(port: int, timeout: float = 2.0) -> str:
     """Die Version, die auf diesem Rechner unter *port* antwortet -- "" wenn keine."""
     try:
         with httpx.Client(timeout=timeout, trust_env=False, follow_redirects=False) as client:
-            antwort = client.get(f"http://127.0.0.1:{int(port)}/",
-                                 headers={"User-Agent": "aquaticy-startcheck"})
+            from aquaticy.netguard import read_response
+
+            with client.stream("GET", f"http://127.0.0.1:{int(port)}/",
+                               headers={"User-Agent": "aquaticy-startcheck"}) as response:
+                raw = read_response(response, 400_000, time.monotonic() + timeout, truncate=True)
+                page = raw.decode(response.encoding or "utf-8", "replace")
     except (httpx.HTTPError, ValueError, OSError):
         return ""
-    treffer = _VERSION.search(antwort.text[:400_000])
+    treffer = _VERSION.search(page)
     return treffer.group(1) if treffer else ""
 
 

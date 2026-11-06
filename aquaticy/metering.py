@@ -349,8 +349,7 @@ def reserve_work(settings: Any, kind: str, amount: float = 1.0) -> Reservation:
 
 def _counted(messages: Any, response: Any) -> tuple[int, int]:
     """Die Zahlen des Anbieters, sonst eine Schaetzung aus dem Text."""
-    from aquaticy.usage import message_tokens, tokens
-
+    from aquaticy.usage import message_tokens, reply_tokens
     echt = usage_of(getattr(response, "usage", None))
     if echt is not None:
         return echt
@@ -358,10 +357,10 @@ def _counted(messages: Any, response: Any) -> tuple[int, int]:
         rein = message_tokens(messages if isinstance(messages, list) else [])
     except Exception:
         rein = 0
-    text = ""
+    output = 0
     with contextlib.suppress(Exception):
-        text = str(response.choices[0].message.content or "")
-    return rein, tokens(text)
+        output = reply_tokens(response.choices[0].message)
+    return rein, output
 
 
 def prepare_messages(settings: Any, model: str, messages: Any) -> Any:

@@ -380,6 +380,8 @@ class RateLimiter:
         with self._lock:
             if len(self._events) >= self.SWEEP_AT:
                 self._sweep(now)
+            if key not in self._events and len(self._events) >= self.SWEEP_AT:
+                return False
             events = self._events[key]
             while events and now - events[0] >= self.window:
                 events.popleft()
@@ -1068,7 +1070,7 @@ class AuthStore:
                 raise ValueError("Das Passwort wurde inzwischen geändert. Bitte melde dich neu an.")
             if self.single and self._owner_id(conn) != account.id:
                 raise ValueError("Mit dem Einzelkonto meldet sich nur das eine Konto an.")
-            conn.execute("DELETE FROM sessions WHERE expires_at < ?", (now,))
+            conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now,))
             conn.execute(
                 "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?)",
                 (
@@ -1100,7 +1102,7 @@ class AuthStore:
             row = conn.execute(
                 "SELECT users.*, sessions.ip_hash AS _ip FROM sessions "
                 "JOIN users ON users.id=sessions.user_id "
-                "WHERE token_hash=? AND device_hash=? AND expires_at>=?",
+                "WHERE token_hash=? AND device_hash=? AND expires_at>?",
                 (_secret_hash(token, self._pepper), _secret_hash(device, self._pepper), now),
             ).fetchone()
             if row is not None and self.single and self._owner_id(conn) != str(row["id"]):
@@ -1384,7 +1386,7 @@ class AuthStore:
     def session_count(self, user_id: str) -> int:
         with self._connect() as conn:
             (anzahl,) = conn.execute(
-                "SELECT COUNT(*) FROM sessions WHERE user_id=? AND expires_at>=?",
+                "SELECT COUNT(*) FROM sessions WHERE user_id=? AND expires_at>?",
                 (str(user_id), time.time())).fetchone()
         return int(anzahl)
 

@@ -191,7 +191,7 @@ def native_base(base_url: str) -> str:
 def server_running(base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> bool:
     """Antwortet unter *base_url* ein Ollama-Server?"""
     try:
-        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=timeout)
+        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=timeout, trust_env=False)
         payload = response.json() if response.status_code == 200 else None
     except (httpx.HTTPError, ValueError):
         return False
@@ -205,7 +205,7 @@ def _tag_list(base_url: str) -> list[dict[str, Any]]:
     Text): bis dahin warf das einen AttributeError bis in ``/api/models``.
     """
     try:
-        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=5)
+        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=5, trust_env=False)
         if response.status_code != 200:
             return []
         payload = response.json()
@@ -241,11 +241,11 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
     value = environment.get("OLLAMA_NUM_PARALLEL", "")
     if not _parallel(value):
         environment["OLLAMA_NUM_PARALLEL"] = str(PARALLEL)
+    if server_running(base_url):
+        return True
     binary = ollama_binary()
     if binary is None:
         return False
-    if server_running(base_url):
-        return True
 
 
 
@@ -302,6 +302,52 @@ def _default_runner(command: list[str]) -> int:
 
 
 
+def _pull_http(name: str, base_url: str) -> Iterator[str]:
+    pending = b""
+    successful = False
+    deadline = time.monotonic() + 3600
+    try:
+        with httpx.stream("POST", f"{native_base(base_url)}/api/pull",
+                          json={"model": name, "stream": True}, timeout=60,
+                          trust_env=False, follow_redirects=False,
+                          headers={"Accept-Encoding": "identity"}) as response:
+            if not 200 <= response.status_code < 300:
+                raise LocalModelError(f"Ollama antwortet mit {response.status_code}.")
+            for chunk in response.iter_bytes(chunk_size=4096):
+                if time.monotonic() >= deadline:
+                    raise LocalModelError("Der Modell-Download hat zu lange gebraucht.")
+                pending += chunk
+                while b"\n" in pending:
+                    line, pending = pending.split(b"\n", 1)
+                    if len(line) > 65536:
+                        raise LocalModelError("Die Ollama-Antwort ist zu groß.")
+                    if not line.strip():
+                        continue
+                    data = json.loads(line)
+                    if not isinstance(data, dict):
+                        raise LocalModelError("Ollama hat keinen Download-Status geliefert.")
+                    if data.get("error"):
+                        raise LocalModelError(str(data["error"]))
+                    status = str(data.get("status") or "")
+                    successful = status == "success"
+                    if status:
+                        yield status
+                if len(pending) > 65536:
+                    raise LocalModelError("Die Ollama-Antwort ist zu groß.")
+            if pending.strip():
+                data = json.loads(pending)
+                if not isinstance(data, dict) or data.get("error"):
+                    raise LocalModelError("Ollama konnte das Modell nicht laden.")
+                status = str(data.get("status") or "")
+                successful = status == "success"
+                if status:
+                    yield status
+    except (httpx.HTTPError, ValueError, UnicodeError) as exc:
+        raise LocalModelError("Der Ollama-Download ist fehlgeschlagen.") from exc
+    if not successful:
+        raise LocalModelError("Ollama hat den Download nicht abgeschlossen.")
+
+
 def pull_model(
     name: str, binary: str | None = None, *, base_url: str = DEFAULT_OLLAMA_URL
 ) -> Iterator[str]:
@@ -311,11 +357,11 @@ def pull_model(
         LocalModelError: Wenn Ollama fehlt oder der Download scheitert.
     """
     executable = binary or ollama_binary()
-    if executable is None:
-        raise LocalModelError("Ollama ist nicht installiert.")
-
     if not name or name.startswith("-") or any(ord(char) < 32 for char in name):
         raise LocalModelError("Ungültiger Ollama-Modellname.")
+    if executable is None:
+        yield from _pull_http(name, base_url)
+        return
     process = subprocess.Popen(
         [executable, "pull", name],
         stdout=subprocess.PIPE,
@@ -324,15 +370,29 @@ def pull_model(
         bufsize=1,
         env=dict(os.environ, OLLAMA_HOST=base_url),
     )
-    assert process.stdout is not None
-    last_line = ""
-    for line in process.stdout:
-        line = line.strip()
-        if line:
-            last_line = line
-            yield line
-    if process.wait() != 0:
-        raise LocalModelError(f"`ollama pull {name}` fehlgeschlagen: {last_line or 'kein Grund'}")
+    try:
+        assert process.stdout is not None
+        last_line = ""
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                last_line = line
+                yield line
+        if process.wait() != 0:
+            raise LocalModelError(
+                f"`ollama pull {name}` fehlgeschlagen: {last_line or 'kein Grund'}")
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        if process.stdout is not None:
+            process.stdout.close()
+
+
 
 
 def local_name(model_id: str) -> str:
@@ -351,6 +411,9 @@ def local_name(model_id: str) -> str:
 def _ohne_latest(name: str) -> str:
     """`gemma3` und `gemma3:latest` sind dasselbe Modell."""
     text = str(name or "").strip()
+    if text.lower().startswith("registry.ollama.ai/"):
+        text = text[len("registry.ollama.ai/"):]
+    text = text.removeprefix("library/")
     return text[: -len(":latest")] if text.endswith(":latest") else text
 
 
@@ -377,7 +440,7 @@ def model_is_loaded(model_id: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool |
 def loaded_models(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
     """Modelle, die gerade im Speicher liegen (`ollama ps`)."""
     try:
-        response = httpx.get(f"{native_base(base_url)}/api/ps", timeout=5)
+        response = httpx.get(f"{native_base(base_url)}/api/ps", timeout=5, trust_env=False)
         if response.status_code != 200:
             return []
         payload = response.json()
@@ -401,7 +464,7 @@ def unload_model(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool:
         response = httpx.post(
             f"{native_base(base_url)}/api/generate",
             json={"model": name, "keep_alive": 0},
-            timeout=30,
+            timeout=30, trust_env=False,
         )
     except httpx.HTTPError:
         return False
@@ -1097,7 +1160,10 @@ def verify_vision(model_id: str, api_base: str = DEFAULT_OLLAMA_URL) -> tuple[bo
     answer = (response.choices[0].message.content or "").strip()
     if not answer:
         return False, "Das Modell hat nichts geantwortet."
-    if any(word in answer.lower() for word in PROBE_COLOR_WORDS):
+    colours = r"(?:rot(?:e|en|er|es|em)?|red|rouge|rosso)"
+    negated = re.search(r"\b(?:nicht|not|kein(?:e[rmns]?)?|no|non|pas)\s+" + colours
+                        + r"\b", answer, re.I)
+    if re.search(r"\b" + colours + r"\b", answer, re.I) and not negated:
         return True, f"Testbild erkannt (Antwort: {answer[:40]})"
     return False, (
         f"Das Modell hat das Testbild nicht erkannt (Antwort: {answer[:60]}). "

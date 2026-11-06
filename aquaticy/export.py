@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import html
 import re
@@ -160,19 +161,19 @@ def to_markdown(turns: list[Turn], image_map: dict[str, str] | None = None) -> s
         lines.append("")
 
         for product in turn.products:
-            lines.append(f"### {product.name}")
+            lines.append(f"### {_md_text(product.name)}")
             if product.image_url:
                 target = image_map.get(product.image_url) or safe_link(product.image_url)
                 if target:
                     lines.append(f"![{_md_text(product.name)}]({_md_url(target)})")
                     lines.append("")
-            lines.append(f"- **Preis:** {product.price_display()}")
+            lines.append(f"- **Preis:** {_md_text(product.price_display())}")
             if product.rating is not None:
                 lines.append(f"- **Bewertung:** {product.rating}")
             if product.availability:
-                lines.append(f"- **Verfuegbarkeit:** {product.availability}")
+                lines.append(f"- **Verfuegbarkeit:** {_md_text(product.availability)}")
             for key, value in product.specs.items():
-                lines.append(f"- **{key}:** {value}")
+                lines.append(f"- **{_md_text(key)}:** {_md_text(value)}")
             label = product.source_domain or safe_link(product.url) or 'Quelle'
             lines.append(f"- **Quelle:** [{_md_text(label)}]"
                          f"({_md_url(safe_link(product.url))})")
@@ -413,20 +414,35 @@ def export(
 
     target = path or default_path(turns, fmt, directory or Path.cwd())
     target.parent.mkdir(parents=True, exist_ok=True)
+    if path is None:
+        base, counter = target, 1
+        while True:
+            try:
+                with target.open("x", encoding="utf-8"):
+                    pass
+                break
+            except FileExistsError:
+                counter += 1
+                target = base.with_name(f"{base.stem}-{counter}{base.suffix}")
+    try:
+        image_map: dict[str, str] = {}
+        if with_images and fmt in ("html", "md"):
+            asset_dir = target.with_suffix("") / "bilder"
+            image_map = {
 
-    image_map: dict[str, str] = {}
-    if with_images and fmt in ("html", "md"):
-        asset_dir = target.with_suffix("") / "bilder"
-        image_map = {
 
 
+                url: (Path(asset_dir.parent.name) / "bilder" / name).as_posix()
+                for url, name in download_images(turns, asset_dir).items()
+            }
 
-            url: (Path(asset_dir.parent.name) / "bilder" / name).as_posix()
-            for url, name in download_images(turns, asset_dir).items()
-        }
-
-    if fmt == "csv":
-        return write_csv(turns, target)
-    content = to_html(turns, image_map) if fmt == "html" else to_markdown(turns, image_map)
-    target.write_text(content, encoding="utf-8")
-    return target
+        if fmt == "csv":
+            return write_csv(turns, target)
+        content = to_html(turns, image_map) if fmt == "html" else to_markdown(turns, image_map)
+        target.write_text(content, encoding="utf-8")
+        return target
+    except BaseException:
+        if path is None:
+            with contextlib.suppress(OSError):
+                target.unlink()
+        raise

@@ -53,6 +53,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import re
 import threading
 import time
@@ -1530,7 +1531,8 @@ WMO = {
 
 def _wetterlage(code: Any) -> str:
     """Der WMO-Wettercode als Wort ("unbekannt", wenn er fehlt oder fremd ist)."""
-    if isinstance(code, bool) or not isinstance(code, (int, float)):
+    if (isinstance(code, bool) or not isinstance(code, (int, float))
+            or not math.isfinite(code) or int(code) != code):
         return "unbekannt"
     return WMO.get(int(code), "unbekannt")
 
@@ -1552,12 +1554,17 @@ def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) ->
         geo = client.get(OPEN_METEO_GEO, params={"name": name.strip(), "count": 5,
                                                  "language": "de", "format": "json"})
         geo.raise_for_status()
-        orte = (geo.json() or {}).get("results") or []
+        raw_places = _objekt(geo.json()).get("results")
+        orte = [item for item in raw_places if isinstance(item, dict)] \
+            if isinstance(raw_places, list) else []
         if zusatz.strip():
-            passend = [o for o in orte if zusatz.strip().lower() in " ".join(
-                str(o.get(k) or "") for k in ("country", "admin1", "admin2", "country_code")
-            ).lower()]
-            orte = passend or orte
+            suffix = zusatz.strip().casefold()
+            if len(suffix) == 2 and suffix.isalpha():
+                orte = [o for o in orte if str(o.get("country_code") or "").casefold() == suffix]
+            else:
+                orte = [o for o in orte if any(
+                    suffix in str(o.get(k) or "").casefold()
+                    for k in ("country", "admin1", "admin2"))]
         if not orte:
             return {"error": f"Einen Ort '{ort}' kennt Open-Meteo nicht."}
         treffer = orte[0]
@@ -1571,19 +1578,20 @@ def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) ->
             "timezone": "auto", "forecast_days": tage,
         })
         vorhersage.raise_for_status()
-        daten = vorhersage.json() or {}
+        daten = _objekt(vorhersage.json())
     except (httpx.HTTPError, ValueError, KeyError) as exc:
         return {"error": f"Open-Meteo nicht erreichbar ({type(exc).__name__})."}
     finally:
         if eigener:
             client.close()
-    jetzt = daten.get("current") or {}
-    taeglich = daten.get("daily") or {}
+    jetzt = _objekt(daten.get("current"))
+    taeglich = _objekt(daten.get("daily"))
     tage_liste = []
-    for i, datum in enumerate(taeglich.get("time") or []):
+    dates = taeglich.get("time")
+    for i, datum in enumerate(dates if isinstance(dates, list) else []):
         def feld(name: str, i: int = i) -> Any:
             werte = taeglich.get(name) or []
-            return werte[i] if i < len(werte) else None
+            return werte[i] if isinstance(werte, list) and i < len(werte) else None
 
         tage_liste.append({
             "datum": datum, "wetter": _wetterlage(feld("weather_code")),
@@ -1761,7 +1769,11 @@ def currency(amount: Any = 1, base: str = "EUR", to: str = "",
     finally:
         if eigener:
             client.close()
-    kurse = _objekt(daten.get("rates"))
+    kurse = {code: rate for code, rate in _objekt(daten.get("rates")).items()
+             if isinstance(rate, (int, float)) and not isinstance(rate, bool)
+             and math.isfinite(rate) and rate > 0 and math.isfinite(betrag * rate)}
+    if von in ziele:
+        kurse[von] = 1.0
     return {
         "betrag": betrag, "von": von, "stand": daten.get("date"),
         "ergebnis": {code: round(betrag * float(kurs), 4) for code, kurs in kurse.items()
@@ -1828,7 +1840,9 @@ def _text(element: ET.Element | None) -> str:
 
 
 def _strip_html(text: str) -> str:
-    return " ".join(re.sub(r"<[^>]+>", " ", text or "").split())
+    from html import unescape
+
+    return " ".join(unescape(re.sub(r"<[^>]+>", " ", text or "")).split())
 
 
 def _hat_dtd(data: bytes) -> bool:
@@ -1858,6 +1872,16 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
         raise ValueError("Feed mit DTD/Entitaeten -- wird nicht gelesen.")
     wurzel = ET.fromstring(data)
     eintraege: list[dict[str, Any]] = []
+    bases: dict[ET.Element, str] = {}
+    pending = [(wurzel, quelle)]
+    while pending:
+        element, parent_base = pending.pop()
+        xml_base = element.get("{http://www.w3.org/XML/1998/namespace}base", "")
+        current_base = urljoin(parent_base, xml_base)
+        if len(current_base) > 8192:
+            raise ValueError("Die Basisadresse im Feed ist zu lang.")
+        bases[element] = current_base
+        pending.extend((child, current_base) for child in element)
     for element in wurzel.iter():
         art = _local(element.tag)
         if art not in ("item", "entry"):
@@ -1867,13 +1891,33 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
         def erstes(*namen: str, felder: dict[str, ET.Element] = felder) -> ET.Element | None:
 
             for name in namen:
-                if felder.get(name) is not None:
+                if felder.get(name) is not None and _text(felder[name]):
                     return felder[name]
             return None
 
-        link = ""
-        if "link" in felder:
-            link = felder["link"].get("href") or _text(felder["link"])
+        links = [child for child in element if _local(child.tag) == "link"]
+        link_node = next((child for child in links if child.get("rel", "alternate") == "alternate"
+                          and child.get("type", "text/html") in
+                          ("text/html", "application/xhtml+xml")),
+                         links[0] if links else None)
+        link = (link_node.get("href") or _text(link_node)) if link_node is not None else ""
+        if not link:
+            guid = erstes("guid")
+            candidate = _text(guid)
+            if (guid is not None and guid.get("isPermaLink", "true").lower() == "true"
+                    and candidate.startswith(("http://", "https://"))):
+                link = candidate
+
+        def readable(node: ET.Element | None, *, html_default: bool = False) -> str:
+            if node is None:
+                return ""
+            value = _text(node)
+            content_type = node.get("type", "html" if html_default else "text").lower()
+            if content_type in ("xhtml", "application/xhtml+xml"):
+                value = ET.tostring(node, encoding="unicode", method="html")
+            return (_strip_html(value) if content_type in
+                    ("html", "xhtml", "text/html", "application/xhtml+xml") else value)
+
         datum = _text(erstes("pubdate", "updated", "published", "date"))
         zeit = 0.0
         with contextlib.suppress(Exception):
@@ -1884,11 +1928,13 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
 
                 zeit = datetime.fromisoformat(datum.replace("Z", "+00:00")).timestamp()
         eintraege.append({
-            "titel": _kurz(_text(felder.get("title")), 300),
-            "link": urljoin(quelle, link) if link else "",
+            "titel": _kurz(readable(felder.get("title")), 300),
+            "link": urljoin(bases[link_node] if link_node is not None else bases[element], link)
+            if link else "",
             "datum": datum,
-            "zusammenfassung": _kurz(_strip_html(_text(
-                erstes("description", "summary", "content"))), 400),
+            "zusammenfassung": _kurz(readable(
+                erstes("description", "summary", "content", "encoded"),
+                html_default=art == "item"), 400),
             "quelle": urlparse(quelle).hostname or quelle,
             "_zeit": zeit,
         })

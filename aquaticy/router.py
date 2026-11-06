@@ -103,9 +103,14 @@ _cache_lock = threading.Lock()
 
 
 def _staerkstes(settings: Any, zweck: str) -> str:
+    from aquaticy.judgecache import cache_key
     from aquaticy.system import strongest_model
 
-    schluessel = f"{getattr(settings, 'data_dir', '')}|{getattr(settings, 'model', '')}|{zweck}"
+    schluessel = cache_key(
+        str(getattr(settings, "data_dir", "")), zweck,
+        [getattr(settings, field, "") for field in (
+            "model", "code_model", "subagent_model", "api_base", "api_base_for", "own_api_base")],
+        getattr(settings, "api_keys", {}), sorted(getattr(settings, "own_key_names", ()) or ()))
     with _cache_lock:
         treffer = _cache.get(schluessel)
         if treffer and time.monotonic() - treffer[0] < _CACHE_TTL:

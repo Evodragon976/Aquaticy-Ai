@@ -292,19 +292,26 @@ SIGNATURE = "[Aquaticy]"
 
 
 def message_parts(text: str) -> list[str]:
-    teile = split_text(text)
-    return [t if i == 0 else f"{SIGNATURE} {t}" for i, t in enumerate(teile)]
+    prefix = f"{SIGNATURE} "
+    teile = split_text(text, MAX_SEND_CHARS - len(prefix))
+    return [t if i == 0 else prefix + t for i, t in enumerate(teile)]
 
 
 def split_text(text: str, limit: int = MAX_SEND_CHARS) -> list[str]:
     """Teilt einen langen Text an Zeilen- oder Wortgrenzen."""
-    text = str(text or "").strip()
+    text = str(text or "")
+    if not text.strip():
+        return []
+    if type(limit) is not int or limit < 1:
+        raise ValueError("Die Nachrichtenlänge muss eine positive ganze Zahl sein.")
     teile: list[str] = []
     while len(text) > limit:
-        schnitt = max(text.rfind("\n", 0, limit), text.rfind(" ", 0, limit))
-        schnitt = schnitt if schnitt > limit // 2 else limit
-        teile.append(text[:schnitt].rstrip())
-        text = text[schnitt:].lstrip()
+        boundary = text.rfind("\n", 0, limit)
+        if boundary < 0:
+            boundary = text.rfind(" ", 0, limit)
+        schnitt = boundary + 1 if boundary >= 0 else limit
+        teile.append(text[:schnitt])
+        text = text[schnitt:]
     if text:
         teile.append(text)
     return teile
@@ -775,21 +782,25 @@ class SignalTransport(Transport):
             stderr=subprocess.DEVNULL, stdin=subprocess.PIPE, text=True, bufsize=1)
         self._proc = proc
         self._set(CONNECTED, who=nummer)
-        for zeile in proc.stdout or ():
-            try:
-                meldung = json.loads(zeile)
-            except ValueError:
-                continue
-            if isinstance(meldung, dict) and meldung.get("method") == "receive":
-                self._deliver(parse_signal(meldung.get("params"), nummer))
-            elif isinstance(meldung, dict):
-                with self._send_lock:
-                    reply_id = meldung.get("id")
-                    pending = self._pending_rpc.get(reply_id) if isinstance(reply_id, int) else None
-                if pending:
-                    pending[1].append(meldung)
-                    pending[0].set()
-        proc.wait()
+        try:
+            for zeile in proc.stdout or ():
+                try:
+                    meldung = json.loads(zeile)
+                except ValueError:
+                    continue
+                if isinstance(meldung, dict) and meldung.get("method") == "receive":
+                    self._deliver(parse_signal(meldung.get("params"), nummer))
+                elif isinstance(meldung, dict):
+                    with self._send_lock:
+                        reply_id = meldung.get("id")
+                        pending = (self._pending_rpc.get(reply_id)
+                                   if isinstance(reply_id, int) else None)
+                    if pending:
+                        pending[1].append(meldung)
+                        pending[0].set()
+            proc.wait()
+        finally:
+            self._wake_rpc()
         return "signal-cli wurde beendet." if not self._stopping.is_set() else ""
 
     def stop(self) -> None:
@@ -797,6 +808,7 @@ class SignalTransport(Transport):
         proc = self._proc
         if proc is not None:
             _kill(proc)
+        self._wake_rpc()
         thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=10)
@@ -810,6 +822,12 @@ class SignalTransport(Transport):
 
     def own_chat(self) -> str:
         return "self" if clean_number(self.store.who("signal")) else ""
+
+    def _wake_rpc(self) -> None:
+        with self._send_lock:
+            pending = list(self._pending_rpc.values())
+        for event, _ in pending:
+            event.set()
 
     def _rpc(self, methode: str, parameter: dict[str, Any], *, wait: bool = False) -> None:
         proc = self._proc
@@ -834,7 +852,7 @@ class SignalTransport(Transport):
             try:
                 if (not done.wait(60) or not result or "error" in result[0]
                         or "result" not in result[0]):
-                    raise RuntimeError("Signal hat die Sprachnachricht nicht bestätigt.")
+                    raise RuntimeError("Signal hat die Nachricht nicht bestätigt.")
             finally:
                 with self._send_lock:
                     self._pending_rpc.pop(request_id, None)
@@ -880,7 +898,7 @@ class SignalTransport(Transport):
         else:
             raise ValueError("Ungueltiger Chat.")
         for teil in message_parts(text):
-            self._rpc("send", {**ziel, "message": teil})
+            self._rpc("send", {**ziel, "message": teil}, wait=True)
 
     def mark_read(self, nachricht: Incoming) -> None:
         """Gelesen-Meldung an den Absender (signal-cli: sendReceipt)."""
