@@ -75,6 +75,9 @@ def normalize_url(url: str) -> str:
         return ""
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return ""
+    if (parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment):
+        return ""
     if port is None and parsed.scheme == "http" and parsed.hostname:
         url = parsed._replace(netloc=f"{parsed.netloc}:{STORAGE_PORT}").geturl()
     return url

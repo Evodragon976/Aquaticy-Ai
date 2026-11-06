@@ -14,6 +14,7 @@ nichts herauskommt.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -66,8 +67,13 @@ def _absolute(url: Any, base_url: str) -> str | None:
     """
     if not isinstance(url, str) or not url.strip():
         return None
-    ziel = urljoin(base_url, url.strip())
-    return ziel if urlparse(ziel).scheme.lower() in ("http", "https") else None
+    try:
+        ziel = urljoin(base_url, url.strip())
+        parsed = urlparse(ziel)
+        _ = parsed.port
+        return ziel if parsed.scheme.lower() in ("http", "https") and parsed.hostname else None
+    except ValueError:
+        return None
 
 
 def _text_or_none(value: Any) -> str | None:
@@ -115,7 +121,8 @@ def parse_price(raw: Any) -> tuple[str | None, str | None]:
 
 def _as_float(value: Any) -> float | None:
     try:
-        return float(str(value).replace(",", "."))
+        result = float(str(value).replace(",", "."))
+        return result if math.isfinite(result) else None
     except (TypeError, ValueError):
         return None
 
@@ -162,7 +169,7 @@ def _first_image(value: Any, base_url: str) -> str | None:
     if isinstance(value, str):
         return _absolute(value, base_url)
     if isinstance(value, list) and value:
-        return _first_image(value[0], base_url)
+        return next((image for item in value if (image := _first_image(item, base_url))), None)
     if isinstance(value, dict):
         return _first_image(value.get("url") or value.get("contentUrl"), base_url)
     return None
@@ -174,7 +181,8 @@ def _offer_fields(obj: dict[str, Any]) -> tuple[str | None, str | None, str | No
         offers = offers[0] if offers else None
     if not isinstance(offers, dict):
         return None, None, None
-    price, currency = parse_price(offers.get("price") or offers.get("lowPrice"))
+    raw_price = offers.get("price")
+    price, currency = parse_price(raw_price if raw_price is not None else offers.get("lowPrice"))
     currency = _text_or_none(offers.get("priceCurrency")) or currency
     availability = _text_or_none(offers.get("availability"))
     if availability:
@@ -262,7 +270,7 @@ def product_from_opengraph(tree: HTMLParser, base_url: str) -> Product | None:
 
 
 
-def _itemprop(tree: HTMLParser, prop: str) -> str | None:
+def _itemprop(tree: HTMLParser | Node, prop: str) -> str | None:
     node = tree.css_first(f'[itemprop="{prop}"]')
     if node is None:
         return None
@@ -276,18 +284,21 @@ def _itemprop(tree: HTMLParser, prop: str) -> str | None:
 
 def product_from_microdata(tree: HTMLParser, base_url: str) -> Product | None:
     """Fallback ueber `itemprop`-Attribute."""
-    name = _itemprop(tree, "name")
+    scope = tree.css_first('[itemscope][itemtype~="https://schema.org/Product"], '
+                           '[itemscope][itemtype~="http://schema.org/Product"]')
+    context: HTMLParser | Node = scope if scope is not None else tree
+    name = _itemprop(context, "name")
     if not name:
         return None
-    price, currency = parse_price(_itemprop(tree, "price"))
+    price, currency = parse_price(_itemprop(context, "price"))
     return Product(
         name=name.strip(),
         url=base_url,
-        image_url=_absolute(_itemprop(tree, "image"), base_url),
+        image_url=_absolute(_itemprop(context, "image"), base_url),
         price=price,
-        currency=_itemprop(tree, "priceCurrency") or currency,
-        rating=_as_float(_itemprop(tree, "ratingValue")),
-        availability=_itemprop(tree, "availability"),
+        currency=_itemprop(context, "priceCurrency") or currency,
+        rating=_as_float(_itemprop(context, "ratingValue")),
+        availability=_itemprop(context, "availability"),
         source_domain=domain_of(base_url),
     )
 

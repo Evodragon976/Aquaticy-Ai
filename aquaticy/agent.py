@@ -1694,7 +1694,8 @@ class Agent:
         from aquaticy.local_model import can
 
         modell = model or self.active_model
-        return can(modell, "tools", self.settings.ollama_base(modell)) is not False
+        return can(modell, "tools", self.settings.ollama_base(modell),
+                   str(self.settings.data_dir.resolve())) is not False
 
     def _ask_before_research(self, frage: str, optionen: Any = (),
                              weitere: Any = ()) -> bool:
@@ -3104,7 +3105,9 @@ class Agent:
                 from aquaticy.local_model import missing_capability, note_missing
 
                 fehlt = missing_capability(detail)
-                if fehlt and note_missing(self.active_model, fehlt):
+                if fehlt and note_missing(
+                        self.active_model, fehlt, self.settings.ollama_base(self.active_model),
+                        str(self.settings.data_dir.resolve())):
                     if fehlt == "tools":
                         self._emit("note", text=(
                             f"{self.active_model} kann keine Werkzeuge benutzen – Aquaticy "

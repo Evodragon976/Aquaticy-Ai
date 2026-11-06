@@ -237,6 +237,21 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
     rest = sorted((i for i in ids if i not in vorne), key=lambda i: ("nemotron" not in i, i))
     info["models"] = [{"id": "nvidia_nim/" + i, "label": i.split("/", 1)[-1]}
                       for i in (vorne + rest)[:MAX_MODELS]]
+    if probe.status_code not in (200, 429):
+        for model in (vorne + rest)[:3]:
+            if model == _NVIDIA_FIRST[1]:
+                continue
+            probe = _probe(http, f"{NVIDIA_API}/chat/completions", key, model)
+            if probe.status_code in (401, 403):
+                raise _fehler(probe, "NVIDIA NIM")
+            if probe.status_code in (200, 429):
+                break
+        if probe.status_code not in (200, 429):
+            raise _fehler(probe, "NVIDIA NIM")
+        info["tokens"] = _tokens(probe.headers)
+        if probe.status_code == 429:
+            info["warning"] = "Grenze erreicht. In einer Minute geht es weiter."
+
     if info["tokens"] is None:
         info["note"] = ("Wie viel du noch hast, sagt NVIDIA hier nicht. Kostenlos gehen 40 Fragen "
                         "pro Minute.")

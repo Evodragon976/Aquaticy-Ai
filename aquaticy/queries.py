@@ -128,11 +128,12 @@ def mentions_place(query: str, location: str) -> bool:
     if not ort:
         return True
     text = (query or "").lower()
-    if ort in text:
+    if re.search(r"(?<!\w)" + re.escape(ort) + r"(?!\w)", text):
         return True
 
 
-    return any(len(teil) > 3 and teil in text for teil in ort.split())
+    return any(len(teil) > 3 and re.search(r"(?<!\w)" + re.escape(teil) + r"(?!\w)", text)
+               for teil in ort.split())
 
 
 def with_place(query: str, location: str) -> str:

@@ -88,10 +88,11 @@ def safe_link(url: object) -> str:
     """
     text = str(url or "").strip()
     try:
-        schema = httpx.URL(text).scheme.lower()
+        parsed = httpx.URL(text)
+        schema = parsed.scheme.lower()
     except (httpx.InvalidURL, TypeError, ValueError):
         return ""
-    return text if schema in ("http", "https") else ""
+    return text if schema in ("http", "https") and parsed.host else ""
 
 
 def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -> dict[str, str]:

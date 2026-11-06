@@ -98,7 +98,7 @@ def digits(text: Any) -> str:
 def clean_number(text: Any) -> str:
     """Eine Telefonnummer als "+49..." -- oder "" (nur geprueft, nie geraten)."""
     roh = str(text or "").strip()
-    nummer = "+" + digits(roh) if roh.startswith("+") else ""
+    nummer = "+" + digits(roh) if re.fullmatch(r"\+[0-9 ()/.-]+", roh) else ""
     return nummer if NUMBER_RE.fullmatch(nummer) else ""
 
 

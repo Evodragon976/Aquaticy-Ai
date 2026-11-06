@@ -2624,8 +2624,11 @@ def _messenger_orders(get_session: Callable[[], Any], account: Any
                 from aquaticy import coworker as coworker_mod
 
                 sitzung = get_session()
-                if coworker_mod.CoworkerStore(sitzung.settings().db_path).by_name(name) is None:
-                    return None
+                try:
+                    if coworker_mod.CoworkerStore(sitzung.settings().db_path).by_name(name) is None:
+                        return None
+                except coworker_mod.CoworkerError as exc:
+                    return _order_reply("[Aquaticy]", text, str(exc))
             return coworker_messenger_order(get_session(), account, name, inhalt, text)
         return None
 
@@ -2721,7 +2724,10 @@ def coworker_messenger_order(session: Any, account: Any, name: str, inhalt: str,
     from aquaticy import coworker as coworker_mod
 
     store = coworker_mod.CoworkerStore(session.settings().db_path)
-    kollege = store.by_name(name)
+    try:
+        kollege = store.by_name(name)
+    except coworker_mod.CoworkerError as exc:
+        return _order_reply("[Aquaticy]", auftrag, str(exc))
     if kollege is None:
         return _order_reply("[Aquaticy]", auftrag, f"Einen Coworker „{name[:40]}“ gibt es "
                             "nicht.")

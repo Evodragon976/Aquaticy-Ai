@@ -45,6 +45,7 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 import threading
 import time
 from collections.abc import Callable
@@ -620,8 +621,19 @@ def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0,
     Kennung :data:`SIGNATURE`.
     """
     text = str(antwort or "").replace("\r", "")
+    protected: list[str] = []
+    marker = "AQUATICYPLAIN" + secrets.token_hex(16)
+
+    def preserve(value: str) -> str:
+        protected.append(value.expandtabs(4))
+        return marker + str(len(protected) - 1) + "Z"
+
+    text = re.sub(r"```[a-zA-Z0-9_+-]*\n(.*?)```",
+                  lambda match: preserve(str(match[1]).rstrip("\n")), text, flags=re.S)
+    text = re.sub(r"`([^`\n]+)`", lambda match: preserve(str(match[1])), text)
     text = re.sub(r"```[a-zA-Z0-9_+-]*\n?", "", text)
     text = _MD_LINK.sub(r"\1 (\2)", text)
+    text = re.sub(r"https?://[^\s<>]+", lambda match: preserve(str(match[0])), text)
     text = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", text)
     text = re.sub(r"(\*\*|__|\*|`)", "", text)
     text = re.sub(r"(?m)^\s*[-*+]\s+", "• ", text)
@@ -632,6 +644,10 @@ def to_chat_text(antwort: str, *, wide: bool = False, limit: int = 0,
                    and (z == "\n" or z.isprintable()))
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    text = re.sub(re.escape(marker) + r"(\d+)Z",
+                  lambda match: protected[int(match[1])], text)
+    text = "".join(char for char in text if (wide or ord(char) <= 0xFFFF)
+                   and (char == "\n" or char.isprintable()))
     grenze = limit or MAX_REPLY_CHARS
     if len(text) > grenze:
         text = text[:grenze].rsplit(" ", 1)[0] + " … (Mehr in der App.)"

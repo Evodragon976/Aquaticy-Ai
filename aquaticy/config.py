@@ -919,7 +919,7 @@ class Settings:
 
             from aquaticy.local_model import can
 
-            kann = can(model, "thinking", self.ollama_base(model))
+            kann = can(model, "thinking", self.ollama_base(model), str(self.data_dir.resolve()))
             if kann is not None:
                 return kann
 

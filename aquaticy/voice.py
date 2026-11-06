@@ -46,6 +46,9 @@ def enabled() -> bool:
 
 
 def requested(text: str) -> bool:
+    if re.search(r"\b(?:keine?|nicht|ohne|no|not|don't)\b[^.!?]{0,80}\bsprachnachricht\b",
+                 text, re.I):
+        return False
     return bool(re.search(r"\bsprachnachricht\b", text, re.I)
                 and re.search(r"\b(?:als|schick\w*|send\w*|antworte)\b", text, re.I))
 

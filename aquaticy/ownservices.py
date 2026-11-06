@@ -174,15 +174,18 @@ def followup_sources(text: str, previous: tuple[str, ...] | list[str] = ()) -> t
 def calendar_days(text: str) -> int:
     """Wie viele Tage der Kalender zeigen soll: heute 1, morgen 2, sonst eine Woche."""
     klein = str(text or "").lower()
-    if re.search(r"\b(?:heute|today|tonight|heute\s+abend)\b", klein):
-        return 1
+    if re.search(r"\b(?:monat|month)\b", klein):
+        return 31
+    if re.search(r"\b(?:woche|week)\b", klein):
+        return 7
     if re.search(r"\b(?:(?:ü|ue)bermorgen)\b", klein):
         return 3
     if re.search(r"\b(?:morgen|tomorrow)\b", klein):
         return 2
-    if re.search(r"\b(?:monat|month)\b", klein):
-        return 31
+    if re.search(r"\b(?:heute|today|tonight)\b", klein):
+        return 1
     return 7
+
 
 
 def home_domain(text: str) -> str:
@@ -191,8 +194,9 @@ def home_domain(text: str) -> str:
     for muster, bereich in (
         (r"licht|lampe|leuchte|light|lamp", "light"),
         (r"heizung|thermostat|heating|klima", "climate"),
-        (r"roll|jalousie|blind|shutter", "cover"),
-        (r"steckdose|plug|ventilator|fan", "switch"),
+        (r"\broll(?:laden|o|os|läden)|jalousie|\bblinds?\b|shutter", "cover"),
+        (r"ventilator|\bfans?\b", "fan"),
+        (r"steckdose|\bplugs?\b", "switch"),
         (r"fernseher|\btv\b", "media_player"),
         (r"staubsauger|vacuum", "vacuum"),
     ):

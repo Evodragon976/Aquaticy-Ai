@@ -613,7 +613,9 @@ class Watcher:
         if router_ip and options(config)["nmap"] and time.time() - self._upnp[0] > 3600:
             try:
                 self._upnp = (time.time(), secure_devices.upnp_gateways(str(network),
-                                                                        router_ip, 1.5))
+                    router_ip, 1.5, allowed=lambda: (
+                        not self.stop_event.is_set()
+                        and grant_active(self.directory, config, "nmap"))))
             except (OSError, ValueError):
                 self._upnp = (time.time(), [])
         for gateway in self._upnp[1] if options(config)["nmap"] else []:

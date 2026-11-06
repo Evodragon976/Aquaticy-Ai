@@ -26,6 +26,12 @@ def host_key(value: str) -> tuple[str, str]:
             raise ValueError("Schlüsseltyp passt nicht.")
     except (ValueError, UnicodeError) as exc:
         raise ValueError("Ungültiger öffentlicher SSH-Hostschlüssel.") from exc
+    from cryptography.hazmat.primitives.serialization import load_ssh_public_key
+
+    try:
+        load_ssh_public_key(" ".join(parts).encode("ascii"))
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError("Ungültiger öffentlicher SSH-Hostschlüssel.") from exc
     fingerprint = base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
     return " ".join(parts), "SHA256:" + fingerprint
 

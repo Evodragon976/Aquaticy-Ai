@@ -225,6 +225,9 @@ def normalize_url(url: str) -> str:
         return ""
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         return ""
+    if (parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment):
+        return ""
     if port is None and parsed.scheme == "http" and parsed.hostname:
         url = parsed._replace(netloc=f"{parsed.netloc}:{HA_PORT}").geturl()
     return url
@@ -387,6 +390,8 @@ def check_call(domain: str, service: str, entity_id: str = "", data: Any = None)
     ziele = _entities(entity_id) if entity_id else []
     if "entity_id" in payload:
         ziele += _entities(payload["entity_id"])
+    if not ziele:
+        raise HomeAssistantError("Nenne die einzelnen Entitäten, die geschaltet werden sollen.")
     for ziel in ziele:
         if not ENTITY_RE.fullmatch(ziel):
             raise HomeAssistantError(f"'{ziel[:80]}' ist keine Entitaet (bereich.name).")

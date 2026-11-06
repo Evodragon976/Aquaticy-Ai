@@ -135,7 +135,8 @@ def parse(xml_text: str) -> list[dict[str, Any]]:
                 ausgabe = str(script.get("output", ""))
                 if not _SKRIPT.fullmatch(kennung):
                     continue
-                verwundbar = bool(re.search(r"(?<!NOT )\bVULNERABLE\b", ausgabe))
+                verwundbar = bool(re.search(
+                    r"(?im)^\s*(?:State:\s*)?(?:LIKELY\s+)?VULNERABLE\b", ausgabe))
                 if verwundbar:
                     eintrag["findings"].append({
                         "script": kennung,

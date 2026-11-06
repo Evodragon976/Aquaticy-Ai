@@ -413,14 +413,10 @@ TRACKING_PARAMS = frozenset({
 
 
 def _offer_identity(url: str) -> tuple[str, str, int, str, str] | None:
-    """Vergleicht Webadressen inklusive Port; Fragmente sind keine andere Seite.
+    """Vergleicht gelesene Adressen ohne Fragmente und bekannte Tracking-Parameter.
 
-    Drei Dinge werden bewusst weggeraeumt, weil sie dieselbe Seite bezeichnen:
-    das fuehrende ``www.`` (Shops leiten staendig zwischen beiden Formen um,
-    und gespeichert wird die Adresse NACH der Umleitung), die Gross- und
-    Kleinschreibung im Pfad, und Parameter, die nur die Herkunft zaehlen.
-    Alles andere bleibt Unterschied: ``?id=1`` und ``?id=2`` sind zwei
-    Produkte, nicht zwei Wege zu einem.
+    Hostnamen, Gross-/Kleinschreibung und abschliessende Schraegstriche des Pfads
+    bleiben erhalten: Nur ein tatsaechlich beobachtetes Redirect belegt eine Gleichheit.
     """
     try:
         parsed = urlsplit(url)
@@ -430,7 +426,7 @@ def _offer_identity(url: str) -> tuple[str, str, int, str, str] | None:
         if parsed.username is not None or parsed.password is not None:
             return None
         port = parsed.port
-        host = parsed.hostname.lower().removeprefix("www.")
+        host = parsed.hostname.lower()
         felder = [
             (name, wert)
             for name, wert in parse_qsl(parsed.query, keep_blank_values=True)
@@ -439,7 +435,7 @@ def _offer_identity(url: str) -> tuple[str, str, int, str, str] | None:
         return (
             scheme, host,
             port if port is not None else (443 if scheme == "https" else 80),
-            parsed.path.rstrip("/").lower() or "/", urlencode(sorted(felder)),
+            parsed.path or "/", urlencode(sorted(felder, key=lambda pair: pair[0])),
         )
     except ValueError:
         return None

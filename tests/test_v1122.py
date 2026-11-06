@@ -154,8 +154,12 @@ def test_old_ollama_teaches_aquaticy_by_its_error(tmp_path) -> None:
         assert ergebnis.error == "" and ergebnis.answer == "Fertig."
         assert [a["tools"] for a in nachbau.anfragen] == [True, False]
         assert any(n == "note" and "keine Werkzeuge" in p["text"] for n, p in ereignisse)
-        _frage(nachbau.url, "ollama_chat/gemma3:4b", tmp_path / "2")
+        same = _frage(nachbau.url, "ollama_chat/gemma3:4b", tmp_path)
+        assert same.error == "" and same.answer == "Fertig."
         assert [a["tools"] for a in nachbau.anfragen] == [True, False, False]
+        other = _frage(nachbau.url, "ollama_chat/gemma3:4b", tmp_path / "2")
+        assert other.error == "" and other.answer == "Fertig."
+        assert [a["tools"] for a in nachbau.anfragen] == [True, False, False, True, False]
     finally:
         nachbau.stop()
 

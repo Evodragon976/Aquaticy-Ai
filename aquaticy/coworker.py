@@ -599,7 +599,11 @@ class CoworkerStore:
     def by_name(self, name: str) -> Coworker | None:
         """Ein Coworker nach seinem Namen (gross/klein egal)."""
         gesucht = " ".join(str(name or "").split()).casefold()
-        return next((cw for cw in self.all() if cw.name.casefold() == gesucht), None)
+        found = [cw for cw in self.all() if cw.name.casefold() == gesucht]
+        if len(found) > 1:
+            raise CoworkerError("Mehrere Coworker heißen so. Vergib eindeutige Namen, "
+                                "bevor du einen Messenger-Auftrag sendest.")
+        return found[0] if found else None
 
     def set_preferences(self, coworker_id: int, values: dict[str, Any], *,
                         settings: Any = None, ultra: bool = False) -> None:
@@ -1787,7 +1791,7 @@ _RUNNING_LOCK = threading.Lock()
 
 
 def claim(db_path: Any, coworker_id: int) -> bool:
-    schluessel = (str(db_path), int(coworker_id))
+    schluessel = (str(Path(db_path).resolve()), int(coworker_id))
     with _RUNNING_LOCK:
         if schluessel in _RUNNING:
             return False
@@ -1797,12 +1801,12 @@ def claim(db_path: Any, coworker_id: int) -> bool:
 
 def release(db_path: Any, coworker_id: int) -> None:
     with _RUNNING_LOCK:
-        _RUNNING.discard((str(db_path), int(coworker_id)))
+        _RUNNING.discard((str(Path(db_path).resolve()), int(coworker_id)))
 
 
 def is_running(db_path: Any, coworker_id: int) -> bool:
     with _RUNNING_LOCK:
-        return (str(db_path), int(coworker_id)) in _RUNNING
+        return (str(Path(db_path).resolve()), int(coworker_id)) in _RUNNING
 
 
 class Scheduler:

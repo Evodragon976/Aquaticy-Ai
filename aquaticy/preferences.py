@@ -29,6 +29,7 @@ beim Menschen vor der Oberflaeche.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 APPEARANCE = "aussehen"
@@ -296,8 +297,13 @@ def coerce(preference: Preference, value: str) -> str:
 
     if preference.kind == "zahl":
         try:
-            number = int(float(raw))
-        except (ValueError, OverflowError):
+            parsed = Decimal(raw)
+            if not parsed.is_finite() or parsed != parsed.to_integral_value():
+                raise ValueError
+            if not preference.low <= parsed <= preference.high:
+                raise ValueError
+            number = int(parsed)
+        except (ValueError, OverflowError, InvalidOperation):
             raise BadValue(
                 f"{preference.label}: eine Zahl zwischen {preference.low} und "
                 f"{preference.high}."

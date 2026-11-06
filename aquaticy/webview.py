@@ -21,8 +21,9 @@ Antwortstrom live darstellen (Markdown), und die Tageszeit des Nutzers fuer
 
 from __future__ import annotations
 
+import math
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 WOCHENTAGE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
@@ -102,9 +103,12 @@ def moment_text(stempel: Any) -> str:
         wert = float(stempel or 0)
     except (TypeError, ValueError):
         return ""
-    if wert <= 0:
+    if wert <= 0 or not math.isfinite(wert):
         return ""
-    zeit = datetime.fromtimestamp(wert)
+    try:
+        zeit = datetime.fromtimestamp(wert)
+    except (OSError, OverflowError, ValueError):
+        return ""
     return (f"{WOCHENTAGE_KURZ[zeit.weekday()]} {zeit.day:02d}. "
             f"{MONATE_KURZ[zeit.month - 1]}, {zeit:%H:%M}")
 
@@ -132,7 +136,8 @@ def chat_group(touched: Any, now: float | None = None) -> str:
     tag = 86400
     if wann >= mitternacht:
         return "Heute"
-    if wann >= mitternacht - tag:
+    gestern = (datetime.fromtimestamp(mitternacht) - timedelta(days=1)).timestamp()
+    if wann >= gestern:
         return "Gestern"
     if wann >= now - 7 * tag:
         return "Letzte 7 Tage"

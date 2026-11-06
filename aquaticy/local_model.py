@@ -479,7 +479,7 @@ _MERK_MAX = 256
 
 MAX_MODEL_INFO_BYTES = 8 * 1024 * 1024
 
-_FEHLT: dict[str, set[str]] = {}
+_FEHLT: dict[tuple[str, str, str], tuple[float, set[str]]] = {}
 _CAPS_LOCK = threading.Lock()
 
 
@@ -668,22 +668,35 @@ def missing_capability(detail: str) -> str:
     return treffer.group(1).lower() if treffer else ""
 
 
-def note_missing(model_id: str, faehigkeit: str) -> bool:
+def note_missing(model_id: str, faehigkeit: str,
+                 base_url: str = DEFAULT_OLLAMA_URL, scope: str = "") -> bool:
     """Merkt sich, dass *model_id* *faehigkeit* nicht kann. True, wenn das neu ist."""
     with _CAPS_LOCK:
-        bekannt = _FEHLT.setdefault(str(model_id), set())
+        key = (scope, base_url.rstrip("/"), str(model_id))
+        if key not in _FEHLT and len(_FEHLT) >= _MERK_MAX:
+            _FEHLT.pop(next(iter(_FEHLT)))
+        now = time.monotonic()
+        cached = _FEHLT.get(key)
+        bekannt = cached[1] if cached is not None and now - cached[0] < CAPABILITY_TTL else set()
         if faehigkeit in bekannt:
             return False
         bekannt.add(faehigkeit)
+        _FEHLT[key] = (now, bekannt)
         return True
 
 
-def can(model_id: str, faehigkeit: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool | None:
+def can(model_id: str, faehigkeit: str, base_url: str = DEFAULT_OLLAMA_URL,
+        scope: str = "") -> bool | None:
     """Kann das oertliche *model_id* *faehigkeit*? None = unbekannt (kein Ollama-Modell
     oder Ollama sagt es nicht)."""
     with _CAPS_LOCK:
-        if faehigkeit in _FEHLT.get(str(model_id), set()):
-            return False
+        key = (scope, base_url.rstrip("/"), str(model_id))
+        cached = _FEHLT.get(key)
+        if cached is not None:
+            if time.monotonic() - cached[0] >= CAPABILITY_TTL:
+                _FEHLT.pop(key, None)
+            elif faehigkeit in cached[1]:
+                return False
     name = local_name(model_id)
     if not name:
         return None

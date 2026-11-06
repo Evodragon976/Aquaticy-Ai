@@ -12,6 +12,7 @@ import ipaddress
 import re
 import socket
 import time
+from collections.abc import Callable
 from typing import Any
 
 # Hersteller nach OUI. Nur verbreitete Heimgeraete, ohne Anspruch auf Vollstaendigkeit.
@@ -96,7 +97,9 @@ def clean_known(known: Any) -> dict[str, str]:
         key = str(key).lower()
         if not re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", key):
             try:
-                if not ipaddress.IPv4Address(key).is_private:
+                from aquaticy.lan import is_private_net
+
+                if not is_private_net(ipaddress.IPv4Network(f"{key}/32")):
                     continue
             except ValueError:
                 continue
@@ -134,20 +137,37 @@ SSDP = ("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discov
         "MX: 1\r\nST: urn:schemas-upnp-org:device:InternetGatewayDevice:1\r\n\r\n")
 
 
-def upnp_gateways(subnet: str, router: str = "", wait: float = 2.0) -> list[str]:
+def upnp_gateways(subnet: str, router: str = "", wait: float = 2.0, *,
+                  allowed: Callable[[], bool] | None = None) -> list[str]:
     """Antwortet der Router (oder ein anderes Geraet) als UPnP-Internet-Gateway?
 
-    Eine einzige SSDP-Frage ins eigene Netz. Nur Antworten aus dem freigegebenen Netz zaehlen.
+    SSDP-Einzelabfragen nur an freigegebene Hosts, kein Multicast in andere Netze.
+    Nur Antworten aus dem freigegebenen Netz zaehlen.
     """
-    netz = ipaddress.IPv4Network(subnet)
+    from aquaticy.lan import parse_subnet
+
+    netz = parse_subnet(subnet)
+    if netz.num_addresses > 256:
+        raise ValueError("UPnP prüft höchstens 256 freigegebene Adressen.")
+    targets = [str(address) for address in netz.hosts()]
+    if router:
+        if ipaddress.IPv4Address(router) not in netz:
+            raise ValueError("Der Router liegt außerhalb des freigegebenen Netzes.")
+        targets = [router] + [address for address in targets if address != router]
     gefunden: set[str] = set()
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sock:
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
             sock.settimeout(0.3)
-            sock.sendto(SSDP.encode("ascii"), ("239.255.255.250", 1900))
+            for address in targets:
+                if allowed is not None and not allowed():
+                    return []
+                sock.sendto(SSDP.replace("239.255.255.250", address).encode("ascii"),
+                            (address, 1900))
             ende = time.monotonic() + max(0.5, min(wait, 5.0))
             while time.monotonic() < ende and len(gefunden) < 16:
+                if allowed is not None and not allowed():
+                    return []
                 try:
                     daten, (absender, _) = sock.recvfrom(2048)
                 except TimeoutError:

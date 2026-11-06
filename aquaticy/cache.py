@@ -126,7 +126,7 @@ def _summaries(kind: str | None) -> tuple[str, tuple[Any, ...]]:
 
 def cache_key(kind: str, *parts: Any) -> str:
     """Stabiler Schluessel aus Art und beliebigen Bestandteilen."""
-    raw = "\x1f".join([kind, *(str(part) for part in parts)])
+    raw = json.dumps([kind, *parts], ensure_ascii=False, sort_keys=True, default=str)
     return f"{kind}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:32]}"
 
 
@@ -723,6 +723,15 @@ class Cache:
             cur.execute("DELETE FROM chat_unread WHERE session_id = ?", (session_id,))
             cur.execute("DELETE FROM chat_modes WHERE session_id = ?", (session_id,))
             cur.execute("DELETE FROM secure_chats WHERE session_id = ?", (session_id,))
+            shared: set[str] = set()
+            if bilder:
+                for other in conn.execute("SELECT meta FROM history"):
+                    with contextlib.suppress(json.JSONDecodeError, TypeError, ValueError):
+                        shared |= media_ids_in(json.loads(
+                            self._open(other["meta"], "history.meta") or "{}")) & bilder
+                    if shared >= bilder:
+                        break
+            bilder -= shared
             conn.commit()
         for media_id in bilder:
             if KEEP_MARK not in media_id:

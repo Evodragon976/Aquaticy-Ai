@@ -517,7 +517,7 @@ def test_the_offer_address_is_read_from_the_answer() -> None:
     from aquaticy.coworker_schedule import verified_offer_url
 
     assert verified_offer_url(
-        "Bei https://laden.example/x/ für 9 €.", [{"url": "https://laden.example/x"}]
+        "Bei https://laden.example/x/ für 9 €.", [{"url": "https://laden.example/x/"}]
     ) == "https://laden.example/x/"
     assert verified_offer_url("Kein Angebot gefunden.", []) == ""
 
@@ -623,13 +623,13 @@ def test_a_read_news_page_cannot_stand_in_for_the_shop() -> None:
 @pytest.mark.parametrize("answer,source,accepted", [
 
 
-    ("https://shop.example/p", "https://www.shop.example/p", True),
-    ("https://www.shop.example/p", "https://shop.example/p", True),
+    ("https://shop.example/p", "https://www.shop.example/p", False),
+    ("https://www.shop.example/p", "https://shop.example/p", False),
 
     ("https://shop.example/p", "https://shop.example/p?utm_source=google", True),
     ("https://shop.example/p?gclid=abc", "https://shop.example/p", True),
     ("https://shop.example/p?a=1&b=2", "https://shop.example/p?b=2&a=1", True),
-    ("https://shop.example/Produkt", "https://shop.example/produkt", True),
+    ("https://shop.example/Produkt", "https://shop.example/produkt", False),
 
     ("https://shop.example/p?id=2", "https://shop.example/p?id=1", False),
     ("https://shop.example/p", "https://shop.example/q", False),

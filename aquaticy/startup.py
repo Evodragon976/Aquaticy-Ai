@@ -73,7 +73,8 @@ def update_at_start(console: Any) -> bool:
                     if isinstance(target, ast.Name) and isinstance(node.value.value, str):
                         values[target.id] = node.value.value
         remote = " ".join(t for t in (values.get("__version__", ""),
-                                      values.get("__codename__", "")) if t)
+                                      values.get("__codename__", ""),
+                                      values.get("__stage__", "")) if t)
         if remote == VERSION_LABEL:
             console.print("Aquaticy ist aktuell.")
             return False

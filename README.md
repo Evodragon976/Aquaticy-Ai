@@ -1,4 +1,4 @@
-# Aquaticy AI 15.1.2
+# Aquaticy AI 15.2.2
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,70 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.2.2: 50 nachgestellte Fehlerursachen behoben.**
+
+Funktionen und feste Sicherheitsgrenzen bleiben erhalten. Bestätigungen werden nicht entfernt.
+Die Gegenproben stehen in `tests/test_v1522_data.py`, `tests/test_v1522_boundaries.py` und
+`tests/test_v1522_runtime.py`. Mehrere Varianten einer Ursache zählen zusammen als ein Fund.
+
+| Nr. | Bereich | Korrektur |
+|---|---|---|
+| 1 | Rechner | Kleine und große Ergebnisse werden bei der Anzeige nicht mehr zu anderen Zahlen gerundet. |
+| 2 | Rechner | Überläufe und nicht darstellbare Rechenergebnisse liefern verständliche Fehler. |
+| 3 | Produktdaten | Ein Preis von null bleibt als kostenloses Angebot erhalten. |
+| 4 | Produktbilder | Nach einem unbrauchbaren Bild wird ein späteres gültiges Bild übernommen. |
+| 5 | Produktbilder | Eine kaputte Bildadresse bricht das Lesen der Produktseite nicht ab. |
+| 6 | Produktdaten | Microdata stammt vom Produkt statt vom vorher stehenden Shop-Namen. |
+| 7 | Produktdaten | NaN und unendliche Bewertungen gelangen nicht mehr in die Ausgabe. |
+| 8 | Kalender | Ungültige Ganztagsdaten werden vor dem Schreibzugriff abgelehnt. |
+| 9 | Kalender | Das Ende eines Termins muss nach seinem Anfang liegen. |
+| 10 | Kalender | Eine Änderung nur des Anfangs überschreibt nicht nebenbei das Ende. |
+| 11 | Gmail | Der Text verwendet den Zeichensatz seines Mailteils, etwa ISO-8859-1. |
+| 12 | Gmail | Textanhänge verdrängen nicht mehr den eigentlichen Nachrichtentext. |
+| 13 | Home Assistant | Ein leerer Zielwert kann nicht versehentlich alle Geräte eines Bereichs schalten. |
+| 14 | Verbindungen | Home-Assistant- und Lager-Adressen lehnen Zugangsdaten, Query und Fragment ab. |
+| 15 | Heimnetz-Fragen | Ventilatoren und Staubsauger werden dem richtigen Gerätebereich zugeordnet. |
+| 16 | Sprachnachrichten | Eine ausdrückliche Ablehnung wird nicht als Bitte um Audio gewertet. |
+| 17 | Ortsfilter | Ein Stadtname mitten in einem anderen Wort hebt den Ortsfilter nicht auf. |
+| 18 | SSH | Ein Hostschlüssel braucht tatsächliches Schlüsselmaterial statt nur des Typnamens. |
+| 19 | Secure Pro | Eine ungültige Geräte-IP erweitert eine Aufgabe nicht stillschweigend auf das ganze Netz. |
+| 20 | Export | Ein Weblink braucht auch einen gültigen Hostnamen. |
+| 21 | Angebotsprüfung | Andere Hosts, Pfadschreibweisen und Reihenfolgen doppelter Parameter gelten nicht als gelesen. |
+| 22 | GitHub | Auch das Löschen übergeordneter Workflow-Verzeichnisse wird abgefangen. |
+| 23 | Modelle | Fehlende Fähigkeiten werden nach Endpunkt und Profil getrennt und nicht unbegrenzt gemerkt. |
+| 24 | GitHub | Der Standard-Branch wird nach der Bestätigung und vor dem Push erneut geprüft. |
+| 25 | GitHub | Die Bestätigung eines Pull Requests zeigt auch den zu veröffentlichenden Text. |
+| 26 | GitHub | Checkout berücksichtigt den Branch aus der URL und verwirft unklare PR-Checkouts. |
+| 27 | Geheimnisse | Auch Passwortwerte ohne Anführungszeichen aus einer .env-Datei werden vor dem Veröffentlichen erkannt. |
+| 28 | Cache | Verschiedene Bestandteile können nicht denselben Schlüssel durch ein Trennzeichen erzeugen. |
+| 29 | GitHub | Ungültige .lock-Bestandteile eines Branch-Namens werden früh abgelehnt. |
+| 30 | GitHub | Absolute Dateipfade werden nicht ungefragt in andere relative Pfade umgeschrieben. |
+| 31 | GitHub | Parallele Checkout-Einträge überschreiben sich nicht gegenseitig. |
+| 32 | Secure Pro | UPnP-Einzelabfragen verlassen den ausdrücklich freigegebenen Netzbereich nicht. |
+| 33 | Tailscale | Gerätenamen für freigegebene Tailscale-IP-Adressen bleiben gespeichert. |
+| 34 | Chats | Das Löschen eines Chats entfernt kein Bild, das ein anderer Chat noch verwendet. |
+| 35 | Oberfläche | Ungültige gespeicherte Zeitstempel bringen die Anzeige nicht zum Absturz. |
+| 36 | Notizcache | Namenszusätze zur Unterscheidung gleichnamiger Personen bleiben bei der Zuordnung erhalten. |
+| 37 | nmap | Abstände in „NOT VULNERABLE“ erzeugen keinen falschen Schwachstellenfund. |
+| 38 | Paketprüfung | DNS-Metadaten brauchen eine tatsächlich vorhandene, vollständige Frage. |
+| 39 | Updates | Dieselbe interne Versionsstufe wird nicht bei jedem Start erneut installiert. |
+| 40 | Chatliste | „Gestern“ wird auch bei der Zeitumstellung nach dem örtlichen Kalender berechnet. |
+| 41 | Coworker | Doppelte Namen führen nicht zu einem Auftrag an einen willkürlich gewählten Coworker. |
+| 42 | Einstellungen | Dezimalwerte für ganzzahlige Einstellungen werden nicht stillschweigend abgeschnitten. |
+| 43 | Coworker | Verschiedene Pfadschreibweisen derselben Datenbank umgehen die Ausführungssperre nicht. |
+| 44 | Messenger | Die Textausgabe erhält Code-Operatoren, __init__ und vollständige URLs. |
+| 45 | Messenger | Buchstaben in Telefonnummern werden nicht einfach gelöscht und als andere Nummer akzeptiert. |
+| 46 | NVIDIA NIM | Ein gescheiterter Modelltest gilt nicht als erfolgreiche Verbindung; verfügbare Alternativen werden geprüft. |
+| 47 | Google-Anmeldung | Ungültige Token-Antworten überschreiben keine funktionierende Verbindung. |
+| 48 | Gmail | MIME-kodierte Betreffzeilen und Absender werden lesbar dargestellt. |
+| 49 | Gmail | Große Mailtexte werden vor dem vollständigen Dekodieren begrenzt. |
+| 50 | Kalender | „Heute und morgen“ und längere ausdrücklich genannte Zeiträume werden vollständig vorgeladen. |
+
+Die Angebotsprüfung setzt verschiedene URL-Schreibweisen nicht mehr ohne Beleg gleich.
+Eine gelesene Zieladresse muss tatsächlich als Quelle vorliegen; bekannte Tracking-Parameter
+bleiben ausgenommen. UPnP verwendet Einzelabfragen an freigegebene Geräte. Geräte, die darauf
+nicht antworten, werden dadurch nicht erkannt; eine ausbleibende Antwort ist kein Sicherheitsnachweis.
 
 **Neu in 15.1.2: 15 nachgestellte Fehler behoben.**
 
@@ -434,7 +498,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.1.2
+aquaticy --version            # 15.2.2
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

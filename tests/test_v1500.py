@@ -615,7 +615,10 @@ def test_upnp_answers_count_only_from_the_own_net(monkeypatch) -> None:
             pass
 
         def sendto(self, data, ziel):
-            assert ziel == ("239.255.255.250", 1900) and b"M-SEARCH" in data
+            import ipaddress
+
+            assert ipaddress.IPv4Address(ziel[0]) in ipaddress.IPv4Network(NETZ)
+            assert ziel[1] == 1900 and b"M-SEARCH" in data
 
         def recvfrom(self, n):
             if antworten:

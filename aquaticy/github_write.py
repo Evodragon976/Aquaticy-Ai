@@ -40,7 +40,8 @@ def valid_branch(name: str) -> bool:
     """Ein Branch-Name nach den Regeln von git (die wichtigsten davon)."""
     return bool(_BRANCH.fullmatch(name)) and not (
         name.startswith(("-", "/", ".")) or name.endswith(("/", ".", ".lock"))
-        or ".." in name or "//" in name or "/." in name or name == "HEAD")
+        or ".." in name or "//" in name or "/." in name or name == "HEAD"
+        or any(part.endswith(".lock") for part in name.split("/")))
 
 
 def default_branch_name() -> str:
@@ -56,10 +57,17 @@ def valid_repo_path(path: str) -> bool:
 
 def secret_problem(path: str, data: bytes) -> str:
     """Steht ein Schluessel oder Passwort in der Datei? Dann wird sie nicht uebertragen."""
-    from aquaticy.review_scan import mask_secrets
+    from aquaticy.review_scan import _secret_value_ok, mask_secrets
 
     text = data.decode("utf-8", "replace").replace("\x00", "")
-    if re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", text) or any(
+    env_names = re.compile(
+        r"passw(?:or)?d|passwort|pwd|secret|token|api_?key|credential|private_?key|session|"
+        r"nonce|salt|otp|(?:^|_)auth(?:_|$)|authorization", re.I)
+    env_secrets = any(env_names.search(match[1]) and _secret_value_ok(match[1], match[2])
+                      for match in re.finditer(
+        r"(?m)^[ \t]*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*"
+        r"([^\s\"'`$(){}\[\]\\]{8,200})(?:[ \t]+#.*)?[ \t]*$", text))
+    if env_secrets or re.search(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", text) or any(
             mask_secrets(zeile) != zeile for zeile in text.splitlines()):
         return (f"{path} enthält wohl einen Schlüssel, ein Token oder ein Passwort. Entferne "
                 "es und übertrage danach erneut.")
@@ -199,7 +207,8 @@ def check_changes(changes: list[dict[str, Any]], *, workflows_allowed: bool) -> 
             raise WriteError(f"Ungültiger oder doppelter Pfad: {pfad[:120]}")
         pfade.add(pfad)
         checked_text(pfad, "Der Dateipfad", 400)
-        if pfad.startswith(WORKFLOWS) and not workflows_allowed:
+        if (pfad.startswith(WORKFLOWS) or pfad == WORKFLOWS.rstrip("/")
+                or pfad == ".github") and not workflows_allowed:
             raise WriteError("Änderungen an GitHub Actions (.github/workflows) macht Aquaticy "
                              "nicht. Sie könnten Geheimnisse des Repos auslesen. Ändere sie "
                              "selbst auf GitHub.")
@@ -224,6 +233,7 @@ def commit(api: Api, repo: str, branch: str, message: str, changes: list[dict[st
         parent: Der Commit, auf dem die Aenderungen beruhen. Gibt es den Branch schon und
             zeigt er auf etwas anderes, lehnt GitHub den Push ab (kein Vorspulen moeglich).
     """
+    ensure_work_branch(api, repo, branch)
     vorhanden = branch_head(api, repo, branch)
     eltern = api.get(f"/repos/{repo}/git/commits/{parent}")
     baum = str((eltern.get("tree") or {}).get("sha") or "")
@@ -245,6 +255,7 @@ def commit(api: Api, repo: str, branch: str, message: str, changes: list[dict[st
     neu = api.send("POST", f"/repos/{repo}/git/commits", {
         "message": message, "tree": neu_baum["sha"], "parents": [parent]})
     sha = str(neu.get("sha") or "")
+    ensure_work_branch(api, repo, branch)
     if vorhanden:
         api.send("PATCH", f"/repos/{repo}/git/refs/heads/{quote(branch, safe='/')}",
                  {"sha": sha, "force": False})
@@ -254,6 +265,15 @@ def commit(api: Api, repo: str, branch: str, message: str, changes: list[dict[st
             "url": f"https://github.com/{repo}/commit/{sha}",
             "files": [{"path": c["path"], "status": c.get("status") or (
                 "gelöscht" if c.get("data") is None else "geändert")} for c in changes]}
+
+
+def ensure_work_branch(api: Api, repo: str, branch: str) -> None:
+    info = api.get(f"/repos/{repo}")
+    if not isinstance(info, dict) or not info.get("default_branch"):
+        raise WriteError("Der aktuelle Standard-Branch ließ sich nicht sicher prüfen.")
+    if branch == info["default_branch"]:
+        raise WriteError("Der gewählte Branch ist jetzt der Standard-Branch. "
+                         "Wähle einen eigenen Branch und bestätige die Änderung erneut.")
 
 
 def _read_response(response: httpx.Response, limit: int,

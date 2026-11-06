@@ -70,6 +70,10 @@ def _evaluate(node: ast.AST) -> float:
             return _BINARY[type(node.op)](left, right)
         except ZeroDivisionError as exc:
             raise CalcError("Division durch null.") from exc
+        except CalcError:
+            raise
+        except (OverflowError, TypeError, ValueError) as exc:
+            raise CalcError("Der Ausdruck hat kein darstellbares reelles Ergebnis.") from exc
     raise CalcError(f"'{type(node).__name__}' ist in Ausdruecken nicht erlaubt.")
 
 
@@ -108,5 +112,5 @@ def calculate_pretty(expression: str) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     if isinstance(value, float):
-        return f"{round(value, 6):g}"
+        return repr(value)
     return str(value)

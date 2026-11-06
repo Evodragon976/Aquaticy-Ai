@@ -77,8 +77,8 @@ def parse(text: str) -> dict[str, Any]:
     for treffer in _IP.findall(roh):
         try:
             adresse = ipaddress.IPv4Address(treffer)
-        except ValueError:
-            continue
+        except ValueError as exc:
+            raise ValueError("Die genannte IP-Adresse ist ungültig.") from exc
         if not is_private_net(ipaddress.IPv4Network(f"{adresse}/32")):
             raise ValueError("Aufgaben gelten nur für Geräte in deinem Heimnetz.")
         host = str(adresse)

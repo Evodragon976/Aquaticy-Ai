@@ -317,9 +317,21 @@ def _token_request(payload: dict[str, str]) -> dict[str, Any]:
     if response.status_code >= 400:
         raise GoogleError(_explain(response))
     try:
-        return response.json()
-    except ValueError as exc:
-        raise GoogleError("Google hat keine verwertbare Antwort geschickt.") from exc
+        data = response.json()
+        if not isinstance(data, dict) or not isinstance(data.get("access_token"), str) \
+                or not re.fullmatch(r"[!-~]{1,65536}", data["access_token"]):
+            raise ValueError
+        expiry = data.get("expires_in", 3600)
+        if isinstance(expiry, bool):
+            raise ValueError
+        seconds = float(expiry)
+        if not math.isfinite(seconds) or seconds <= 0 or not math.isfinite(time.time() + seconds):
+            raise ValueError
+        if "refresh_token" in data and not isinstance(data["refresh_token"], str):
+            raise ValueError
+        return data
+    except (ValueError, TypeError, OverflowError) as exc:
+        raise GoogleError("Google hat keine gültigen Zugangsdaten geschickt.") from exc
 
 
 def _explain(response: httpx.Response) -> str:
@@ -475,7 +487,7 @@ class Google:
             },
         )
         headers = {
-            str(item.get("name", "")).lower(): str(item.get("value", ""))
+            str(item.get("name", "")).lower(): _header_text(str(item.get("value", "")))
             for item in (data.get("payload") or {}).get("headers", [])
         }
         return {
@@ -496,7 +508,7 @@ class Google:
         message_id = _resource_id(message_id)
         data = self._get(f"{GMAIL_API}/messages/{message_id}", {"format": "full"})
         headers = {
-            str(item.get("name", "")).lower(): str(item.get("value", ""))
+            str(item.get("name", "")).lower(): _header_text(str(item.get("value", "")))
             for item in (data.get("payload") or {}).get("headers", [])
         }
         body = _body_text(data.get("payload") or {})
@@ -604,7 +616,10 @@ class Google:
         if location:
             payload["location"] = str(location)[:300]
         if start:
-            payload["start"], payload["end"] = _times(start, end, whole_day)
+            if end:
+                payload["start"], payload["end"] = _times(start, end, whole_day)
+            else:
+                payload["start"] = _start_time(start, whole_day)
         elif end:
             payload["end"] = _end_time(end, whole_day)
         if not payload:
@@ -697,29 +712,35 @@ def mail_addresses(text: str) -> str:
         if not _ADRESSE.fullmatch(adresse):
             raise GoogleError(f"'{adresse[:80]}' ist keine gültige Mailadresse.")
     return ", ".join(formataddr((" ".join(name.split())[:80], adresse)) for name, adresse in paare)
-def _times(start: str, end: str, whole_day: bool) -> tuple[dict[str, str], dict[str, str]]:
-    """Macht aus zwei Zeitangaben das, was der Kalender erwartet.
-
-    Ohne Ende wird eine Stunde angenommen -- bei einem ganzen Tag ein Tag.
-    Uhrzeiten bekommen immer einen Offset. Google verlangt ihn, wenn kein
-    separates ``timeZone``-Feld gesetzt ist; bei einer naiven Eingabe gilt die
-    Ortszeit des Rechners.
-    """
-    roh_start = str(start).strip()
-    roh_ende = str(end).strip()
-    if whole_day or (len(roh_start) == 10 and "T" not in roh_start):
-        tag = roh_start[:10]
-        if not roh_ende:
-            with contextlib.suppress(ValueError):
-                naechster = datetime.fromisoformat(tag) + timedelta(days=1)
-                roh_ende = naechster.date().isoformat()
-        return ({"date": tag}, {"date": roh_ende[:10] or tag})
+def _start_time(start: str, whole_day: bool) -> dict[str, str]:
+    raw = str(start).strip()
     try:
-        beginn = _calendar_datetime(roh_start)
-        ende = _calendar_datetime(roh_ende) if roh_ende else beginn + timedelta(hours=1)
-    except ValueError as exc:
-        raise GoogleError(f"Mit '{start}' kann der Kalender nichts anfangen.") from exc
-    return ({"dateTime": beginn.isoformat()}, {"dateTime": ende.isoformat()})
+        if whole_day or (len(raw) == 10 and "T" not in raw):
+            return {"date": datetime.fromisoformat(raw[:10]).date().isoformat()}
+        return {"dateTime": _calendar_datetime(raw).isoformat()}
+    except (ValueError, OverflowError) as exc:
+        raise GoogleError("Der Kalender braucht ein gültiges Datum oder eine ISO-Uhrzeit.") from exc
+
+
+def _times(start: str, end: str, whole_day: bool) -> tuple[dict[str, str], dict[str, str]]:
+    """Validierte Zeiten; beim Anlegen ohne Ende eine Stunde bzw. einen Tag."""
+    first = _start_time(start, whole_day)
+    try:
+        if "date" in first:
+            begin = datetime.fromisoformat(first["date"])
+            finish = datetime.fromisoformat(str(end).strip()[:10]) if end else \
+                begin + timedelta(days=1)
+            if finish <= begin:
+                raise ValueError("Ende vor Anfang")
+            return first, {"date": finish.date().isoformat()}
+        begin = _calendar_datetime(first["dateTime"])
+        finish = _calendar_datetime(end) if end else begin + timedelta(hours=1)
+        if finish <= begin:
+            raise ValueError("Ende vor Anfang")
+        return first, {"dateTime": finish.isoformat()}
+    except (ValueError, OverflowError) as exc:
+        raise GoogleError("Das Ende muss nach dem Anfang liegen und ein gültiges Datum sein.") \
+            from exc
 
 
 def _calendar_datetime(value: str) -> datetime:
@@ -761,18 +782,47 @@ def _event(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _header_text(value: str) -> str:
+    from email.header import decode_header
+
+    result = []
+    try:
+        for part, charset in decode_header(value):
+            if isinstance(part, bytes):
+                try:
+                    part = part.decode(charset or "ascii", "replace")
+                except LookupError:
+                    part = part.decode("utf-8", "replace")
+            result.append(part)
+    except ValueError:
+        return value
+    return "".join(result)
+
+
 def _body_text(payload: dict[str, Any]) -> str:
     """Sucht den Textteil einer Mail -- lieber Klartext als HTML."""
     plain = _find_part(payload, "text/plain")
     if plain:
         return plain
     html = _find_part(payload, "text/html")
-    return _strip_tags(html) if html else ""
+    return _strip_tags(html)[:MAX_BODY_CHARS + 1] if html else ""
 
 
 def _find_part(part: dict[str, Any], wanted: str) -> str:
-    if str(part.get("mimeType", "")).startswith(wanted):
-        return _decode(str((part.get("body") or {}).get("data", "")))
+    from email.message import Message
+
+    if not isinstance(part, dict) or part.get("filename"):
+        return ""
+    headers = {str(h.get("name", "")).lower(): str(h.get("value", ""))
+               for h in part.get("headers", []) if isinstance(h, dict)}
+    if headers.get("content-disposition", "").lower().startswith("attachment"):
+        return ""
+    if str(part.get("mimeType", "")).split(";", 1)[0] == wanted:
+        message = Message()
+        message["Content-Type"] = headers.get("content-type", wanted)
+        return _decode(str((part.get("body") or {}).get("data", "")),
+                       charset=message.get_content_charset() or "utf-8",
+                       limit=1_000_000 if wanted == "text/html" else MAX_BODY_CHARS + 1)
     for child in part.get("parts") or []:
         found = _find_part(child, wanted)
         if found:
@@ -780,15 +830,21 @@ def _find_part(part: dict[str, Any], wanted: str) -> str:
     return ""
 
 
-def _decode(data: str) -> str:
+def _decode(data: str, charset: str = "utf-8", limit: int = MAX_BODY_CHARS + 1) -> str:
     """Gmail liefert base64url mit fehlendem Padding."""
     if not data:
         return ""
     import binascii
 
     with contextlib.suppress(ValueError, binascii.Error):
-        padded = data + "=" * (-len(data) % 4)
-        return base64.urlsafe_b64decode(padded).decode("utf-8", "replace")
+        max_encoded = (limit * 4 + 2) // 3 * 4
+        limited = data[:max_encoded]
+        padded = limited + "=" * (-len(limited) % 4)
+        raw = base64.urlsafe_b64decode(padded)
+        try:
+            return raw.decode(charset, "replace")[:limit]
+        except LookupError:
+            return raw.decode("utf-8", "replace")[:limit]
     return ""
 
 

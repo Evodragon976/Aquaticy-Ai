@@ -116,8 +116,10 @@ def parse_frame(frame: bytes) -> dict[str, Any] | None:
         if 53 in (sport, dport) and len(rest) >= 20:
             dns = rest[8:]
             flags = struct.unpack("!H", dns[2:4])[0]
-            record.update(dns=_dns_name(dns, 12), qr=bool(flags & 0x8000),
-                          nx=(flags & 0x000F) == 3)
+            questions = struct.unpack("!H", dns[4:6])[0]
+            name = _dns_name(dns, 12) if questions else ""
+            if name and len(dns) >= 12 + len(name) + 2 + 4:
+                record.update(dns=name, qr=bool(flags & 0x8000), nx=(flags & 0x000F) == 3)
         return record
     return None
 

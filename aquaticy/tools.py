@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import json
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +39,8 @@ from aquaticy.search import (
     search_news,
     search_web,
 )
+
+_GITHUB_CHECKOUT_LOCK = threading.Lock()
 
 EventHook = Callable[[str, dict[str, Any]], None]
 
@@ -4025,13 +4028,14 @@ class Toolbox:
     def _github_checkout_merken(self, ordner: str, eintrag: dict[str, Any] | None) -> None:
         from aquaticy import private_json
 
-        daten = self._github_checkouts()
-        if eintrag is None:
-            daten.pop(ordner, None)
-        else:
-            daten[ordner] = eintrag
-        private_json.write(self.settings.data_dir / "github-checkouts.json",
-                           dict(list(daten.items())[-50:]))
+        with _GITHUB_CHECKOUT_LOCK:
+            daten = self._github_checkouts()
+            if eintrag is None:
+                daten.pop(ordner, None)
+            else:
+                daten[ordner] = eintrag
+            private_json.write(self.settings.data_dir / "github-checkouts.json",
+                               dict(list(daten.items())[-50:]))
 
     def github_write(self, arguments: dict[str, Any]) -> dict[str, Any]:
         """Aendern bei GitHub: holen, committen, pushen, Pull Request, Kommentar.
@@ -4063,10 +4067,26 @@ class Toolbox:
         if aktion != "checkout" and self.ask_handler is None:
             return {"error": "Hier kann gerade niemand bestätigen. Ohne dein Ja ändert "
                              "Aquaticy nichts bei GitHub."}
+        from urllib.parse import unquote, urlsplit
+
+        linked_tail = ""
+        raw_target = str(arguments.get("repo") or "")
         try:
-            repo, _, _, _ = github_repo.target(str(arguments.get("repo") or ""))
+            repo, linked_ref, _, pull_number = github_repo.target(
+                raw_target, str(arguments.get("ref") or ""))
+            if aktion == "checkout" and not arguments.get("ref"):
+                if pull_number:
+                    return {"error": "Nutze für checkout die Repo- oder Branch-Adresse oder "
+                                     "gib den Kopf-Commit des Pull Requests ausdrücklich "
+                                     "als ref an."}
+                if "://" in raw_target:
+                    parts = urlsplit(raw_target).path.strip("/").split("/")
+                    if len(parts) >= 4 and parts[2] in ("tree", "blob"):
+                        linked_tail = unquote("/".join(parts[3:]))
         except github_repo.GitHubError as exc:
             return {"error": str(exc)}
+        if aktion == "checkout" and linked_ref and not arguments.get("ref"):
+            arguments = {**arguments, "ref": linked_ref}
 
         def gleich_geblieben() -> bool:
             return (addons.active(self.settings, "github")
@@ -4096,6 +4116,19 @@ class Toolbox:
                                  "(Add-on GitHub -> Rechte)."}
             standard = str(info.get("default_branch") or "main")
             if aktion == "checkout":
+                if linked_tail:
+                    pieces = linked_tail.split("/")
+                    for count in range(min(len(pieces), 10), 0, -1):
+                        candidate = "/".join(pieces[:count])
+                        try:
+                            gw.resolve(api, repo, candidate)
+                        except gw.Missing:
+                            continue
+                        arguments = {**arguments, "ref": candidate}
+                        break
+                    else:
+                        raise gw.WriteError(
+                            "Der Branch aus der GitHub-Adresse wurde nicht gefunden.")
                 if info.get("private") is not False:
                     self._github_private = True
                     self.untrusted_seen = True
@@ -4134,7 +4167,7 @@ class Toolbox:
                     return {"error": "pull_request braucht title, branch (der Kopf) und "
                                      "optional base."}
                 nein = self._confirm(f"In {repo} einen Pull Request öffnen?\n{kopf} → {basis}\n"
-                                     f"Titel: {titel}")
+                                     f"Titel: {titel}\nText:\n{text}")
                 if nein:
                     return {"error": nein}
                 if not gleich_geblieben():
@@ -4309,7 +4342,7 @@ class Toolbox:
         for datei in dateien:
             if not isinstance(datei, dict):
                 return {"error": "Jeder Eintrag in files braucht path und content."}
-            pfad = str(datei.get("path") or "").strip().strip("/")
+            pfad = str(datei.get("path") or "").strip()
             if datei.get("delete") is True:
                 aenderungen.append({"path": pfad, "data": None, "status": "gelöscht"})
                 continue

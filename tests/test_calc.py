@@ -67,4 +67,4 @@ def test_division_by_zero_is_a_clean_error() -> None:
 def test_pretty_output() -> None:
     assert calculate_pretty("4/2") == "2"
     assert calculate_pretty("10/4") == "2.5"
-    assert calculate_pretty("1/3") == "0.333333"
+    assert calculate_pretty("1/3") == "0.3333333333333333"

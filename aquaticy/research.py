@@ -62,7 +62,11 @@ def source_url(url: str) -> str:
 
 
 def matches_subject(url: str, query: set[str], question: str = "") -> bool:
-    title = unquote(urlsplit(url).path[6:]).split("(")[0].replace("_", " ").strip()
+    full_title = unquote(urlsplit(url).path[6:]).replace("_", " ").strip()
+    qualifier = re.search(r"\(([^)]+)\)", full_title)
+    if qualifier and not words(qualifier[1]) <= query:
+        return False
+    title = full_title.split("(")[0].strip()
     tokens = words(title)
     last = words(title.split()[-1]) if title else set()
     if tokens and tokens <= query:
