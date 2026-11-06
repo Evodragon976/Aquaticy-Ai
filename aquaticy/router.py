@@ -71,7 +71,8 @@ def kategorie(frage: str, mode: str = "normal") -> str:
         return "code"
     if not text:
         return "recherche"
-    if CODE_ZEICHEN_RE.search(text) or (CODE_WORT_RE.search(text) and CODE_VERB_RE.search(text)):
+    code_word = CODE_WORT_RE.search(text) or re.search(r"(?<!\w)(?:c\+\+|c#)(?!\w)", text, re.I)
+    if CODE_ZEICHEN_RE.search(text) or (code_word and CODE_VERB_RE.search(text)):
         return "code"
     if SCHNELL_RE.match(text):
         return "schnell"

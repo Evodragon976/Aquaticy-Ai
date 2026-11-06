@@ -724,4 +724,14 @@ def available_models(settings: Any) -> list[dict[str, str]]:
                 herkunft,
             ),
         )
-    return found
+    access = getattr(settings, "model_access", None)
+    if access is None:
+        return found
+    permitted = []
+    for entry in found:
+        try:
+            access(entry["id"])
+        except ValueError:
+            continue
+        permitted.append(entry)
+    return permitted

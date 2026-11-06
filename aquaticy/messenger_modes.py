@@ -72,7 +72,7 @@ def natural_command(text: str) -> tuple[str, str] | None:
 
 
 def _name(text: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", text.casefold())
+    return "".join(char for char in text.casefold() if char.isalnum())
 
 
 def command(name: str, argument: str, decision: Any, settings: Any,
@@ -153,7 +153,9 @@ def command(name: str, argument: str, decision: Any, settings: Any,
     if name == "normal" or (name == "pro" and argument.casefold() in {"aus", "off", "0"}):
         state["pro"] = False
         return "Normal-Modus: höchstens vier Rechercheagenten, ohne Strukturieren und Gegenprüfen."
+    if name == "max" and not argument.strip():
+        return "Schreib die Frage hinter /max."
     state["pro"] = True
     if name == "max":
-        return Expanded("/max " + argument) if argument else "Schreib die Frage hinter /max."
+        return Expanded("/max " + argument)
     return "Pro-Modus für diesen Chat: Mannschaft, Strukturieren und Gegenprüfen sind aktiviert."

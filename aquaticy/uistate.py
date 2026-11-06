@@ -30,6 +30,7 @@ import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -172,8 +173,12 @@ def clean(raw: Any, *, base: dict[str, Any] | None = None) -> dict[str, Any]:
             stand[name] = clean_design(wert)
         elif isinstance(erlaubt, range):
             try:
-                zahl = int(wert)
-            except (TypeError, ValueError, OverflowError):
+                number = Decimal(str(wert))
+                if (isinstance(wert, bool) or not number.is_finite()
+                        or number != number.to_integral_value() or number not in erlaubt):
+                    continue
+                zahl = int(number)
+            except (TypeError, ValueError, OverflowError, InvalidOperation):
                 continue
             if zahl in erlaubt:
                 stand[name] = zahl
@@ -244,10 +249,8 @@ class UIState:
                         "ON CONFLICT(id) DO UPDATE SET state = excluded.state",
                         (json.dumps(neu, ensure_ascii=False),),
                     )
-            except sqlite3.Error:
-
-
-                pass
+            except sqlite3.Error as exc:
+                raise OSError("Die Einstellungen konnten nicht gespeichert werden.") from exc
             return neu
 
     def reset(self) -> dict[str, Any]:

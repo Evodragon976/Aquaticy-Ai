@@ -183,10 +183,15 @@ def install_hint() -> str:
     return "Anleitung: https://ollama.com/download"
 
 
+def native_base(base_url: str) -> str:
+    """Ollamas native API liegt neben dem optionalen OpenAI-Praefix /v1."""
+    return str(base_url).strip().rstrip("/").removesuffix("/v1")
+
+
 def server_running(base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> bool:
     """Antwortet unter *base_url* ein Ollama-Server?"""
     try:
-        response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=timeout)
+        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=timeout)
         payload = response.json() if response.status_code == 200 else None
     except (httpx.HTTPError, ValueError):
         return False
@@ -200,7 +205,7 @@ def _tag_list(base_url: str) -> list[dict[str, Any]]:
     Text): bis dahin warf das einen AttributeError bis in ``/api/models``.
     """
     try:
-        response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=5)
+        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=5)
         if response.status_code != 200:
             return []
         payload = response.json()
@@ -372,7 +377,7 @@ def model_is_loaded(model_id: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool |
 def loaded_models(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
     """Modelle, die gerade im Speicher liegen (`ollama ps`)."""
     try:
-        response = httpx.get(f"{base_url.rstrip('/')}/api/ps", timeout=5)
+        response = httpx.get(f"{native_base(base_url)}/api/ps", timeout=5)
         if response.status_code != 200:
             return []
         payload = response.json()
@@ -394,7 +399,7 @@ def unload_model(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool:
     """
     try:
         response = httpx.post(
-            f"{base_url.rstrip('/')}/api/generate",
+            f"{native_base(base_url)}/api/generate",
             json={"model": name, "keep_alive": 0},
             timeout=30,
         )
@@ -417,7 +422,7 @@ _USES_LOCK = threading.Lock()
 
 def _use_for(base_url: str) -> _OllamaUse:
     with _USES_LOCK:
-        name = base_url.rstrip("/")
+        name = native_base(base_url)
         if name not in _USES:
             _USES[name] = _OllamaUse()
         return _USES[name]
@@ -457,7 +462,7 @@ def free_memory(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
 def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None:
     """Tatsaechliche Groesse eines geladenen Modells in GB."""
     for item in _tag_list(base_url):
-        if str(item.get("name", "")) == name:
+        if is_installed(name, [str(item.get("name", ""))]):
             size = item.get("size")
             if isinstance(size, (int, float)) and size > 0:
                 return round(size / 1_000_000_000, 1)
@@ -494,7 +499,7 @@ def _show(name: str, base_url: str = DEFAULT_OLLAMA_URL,
     Seit 11.3.0 Luna eine Abfrage fuer beides: die Faehigkeiten und den Aufbau
     des Modells (Schichten, Koepfe), aus dem sich der Speicher je Token ergibt.
     """
-    schluessel = (base_url.rstrip("/"), _ohne_latest(name))
+    schluessel = (native_base(base_url), _ohne_latest(name))
     jetzt = time.monotonic()
     with _CAPS_LOCK:
         gemerkt = _SHOW.get(schluessel)
@@ -547,7 +552,7 @@ def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
     Ollama es nicht sagt (aelter, nicht erreichbar, Modell unbekannt) --
     dann gilt das Gelernte aus :func:`note_missing`.
     """
-    schluessel = (base_url.rstrip("/"), _ohne_latest(name))
+    schluessel = (native_base(base_url), _ohne_latest(name))
     jetzt = time.monotonic()
     with _CAPS_LOCK:
         gemerkt = _CAPS.get(schluessel)
@@ -672,7 +677,7 @@ def note_missing(model_id: str, faehigkeit: str,
                  base_url: str = DEFAULT_OLLAMA_URL, scope: str = "") -> bool:
     """Merkt sich, dass *model_id* *faehigkeit* nicht kann. True, wenn das neu ist."""
     with _CAPS_LOCK:
-        key = (scope, base_url.rstrip("/"), str(model_id))
+        key = (scope, native_base(base_url), str(model_id))
         if key not in _FEHLT and len(_FEHLT) >= _MERK_MAX:
             _FEHLT.pop(next(iter(_FEHLT)))
         now = time.monotonic()
@@ -690,7 +695,7 @@ def can(model_id: str, faehigkeit: str, base_url: str = DEFAULT_OLLAMA_URL,
     """Kann das oertliche *model_id* *faehigkeit*? None = unbekannt (kein Ollama-Modell
     oder Ollama sagt es nicht)."""
     with _CAPS_LOCK:
-        key = (scope, base_url.rstrip("/"), str(model_id))
+        key = (scope, native_base(base_url), str(model_id))
         cached = _FEHLT.get(key)
         if cached is not None:
             if time.monotonic() - cached[0] >= CAPABILITY_TTL:
@@ -1115,7 +1120,7 @@ def env_values(model: LocalModel | str, base_url: str = DEFAULT_OLLAMA_URL) -> d
         model_id = f"{MODEL_PREFIX}/{model_id}"
     return {
         "AQUATICY_MODEL": model_id,
-        "AQUATICY_API_BASE": base_url.rstrip("/"),
+        "AQUATICY_API_BASE": native_base(base_url),
     }
 
 

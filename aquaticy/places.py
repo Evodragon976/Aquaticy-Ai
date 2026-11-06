@@ -30,6 +30,7 @@ Ergebnis mit Begruendung: die Antwort entsteht dann eben aus dem Web.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from dataclasses import dataclass, field
@@ -217,7 +218,11 @@ def geocode(place: str, user_agent: str, timeout: float = 15.0) -> tuple[float, 
         raise PlacesError(f"Den Ort '{place}' kennt die Karte nicht.")
     erster = treffer[0]
     try:
-        return float(erster["lat"]), float(erster["lon"]), str(erster.get("display_name", place))
+        lat, lon = float(erster["lat"]), float(erster["lon"])
+        if not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 \
+                or not -180 <= lon <= 180:
+            raise ValueError("Ungültige Koordinaten")
+        return lat, lon, str(erster.get("display_name", place))
     except (KeyError, TypeError, ValueError) as exc:
         raise PlacesError("Die Ortssuche gab etwas Unerwartetes zurueck.") from exc
 
@@ -241,6 +246,8 @@ def _kategorie(text: str) -> str:
     woerter = re.findall(r"[^\W\d_]+", text)
     woerter += [w.translate(_UMLAUTE) for w in woerter]
     for schluessel in sorted(CATEGORIES, key=len, reverse=True):
+        if " " in schluessel and re.search(r"(?<!\w)" + re.escape(schluessel) + r"(?!\w)", text):
+            return CATEGORIES[schluessel]
         for wort in woerter:
             if wort == schluessel or any(wort == schluessel + e for e in _ENDUNGEN) or (
                     len(wort) > len(schluessel) + 2 and wort.endswith(schluessel)):
@@ -342,8 +349,10 @@ def find_places(
         if not isinstance(mitte, dict):
             mitte = {}
         try:
-            lat = float(eintrag.get("lat") or mitte.get("lat") or 0.0)
-            lon = float(eintrag.get("lon") or mitte.get("lon") or 0.0)
+            lat = float(eintrag["lat"] if eintrag.get("lat") is not None
+                        else mitte.get("lat") or 0.0)
+            lon = float(eintrag["lon"] if eintrag.get("lon") is not None
+                        else mitte.get("lon") or 0.0)
         except (TypeError, ValueError):
             lat, lon = 0.0, 0.0
         orte.append(
@@ -384,7 +393,8 @@ def _overpass_fehler(daten: Any) -> str:
 def _address(tags: dict[str, str]) -> str:
     """Baut aus den Adressfeldern eine Zeile."""
     strasse = " ".join(
-        teil for teil in (tags.get("addr:street", ""), tags.get("addr:housenumber", "")) if teil
+        teil for teil in (tags.get("addr:street") or tags.get("addr:place", ""),
+                          tags.get("addr:housenumber", "")) if teil
     ).strip()
     ort = " ".join(
         teil for teil in (tags.get("addr:postcode", ""), tags.get("addr:city", "")) if teil

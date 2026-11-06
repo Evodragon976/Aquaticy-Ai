@@ -7665,10 +7665,9 @@ def upgrades_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, An
 
 def OLLAMA_URL() -> str:
     """Die Ollama-Adresse des Betreibers (fuer Auto-Upgrading)."""
-    from aquaticy.local_model import DEFAULT_OLLAMA_URL
+    from aquaticy.system import ollama_base
 
-    base = (get_settings().api_base or "").strip().rstrip("/")
-    return re.sub(r"/v1$", "", base) if "11434" in base else DEFAULT_OLLAMA_URL
+    return ollama_base(get_settings())
 
 
 def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:

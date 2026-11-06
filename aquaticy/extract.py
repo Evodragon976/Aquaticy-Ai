@@ -109,10 +109,10 @@ def parse_price(raw: Any) -> tuple[str | None, str | None]:
         if symbol in lowered:
             currency = code
             break
-    if currency is None:
-        match = re.search(r"\b(EUR|USD|GBP|CHF|PLN|SEK|DKK)\b", text, re.IGNORECASE)
-        if match:
-            currency = match.group(1).upper()
+    match = re.search(r"\b(EUR|USD|GBP|CHF|PLN|SEK|DKK|CAD|AUD|NZD|JPY|CNY|NOK)\b",
+                      text, re.IGNORECASE)
+    if match:
+        currency = match.group(1).upper()
 
     price_match = _PRICE_RE.search(text.replace(" ", " "))
     price = price_match.group(1).strip() if price_match else None
@@ -154,7 +154,7 @@ def _flatten_jsonld(data: Any, out: list[dict[str, Any]]) -> None:
             _flatten_jsonld(item, out)
     elif isinstance(data, dict):
         out.append(data)
-        for key in ("@graph", "mainEntity", "itemListElement", "hasVariant"):
+        for key in ("@graph", "mainEntity", "itemListElement", "item", "hasVariant"):
             if key in data:
                 _flatten_jsonld(data[key], out)
 
@@ -162,7 +162,8 @@ def _flatten_jsonld(data: Any, out: list[dict[str, Any]]) -> None:
 def _is_product(obj: dict[str, Any]) -> bool:
     type_field = obj.get("@type")
     types = type_field if isinstance(type_field, list) else [type_field]
-    return any(str(t).lower() in {"product", "productmodel", "individualproduct"} for t in types)
+    return any(str(t).lower().removeprefix("https://schema.org/").removeprefix(
+        "http://schema.org/") in {"product", "productmodel", "individualproduct"} for t in types)
 
 
 def _first_image(value: Any, base_url: str) -> str | None:
@@ -271,7 +272,7 @@ def product_from_opengraph(tree: HTMLParser, base_url: str) -> Product | None:
 
 
 def _itemprop(tree: HTMLParser | Node, prop: str) -> str | None:
-    node = tree.css_first(f'[itemprop="{prop}"]')
+    node = tree.css_first(f'[itemprop~="{prop}"]')
     if node is None:
         return None
     attrs = node.attributes

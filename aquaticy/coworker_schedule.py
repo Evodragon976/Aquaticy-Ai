@@ -272,9 +272,7 @@ def next_time(rhythm: str, hour: int, minute: int, weekday: int, now: float = 0.
 
     intervals = {"minutes1": 1, "minutes5": 5, "minutes15": 15, "minutes30": 30}
     if rhythm in intervals:
-        return (jetzt + timedelta(minutes=intervals[rhythm])).replace(
-            second=0, microsecond=0
-        ).timestamp()
+        return (stempel // 60 + intervals[rhythm]) * 60
 
     if rhythm == "hourly":
         ziel = jetzt.replace(minute=minute, second=0, microsecond=0)

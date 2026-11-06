@@ -709,12 +709,9 @@ class OllamaBackend:
     """Spricht mit dem lokalen Ollama (Modelle bauen, fragen, kopieren, loeschen)."""
 
     def __init__(self, base_url: str = "", timeout: float = 300.0) -> None:
-        from aquaticy.local_model import DEFAULT_OLLAMA_URL
+        from aquaticy.local_model import DEFAULT_OLLAMA_URL, native_base
 
-        url = (base_url or "").strip().rstrip("/")
-        if not url or "11434" not in url:
-            url = DEFAULT_OLLAMA_URL
-        self.url = re.sub(r"/v1$", "", url)
+        self.url = native_base(base_url or DEFAULT_OLLAMA_URL)
         self.timeout = timeout
 
     def _post(self, pfad: str, daten: dict[str, Any], methode: str = "POST") -> dict[str, Any]:

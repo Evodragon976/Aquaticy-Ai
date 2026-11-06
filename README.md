@@ -1,4 +1,4 @@
-# Aquaticy AI 15.2.2
+# Aquaticy AI 15.2.3
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,47 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.2.3: Ollama-Auswahl repariert und 25 weitere Funktionsfehler behoben.**
+
+Die lokale Modellliste, Fähigkeiten, Chat-Aufrufe und Modellverwaltung verwenden denselben
+Ollama-Endpunkt. Ein abschließendes `/v1` wird für die native API entfernt, eigene Ports und
+Proxy-Pfade bleiben erhalten. `ollama/` und `ollama_chat/` verwenden dieselbe Server-Route.
+In Pro und Code bleiben neben den Empfehlungen alle verfügbaren lokalen Modelle auswählbar.
+Die Wahl setzt weiterhin das Modell für Pro/Code; das normale Chat-Modell bleibt getrennt.
+Kontenrechte, Modellfreigaben und feste Sicherheitsprüfungen gelten weiter.
+
+Die Tests in `tests/test_v1523_models.py` prüfen die HTTP-Auswahl, den Browser in allen drei
+Modi und eine echte Chat-Verbindung zum lokalen Ollama-Nachbau. Die 25 weiteren Ursachen
+sind in `tests/test_v1523_functions.py` einzeln nachgestellt:
+
+| Nr. | Bereich | Korrektur |
+|---|---|---|
+| 1 | Oberfläche | Die Agentenzahl wird bei Dezimalwerten oder Wahrheitswerten nicht stillschweigend geändert. |
+| 2 | Einstellungen | Ein gescheitertes Speichern wird als Fehler gemeldet statt als Erfolg ausgegeben. |
+| 3 | Karte | Koordinaten mit dem Wert null werden nicht durch die Mitte eines anderen Objekts ersetzt. |
+| 4 | Ortssuche | Nicht endliche oder außerhalb der Erde liegende Koordinaten werden vor der Kartenabfrage verworfen. |
+| 5 | Karte | „Werkstatt Fahrrad“ findet Fahrradwerkstätten statt Autowerkstätten. |
+| 6 | Nachrichten | Bei gleichen Schlagzeilen bleibt die neueste Fassung erhalten. |
+| 7 | Gmail | HTML-Zeilenumbrüche und Absätze bleiben im Nachrichtentext lesbar. |
+| 8 | Kalender | Eine allein geänderte Ganztags-Endzeit bleibt ein Datum statt einer Uhrzeit. |
+| 9 | Export | Karten im HTML-Export bleiben im dunklen Modus dunkel. |
+| 10 | Export | Eine Produktquelle ohne Domain-Beschriftung erhält einen sichtbaren Linktext. |
+| 11 | Modell-Router | Programmieraufträge für C++ und C# werden als Code erkannt. |
+| 12 | Messenger | Modellnamen außerhalb des lateinischen Alphabets lassen sich eindeutig auswählen. |
+| 13 | Messenger | Ein unvollständiger `/max`-Befehl aktiviert nicht nebenbei Pro. |
+| 14 | Dateiliste | Ein unendlicher Größenwert bringt die Anzeige nicht zum Absturz. |
+| 15 | Karte | Adressen mit `addr:place` erhalten ihren Ortsnamen, auch ohne Straße. |
+| 16 | Kalender | Ein optionales Ende aus bloßen Leerzeichen nutzt die normale Standarddauer. |
+| 17 | Produktdaten | Vollständige Schema.org-Adressen als Produkttyp werden erkannt. |
+| 18 | Produktdaten | Produkte in JSON-LD-Listeneinträgen werden aus dem `item`-Objekt gelesen. |
+| 19 | Produktdaten | Microdata-Felder mit mehreren Eigenschaftsnamen werden erkannt. |
+| 20 | Suche | Doppelte Treffer einer einzelnen Suchliste zählen nicht als mehrere unabhängige Stimmen. |
+| 21 | Suche | Das Zusammenführen verändert keine Trefferobjekte, die andere Suchläufe weiterverwenden. |
+| 22 | Coworker | Minutenrhythmen warten bei der Zeitumstellung nicht versehentlich eine zusätzliche Stunde. |
+| 23 | Preise | Ein ausdrücklicher Währungscode wie CAD hat Vorrang vor einem mehrdeutigen Dollarzeichen. |
+| 24 | Gmail | Ein leerer Klartextteil verdeckt nicht mehr den vorhandenen HTML-Nachrichtentext. |
+| 25 | Ollama | Die Größenberechnung erkennt auch den Modellnamen ohne den Standard-Tag `:latest`. |
 
 **Neu in 15.2.2: 50 nachgestellte Fehlerursachen behoben.**
 
@@ -498,7 +539,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.2.2
+aquaticy --version            # 15.2.3
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

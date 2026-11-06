@@ -73,7 +73,7 @@ def size_text(nbytes: Any) -> str:
     """1234567 -> "1,2 MB"."""
     try:
         n = max(0, int(nbytes or 0))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         n = 0
     if n >= 1_000_000:
         return f"{n / 1e6:.1f}".replace(".", ",") + " MB"
@@ -278,15 +278,17 @@ def picker_view(mode: str, models: list[dict[str, Any]],
     """Die Modellauswahl je Modus: Ueberschrift, Liste und welches Feld sie setzt.
 
     Im Code- und im Pro-Modus antwortet das staerkste erreichbare Modell --
-    also stehen dort nur die drei staerksten zur Wahl, und die Wahl setzt das
-    starke Modell (AQUATICY_CODE_MODEL), nicht das allgemeine. Sonst haette
+    dort stehen Empfehlungen und alle verfuegbaren lokalen Modelle zur Wahl.
+    Die Wahl setzt das starke Modell (AQUATICY_CODE_MODEL), nicht das allgemeine. Sonst haette
     sie beim naechsten Wechsel in den Standardmodus alles umgestellt.
     """
     nur_starke = mode in ("code", "pro")
     liste = list(strong if nur_starke else models)
-
-
-
+    if nur_starke:
+        ids = {model.get("id") for model in liste}
+        liste.extend(model for model in models
+                     if str(model.get("id", "")).startswith(("ollama_chat/", "ollama/"))
+                     and model.get("id") not in ids)
     eigene = [m for m in liste if m.get("source") == "own"]
     gruppen: list[dict[str, Any]] = [
         {"title": "Mit deinem Schlüssel",

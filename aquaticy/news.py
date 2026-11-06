@@ -193,21 +193,22 @@ def headlines(country: str = "de", lang: str = "de", count: int = HEADLINE_COUNT
     feeds = feeds_for(country, lang)
     with ThreadPoolExecutor(max_workers=len(feeds)) as pool:
         listen = list(pool.map(lambda feed: _ein_feed(feed, reader), feeds))
-    gesehen: set[str] = set()
-    alle: list[tuple[float, SearchResult]] = []
+    by_title: dict[str, tuple[float, SearchResult]] = {}
     for eintraege in listen:
         for eintrag in eintraege:
             titel = str(eintrag.get("titel") or "").strip()
             link = str(eintrag.get("link") or "").strip()
             schluessel = re.sub(r"\W+", " ", titel.lower()).strip()
-            if not titel or not link.startswith(("https://", "http://")) or schluessel in gesehen:
+            if not titel or not link.startswith(("https://", "http://")):
                 continue
-            gesehen.add(schluessel)
             stempel = _zeit(str(eintrag.get("datum") or ""))
             kopf = " · ".join(t for t in (_wann(stempel), str(eintrag.get("quelle") or "")) if t)
             text = str(eintrag.get("zusammenfassung") or "").strip()
-            alle.append((stempel, SearchResult(
-                title=titel, url=link, snippet=f"[{kopf}] {text}" if kopf else text)))
+            previous = by_title.get(schluessel)
+            if previous is None or stempel > previous[0]:
+                by_title[schluessel] = (stempel, SearchResult(
+                    title=titel, url=link, snippet=f"[{kopf}] {text}" if kopf else text))
+    alle = list(by_title.values())
     alle.sort(key=lambda paar: paar[0], reverse=True)
     ergebnis = [treffer for _, treffer in alle[:max(1, count)]]
     for rang, treffer in enumerate(ergebnis, start=1):

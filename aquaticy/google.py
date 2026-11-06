@@ -724,6 +724,7 @@ def _start_time(start: str, whole_day: bool) -> dict[str, str]:
 
 def _times(start: str, end: str, whole_day: bool) -> tuple[dict[str, str], dict[str, str]]:
     """Validierte Zeiten; beim Anlegen ohne Ende eine Stunde bzw. einen Tag."""
+    end = str(end or "").strip()
     first = _start_time(start, whole_day)
     try:
         if "date" in first:
@@ -751,7 +752,7 @@ def _calendar_datetime(value: str) -> datetime:
 def _end_time(end: str, whole_day: bool) -> dict[str, str]:
     """Formatiert eine einzelne PATCH-Endzeit ohne den Start anzufassen."""
     value = str(end).strip()
-    if whole_day:
+    if whole_day or (len(value) == 10 and "T" not in value):
         try:
             return {"date": datetime.fromisoformat(value[:10]).date().isoformat()}
         except ValueError as exc:
@@ -802,7 +803,7 @@ def _header_text(value: str) -> str:
 def _body_text(payload: dict[str, Any]) -> str:
     """Sucht den Textteil einer Mail -- lieber Klartext als HTML."""
     plain = _find_part(payload, "text/plain")
-    if plain:
+    if plain.strip():
         return plain
     html = _find_part(payload, "text/html")
     return _strip_tags(html)[:MAX_BODY_CHARS + 1] if html else ""
@@ -854,7 +855,9 @@ _SPACE = re.compile(r"[ \t]*\n\s*\n\s*")
 
 def _strip_tags(html: str) -> str:
     text = re.sub(r"(?is)<(script|style).*?</\1>", " ", html)
-    text = _TAG.sub(" ", text)
+    text = re.sub(r"(?i)<br\b[^>]*>", "\n", text)
+    text = re.sub(r"(?i)</(?:p|div|h[1-6]|li|tr)\s*>", "\n\n", text)
+    text = _TAG.sub("", text)
     text = _unescape(text)
     return _SPACE.sub("\n\n", text).strip()
 

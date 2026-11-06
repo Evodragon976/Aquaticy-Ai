@@ -173,7 +173,8 @@ def to_markdown(turns: list[Turn], image_map: dict[str, str] | None = None) -> s
                 lines.append(f"- **Verfuegbarkeit:** {product.availability}")
             for key, value in product.specs.items():
                 lines.append(f"- **{key}:** {value}")
-            lines.append(f"- **Quelle:** [{_md_text(product.source_domain)}]"
+            label = product.source_domain or safe_link(product.url) or 'Quelle'
+            lines.append(f"- **Quelle:** [{_md_text(label)}]"
                          f"({_md_url(safe_link(product.url))})")
             lines.append("")
 
@@ -230,7 +231,11 @@ th { background: #f4f4f0; font-weight: 600; }
 ul { padding-left: 1.2rem; }
 .skip { color: #a06b00; font-size: .9rem; }
 code { background: #efefe9; padding: .1rem .3rem; border-radius: .25rem; }
-@media (prefers-color-scheme: dark) { code { background: #2a2a30; } }
+@media (prefers-color-scheme: dark) {
+  .card, .turn { background: #202024; border-color: #33333a; }
+  th { background: #26262b; }
+  code { background: #2a2a30; }
+}
 """
 
 

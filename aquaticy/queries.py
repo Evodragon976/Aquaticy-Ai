@@ -194,17 +194,20 @@ def fuse(
     scores: dict[str, float] = {}
     best: dict[str, SearchResult] = {}
     for results in lists:
-        for rank, result in enumerate(results, start=1):
+        seen: set[str] = set()
+        for result in results:
             url = (result.url or "").strip()
             if not url:
                 continue
-            scores[url] = scores.get(url, 0.0) + 1.0 / (RRF_K + rank)
+            if url not in seen:
+                scores[url] = scores.get(url, 0.0) + 1.0 / (RRF_K + len(seen) + 1)
+                seen.add(url)
             keep = best.get(url)
 
             if keep is None or len(result.snippet or "") > len(keep.snippet or ""):
                 if keep is not None and not (result.title or "").strip():
                     continue
-                best[url] = result
+                best[url] = result.model_copy()
 
     order = sorted(best.values(), key=lambda item: -scores[item.url.strip()])
     picked: list[SearchResult] = []

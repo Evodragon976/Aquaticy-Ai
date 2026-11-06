@@ -722,8 +722,15 @@ class Settings:
 
 
         bezug = self.model if des_kontos or not self.api_base_for else self.api_base_for
-        if provider_of(model) != provider_of(bezug) or not base_fits(self.api_base, model):
+        local = provider_of(model) in ("ollama", "ollama_chat")
+        same = provider_of(model) == provider_of(bezug) or (
+            local and provider_of(bezug) in ("ollama", "ollama_chat"))
+        if not same or not base_fits(self.api_base, model):
             return "", False
+        if local:
+            from aquaticy.local_model import native_base
+
+            return native_base(self.api_base), des_kontos
         return self.api_base, des_kontos
 
     def key_source(self, model: str) -> str:
@@ -838,7 +845,9 @@ class Settings:
                                  "nicht. Wähle bitte ein anderes Modell.")
             return {"api_base": adresse, "api_key": schluessel or NO_KEY}
         kwargs: dict[str, object] = {}
-        gleich = provider_of(model) == provider_of(self.api_base_for or self.model)
+        gleich = provider_of(model) == provider_of(self.api_base_for or self.model) or (
+            provider_of(model) in ("ollama", "ollama_chat")
+            and provider_of(self.api_base_for or self.model) in ("ollama", "ollama_chat"))
 
 
         adresse, adresse_des_kontos = self.route(model)
@@ -867,6 +876,8 @@ class Settings:
             schluessel = self.key_for(model)
             if schluessel:
                 kwargs["api_key"] = schluessel
+        if provider_of(model) in ("ollama", "ollama_chat") and os.environ.get("OLLAMA_API_BASE"):
+            kwargs["api_base"] = self.ollama_base(model)
         if provider_of(model) in ("ollama", "ollama_chat") and self.context_tokens > 0:
             kwargs["num_ctx"] = self.context_for(model)
         return kwargs
@@ -896,10 +907,10 @@ class Settings:
 
     def ollama_base(self, model: str) -> str:
         """Die Adresse des Ollama, bei dem *model* laeuft (wie LiteLLM sie waehlt)."""
-        from aquaticy.local_model import DEFAULT_OLLAMA_URL
+        from aquaticy.local_model import DEFAULT_OLLAMA_URL, native_base
 
         adresse, _ = self.route(model)
-        return adresse or os.environ.get("OLLAMA_API_BASE", "") or DEFAULT_OLLAMA_URL
+        return native_base(adresse or os.environ.get("OLLAMA_API_BASE", "") or DEFAULT_OLLAMA_URL)
 
     def thinks(self, model: str) -> bool:
         """Kann dieses Modell ueberhaupt "nachdenken"?
