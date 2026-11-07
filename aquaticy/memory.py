@@ -37,7 +37,7 @@ import os
 import sqlite3
 import subprocess
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -333,6 +333,9 @@ class Memory:
 
     def _setup(self) -> None:
         with closing(self._connect()) as conn, conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS memory_revision "
+                         "(id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL)")
+            conn.execute("INSERT OR IGNORE INTO memory_revision VALUES (1, 0)")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory (
@@ -383,7 +386,34 @@ class Memory:
         return self.used_bytes() >= MAX_BYTES
 
 
-    def remember(self, text: str, topic: str = "") -> Entry:
+    def revision(self) -> int:
+        with closing(self._connect()) as conn:
+            return int(conn.execute("SELECT version FROM memory_revision WHERE id=1").fetchone()[0])
+
+    def invalidate_pending(self) -> None:
+        with closing(self._connect()) as conn, conn:
+            self._bump_revision(conn)
+
+    @staticmethod
+    def _bump_revision(conn: sqlite3.Connection) -> None:
+        conn.execute("UPDATE memory_revision SET version=version+1 WHERE id=1")
+
+    def iter_entries(self, *, topic_prefix: str = "") -> Iterator[Entry]:
+        with closing(self._connect()) as conn:
+            cursor = conn.execute("SELECT * FROM memory ORDER BY id DESC")
+            while rows := cursor.fetchmany(100):
+                for row in rows:
+                    if topic_prefix:
+                        try:
+                            topic = self._cipher.decrypt(str(row["topic"] or ""))
+                        except CipherError:
+                            continue
+                        if topic.casefold().split(":", 1)[0].strip() != topic_prefix.casefold():
+                            continue
+                    yield self._read(row)
+
+    def remember(self, text: str, topic: str = "", *, replace_ids: Iterable[int] = (),
+                 expected_revision: int | None = None) -> Entry:
         """Legt eine Notiz ab.
 
         Raises:
@@ -408,6 +438,11 @@ class Memory:
 
         with closing(self._connect()) as conn, conn:
             conn.execute("BEGIN IMMEDIATE")
+            if expected_revision is not None:
+                version = conn.execute(
+                    "SELECT version FROM memory_revision WHERE id=1").fetchone()[0]
+                if version != expected_revision:
+                    raise ValueError("Der Speicher wurde inzwischen geändert.")
             if self.used_bytes() + incoming > MAX_BYTES:
                 raise MemoryFull("Die neue Notiz passt nicht mehr in deinen Speicher.")
             cur = conn.execute(
@@ -415,6 +450,10 @@ class Memory:
                 (encrypted_topic, encrypted_text),
             )
             new_id = int(cur.lastrowid or 0)
+            for entry_id in replace_ids:
+                if int(entry_id) != new_id:
+                    conn.execute("DELETE FROM memory WHERE id=?", (int(entry_id),))
+            self._bump_revision(conn)
             row = conn.execute("SELECT * FROM memory WHERE id = ?", (new_id,)).fetchone()
         return self._read(row)
 
@@ -477,13 +516,16 @@ class Memory:
 
     def forget(self, entry_id: int) -> bool:
         with closing(self._connect()) as conn, conn:
-            return conn.execute("DELETE FROM memory WHERE id = ?", (entry_id,)).rowcount > 0
+            deleted = conn.execute("DELETE FROM memory WHERE id = ?", (entry_id,)).rowcount > 0
+            self._bump_revision(conn)
+            return deleted
 
     def clear(self) -> int:
         """Loescht alle Notizen und gibt zurueck, wie viele es waren."""
         with closing(self._connect()) as conn, conn:
             count = int(conn.execute("SELECT COUNT(*) FROM memory").fetchone()[0])
             conn.execute("DELETE FROM memory")
+            self._bump_revision(conn)
         self.compact()
         return count
 

@@ -30,8 +30,16 @@ Regeln, die fuer beide gelten:
 
 from __future__ import annotations
 
+import contextlib
+import hashlib
 import json
+import queue
 import re
+import threading
+import unicodedata
+import weakref
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -61,9 +69,10 @@ class Fact:
 
 # -- Was nie von allein gemerkt wird -------------------------------------------------------------
 _SENSIBEL = re.compile(
-    r"(?i)\b(krank\w*|krankheit\w*|diagnose\w*|depress\w*|therap\w*|medikament\w*|"
+    r"(?i)\b(krank(?:e|en|er|es)?|krankheit\w*|diagnose\w*|depress\w*|therap\w*|medikament\w*|"
     r"allerg\w*|diabet\w*|krebs|schwanger\w*|behinder\w*|psych\w*|adhs|autis\w*|"
-    r"religi\w*|christ\w*|muslim\w*|moslem\w*|jud(?:e|in|en)|jüd\w*|atheist\w*|"
+    r"religi\w*|christlich\w*|christentum|christianity|muslim\w*|moslem\w*|"
+    r"jud(?:e|in|en)|jüd\w*|atheist\w*|"
     r"kirche\w*|moschee\w*|partei\w*|w(?:ä|ae)hle\w*|afd|spd|cdu|csu|fdp|"
     r"schwul\w*|lesbisch\w*|bisexuell\w*|transgender|trans\b|queer|sexuell\w*|"
     r"gewerkschaft\w*|vorstrafe\w*|knast|gefängnis\w*|verurteilt\w*|ethni\w*|hautfarbe|"
@@ -73,9 +82,44 @@ _GEHEIM = re.compile(r"(?i)(?:\b[A-Z]{2}\d{2}(?:\s?\w{4}){3,7}\b|\b(?:\d[ -]?){1
                      r"ghp_|github_pat_|sk-[a-z0-9]|nvapi-|xox[bp]-|AKIA[0-9A-Z]{8})")
 
 
+_SENSIBEL_EXTRA = re.compile(
+    r"(?i)\b(?:hiv|aids|bipolar\w*|disorder|katholi\w*|catholi\w*|protestant\w*|"
+    r"evangelisch\w*|buddh\w*|hindu\w*|orthodox\w*|islam\w*|suizid\w*|suicid\w*|"
+    r"grünen?|gruene[nr]?|linken?|republican\w*|democrat\w*|verdi|ver\.di|ig\s+metall|"
+    r"pregnan\w*|disabled|disability|bisexual\w*|sexual\w*|convicted|criminal|"
+    r"depression|medication|health|ethnicity|api[ _-]?key|geheimnis|secret)\b")
+
+_LOCKS: weakref.WeakValueDictionary[str, Any] = weakref.WeakValueDictionary()
+_LOCKS_GUARD = threading.Lock()
+
+
+@contextmanager
+def profile_lock(store: Any) -> Iterator[None]:
+    key = str(getattr(store, "db_path", id(store)))
+    with _LOCKS_GUARD:
+        lock = _LOCKS.setdefault(key, threading.RLock())
+    with lock:
+        yield
+
+
+def _entries(store: Any) -> list[Any]:
+    iterator = getattr(store, "iter_entries", None)
+    return list(iterator()) if callable(iterator) else list(store.all_entries(limit=2000))
+
+
+def credentials(text: str) -> bool:
+    return bool(_GEHEIM.search(text or "") or re.search(
+        r"(?i)\b(?:passwort\w*|kennwort\w*|password|pin|iban|kreditkart\w*|"
+        r"api[ _-]?key|auth[ _-]?token|session[ _-]?key|zugangsdaten)\b", text or ""))
+
+
 def sensitive(text: str) -> bool:
     """Gehoert das zu den Dingen, die nur auf ausdrueckliche Bitte in den Speicher duerfen?"""
-    return bool(_SENSIBEL.search(text or "") or _GEHEIM.search(text or ""))
+    context = re.search(
+        r"(?i)\b(?:bin|ist|is|am|a)\s+(?:ein\w*\s+)?christ(?:ian)?s?\b"
+        r"|\b(?:bin|ist|is|am|liege|liegt)\s+im\s+Krankenhaus\b", text or "")
+    return bool(_SENSIBEL.search(text or "") or _SENSIBEL_EXTRA.search(text or "")
+                or _GEHEIM.search(text or "") or context)
 
 
 _NICHT_MERKEN = re.compile(
@@ -86,7 +130,9 @@ _NICHT_MERKEN = re.compile(
 
 def opted_out(text: str) -> bool:
     """Will der Nutzer, dass diese Nachricht nicht gemerkt wird?"""
-    return bool(_NICHT_MERKEN.search(text or ""))
+    return bool(_NICHT_MERKEN.search(text or "") or re.search(
+        r"(?i)\b(?:speicher\w*\s+(?:das|es|dies)\s+nicht|merk\w*\s+dir\s+nichts"
+        r"|do\s+not\s+(?:remember|save|store)\s+(?:this|that|it))\b", text or ""))
 
 
 # -- Werte saeubern ------------------------------------------------------------------------------
@@ -117,18 +163,52 @@ def _schluessel(wert: str) -> str:
     """Vergleichswert fuer "mag X" und "mag X nicht": klein, ohne Artikel."""
     wert = re.sub(r"(?i)^(?:den|die|das|der|dem|einen?|eine[mnrs]?|kein\w*|the|a|an)\s+", "",
                   wert.strip())
-    return re.sub(r"[^a-z0-9äöüß]+", "-", wert.casefold()).strip("-")[:40]
+    key = re.sub(r"[\W_]+", "-", unicodedata.normalize("NFKC", wert).casefold()).strip("-")
+    if len(key) > 40:
+        suffix = hashlib.sha256(key.encode()).hexdigest()[:8]
+        key = key[:31] + "-" + suffix
+    return key
 
 
 _FRAGE = re.compile(r"(?i)^(?:wie|was|wo|wer|wann|warum|wieso|weißt|weisst|kennst|"
                     r"heiße\s+ich|heisse\s+ich|do|does|what|who|where)\b")
 
 
+def explicit_request(text: str) -> bool:
+    if opted_out(text):
+        return False
+    words = own_message(text)
+    return bool(re.search(
+        r"(?im)(?:^|[.!?]\s+)(?:bitte\s+|please\s+)?"
+        r"(?:merk(?:e)?\s+dir|speicher(?:e)?|notier(?:e)?|remember|save|store|memorize)\b"
+        r"|\b(?:kannst|könntest|koenntest)\s+du\s+(?:dir\s+)?[^.!?\n]{0,80}"
+        r"\b(?:merken|speichern|notieren)\b"
+        r"|\b(?:can|could)\s+you\s+(?:please\s+)?(?:remember|save|store|memorize)\b"
+        r"|\bbitte\s+(?:merken|speichern|notieren)\b", words))
+
+
+def own_message(text: str) -> str:
+    text = re.sub(r"(?s)```.*?```|~~~.*?~~~", " ", str(text or ""))
+    text = re.sub(r'"[^"\n]*"|„[^“\n]*“|“[^”\n]*”', " ", text)
+    lines = []
+    for line in text.splitlines():
+        if re.match(r"\s*>", line) or re.match(
+                r"(?i)\s*(?:beispiel|zitiere|übersetz\w*|uebersetz\w*|translate|quote)\b", line):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _saetze(text: str) -> list[str]:
     """Aussagesaetze -- Fragen ("wie heisse ich?") und Wenn-Saetze zaehlen nicht."""
     saetze = []
-    for satz in re.split(r"(?<=[.!?\n])\s+", str(text or "")):
-        satz = satz.strip()
+    source = own_message(text)
+    source = re.sub(
+        r"\b\d{1,2}\.\s*(?:\d{1,2}\.?|Januar|Februar|März|April|Mai|Juni|Juli|"
+        r"August|September|Oktober|November|Dezember)",
+        lambda match: match[0].replace(".", "\u2024"), source, flags=re.I)
+    for satz in re.split(r"\n+|(?<=[.!?])\s+", source):
+        satz = satz.replace("\u2024", ".").strip()
         if satz.endswith("?") and "," in satz:
             # "Ich wohne in Bremen, und du?" -- die Aussage vor der kurzen Rueckfrage zaehlt.
             vorne, _, hinten = satz.rpartition(",")
@@ -152,7 +232,8 @@ _MUSTER: list[tuple[str, re.Pattern[str]]] = [
                           r"(?P<w>[^\W\d_][^\s,.!?]{0,30})(?:\s+zu\s+mir)?",
                           re.IGNORECASE)),
     ("wohnort", re.compile(_I + r"(?:(?:ich|und)\s+wohne\s+(?:jetzt\s+|seit\s+\w+\s+)?(?:in|im)|"
-                           r"ich\s+lebe\s+(?:jetzt\s+)?(?:in|im)|ich\s+bin\s+(?:jetzt\s+)?nach"
+                           r"ich\s+lebe\s+(?:jetzt\s+)?(?:in|im)|ich\s+bin\s+"
+                           r"(?:jetzt\s+)?nach(?=[^,.!?\n]*\b(?:um)?gezogen\b)"
                            r"|i\s+live\s+in|i\s+moved\s+to)\s+(?P<w>[^,.!?\n]+)",
                            re.IGNORECASE)),
     ("herkunft", re.compile(_I + r"(?:ich\s+komme\s+(?:urspr(?:ü|ue)nglich\s+)?aus|"
@@ -164,7 +245,8 @@ _MUSTER: list[tuple[str, re.Pattern[str]]] = [
                                r"\s+(?P<w>[^,.!?\n]+)", re.IGNORECASE)),
     ("alter", re.compile(_I + r"(?:ich\s+bin|i'?m|i\s+am)\s+(?P<w>\d{1,2})\s+"
                          r"(?:jahre\s+alt|years?\s+old|jahre\b)", re.IGNORECASE)),
-    ("geburtstag", re.compile(_I + r"(?:ich\s+habe\s+am|mein\s+geburtstag\s+ist\s+(?:am)?|"
+    ("geburtstag", re.compile(_I + r"(?:ich\s+habe\s+am(?=[^!?\n]*\bGeburtstag\b)|"
+                              r"mein\s+geburtstag\s+ist\s+(?:am)?|"
                               r"my\s+birthday\s+is(?:\s+on)?)\s*(?P<w>[0-9]{1,2}\.\s?(?:[0-9]"
                               r"{1,2}\.?|[A-Za-zäöü]+)|[A-Za-z]+\s+\d{1,2})", re.IGNORECASE)),
     ("ernaehrung", re.compile(_I + r"(?:ich\s+bin|ich\s+lebe|i'?m|i\s+am)\s+(?:seit\s+\w+\s+)?"
@@ -173,6 +255,8 @@ _MUSTER: list[tuple[str, re.Pattern[str]]] = [
     ("mag_nicht", re.compile(_I + r"(?:ich\s+mag\s+(?:keine?n?|kein)|ich\s+hasse|"
                              r"ich\s+kann\s+\S+\s+nicht\s+leiden|i\s+hate|i\s+don'?t\s+like|"
                              r"i\s+dislike)\s+(?P<w>[^,.!?\n]+)", re.IGNORECASE)),
+    ("mag_nicht2", re.compile(_I + r"ich\s+kann\s+(?P<w>[^,.!?\n]+?)\s+nicht\s+leiden\b",
+                              re.IGNORECASE)),
     ("mag_nicht2", re.compile(_I + r"ich\s+mag\s+(?P<w>[^,.!?\n]+?)\s+(?:gar\s+|überhaupt\s+)?"
                               r"nicht\b", re.IGNORECASE)),
     ("mag", re.compile(_I + r"(?:(?:ich|und)\s+(?:mag|liebe)|ich\s+(?:esse|trinke|höre|hoere|lese|"
@@ -220,6 +304,26 @@ def _fakt(slot: str, wert: str, art: str = "") -> Fact | None:
             return None
         return Fact("alter", f"Ist {alter} Jahre alt (Stand {date.today():%m/%Y}).")
     if slot == "geburtstag":
+        import calendar
+
+        months = {name.casefold(): number for number, name in enumerate(calendar.month_name)
+                  if name}
+        months.update({name: number for number, name in enumerate((
+            "", "januar", "februar", "märz", "april", "mai", "juni", "juli", "august",
+            "september", "oktober", "november", "dezember")) if name})
+        match = re.fullmatch(r"(\d{1,2})\.\s*([\w]+)\.?", wert)
+        english = re.fullmatch(r"([A-Za-z]+)\s+(\d{1,2})", wert)
+        if match:
+            day, month = int(match[1]), match[2]
+        elif english:
+            day, month = int(english[2]), english[1]
+        else:
+            return None
+        try:
+            number = int(month) if month.isdecimal() else months.get(month.casefold(), 0)
+            date(2000, number, day)
+        except (ValueError, OverflowError):
+            return None
         return Fact("geburtstag", f"Hat am {wert} Geburtstag.")
     if slot == "ernaehrung":
         art_text = wert.casefold()
@@ -243,6 +347,9 @@ def _fakt(slot: str, wert: str, art: str = "") -> Fact | None:
             return None
         return Fact(f"lieblings:{art}", f"Lieblings{art}: {wert}.")
     if slot == "sprache":
+        if re.match(r"(?i)^(?:über|ueber|von|mit|zu|gerade|heute|jetzt|noch|nicht|auch|nur)\b",
+                    wert):
+            return None
         return Fact(f"sprache:{_schluessel(wert)}", f"Spricht {wert}.")
     if slot == "haustier":
         return Fact(f"haustier:{_schluessel(wert)}", f"Hat {wert}.")
@@ -261,7 +368,8 @@ def extract(text: str) -> list[Fact]:
         for slot, muster in _MUSTER:
             for treffer in muster.finditer(satz):
                 woerter = 2 if slot in ("name", "anrede") else 6
-                wert = _wert(treffer.group("w"), woerter)
+                wert = (treffer.group("w").strip() if slot in ("geburtstag", "sprache")
+                        else _wert(treffer.group("w"), woerter))
                 start, ende = treffer.start(), treffer.start("w") + len(wert)
                 if any(start < b and ende > a for a, b in belegt):
                     continue
@@ -295,18 +403,24 @@ def forget_request(text: str) -> str:
 
 # -- Ablegen mit einem Stand je Sache ------------------------------------------------------------
 def _norm(text: str) -> str:
-    return re.sub(r"[^a-z0-9äöüß]+", " ", (text or "").casefold()).strip()
+    return re.sub(r"[\W_]+", " ",
+                  unicodedata.normalize("NFKC", text or "").casefold()).strip()
 
 
-def person_entries(store: Any, limit: int = MAX_PERSON_FACTS) -> list[Any]:
-    """Alle Eintraege ueber den Nutzer (Thema "person" oder "person:..."), aelteste zuerst."""
+def person_entries(store: Any, limit: int | None = MAX_PERSON_FACTS) -> list[Any]:
+    if limit is not None and limit <= 0:
+        return []
     try:
-        eintraege = store.all_entries(limit=2000)
+        passend = []
+        with contextlib.closing(store.iter_entries(topic_prefix=PERSON)) as stream:
+            for entry in stream:
+                if str(entry.topic or "").casefold().split(":", 1)[0].strip() == PERSON:
+                    passend.append(entry)
+                    if limit is not None and len(passend) >= limit:
+                        break
+        return list(reversed(passend))
     except Exception:
         return []
-    passend = [e for e in eintraege
-               if str(e.topic or "").casefold().split(":", 1)[0].strip() == PERSON]
-    return list(reversed(passend[:limit]))
 
 
 _ALTER_PLATZ = {
@@ -317,15 +431,21 @@ _ALTER_PLATZ = {
 }
 
 
-def store_facts(store: Any, facts: list[Fact]) -> list[Fact]:
-    """Legt *facts* ab: ersetzt den alten Stand, hebt Gegenteile auf, nichts doppelt.
-
-    Returns: die Fakten, die wirklich neu oder geaendert sind.
-    """
+def store_facts(store: Any, facts: list[Fact], *,
+                expected_revision: int | None = None) -> list[Fact]:
     if store is None or not facts:
         return []
+    with profile_lock(store):
+        return _store_facts(store, facts, expected_revision)
+
+
+def _store_facts(store: Any, facts: list[Fact],
+                 expected_revision: int | None) -> list[Fact]:
     try:
-        vorhanden = list(store.all_entries(limit=2000))
+        version = store.revision()
+        if expected_revision is not None and version != expected_revision:
+            return []
+        vorhanden = _entries(store)
     except Exception:
         return []
     neu: list[Fact] = []
@@ -337,25 +457,30 @@ def store_facts(store: Any, facts: list[Fact]) -> list[Fact]:
             gegenteil = "mag:" + fakt.slot.split(":", 1)[1]
         einzel = fakt.slot in SINGLE or fakt.slot.startswith("lieblings:")
         gleich = False
+        ersetzen = set()
         for eintrag in vorhanden:
             thema = str(eintrag.topic or "").casefold()
+            if thema.startswith(("person:mag:", "person:mag_nicht:")):
+                old_kind = thema.split(":", 2)[1]
+                value = re.sub(r"(?i)^mag\s+|\s+nicht\.?$|\.$", "", eintrag.text)
+                thema = f"person:{old_kind}:{_schluessel(value)}"
             if _norm(eintrag.text) == _norm(fakt.text):
                 gleich = True
                 continue
-            if thema == fakt.topic.casefold() and einzel:
-                store.forget(eintrag.id)
-            elif (thema == PERSON and fakt.slot in _ALTER_PLATZ
-                  and _ALTER_PLATZ[fakt.slot].search(str(eintrag.text or ""))):
-                # Von Hand oder vom Modell abgelegt ("Heisst Jonas."): auch das ist der Platz.
-                store.forget(eintrag.id)
-            elif gegenteil and thema == f"{PERSON}:{gegenteil}":
-                store.forget(eintrag.id)
+            if (thema == fakt.topic.casefold() and einzel) or (
+                    thema == PERSON and fakt.slot in _ALTER_PLATZ
+                    and _ALTER_PLATZ[fakt.slot].search(str(eintrag.text or ""))) or (
+                    gegenteil and thema == f"{PERSON}:{gegenteil}"):
+                ersetzen.add(eintrag.id)
         if gleich:
             continue
         try:
-            eintrag = store.remember(fakt.text, fakt.topic)
+            eintrag = store.remember(fakt.text, fakt.topic, replace_ids=ersetzen,
+                                     expected_revision=version)
         except Exception:
             continue
+        version += 1
+        vorhanden = [e for e in vorhanden if e.id not in ersetzen]
         vorhanden.append(eintrag)
         neu.append(fakt)
     return neu
@@ -368,9 +493,10 @@ def forget_matching(store: Any, wunsch: str) -> list[str]:
     if store is None or not woerter:
         return []
     weg = []
-    for eintrag in person_entries(store, limit=2000):
+    store.invalidate_pending()
+    for eintrag in person_entries(store, limit=None):
         text = _norm(f"{eintrag.text} {eintrag.topic}")
-        if all(w in text for w in woerter) and store.forget(eintrag.id):
+        if set(woerter) <= set(text.split()) and store.forget(eintrag.id):
             weg.append(str(eintrag.text))
     return weg
 
@@ -407,7 +533,9 @@ zum Beispiel "Mag Klettern." oder "Wohnt in Bremen.". Nichts gefunden: {"fakten"
 
 def worth_asking(text: str) -> bool:
     """Lohnt der Modellaufruf? Nur bei Ich-Bezug, ohne Opt-out, nicht bei reinen Fragen."""
-    text = (text or "").strip()
+    text = own_message(text).strip()
+    if sensitive(text) or forget_request(text):
+        return False
     if len(text) < 12 or opted_out(text) or not _ICH.search(text):
         return False
     return any(not s.endswith("?") for s in re.split(r"(?<=[.!?\n])\s+", text) if s.strip())
@@ -439,12 +567,24 @@ def parse_llm(raw: str) -> list[Fact]:
         if not isinstance(eintrag, dict):
             continue
         art = str(eintrag.get("art") or "").strip().casefold()
-        text = " ".join(str(eintrag.get("text") or "").split())[:MAX_FACT]
+        value = eintrag.get("text")
+        if not isinstance(value, str) or not 4 <= len(value.strip()) <= MAX_FACT:
+            continue
+        text = " ".join(value.split())
         if art not in ARTEN or len(text) < 4 or sensitive(text) or "http" in text.casefold():
             continue
         if not text.endswith((".", "!")):
             text += "."
+        from aquaticy.injection import suspicious
+
+        if suspicious(text):
+            continue
         slot = art if art in SINGLE else f"{art}:{_schluessel(text)}"
+        if art == "lieblings":
+            favorite = re.match(r"(?i)^Lieblings([a-zäöüß]+)\s*:", text)
+            if favorite is None:
+                continue
+            slot = "lieblings:" + favorite[1].casefold()
         if art in ("mag", "mag_nicht"):
             kern = re.sub(r"(?i)^mag\s+|\s+nicht\.?$|\.$", "", text)
             slot = f"{art}:{_schluessel(kern)}"
@@ -460,7 +600,7 @@ def ask_model(settings: Any, prompt: str) -> str:
     model = str(getattr(settings, "effective_subagent_model", "") or settings.model)
     with paced(model, key_of(settings, model)):
         antwort = metering.completion(
-            settings, enforce=False, model=model,
+            settings, enforce=True, model=model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=300, timeout=25.0, **settings.fast_kwargs_for(model))
     return str(antwort.choices[0].message.content or "")
@@ -474,13 +614,63 @@ def cloud_model(settings: Any) -> bool:
     return provider_of(model) not in ("ollama", "ollama_chat", "llamacpp", "hosted_vllm", "")
 
 
-def learn_with_model(settings: Any, store: Any, nachricht: str) -> list[Fact]:
-    """Fragt das schnelle Modell nach Beilaeufigem und legt es ab. Fehler bleiben still."""
-    if store is None or not worth_asking(nachricht):
+def learn_with_model(settings: Any, store: Any, nachricht: str, *,
+                     allowed: Any = None, ask: Any = None) -> list[Fact]:
+    def enabled() -> bool:
+        return bool(settings.memory_enabled and (allowed is None or allowed()))
+
+    nachricht = own_message(nachricht)
+    if store is None or not enabled() or not worth_asking(nachricht):
         return []
-    bekannt = [str(e.text) for e in person_entries(store)]
+    from aquaticy.keyvault import scrub
+
+    secrets = settings.secrets()
+    if scrub(nachricht, secrets) != nachricht:
+        return []
+    version = store.revision()
+    bekannt = [str(e.text) for e in person_entries(store)
+               if not sensitive(str(e.text)) and scrub(str(e.text), secrets) == str(e.text)]
     try:
-        fakten = parse_llm(ask_model(settings, llm_prompt(nachricht, bekannt)))
+        fakten = parse_llm((ask or ask_model)(settings, llm_prompt(nachricht, bekannt)))
     except Exception:
         return []
-    return store_facts(store, fakten)
+    with profile_lock(store):
+        if not enabled() or store.revision() != version:
+            return []
+        return store_facts(store, [f for f in fakten if scrub(f.text, secrets) == f.text],
+                           expected_revision=version)
+
+
+_LEARNING_JOBS: queue.Queue[Callable[[], None]] = queue.Queue(maxsize=32)
+_LEARNING_START = threading.Lock()
+_LEARNING_THREADS = 0
+
+
+def _learning_worker() -> None:
+    while True:
+        job = _LEARNING_JOBS.get()
+        try:
+            with contextlib.suppress(Exception):
+                job()
+        finally:
+            _LEARNING_JOBS.task_done()
+
+
+def schedule_learning(job: Callable[[], None]) -> bool:
+    global _LEARNING_THREADS
+    with _LEARNING_START:
+        while _LEARNING_THREADS < 4:
+            thread = threading.Thread(target=_learning_worker, daemon=True,
+                                      name=f"aquaticy-gedaechtnis-{_LEARNING_THREADS}")
+            try:
+                thread.start()
+            except RuntimeError:
+                break
+            _LEARNING_THREADS += 1
+        if not _LEARNING_THREADS:
+            return False
+    try:
+        _LEARNING_JOBS.put_nowait(job)
+        return True
+    except queue.Full:
+        return False

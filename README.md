@@ -1,4 +1,4 @@
-# Aquaticy AI 15.3.4
+# Aquaticy AI 15.4.4
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,42 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.4.4: 39 nachgewiesene Fehlerursachen korrigiert.**
+
+Die neuen Gegenproben scheitern auf dem unveränderten Stand 15.3.4 und bestehen nach den
+Korrekturen. Mehrere Varianten derselben Ursache zählen nur einmal. Die angefragten
+1.000 unterschiedlichen Fehler sind damit nicht nachgewiesen.
+
+- **Gedächtnis und Datenschutz (25 Ursachen):** Fehlgeschlagene Änderungen erhalten alte
+  Notizen. Gleichzeitiges Lernen erzeugt keine doppelten Einträge. Verspätete Modellantworten
+  schreiben nach Löschen, Abschalten oder neuen Änderungen keine alten Fakten zurück.
+  Vergessen findet auch ältere Einträge und unterscheidet ganze Wörter.
+- Opt-out, Zitate und sensible Angaben werden verlässlicher erkannt. Das gilt auch für
+  Speicherversuche des Hauptmodells. Gespeicherte Zugangsdaten bleiben aus automatischen
+  Modellkontexten heraus. Erinnerungen stehen als gekennzeichnete Daten im Systemkontext.
+  Automatische Cloud-Auswertung beachtet Kontolimits. Hintergrundarbeit hat feste Grenzen.
+- Namen, Geburtstage, Wohnorte, Sprachen und Vorlieben werden genauer erkannt. Unicode-Namen
+  und lange Werte behalten unterschiedliche Schlüssel. „Im Netz suchen“ auszuschalten lässt
+  das eingeschaltete Gedächtnis weiter verfügbar.
+- **Abbrechen (6 Ursachen):** Alte Hilfsarbeiten verwenden einen eigenen Zustand. Sie ändern
+  nach dem Abbrechen keine neue Anfrage und senden keine verspäteten Ereignisse an sie.
+  Wartende Modellaufrufe prüfen den Abbruch vor dem Start. Auch die Schlussantwort und
+  vorab geladene Nachrichten lassen sich abbrechen. Verlassene Hilfsarbeiten sind begrenzt.
+- **Prüf-VM (3 Ursachen):** Reviews verwenden eine eigene VM ohne Netz und Messenger-Volumes.
+  Höchstens fünf Testläufe mit jeweils höchstens 20 Sekunden sind technisch erzwungen.
+  JSON-Prüfungen lehnen auch die ungültigen Werte `NaN` und `Infinity` ab.
+- **Weitere Funktionen (5 Ursachen):** Lageränderungen akzeptieren nur gültige ganze Zahlen
+  und prüfen Schreibantworten. Private Bilder folgen keinen Verknüpfungen in andere Ordner.
+  Der Modell-Routing-Cache bleibt begrenzt. Auch kurze Standardantworten übernehmen neu
+  gewählte Chat- und Datenschutzeinstellungen.
+
+Nachweise: [Gedächtnis](tests/test_v1544_memory.py),
+[Abbrechen und Reviews](tests/test_v1544_cancel_review.py),
+[weitere Funktionen](tests/test_v1544_integrations.py).
+Vorhandene Funktionen und Sicherheitsprüfungen bleiben erhalten. Diese Prüfungen sind kein
+Nachweis vollständiger Fehlerfreiheit; echte Messenger-Konten und Container-Läufe brauchen
+zusätzlich die passende Laufzeit und Zugangsdaten.
 
 **Neu in 15.3.4:**
 
@@ -623,7 +659,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.3.4
+aquaticy --version            # 15.4.4
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import copy
 import json
 import re
 import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -1438,6 +1440,9 @@ def model_error_hint(exc: BaseException, model: str) -> str:
     return ""
 
 
+_STEP_SLOTS = threading.BoundedSemaphore(32)
+
+
 class Abgebrochen(Exception):
     """Der Nutzer hat die laufende Anfrage abgebrochen (15.3.4)."""
 
@@ -1504,8 +1509,10 @@ class Agent:
 
 
         self._stop = threading.Event()
+        self._turn_clarified: list[tuple[str, str]] = []
         # 15.3.4: Hilfsthreads abgebrochener Schritte -- sie melden nichts mehr.
         self._verlassen: set[int] = set()
+        self._step_slots = threading.BoundedSemaphore(4)
 
 
 
@@ -2027,8 +2034,7 @@ class Agent:
         if not calls:
             return 0
         self.messages.append({"role": "assistant", "content": "", "tool_calls": calls})
-        for call in calls:
-            self.messages.append(self._tool_result(call))
+        self._run_round(calls)
         return len(calls)
 
     def _prefetch_news(self, question: str) -> int:
@@ -2067,7 +2073,7 @@ class Agent:
             },
         }
         self.messages.append({"role": "assistant", "content": "", "tool_calls": [call]})
-        self.messages.append(self._tool_result(call))
+        self._run_round([call])
         return 1
 
     def _master_research(self, question: str, budget: int) -> int:
@@ -2893,7 +2899,9 @@ class Agent:
         if store is None:
             return ""
         from aquaticy import memory_auto
+        from aquaticy.keyvault import scrub
 
+        secrets = self.settings.secrets()
         try:
             entries = memory_auto.person_entries(store)
         except Exception:
@@ -2902,7 +2910,9 @@ class Agent:
         laenge = 0
         for entry in entries:
             zeile = " ".join(str(entry.text or "").split())
-            if not zeile or zeile in lines:
+            if not zeile or zeile in lines or memory_auto.credentials(zeile):
+                continue
+            if scrub(zeile, secrets) != zeile:
                 continue
             laenge += len(zeile)
             if laenge > 3000:
@@ -2916,7 +2926,9 @@ class Agent:
                 for entry in store.recall(" ".join(woerter), limit=8):
                     thema = str(entry.topic or "").casefold().split(":", 1)[0].strip()
                     zeile = " ".join(str(entry.text or "").split())[:400]
-                    if thema != memory_auto.PERSON and zeile and zeile not in passend:
+                    if (thema != memory_auto.PERSON and zeile and zeile not in passend
+                            and not memory_auto.credentials(zeile)
+                            and scrub(zeile, secrets) == zeile):
                         passend.append(zeile)
         text = ""
         if lines:
@@ -2924,11 +2936,12 @@ class Agent:
                 "\n\nWas du ueber den Nutzer weisst (aus deinem Gedaechtnis). Nutze es von "
                 "selbst, wo es passt -- Anrede, Vorlieben, Ort --, ohne es aufzuzaehlen. Sagt "
                 "der Nutzer jetzt etwas anderes, gilt das Neue:\n"
-                + "\n".join(f"- {line}" for line in lines)
+                + wrap_block("\n".join(f"- {line}" for line in lines), "Gespeicherte Fakten")
             )
         if passend:
             text += ("\n\nNotizen aus deinem Gedaechtnis, die zur Frage passen koennten:\n"
-                     + "\n".join(f"- {line}" for line in passend[:4]))
+                     + wrap_block("\n".join(f"- {line}" for line in passend[:4]),
+                                  "Gespeicherte Notizen"))
         return text
 
     def _memory_allowed(self, mode: str = "") -> bool:
@@ -2939,10 +2952,13 @@ class Agent:
 
     def _memory_learn(self, question: str, mode: str = "") -> None:
         """Feste Muster sofort ablegen ("ich heisse Louis") -- vor der Antwort (15.3.4)."""
+        from aquaticy import memory_auto
+
         self.toolbox.memory_blocked = not self._memory_allowed(mode)
+        self.toolbox.memory_request = question
+        self.toolbox.memory_optout = memory_auto.opted_out(question)
         if self.toolbox.memory_blocked:
             return
-        from aquaticy import memory_auto
 
         try:
             store = self.toolbox._memory()
@@ -2961,7 +2977,7 @@ class Agent:
     def _memory_learn_later(self, question: str, result: AgentResult) -> None:
         """Nach der Antwort: Beilaeufiges mit dem schnellen Modell finden (15.3.4).
 
-        Ein eigener kurzer Thread je Turn, damit die Antwort nicht wartet. Nur bei Ich-Bezug
+        Eine begrenzte Warteschlange, damit die Antwort nicht wartet. Nur bei Ich-Bezug
         (memory_auto.worth_asking), nur mit Wolkenmodell, nur wenn das Hauptmodell in diesem
         Turn nicht schon selbst etwas abgelegt hat.
         """
@@ -2980,12 +2996,22 @@ class Agent:
         if store is None:
             return
         settings = self.settings
+        stop = self._stop
+        version = store.revision()
+        learn = memory_auto.learn_with_model
+        ask = memory_auto.ask_model
+
+        def allowed() -> bool:
+            return (self.settings.memory_enabled and self._memory_allowed()
+                    and not stop.is_set() and self._stop is stop
+                    and self.settings.data_dir == settings.data_dir)
 
         def lernen() -> None:
-            with contextlib.suppress(Exception):
-                memory_auto.learn_with_model(settings, store, question)
+            if not allowed() or store.revision() != version:
+                return
+            learn(settings, store, question, allowed=allowed, ask=ask)
 
-        threading.Thread(target=lernen, name="aquaticy-gedaechtnis", daemon=True).start()
+        memory_auto.schedule_learning(lernen)
 
     def _guard_models(self) -> list[str]:
         """Womit der Chat in diesem Durchlauf wirklich arbeitet -- fuer den Rechtspruefer.
@@ -3134,6 +3160,13 @@ class Agent:
             return aufruf()  # ein Agent ohne __init__ (Tests, Nachbauten): wie bisher
         if stop.is_set():
             raise Abgebrochen()
+        slots = getattr(self, "_step_slots", None)
+        if slots is not None and not slots.acquire(blocking=False):
+            raise RuntimeError("Es laufen noch abgebrochene Schritte. Versuche es gleich erneut.")
+        if not _STEP_SLOTS.acquire(blocking=False):
+            if slots is not None:
+                slots.release()
+            raise RuntimeError("Die Verarbeitung ist ausgelastet. Versuche es gleich erneut.")
         ergebnis: dict[str, Any] = {}
         fertig = threading.Event()
         kontext = contextvars.copy_context()
@@ -3147,9 +3180,18 @@ class Agent:
                 fertig.set()
                 # Thread-Nummern werden wiederverwendet: nach dem Ende nicht mehr sperren.
                 verlassen.discard(threading.get_ident())
+                _STEP_SLOTS.release()
+                if slots is not None:
+                    slots.release()
 
         helfer = threading.Thread(target=lauf, name="aquaticy-schritt", daemon=True)
-        helfer.start()
+        try:
+            helfer.start()
+        except BaseException:
+            _STEP_SLOTS.release()
+            if slots is not None:
+                slots.release()
+            raise
         while not fertig.wait(0.1):
             if stop.is_set():
                 if helfer.ident is not None:
@@ -3157,10 +3199,95 @@ class Agent:
                     if fertig.is_set():
                         verlassen.discard(helfer.ident)
                 raise Abgebrochen()
+        if stop.is_set():
+            raise Abgebrochen()
         if "fehler" in ergebnis:
             raise ergebnis["fehler"]
         return ergebnis.get("wert")
 
+
+    def _step_agent(self) -> Agent:
+        if not hasattr(self, "_stop"):
+            return self
+        worker = copy.copy(self)
+        worker.settings = copy.copy(self.settings)
+        for item in fields(self.settings):
+            value = getattr(self.settings, item.name)
+            if isinstance(value, (dict, list, set)):
+                setattr(worker.settings, item.name, copy.copy(value))
+        worker._request_model = self.active_model
+        for key, value in vars(self).items():
+            if isinstance(value, (dict, list, set)):
+                setattr(worker, key, copy.copy(value))
+        worker.messages = copy.deepcopy(self.messages)
+        worker.toolbox = copy.copy(self.toolbox)
+        for key, value in vars(self.toolbox).items():
+            if isinstance(value, (dict, list, set)):
+                setattr(worker.toolbox, key, copy.deepcopy(value))
+            elif getattr(value, "__self__", None) is self:
+                setattr(worker.toolbox, key, value.__func__.__get__(worker, type(worker)))
+        worker.toolbox.stats = copy.deepcopy(self.toolbox.stats)
+        worker.toolbox.cancel_check = lambda: worker.stopped
+        def guarded_callback(callback: EventHook | None) -> EventHook:
+            def emit(name: str, payload: dict[str, Any]) -> None:
+                if callback is not None and not worker.stopped:
+                    callback(name, payload)
+            return emit
+
+        worker.on_event = guarded_callback(self.on_event)
+        worker.toolbox.on_event = guarded_callback(self.toolbox.on_event)
+        return worker
+
+    @staticmethod
+    def _sync_field(target: Any, name: str, value: Any) -> None:
+        before = getattr(target, name, None)
+        if isinstance(before, dict) and isinstance(value, dict):
+            before.clear()
+            before.update(value)
+        elif isinstance(before, list) and isinstance(value, list):
+            before[:] = value
+        elif isinstance(before, set) and isinstance(value, set):
+            before.clear()
+            before.update(value)
+        else:
+            setattr(target, name, value)
+
+    def _merge_step(self, worker: Agent) -> None:
+        if worker is self or self.stopped or worker.stopped:
+            return
+        self.messages[:] = worker.messages
+        protected = {"settings", "on_event", "cancel_check", "stats"}
+        for name, value in vars(worker.toolbox).items():
+            if name in protected or callable(value):
+                continue
+            self._sync_field(self.toolbox, name, value)
+        for name, value in vars(worker.toolbox.stats).items():
+            self._sync_field(self.toolbox.stats, name, value)
+        before = list(getattr(self, "clarified", ()))
+        after = list(getattr(worker, "clarified", ()))
+        changed = before != after
+        if hasattr(worker, "clarified"):
+            self.clarified = after
+        if hasattr(worker, "_turn_clarified"):
+            self._turn_clarified = worker._turn_clarified
+        if changed:
+            self._refresh_system()
+        for name in ("_sandbox_box", "_review_box"):
+            box = getattr(self.toolbox, name, None)
+            if box is not None and hasattr(box, "on_event"):
+                box.on_event = self.toolbox._emit_pair
+
+    def _step_cleanup(self, worker: Agent) -> None:
+        if worker is self or not worker.stopped:
+            return
+        for name in ("_google_client", "_storage_client", "_review_box"):
+            resource = getattr(worker.toolbox, name, None)
+            if resource is None or resource is getattr(self.toolbox, name, None):
+                continue
+            close = getattr(resource, "close", None) or getattr(resource, "stop", None)
+            if callable(close):
+                with contextlib.suppress(Exception):
+                    close()
 
     def _model_ready(self) -> None:
         """Schliesst die Ladezeile ab -- hoechstens einmal je Frage."""
@@ -3224,8 +3351,10 @@ class Agent:
             try:
                 self._request_model = aufgerufen
                 try:
+                    worker = self._step_agent()
+                    frozen_messages = copy.deepcopy(messages)
                     antwort = self._abbrechbar(
-                        lambda: self._completion(messages, stream=stream))
+                        partial(worker._completion, frozen_messages, stream=stream))
                 finally:
                     self._request_model = ""
             except (metering.QuotaExceeded, Abgebrochen):
@@ -3379,6 +3508,8 @@ class Agent:
                 stream = False
             try:
                 with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
+                    if self.stopped:
+                        raise Abgebrochen()
                     if self.settings.model_access is not None:
                         self.settings.model_access(self.active_model)
 
@@ -3574,6 +3705,8 @@ class Agent:
             self.toolbox._secure_nmaps = 0
             self.toolbox._secure_sources.clear()
         self._plugin_turn = str(plugin_prompt or "").strip()
+        self.toolbox.review_mode = self._review_turn()
+        self.toolbox._review_runs = 0
         self._github_review_target = None
         if not self.secure_pro:
             from aquaticy import addons, github_repo
@@ -3605,7 +3738,7 @@ class Agent:
         # Nur die eigenen Worte: keine Anhaenge, keine fremden Bloecke, kein Ortsfilter.
         from aquaticy.injection import user_words
 
-        self._memory_words = " ".join(user_words([own_words(question)]).split())
+        self._memory_words = user_words([own_words(question)]).strip()
         self._memory_learn(self._memory_words, mode or self.mode)
 
 
@@ -3616,17 +3749,6 @@ class Agent:
                 [str(m.get("content") or "") for m in self.messages
                  if m.get("role") == "user" and isinstance(m.get("content"), str)]
                 + [question])
-        standard = "" if self._plugin_turn or self.secure_pro else standard_chat_reply(
-            question, frage_offen=self._last_reply_asks())
-        if standard:
-            self.max_run = False
-            self._stop = threading.Event()
-            self.toolbox.stats.reset()
-            self._emit("triage", decision="chat", source="standardantwort")
-            self.messages.append({"role": "user", "content": question})
-            self.messages.append({"role": "assistant", "content": standard})
-            self._type_out(standard, stream)
-            return self._finish(AgentResult(answer=standard), question)
         if effort:
             self.effort = clean_effort(effort)
         before = (self.mode, self.structured, self.online, self.workshop_on,
@@ -3651,13 +3773,27 @@ class Agent:
 
 
 
+        standard = "" if self._plugin_turn or self.secure_pro else standard_chat_reply(
+            question, frage_offen=self._last_reply_asks())
+        if standard:
+            self._system_dirty = True
+            self.max_run = False
+            self._stop = threading.Event()
+            self.toolbox.stats.reset()
+            self._emit("triage", decision="chat", source="standardantwort")
+            self.messages.append({"role": "user", "content": question})
+            self.messages.append({"role": "assistant", "content": standard})
+            self._type_out(standard, stream)
+            return self._finish(AgentResult(answer=standard), question)
         self._vm_da = self._vm_can_start() if self.workshop_on else None
         if (self.mode, self.structured, self.online, self.workshop_on,
                 self.visual_sources, self._vm_da) != before or (
                 self._addon_prompt() != getattr(self, "_addon_prompt_seen", "")) or (
-                self._person_prompt() != getattr(self, "_person_seen", "")):
+                self._person_prompt() != getattr(self, "_person_seen", "")) or (
+                getattr(self, "_system_dirty", False)):
             # 15.3.4: auch wenn sich das Gedaechtnis geaendert hat (neu Gemerktes).
             self._refresh_system()
+            self._system_dirty = False
         self.max_run = bool(gewuenscht_max) and self.pro_mode
         if gewuenscht_max and not self.pro_mode:
             self._emit(
@@ -3747,7 +3883,7 @@ class Agent:
 
         turn_start = len(self.messages)
 
-        self._turn_clarified: list[tuple[str, str]] = []
+        self._turn_clarified = []
         inhalt = self._with_context(question)
         if self._eigene:
             from aquaticy.ownservices import missing_text, turn_note
@@ -4317,10 +4453,18 @@ class Agent:
         """
         suchen = self.toolbox.stats.searches
         vorher = len(suchen)
+        worker = self._step_agent()
+
+        def execute() -> list[dict[str, Any]]:
+            try:
+                return run_calls(tool_calls, worker._tool_result,
+                                 parallel_groups=clean_mode(worker.mode) == "normal")
+            finally:
+                self._step_cleanup(worker)
+
         try:
-            antworten = self._abbrechbar(lambda: run_calls(
-                tool_calls, self._tool_result,
-                parallel_groups=clean_mode(self.mode) == "normal"))
+            antworten = self._abbrechbar(execute)
+            self._merge_step(worker)
         except Abgebrochen:
             # Zu jedem Aufruf genau eine Antwort -- sonst lehnt die Schnittstelle die
             # naechste Frage ab.
@@ -4397,6 +4541,15 @@ class Agent:
         }
 
     def _final_answer(self, *, stream: bool) -> str:
+        worker = self._step_agent()
+        try:
+            answer = str(self._abbrechbar(lambda: worker._final_answer_blocking(stream=stream)))
+            self._merge_step(worker)
+            return answer
+        except Abgebrochen:
+            return ""
+
+    def _final_answer_blocking(self, *, stream: bool) -> str:
         """Letzter Aufruf ohne Werkzeuge -- der Zwischenstand muss raus."""
         import litellm
 
@@ -4409,6 +4562,8 @@ class Agent:
             messages = metering.prepare_messages(self.settings, self.active_model, self.messages)
             buchung = self._reserve(messages)
             with paced(self.active_model, pace_key_of(self.settings, self.active_model)):
+                if self.stopped:
+                    raise Abgebrochen()
                 if self.settings.model_access is not None:
                     self.settings.model_access(self.active_model)
                 response = llmcall.completion(
@@ -4736,6 +4891,7 @@ class Agent:
                 break
 
     def _finish(self, result: AgentResult, question: str = "") -> AgentResult:
+        result.stopped = result.stopped or self.stopped
         original_answer = result.answer
         self._check_answer(result, question)
         stats = self.toolbox.stats

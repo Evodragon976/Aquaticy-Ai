@@ -27,6 +27,8 @@ Reverse Proxy mit Anmeldung.
 from __future__ import annotations
 
 import contextlib
+import math
+import re
 from typing import Any
 from urllib.parse import urlparse
 
@@ -87,6 +89,22 @@ def normalize_access(value: str) -> str:
     """Unbekanntes wird zu "off" -- im Zweifel lieber nichts duerfen."""
     value = (value or "").strip().lower()
     return value if value in ACCESS_LEVELS else "off"
+
+
+def integer(value: Any, *, minimum: int | None = None) -> int:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise StorageError("Nenne eine ganze Zahl.")
+    if isinstance(value, float) and (not math.isfinite(value) or not value.is_integer()):
+        raise StorageError("Nenne eine ganze Zahl.")
+    if isinstance(value, str) and not re.fullmatch(r"[+-]?\d+", value.strip()):
+        raise StorageError("Nenne eine ganze Zahl.")
+    try:
+        number = int(value)
+    except (ValueError, OverflowError) as exc:
+        raise StorageError("Nenne eine ganze Zahl.") from exc
+    if minimum is not None and number < minimum:
+        raise StorageError(f"Die Zahl muss mindestens {minimum} sein.")
+    return number
 
 
 class Storage:
@@ -155,11 +173,16 @@ class Storage:
         if not 200 <= response.status_code < 300:
             raise StorageError(_explain(response))
         try:
-            return response.json()
+            result = response.json()
         except ValueError as exc:
             raise StorageError(
                 "Unter dieser Adresse antwortet etwas anderes als die Lagerverwaltung."
             ) from exc
+        if method not in {"GET", "HEAD"} and (
+                not isinstance(result, dict) or not result or result.get("error")):
+            raise StorageError("Die Antwort der Lagerverwaltung ist unbrauchbar. Prüfe dort, "
+                               "ob die Änderung angekommen ist, bevor du sie wiederholst.")
+        return result
 
     def info(self) -> dict[str, Any]:
         """Kennung und Einstellungen des Servers -- der Verbindungstest."""
@@ -178,15 +201,16 @@ class Storage:
 
     def furniture(self, room_id: int) -> list[dict[str, Any]]:
         """Die Moebel eines Raums."""
-        return _rows(self._request("GET", f"/api/rooms/{int(room_id)}/furniture"))
+        return _rows(self._request("GET", f"/api/rooms/{integer(room_id, minimum=1)}/furniture"))
 
     def items(self, furniture_id: int) -> list[dict[str, Any]]:
         """Die Artikel eines Moebels, nach Nummer sortiert."""
-        return _rows(self._request("GET", f"/api/furniture/{int(furniture_id)}/items"))
+        return _rows(self._request(
+            "GET", f"/api/furniture/{integer(furniture_id, minimum=1)}/items"))
 
     def item(self, item_id: int) -> dict[str, Any]:
         """Ein einzelner Artikel mit vollem Pfad."""
-        return _clean(self._request("GET", f"/api/items/{int(item_id)}"))
+        return _clean(self._request("GET", f"/api/items/{integer(item_id, minimum=1)}"))
 
     def search(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """Sucht in Artikelnummern und -namen; Treffer nennen ihren Pfad."""
@@ -209,8 +233,8 @@ class Storage:
         return _clean(
             self._request(
                 "POST",
-                f"/api/furniture/{int(furniture_id)}/items",
-                json={"name": name, "quantity": max(0, int(quantity))},
+                f"/api/furniture/{integer(furniture_id, minimum=1)}/items",
+                json={"name": name, "quantity": integer(quantity, minimum=0)},
             )
         )
 
@@ -222,10 +246,11 @@ class Storage:
         if (name or "").strip():
             payload["name"] = name.strip()
         if quantity is not None:
-            payload["quantity"] = max(0, int(quantity))
+            payload["quantity"] = integer(quantity, minimum=0)
         if not payload:
             raise StorageError("Es wurde nichts zum Aendern angegeben.")
-        return _clean(self._request("PATCH", f"/api/items/{int(item_id)}", json=payload))
+        return _clean(self._request(
+            "PATCH", f"/api/items/{integer(item_id, minimum=1)}", json=payload))
 
     def change_quantity(self, item_id: int, delta: int) -> dict[str, Any]:
         """Zaehlt den Bestand hoch oder runter -- ohne den alten Wert zu kennen.
@@ -234,11 +259,12 @@ class Storage:
         eine Schraube entnehmen, kommen hier auf zwei weniger. Mit gesetztem
         Wert wuerde einer den anderen ueberschreiben.
         """
-        delta = int(delta)
+        delta = integer(delta)
         if delta == 0:
             raise StorageError("Eine Aenderung um null ist keine.")
         return _clean(
-            self._request("POST", f"/api/items/{int(item_id)}/quantity", json={"delta": delta})
+            self._request("POST", f"/api/items/{integer(item_id, minimum=1)}/quantity",
+                          json={"delta": delta})
         )
 
     def add_room(self, name: str) -> dict[str, Any]:
@@ -254,7 +280,8 @@ class Storage:
         if not name:
             raise StorageError("Ein Moebel braucht einen Namen.")
         return _clean(
-            self._request("POST", f"/api/rooms/{int(room_id)}/furniture", json={"name": name})
+            self._request("POST", f"/api/rooms/{integer(room_id, minimum=1)}/furniture",
+                          json={"name": name})
         )
 
 

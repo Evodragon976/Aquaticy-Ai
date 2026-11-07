@@ -81,6 +81,7 @@ import tempfile
 import threading
 import time
 import uuid
+import weakref
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -1603,6 +1604,7 @@ def sweep(runtime: Runtime | None = None) -> int:
 
 
 _shared: dict[str, Sandbox] = {}
+_review_boxes: weakref.WeakSet[Sandbox] = weakref.WeakSet()
 _shared_lock = threading.Lock()
 _shared_registered = False
 
@@ -1687,9 +1689,25 @@ def browser_agent(settings: Any = None) -> str:
     )
 
 
+def review_box(settings: Any, on_event: Any = None) -> Sandbox:
+    global _shared_registered
+    box = Sandbox(
+        memory_mb=int(getattr(settings, "vm_memory_mb", MEMORY_MB)),
+        disk_gb=int(getattr(settings, "vm_disk_gb", DISK_GB)),
+        cpus=int(getattr(settings, "vm_cpus", CPUS)), on_event=on_event)
+    with _shared_lock:
+        if not _shared_registered:
+            atexit.register(_stop_shared)
+            _shared_registered = True
+        _review_boxes.add(box)
+    return box
+
+
 def _stop_shared() -> None:
     """Beim Beenden des Programms: alle Werkstaetten gehen mit."""
-    for box in list(_shared.values()):
+    with _shared_lock:
+        boxes = [*list(_shared.values()), *list(_review_boxes)]
+    for box in boxes:
         box.stop("Programm beendet")
 
 

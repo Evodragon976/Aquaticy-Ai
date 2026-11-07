@@ -1797,6 +1797,12 @@ class Toolbox:
         self._memory_store: Any = None
         # 15.3.4: im Code-Modus kein Gedaechtnis (setzt der Agent je Turn).
         self.memory_blocked = False
+        self.memory_request: str | None = None
+        self.memory_optout = False
+        self.cancel_check: Callable[[], bool] | None = None
+        self.review_mode = False
+        self._review_runs = 0
+        self._review_box: Any = None
         self._fetcher = fetcher or Fetcher(
             user_agent=settings.user_agent,
             timeout=settings.fetch_timeout,
@@ -1854,6 +1860,10 @@ class Toolbox:
             self._google_client.close()
         if self._storage_client is not None:
             self._storage_client.close()
+        review = getattr(self, "_review_box", None)
+        if review is not None:
+            review.stop()
+            self._review_box = None
 
     def _emit(self, event: str, **payload: Any) -> None:
         if self.on_event:
@@ -2476,6 +2486,11 @@ class Toolbox:
             return {"error": problem}
         client = self._storage()
         try:
+            from aquaticy.storage import integer
+
+            furniture_id = integer(furniture_id, minimum=0)
+            room_id = integer(room_id, minimum=0)
+            quantity = integer(quantity, minimum=0)
             if furniture_id:
                 created = client.add_item(furniture_id, name, quantity)
                 kind = "Artikel"
@@ -2508,6 +2523,12 @@ class Toolbox:
         client = self._storage()
         self._emit("storage", action="aendern", detail=f"Artikel {item_id}")
         try:
+            from aquaticy.storage import integer
+
+            item_id = integer(item_id, minimum=1)
+            delta = integer(delta)
+            if quantity is not None:
+                quantity = integer(quantity, minimum=0)
             if delta:
                 entry = client.change_quantity(item_id, delta)
             else:
@@ -2659,6 +2680,13 @@ class Toolbox:
         """Die gemeinsame virtual machine -- gebaut beim ersten Zugriff."""
         from aquaticy import sandbox as werkstatt
 
+        if getattr(self, "review_mode", False):
+            box = getattr(self, "_review_box", None)
+            if box is None:
+                box = werkstatt.review_box(self.settings, on_event=self._emit_pair)
+                self._review_box = box
+            box.on_event = self._emit_pair
+            return box
         if self._sandbox_box is None:
             self._sandbox_box = werkstatt.shared(self.settings, on_event=self._emit_pair)
         else:
@@ -2674,6 +2702,13 @@ class Toolbox:
         """Fuehrt einen Befehl in der virtual machine aus."""
         from aquaticy.sandbox import COMMAND_TIMEOUT, SandboxUnavailable
 
+        review = getattr(self, "review_mode", False)
+        if review:
+            used = getattr(self, "_review_runs", 0)
+            if used >= 5:
+                return {"error": "Fünf Testläufe sind erreicht. Prüfe weiter durch Lesen."}
+            self._review_runs = used + 1
+            timeout = min(max(1, int(timeout or 20)), 20)
         try:
             box = self._sandbox()
             result = box.run(command, timeout=int(timeout or COMMAND_TIMEOUT))
@@ -3002,6 +3037,9 @@ class Toolbox:
         laeuft (aquaticy/metering.py, seit 9.5.14 Seashell). Ist nichts mehr
         uebrig, lehnt das Werkzeug ab -- das Modell antwortet dann ohne.
         """
+        cancelled = getattr(self, "cancel_check", None)
+        if callable(cancelled) and cancelled():
+            return {"error": "Abgebrochen."}
         if getattr(self, "secure_mode", False):
             from aquaticy.secure_chat import ALLOWED
 
@@ -3018,6 +3056,8 @@ class Toolbox:
                 or self._leak_gate(guard_name, arguments))
         if nein:
             return nein
+        if callable(cancelled) and cancelled():
+            return {"error": "Abgebrochen."}
         art = WORK_TOOLS.get(name)
         if art is None or metering.quota_of(self.settings) is None:
             return self._after_untrusted(name, self._call(name, arguments))
@@ -3431,23 +3471,23 @@ class Toolbox:
             )
         if name == "storage_browse":
             return self.storage_browse(
-                room_id=int(arguments.get("room_id") or 0),
-                furniture_id=int(arguments.get("furniture_id") or 0),
+                room_id=arguments.get("room_id", 0),
+                furniture_id=arguments.get("furniture_id", 0),
             )
         if name == "storage_add":
             return self.storage_add(
                 name=str(arguments.get("name", "")),
-                furniture_id=int(arguments.get("furniture_id") or 0),
-                room_id=int(arguments.get("room_id") or 0),
-                quantity=int(arguments.get("quantity", 1)),
+                furniture_id=arguments.get("furniture_id", 0),
+                room_id=arguments.get("room_id", 0),
+                quantity=arguments.get("quantity", 1),
             )
         if name == "storage_edit":
             raw_quantity = arguments.get("quantity")
             return self.storage_edit(
-                item_id=int(arguments.get("item_id") or 0),
+                item_id=arguments.get("item_id", 0),
                 name=str(arguments.get("name") or ""),
-                quantity=None if raw_quantity is None else int(raw_quantity),
-                delta=int(arguments.get("delta") or 0),
+                quantity=raw_quantity,
+                delta=arguments.get("delta", 0),
             )
         if name == "calendar_events":
             return self.calendar_events(
@@ -3870,6 +3910,9 @@ class Toolbox:
         """Notiz auf den dauerhaften Merkzettel des Nutzers schreiben."""
         if self.memory_blocked:
             return {"error": "Im Code-Modus gibt es kein Gedächtnis."}
+        refusal = self._memory_write_gate(text)
+        if refusal:
+            return refusal
         text = (text or "").strip()
         if not text:
             return {"error": "Leere Notiz."}
@@ -3893,10 +3936,24 @@ class Toolbox:
             )
         return self._memory_store
 
+    def _memory_write_gate(self, text: str) -> dict[str, Any] | None:
+        from aquaticy import memory_auto
+
+        if getattr(self, "memory_optout", False):
+            return {"error": "Du hast das Speichern für diese Nachricht ausgeschlossen."}
+        request = getattr(self, "memory_request", None)
+        if (request is not None and memory_auto.sensitive(text)
+                and not memory_auto.explicit_request(request)):
+            return {"error": "Sensible Angaben speichere ich nur auf ausdrückliche Bitte."}
+        return None
+
     def save_memory(self, text: str, topic: str = "") -> dict[str, Any]:
         """Legt eine Textnotiz im Langzeitspeicher ab."""
         from aquaticy.memory import MemoryFull
 
+        refusal = self._memory_write_gate(text)
+        if refusal:
+            return refusal
         store = self._memory()
         if store is None:
             return {

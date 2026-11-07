@@ -112,6 +112,10 @@ def _staerkstes(settings: Any, zweck: str) -> str:
             "model", "code_model", "subagent_model", "api_base", "api_base_for", "own_api_base")],
         getattr(settings, "api_keys", {}), sorted(getattr(settings, "own_key_names", ()) or ()))
     with _cache_lock:
+        now = time.monotonic()
+        expired = [key for key, (stamp, _) in _cache.items() if now - stamp >= _CACHE_TTL]
+        for key in expired:
+            _cache.pop(key, None)
         treffer = _cache.get(schluessel)
         if treffer and time.monotonic() - treffer[0] < _CACHE_TTL:
             return treffer[1]
@@ -121,6 +125,9 @@ def _staerkstes(settings: Any, zweck: str) -> str:
         modell = ""
     with _cache_lock:
         _cache[schluessel] = (time.monotonic(), modell)
+        while len(_cache) > 256:
+            oldest = min(_cache, key=lambda key: _cache[key][0])
+            _cache.pop(oldest)
     return modell
 
 

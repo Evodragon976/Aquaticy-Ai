@@ -36,6 +36,8 @@ KEEP_MARK = "-fest"
 
 def _directory(data_dir: Path | str) -> Path:
     path = Path(data_dir) / "media"
+    if path.is_symlink() or path.resolve().parent != Path(data_dir).resolve():
+        raise ValueError("Der Bilderordner liegt außerhalb deines Profils.")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -85,7 +87,7 @@ def save_snapshot(
 
 def _names(directory: Path) -> list[str]:
     return [item.name for item in directory.iterdir()
-            if item.is_file() and MEDIA_ID.fullmatch(item.name)]
+            if not item.is_symlink() and item.is_file() and MEDIA_ID.fullmatch(item.name)]
 
 
 def _rotate(directory: Path, passt: object, behalten: int) -> None:
@@ -128,8 +130,11 @@ def snapshot_path(data_dir: Path | str, media_id: str) -> Path | None:
     wanted = str(media_id or "").strip()
     if not MEDIA_ID.fullmatch(wanted):
         return None
-    path = Path(data_dir) / "media" / wanted
-    return path if path.is_file() else None
+    directory = Path(data_dir) / "media"
+    path = directory / wanted
+    if directory.is_symlink() or directory.resolve().parent != Path(data_dir).resolve():
+        return None
+    return path if not path.is_symlink() and path.is_file() else None
 
 
 def delete_snapshot(data_dir: Path | str, media_id: str) -> bool:
@@ -153,7 +158,9 @@ def load_snapshot(data_dir: Path | str, media_id: str) -> tuple[bytes, str] | No
     wanted = str(media_id or "").strip()
     if not MEDIA_ID.fullmatch(wanted):
         return None
-    path = Path(data_dir) / "media" / wanted
+    path = snapshot_path(data_dir, wanted)
+    if path is None:
+        return None
     from aquaticy.memory import CipherError
     from aquaticy.privacy import read_private
 

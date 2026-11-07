@@ -552,7 +552,9 @@ def syntax_problems(text: str) -> list[str]:
             if sprache == "python":
                 ast.parse(quelle)
             elif sprache == "json":
-                json.loads(quelle)
+                def invalid_constant(value: str) -> None:
+                    raise ValueError(f"{value} ist keine gültige JSON-Konstante.")
+                json.loads(quelle, parse_constant=invalid_constant)
             else:
                 continue
         except SyntaxError as exc:
