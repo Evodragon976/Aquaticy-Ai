@@ -301,9 +301,9 @@ def usage_of(usage: Any) -> tuple[int, int] | None:
         return usage.get(name) if isinstance(usage, dict) else getattr(usage, name, None)
 
     rein, raus, summe = wert("prompt_tokens"), wert("completion_tokens"), wert("total_tokens")
-    if not isinstance(rein, int) or not isinstance(raus, int) or rein < 0 or raus < 0:
+    if type(rein) is not int or type(raus) is not int or rein < 0 or raus < 0:
         return None
-    if isinstance(summe, int) and summe > rein + raus:
+    if type(summe) is int and summe > rein + raus:
         raus = summe - rein
     return rein, raus
 

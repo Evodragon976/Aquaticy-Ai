@@ -665,17 +665,20 @@ class SharedDb:
 
 
 def snapshot_sqlite(path: Path, target: Path) -> None:
-    """Ein in sich stimmiger Abzug einer laufenden Datenbank (Backup-API)."""
+    """Erstellt einen privaten Abzug und ersetzt erst nach erfolgreichem Backup."""
+    from aquaticy.memory import secure_file
+
     target.parent.mkdir(parents=True, exist_ok=True)
-    with contextlib.suppress(FileNotFoundError):
-        target.unlink()
-    quelle = sqlite3.connect(path, timeout=15)
-    ziel = sqlite3.connect(target)
+    temporary = target.parent / f"{_TMP_PREFIX}{secrets.token_hex(12)}"
     try:
-        quelle.backup(ziel)
+        with contextlib.closing(sqlite3.connect(path, timeout=15)) as source:
+            temporary.touch(mode=0o600, exist_ok=False)
+            secure_file(temporary)
+            with contextlib.closing(sqlite3.connect(temporary)) as destination:
+                source.backup(destination)
+        os.replace(temporary, target)
     finally:
-        ziel.close()
-        quelle.close()
+        temporary.unlink(missing_ok=True)
 
 
 
@@ -743,8 +746,9 @@ def write_atomic(target: Path, data: bytes) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.parent / f"{_TMP_PREFIX}{secrets.token_hex(6)}"
     try:
-        tmp.write_bytes(data)
+        tmp.touch(mode=0o600, exist_ok=False)
         secure_file(tmp)
+        tmp.write_bytes(data)
         os.replace(tmp, target)
         if target.name.endswith(_SQLITE_SUFFIXES):
             for endung in _SIDE_FILES:
@@ -1857,14 +1861,25 @@ class Cluster:
         return self.data_dir / "users" / user
 
     def sync_user(self, user: str, node: str, force: bool = False) -> None:
-        """Holt den Profilordner eines Kontos vom zustaendigen Server."""
+        """Spiegelt ein validiertes Manifest, ohne lokale Daten als Fehlerfolge zu loeschen."""
         if node == self.node_id or (self.homes.get(user) == self.node_id and not force):
             return
         ordner = self._user_dir(user)
-        fern = self.call(node, "manifest", {"user": user}, timeout=30.0).get("files") or {}
+        response = self.call(node, "manifest", {"user": user}, timeout=30.0)
+        fern = response.get("files")
+        if not isinstance(fern, dict):
+            raise ClusterError("Der andere Server hat kein gültiges Profilverzeichnis gesendet.")
+        for rel, sig in fern.items():
+            if (not isinstance(rel, str) or not isinstance(sig, str)
+                    or not re.fullmatch(r"[0-9]+:-?[0-9]+(?:\+[0-9]+:-?[0-9]+)?", sig)):
+                raise ClusterError("Das Profilverzeichnis enthält ungültige Dateiangaben.")
+            safe_rel(ordner, rel)
+            if any(parent.as_posix() in fern for parent in Path(rel).parents
+                   if parent != Path(".")):
+                raise ClusterError("Das Profilverzeichnis enthält widersprüchliche Pfade.")
         bekannt = dict(self.synced.get(user, {}))
         for rel, sig in fern.items():
-            if not force and bekannt.get(rel) == sig and (ordner / rel).exists():
+            if not force and bekannt.get(rel) == sig and (ordner / rel).is_file():
                 continue
             ziel = safe_rel(ordner, rel)
             daten = self._fetch(node, {"user": user, "rel": rel, "sig": sig})
@@ -1872,7 +1887,27 @@ class Cluster:
                 if force:
                     raise ClusterError("Das Profil hat sich während der Übernahme geändert.")
                 continue
-            write_atomic(ziel, daten)
+            blocker = next((p for p in reversed([ziel, *ziel.parents])
+                            if p != ordner and ordner in p.parents and p.is_file()), None)
+            if blocker is None and ziel.is_dir():
+                blocker = ziel
+            backup = None
+            if blocker is not None:
+                backup = blocker.with_name(f"{_TMP_PREFIX}{secrets.token_hex(12)}")
+                os.replace(blocker, backup)
+            try:
+                write_atomic(ziel, daten)
+            except BaseException:
+                if blocker is not None and backup is not None:
+                    if blocker.is_dir():
+                        shutil.rmtree(blocker)
+                    os.replace(backup, blocker)
+                raise
+            if backup is not None:
+                if backup.is_dir():
+                    shutil.rmtree(backup)
+                else:
+                    backup.unlink()
             bekannt[rel] = sig
         if ordner.is_dir():
             for rel in list(manifest(ordner)):
@@ -1885,19 +1920,37 @@ class Cluster:
             self._save_json("sync.json", self.synced)
 
     def _fetch(self, node: str, args: dict[str, Any], op: str = "file") -> bytes | None:
+        """Prueft Fortschritt, Endmarkierung und die angekuendigte Laenge jedes Transfers."""
         teile: list[bytes] = []
         versatz = 0
         transfer = secrets.token_hex(12)
+        limit = 1_073_741_824
+        exact = None
+        if op == "file":
+            sig = str(args.get("sig", ""))
+            if not re.fullmatch(r"[0-9]+:-?[0-9]+(?:\+[0-9]+:-?[0-9]+)?", sig):
+                raise ClusterError("Ungültige Dateikennung.")
+            sizes = [int(part.split(":")[0]) for part in sig.split("+")]
+            limit = min(limit, sum(sizes))
+            exact = sizes[0] if len(sizes) == 1 else None
         while True:
             antwort = self.call(node, op, dict(args, offset=versatz, transfer=transfer),
                                 timeout=60.0)
             if antwort.get("changed"):
                 return None
-            stueck = _unb64(antwort.get("data", ""))
-            teile.append(stueck)
+            if type(antwort.get("eof")) is not bool or not isinstance(antwort.get("data"), str):
+                raise ClusterError("Die Dateiübertragung hat ungültig geantwortet.")
+            stueck = _unb64(antwort["data"])
             versatz += len(stueck)
-            if antwort.get("eof") or not stueck:
+            if versatz > limit:
+                raise ClusterError("Die Dateiübertragung überschreitet die angekündigte Größe.")
+            teile.append(stueck)
+            if antwort["eof"]:
+                if exact is not None and versatz != exact:
+                    raise ClusterError("Die Datei wurde nicht vollständig übertragen.")
                 return b"".join(teile)
+            if not stueck:
+                raise ClusterError("Die Dateiübertragung wurde ohne Endmarkierung abgebrochen.")
 
     @staticmethod
     def _transfer_key(key: str, args: dict[str, Any]) -> str:
@@ -2042,7 +2095,7 @@ class Cluster:
             daten = self._fetch(master, {"name": name, "sig": kennung}, op="rootfile")
             if daten is None:
                 raise ClusterError("Eine Datei des Masters hat sich beim Beitritt geändert.")
-            (staging / name).write_bytes(daten)
+            write_atomic(staging / name, daten)
         if not (staging / SHARED_DB).is_file():
             raise ClusterError("Die Datenbank des Masters wurde nicht vollständig übertragen.")
         db = SharedDb(staging / SHARED_DB)

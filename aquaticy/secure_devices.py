@@ -178,7 +178,8 @@ def upnp_gateways(subnet: str, router: str = "", wait: float = 2.0, *,
                         continue
                 except ValueError:
                     continue
-                if "internetgatewaydevice" in text or "wanipconnection" in text:
+                if re.match(r"^http/1\.[01] 200(?:\s|$)", text) and (
+                        "internetgatewaydevice" in text or "wanipconnection" in text):
                     gefunden.add(absender)
     except OSError:
         return []

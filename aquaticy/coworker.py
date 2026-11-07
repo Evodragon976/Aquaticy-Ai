@@ -98,7 +98,8 @@ class Kategorie:
 CATEGORIES: tuple[Kategorie, ...] = (
     Kategorie("kalender", "Termine eintragen und ändern", ("calendar_add", "calendar_edit")),
     Kategorie("mail", "Mail-Entwürfe anlegen", ("mail_draft",)),
-    Kategorie("speicher", "Sich etwas dauerhaft merken", ("save_memory",)),
+    Kategorie("speicher", "Persönliche Notizen speichern oder löschen",
+              ("save_memory", "forget_memory")),
     Kategorie("lager", "Die Lagerverwaltung ändern", ("storage_add", "storage_edit"),
               ultra=True),
 
@@ -648,6 +649,10 @@ class CoworkerStore:
             if limit < len(cw.notes):
                 conn.execute("UPDATE coworkers SET notes = ? WHERE id = ?",
                              (self._seal(cw.notes[:limit], "coworkers.notes"), cw.id))
+            if any(getattr(cw, key) and values.get(key) is False
+                   for key in ("sharing_chats", "sharing_coworkers")):
+                conn.execute("UPDATE coworkers SET notes_version = notes_version + 1 WHERE id = ?",
+                             (cw.id,))
             if "schedule" in values:
                 conn.execute("UPDATE coworkers SET next_wake = ?, interval_seconds = 0,"
                              " timing_version = timing_version + 1 WHERE id = ?",
@@ -1057,7 +1062,7 @@ SUMMARY_FIELDS = (
     ("start", "Beginn"), ("end", "Ende"), ("location", "Ort"), ("name", "Name"),
     ("quantity", "Menge"), ("domain", "Bereich"), ("service", "Dienst"),
     ("entity_id", "Gerät"), ("fact", "Inhalt"), ("text", "Inhalt"), ("body", "Text"),
-    ("path", "Datei"), ("command", "Befehl"),
+    ("path", "Datei"), ("command", "Befehl"), ("id", "Notiz-ID"),
 )
 
 
@@ -1097,6 +1102,8 @@ class Session:
                     for tool in kat.tools}
         if not self.vm:
             gesperrt |= set(CATEGORY_OF) & {"vm_run", "vm_write", "vm_read", "vm_files"}
+        if not self.cw.sharing_chats:
+            gesperrt |= {"recall_memory", "forget_memory"}
         return gesperrt
 
     def gate(self, toolbox: Any, name: str, arguments: dict[str, Any]) -> dict[str, Any] | None:
@@ -1109,6 +1116,9 @@ class Session:
         aktuell = self.store.get(self.cw.id)
         if aktuell is None or not aktuell.enabled:
             return {"error": "Dieser Coworker ist pausiert oder gelöscht.", "gesperrt": True}
+        if name in {"recall_memory", "forget_memory"} and not aktuell.sharing_chats:
+            return {"error": "Persönliche Chatdaten sind für diesen Coworker nicht freigegeben.",
+                    "gesperrt": True}
         if name == "coworker_report":
             if not self.reports_allowed:
                 return {"error": "Beobachtungen melden erst nach dem geprüften Nachweis "
@@ -1135,8 +1145,16 @@ class Session:
         if kat is None:
             return None
         plan = self.current_plan() if self.current_plan is not None else self.plan
-        if kat.ultra and plan != "ultra" and kat.key != "werkstatt":
+        if kat.ultra and plan != "ultra" and (
+                kat.key != "werkstatt" or self.current_plan is not None):
             return {"error": "Das gehört zu Ultra.", "gesperrt": True}
+        if kat.key == "werkstatt" and self.current_settings is not None:
+            current = self.current_settings()
+            previous = getattr(toolbox, "settings", None)
+            if any(bool(getattr(current, field, False)) != bool(getattr(previous, field, False))
+                   for field in ("vm_internet", "vm_lan", "vm_user_mode")):
+                return {"error": "Die Netzrechte der virtual machine wurden geändert. "
+                        "Der nächste Arbeitsschritt übernimmt sie.", "gesperrt": True}
         regel = aktuell.rule(kat.key)
         if regel == "sperren" or (kat.key == "werkstatt" and not self.vm):
             return {"error": f"„{kat.label}“ hat der Nutzer für Coworker gesperrt.",
@@ -1293,6 +1311,14 @@ def coworker_agent_class() -> type:
         def _compose_system(self) -> str:
             return super()._compose_system() + SYSTEM_PROMPT
 
+        def _person_prompt(self) -> str:
+            if not self._coworker.cw.sharing_chats:
+                return ""
+            return super()._person_prompt()
+
+        def _automatic_memory_allowed(self) -> bool:
+            return False
+
         def _warm_workshop(self) -> threading.Thread | None:
 
 
@@ -1370,32 +1396,36 @@ def build_prompt(cw: Coworker, *, messages: list[dict[str, Any]],
 
 
 def _box(settings: Any, coworker_id: int) -> Any:
-    """Die eigene virtual machine eines Coworkers (Ultra) -- ohne Desktop."""
+    """Eigene virtual machine, deren Netzrechte und Grenzen dem aktuellen Profil folgen."""
     from aquaticy import sandbox as werkstatt
 
     schluessel = (str(Path(settings.data_dir).resolve()), int(coworker_id))
+    lan = bool(getattr(settings, "vm_lan", False))
+    internet = bool(getattr(settings, "vm_internet", False)
+                    or getattr(settings, "vm_user_mode", False) or lan)
+    options: dict[str, Any] = {
+        "image": (getattr(settings, "vm_desktop_image", "") or werkstatt.DESKTOP_IMAGE
+                  if internet else getattr(settings, "vm_image", "") or werkstatt.DEFAULT_IMAGE),
+        "user_mode": False, "internet": internet, "lan": lan, "headless": internet,
+        "idle_minutes": int(getattr(settings, "vm_idle_minutes", 0) or werkstatt.IDLE_MINUTES),
+        "memory_mb": int(getattr(settings, "vm_memory_mb", 0) or werkstatt.MEMORY_MB),
+        "disk_gb": int(getattr(settings, "vm_disk_gb", 0) or werkstatt.DISK_GB),
+        "cpus": int(getattr(settings, "vm_cpus", 0) or werkstatt.CPUS),
+    }
     with _BOX_LOCK:
-        box = _BOXES.get(schluessel)
+        cached = _BOXES.get(schluessel)
+        box = cached[0] if cached is not None else None
+        if cached is not None and cached[1] != options:
+            cached[0].stop("Die Einstellungen der virtual machine wurden geändert")
+            _BOXES.pop(schluessel)
+            box = None
         if box is None:
-            lan = bool(getattr(settings, "vm_lan", False))
-            internet = bool(getattr(settings, "vm_internet", False)
-                            or getattr(settings, "vm_user_mode", False) or lan)
-            box = werkstatt.Sandbox(
-                image=(getattr(settings, "vm_desktop_image", "") or werkstatt.DESKTOP_IMAGE
-                       if internet else getattr(settings, "vm_image", "")
-                       or werkstatt.DEFAULT_IMAGE),
-                user_mode=False, internet=internet, lan=lan, headless=internet,
-                idle_minutes=int(getattr(settings, "vm_idle_minutes", 0)
-                                 or werkstatt.IDLE_MINUTES),
-                memory_mb=int(getattr(settings, "vm_memory_mb", 0) or werkstatt.MEMORY_MB),
-                disk_gb=int(getattr(settings, "vm_disk_gb", 0) or werkstatt.DISK_GB),
-                cpus=int(getattr(settings, "vm_cpus", 0) or werkstatt.CPUS),
-            )
-            _BOXES[schluessel] = box
+            box = werkstatt.Sandbox(**options)
+            _BOXES[schluessel] = (box, options)
         return box
 
 
-_BOXES: dict[tuple[str, int], Any] = {}
+_BOXES: dict[tuple[str, int], tuple[Any, dict[str, Any]]] = {}
 _BOX_LOCK = threading.Lock()
 
 
@@ -1405,7 +1435,7 @@ def stop_boxes(data_dir: Any = None, coworker_id: int | None = None) -> None:
     with _BOX_LOCK:
         weg = [k for k in _BOXES if (not schluessel or k[0] == schluessel)
                and (coworker_id is None or k[1] == int(coworker_id))]
-        boxen = [_BOXES.pop(k) for k in weg]
+        boxen = [_BOXES.pop(k)[0] for k in weg]
     for box in boxen:
         with contextlib.suppress(Exception):
             box.stop("Coworker beendet")
@@ -1732,6 +1762,8 @@ def run_action(store: CoworkerStore, action: dict[str, Any], settings: Any,
 
         if not action.get("binding") or action["binding"] != connection_key(settings):
             return False, "Die Home-Assistant-Verbindung hat sich geändert. Bitte neu anfragen."
+    if tool == "forget_memory" and not cw.sharing_chats:
+        return False, "Die Freigabe für persönliche Chatdaten ist inzwischen aus."
     if not _setting_allows(tool, settings):
         return False, "Die Einstellung dafür ist inzwischen aus."
     toolbox = Toolbox(settings)
@@ -1753,7 +1785,7 @@ def _setting_allows(tool: str, settings: Any) -> bool:
     if tool in ("calendar_add", "calendar_edit", "mail_draft"):
         return bool(getattr(settings, "google_enabled", False)
                     and getattr(settings, "google_write", False))
-    if tool == "save_memory":
+    if tool in {"save_memory", "forget_memory"}:
         return bool(getattr(settings, "memory_enabled", False))
     if tool in ("storage_add", "storage_edit"):
         return bool(getattr(settings, "storage_url", "")) and str(

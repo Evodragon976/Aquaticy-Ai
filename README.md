@@ -1,4 +1,4 @@
-# Aquaticy AI 15.4.4
+# Aquaticy AI 15.4.5
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,43 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.4.5: 66 weitere nachgewiesene Fehlerursachen korrigiert.**
+
+Die Gegenproben für alle 66 Ursachen scheitern auf dem unveränderten Stand 15.4.4.
+Varianten derselben Ursache zählen nur einmal. 200 unterschiedliche Fehler sind damit
+nicht nachgewiesen; unbestätigte Vermutungen zählen nicht als Fehler.
+
+- **Datenschutz und Coworker:** Persönliche Chatdaten brauchen auch beim Werkzeugzugriff
+  eine Freigabe. Das Löschen persönlicher Notizen folgt der Speicherregel und wartet bei
+  „Fragen“ auf Zustimmung. Zurückgezogene Freigaben verhindern neue Zugriffe und das spätere
+  Übernehmen importierter Notizen. Änderungen an VM-Netzrechten gelten auch für Coworker.
+- **Serververbund und Einstellungen:** Ungültige Profileinträge führen nicht zur Löschung
+  lokaler Daten. Abgebrochene oder zu große Dateiübertragungen werden verworfen. Datei- und
+  Ordnerwechsel funktionieren. Fehlgeschlagene Datenbankkopien erhalten die vorherige Kopie.
+  Parallele Änderungen der Einstellungen bleiben erhalten; Geheimnisse verschwinden beim
+  Umzug in den Tresor auch aus mehrzeiligen dotenv-Zuweisungen.
+- **Exporte und Speicher:** Exporte eines befüllten Chats enthalten dessen eigene Beiträge
+  und Produktdaten. Kopien überschreiben keine bestehenden Dateien. Private Dateien bekommen
+  eingeschränkte Rechte. Spracherkennungsmodelle verbrauchen nicht das persönliche
+  Notizkontingent. Ungültige Kennungen löschen oder genehmigen keine anderen Einträge.
+- **Netz und Oberfläche:** Secure Pro beginnt nach dem Widerruf keine weiteren Scan-Anfragen.
+  Die Gerätesuche nutzt bereits bestätigte Portantworten statt sie nochmals abzufragen.
+  Proxyketten, fragmentierte Dienstantworten, SSH-Banner und nmap-Status werden genauer
+  ausgewertet. Add-ons und Coworker erholen sich nach kurzen Verbindungsabbrüchen.
+- **Lange Texte:** Die Sicherheitsprüfung wiederholt weniger Wortarbeit. Die Regeln und
+  Zeitgrenzen bleiben erhalten. Zwischenergebnisse gelten nur für die aktuelle Nachricht.
+- **Weitere Korrekturen:** Geheimnisse in Codeprüfungen werden vollständiger verdeckt.
+  Home-Assistant- und Google-Schreibaufrufe prüfen Daten und Bestätigungen genauer.
+  Preise, Nachrichten, Sprachausgabe, Zeitpläne und persönliche Löschwünsche werden
+  verlässlicher verarbeitet. Bestehende Funktionen und Sicherheitsprüfungen bleiben erhalten.
+
+Nachweise: [A](tests/test_v1545_a.py), [B](tests/test_v1545_b.py),
+[C](tests/test_v1545_c.py), [D](tests/test_v1545_d.py), [E](tests/test_v1545_e.py),
+[F](tests/test_v1545_f.py), [G](tests/test_v1545_g.py), [H](tests/test_v1545_h.py),
+[I](tests/test_v1545_i.py).
+Die Prüfung belegt keine vollständige Fehlerfreiheit. Echte Messenger-Verbindungen und
+Container-Läufe benötigen weiterhin passende Laufzeiten und Zugangsdaten.
 
 **Neu in 15.4.4: 39 nachgewiesene Fehlerursachen korrigiert.**
 
@@ -659,7 +696,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.4.4
+aquaticy --version            # 15.4.5
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

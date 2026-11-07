@@ -7,9 +7,12 @@ Arbeitsverzeichnis oder unter `~/.config/aquaticy/.env`.
 from __future__ import annotations
 
 import contextlib
+import io
 import os
 import re
+import tempfile
 import threading
+import weakref
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -20,6 +23,10 @@ from typing import Any
 from dotenv import load_dotenv
 
 from aquaticy import __version__
+
+_ENV_LOCKS: weakref.WeakValueDictionary[str, threading.RLock] = weakref.WeakValueDictionary()
+_ENV_GUARD = threading.Lock()
+
 
 ENV_CANDIDATES: tuple[Path, ...] = (
     Path.cwd() / ".env",
@@ -1139,45 +1146,46 @@ def read_env_file(path: Path | None) -> dict[str, str]:
     }
 
 
-def write_env_file(values: dict[str, str], path: Path | None = None) -> Path:
-    """Schreibt/aktualisiert Schluessel in einer `.env`, ohne Fremdzeilen zu verlieren.
+def write_env_file(values: dict[str, str], path: Path | None = None, *,
+                   remove: set[str] | None = None) -> Path:
+    """Ersetzt ganze dotenv-Zuweisungen unter einer gemeinsamen Dateisperre."""
+    from dotenv.parser import parse_stream
 
-    Raises:
-        ValueError: Ein Name oder Wert, der die Datei verbiegen wuerde. Dann
-            wird gar nichts geschrieben.
-    """
+    from aquaticy.memory import secure_file
 
     zeilen = {key: env_line(key, value) for key, value in values.items()}
-    target = path or find_env_file() or DEFAULT_ENV_PATH
-    target.parent.mkdir(parents=True, exist_ok=True)
-
-    existing: list[str] = (
-        target.read_text(encoding="utf-8").splitlines() if target.is_file() else []
-    )
-    remaining = dict(values)
-    out: list[str] = []
-    for line in existing:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
-            out.append(line)
-            continue
-        key = stripped.split("=", 1)[0].strip().removeprefix("export ").strip()
-        if key in remaining:
-            remaining.pop(key)
-            out.append(zeilen[key])
-        elif key in zeilen:
-
-
-            continue
-        else:
-            out.append(line)
-    if remaining:
-        if out and out[-1].strip():
-            out.append("")
-        out.extend(zeilen[key] for key in remaining)
-
-    target.write_text("\n".join(out).rstrip("\n") + "\n", encoding="utf-8")
-
-    with contextlib.suppress(OSError):
-        target.chmod(0o600)
+    entfernen = set(remove or ()) - values.keys()
+    for key in entfernen:
+        env_line(key, "")
+    target = Path(path or find_env_file() or DEFAULT_ENV_PATH)
+    with _ENV_GUARD:
+        lock = _ENV_LOCKS.setdefault(str(target.resolve()), threading.RLock())
+    with lock:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        existing = target.read_text(encoding="utf-8-sig") if target.is_file() else ""
+        remaining = dict(zeilen)
+        out: list[str] = []
+        for binding in parse_stream(io.StringIO(existing)):
+            parsed_key = binding.key
+            if parsed_key in zeilen:
+                if parsed_key in remaining:
+                    out.append(remaining.pop(parsed_key) + "\n")
+            elif parsed_key not in entfernen:
+                out.append(binding.original.string)
+        content = "".join(out)
+        if remaining:
+            if content and not content.endswith("\n"):
+                content += "\n"
+            content += "\n".join(remaining.values()) + "\n"
+        fd, name = tempfile.mkstemp(prefix=".env-", dir=target.parent)
+        os.close(fd)
+        temporary = Path(name)
+        try:
+            secure_file(temporary)
+            temporary.write_text(content, encoding="utf-8")
+            with temporary.open("r+b") as stream:
+                os.fsync(stream.fileno())
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
     return target

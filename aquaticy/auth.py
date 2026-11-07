@@ -210,7 +210,8 @@ def ip_scope(ip: str) -> str:
 
 def normalize_email(email: str) -> str:
     value = (email or "").strip().lower()
-    if len(value) > 254 or not EMAIL_RE.fullmatch(value):
+    if (len(value) > 254 or not EMAIL_RE.fullmatch(value)
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)):
         raise ValueError("Bitte gib eine gültige E-Mail-Adresse ein.")
     try:
         value.encode("utf-8")
@@ -237,7 +238,9 @@ def validate_password(password: str) -> None:
 
 def normalize_username(username: str) -> str:
     value = " ".join((username or "").strip().split())
-    if not USERNAME_RE.fullmatch(value):
+    if (not USERNAME_RE.fullmatch(value)
+            or any(char in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+                   for char in value)):
         raise ValueError("Der Nutzername braucht 2 bis 40 sichtbare Zeichen.")
     try:
         value.encode("utf-8")

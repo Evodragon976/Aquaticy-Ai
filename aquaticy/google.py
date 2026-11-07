@@ -568,9 +568,12 @@ class Google:
             data = response.json()
             if not isinstance(data, dict):
                 raise ValueError("Ungültiges JSON-Objekt")
+            if data.get("error") or not isinstance(data.get("id"), str) or not data["id"]:
+                raise ValueError("Google hat die Änderung nicht bestätigt")
             return data
         except ValueError as exc:
-            raise GoogleError("Google hat keine verwertbare Antwort geschickt.") from exc
+            raise GoogleError("Google hat die Änderung nicht bestätigt. Prüfe dein Konto, "
+                              "bevor du den Schreibauftrag wiederholst.") from exc
 
     def create_event(
         self,

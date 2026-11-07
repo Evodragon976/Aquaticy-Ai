@@ -279,9 +279,13 @@ def next_time(rhythm: str, hour: int, minute: int, weekday: int, now: float = 0.
 
     if rhythm == "hourly":
         ziel = jetzt.replace(minute=minute, second=0, microsecond=0)
-        if ziel <= jetzt:
-            ziel += timedelta(hours=1)
-        return ziel.timestamp()
+        for offset in (0, 1, 2):
+            candidate = ziel + timedelta(hours=offset)
+            future = [candidate.replace(fold=fold).timestamp() for fold in (0, 1)
+                      if candidate.replace(fold=fold).timestamp() > stempel]
+            if future:
+                return min(future)
+        raise ValueError("Der nächste stündliche Termin ließ sich nicht bestimmen.")
 
     ziel = jetzt.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if rhythm == "daily":
@@ -371,6 +375,10 @@ def clean_schedule(raw: Any) -> dict[str, Any]:
         raise ValueError("Der Zeitplan muss ein Objekt sein.")
     if not raw:
         return {}
+    for key in ("hour", "minute", "weekday"):
+        value = raw.get(key)
+        if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
+            raise ValueError("Uhrzeit und Wochentag brauchen ganze Zahlen.")
     kind = str(raw.get("kind") or "research").strip().lower()
     if kind not in KINDS:
         raise ValueError("Diese Art Beobachtung gibt es nicht.")

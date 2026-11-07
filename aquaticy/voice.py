@@ -46,11 +46,22 @@ def enabled() -> bool:
 
 
 def requested(text: str) -> bool:
-    if re.search(r"\b(?:keine?|nicht|ohne|no|not|don't)\b[^.!?]{0,80}\bsprachnachricht\b",
-                 text, re.I):
-        return False
-    return bool(re.search(r"\bsprachnachricht\b", text, re.I)
-                and re.search(r"\b(?:als|schick\w*|send\w*|antworte)\b", text, re.I))
+    from aquaticy.memory_auto import own_message
+
+    decision = False
+    for clause in re.split(r"[.!?\n]+|\bsondern\b", own_message(text), flags=re.I):
+        if not re.search(r"\bsprachnachricht\b", clause, re.I):
+            continue
+        before = re.search(
+            r"\b(?:kein\w*|nicht(?!\s+nur\b)|ohne|no|not(?!\s+only\b)|don't)\b"
+            r"[^.!?]{0,80}\bsprachnachricht\b", clause, re.I)
+        after = re.search(r"\bsprachnachricht\b\s*(?:bitte\s+|lieber\s+|doch\s+)*"
+                          r"(?:nicht|nein)\b", clause, re.I)
+        if before or after:
+            decision = False
+        elif re.search(r"\b(?:als|schick\w*|send\w*|antworte)\b", clause, re.I):
+            decision = True
+    return decision
 
 
 def configure(directory: Path, enable: bool) -> None:

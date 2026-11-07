@@ -5,8 +5,11 @@ from __future__ import annotations
 import contextlib
 import csv
 import html
+import os
 import re
-from collections.abc import Sequence
+import tempfile
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +21,45 @@ from aquaticy import netguard
 from aquaticy.models import Product
 
 FORMATS = ("html", "md", "csv")
+
+
+@contextmanager
+def _atomic_output(path: Path) -> Iterator[Path]:
+    from aquaticy.memory import secure_file
+
+    descriptor, name = tempfile.mkstemp(prefix=".aquaticy-export-", dir=path.parent)
+    os.close(descriptor)
+    temporary = Path(name)
+    try:
+        secure_file(temporary)
+        yield temporary
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _unique_path(base: Path) -> Path:
+    target = base
+    counter = 1
+    while True:
+        try:
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(descriptor)
+            return target
+        except FileExistsError:
+            counter += 1
+            target = base.with_name(f"{base.stem}-{counter}{base.suffix}")
+
+
+def write_copy(content: str, path: Path) -> Path:
+    target = _unique_path(path)
+    try:
+        with _atomic_output(target) as temporary:
+            temporary.write_text(content, encoding="utf-8")
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    return target
 
 
 @dataclass
@@ -98,7 +140,7 @@ def safe_link(url: object) -> str:
 
 def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -> dict[str, str]:
     """Laedt Produktbilder in *directory* und gibt {url: dateiname} zurueck."""
-    directory.mkdir(parents=True, exist_ok=True)
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     mapping: dict[str, str] = {}
 
 
@@ -123,7 +165,8 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
                         continue
                     name = f"{_slug(product.name, 30)}-{counter}{suffix}"
                     counter += 1
-                    (directory / name).write_bytes(response.content)
+                    with _atomic_output(directory / name) as temporary:
+                        temporary.write_bytes(response.content)
                     mapping[url] = name
                 except httpx.HTTPError:
                     continue
@@ -340,6 +383,12 @@ def to_html(turns: list[Turn], image_map: dict[str, str] | None = None) -> str:
 
 
 def write_csv(turns: list[Turn], path: Path) -> Path:
+    with _atomic_output(path) as temporary:
+        _write_csv(turns, temporary)
+    return path
+
+
+def _write_csv(turns: list[Turn], path: Path) -> Path:
     """Eine Zeile je Produkt; Specs werden zu Spalten."""
     products = [product for turn in turns for product in turn.products]
     spec_keys: list[str] = []
@@ -415,15 +464,7 @@ def export(
     target = path or default_path(turns, fmt, directory or Path.cwd())
     target.parent.mkdir(parents=True, exist_ok=True)
     if path is None:
-        base, counter = target, 1
-        while True:
-            try:
-                with target.open("x", encoding="utf-8"):
-                    pass
-                break
-            except FileExistsError:
-                counter += 1
-                target = base.with_name(f"{base.stem}-{counter}{base.suffix}")
+        target = _unique_path(target)
     try:
         image_map: dict[str, str] = {}
         if with_images and fmt in ("html", "md"):
@@ -439,7 +480,8 @@ def export(
         if fmt == "csv":
             return write_csv(turns, target)
         content = to_html(turns, image_map) if fmt == "html" else to_markdown(turns, image_map)
-        target.write_text(content, encoding="utf-8")
+        with _atomic_output(target) as temporary:
+            temporary.write_text(content, encoding="utf-8")
         return target
     except BaseException:
         if path is None:

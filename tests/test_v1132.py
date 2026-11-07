@@ -23,6 +23,8 @@ def _google(tmp_path: Path) -> tuple[Google, TokenStore, list[httpx.Request]]:
 
     def respond(request):
         requests.append(request)
+        if request.method == "PATCH":
+            return httpx.Response(200, json={"id": request.url.path.rsplit("/", 1)[-1]})
         return httpx.Response(200, json={"items": [], "payload": {}})
 
     return Google("id", "secret", store, httpx.Client(

@@ -52,7 +52,8 @@ def valid_repo_path(path: str) -> bool:
     teile = path.split("/")
     return (0 < len(path) <= 400 and all(c.isprintable() for c in path)
             and "\\" not in path and not path.startswith("/")
-            and all(t not in ("", ".", "..", ".git") for t in teile))
+            and all(t not in ("", ".", "..") and t.rstrip(" .").casefold() != ".git"
+                    for t in teile))
 
 
 def secret_problem(path: str, data: bytes) -> str:

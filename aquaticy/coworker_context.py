@@ -67,6 +67,8 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
     def consider(source: str, text: str) -> None:
 
         text = str(text or "")
+        from aquaticy.github_repo import redact
+        from aquaticy.injection import clean_text
         from aquaticy.keyvault import scrub
 
         secret_values = [str(getattr(settings, key, "") or "") for key in (
@@ -75,7 +77,8 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
         secrets_method = getattr(settings, "secrets", None)
         if callable(secrets_method):
             secret_values.extend(secrets_method())
-        text = scrub(text, secret_values)[:12000]
+        source = clean_text(redact(scrub(source, secret_values)))
+        text = clean_text(redact(scrub(text, secret_values)))[:12000]
         text = re.sub(r"(?i)((?:password|passwort|token|api[_ -]?key|secret)\s*[:=]\s*)"
                       r"[^\s,;]+", r"\1[entfernt]", text)
         lower = text.casefold()
@@ -83,6 +86,12 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
         if not matches:
             return
         first = min(lower.index(word) for word in matches)
+        folded = 0
+        for index, char in enumerate(text):
+            folded += len(char.casefold())
+            if folded > first:
+                first = index
+                break
         start = max(0, first - 200)
         candidates.append((len(matches), source, text[start:start + 1200]))
 
@@ -94,19 +103,24 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
         from aquaticy.cache import Cache
 
         cache = Cache(settings.db_path, settings.cache_ttl_hours)
-        for entry in cache.recent_history(limit=60):
+        for entry in cache.recent_history(limit=60, kind="chat"):
             if entry.session_id != cw.chat and not entry.meta.get("coworker"):
                 consider(f"Chat {entry.session_id}, {entry.created_at:.0f}",
                          entry.question + "\n" + entry.answer)
     candidates.sort(key=lambda item: item[0], reverse=True)
-    snippets = []
+    snippets: list[str] = []
     known = set()
     for _, source, text in candidates:
         if text in known:
             continue
         known.add(text)
 
-        snippets.append(f"Quelle: {source}\n--- Fremder Inhalt ---\n{text}\n--- Ende ---")
+        from aquaticy.injection import wrap_block
+
+        block = wrap_block(f"Quelle: {source}\n{text}", "Coworker-Kontext")
+        if len("\n\n".join([*snippets, block])) > MAX_CONTEXT:
+            break
+        snippets.append(block)
         if len(snippets) >= 6:
             break
-    return "\n\n".join(snippets)[:MAX_CONTEXT]
+    return "\n\n".join(snippets)

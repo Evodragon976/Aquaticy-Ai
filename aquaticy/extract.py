@@ -51,9 +51,12 @@ MAX_SPEC_VALUE_LEN = 160
 
 
 _PRICE_RE = re.compile(
-    r"(\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)(?!\d)"
+    r"([+-]?(?:\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)"
+    r"(?:[eE][+-]?\d+)?)(?!\d)"
 )
-_CURRENCY_SYMBOLS = {"€": "EUR", "$": "USD", "£": "GBP", "chf": "CHF", "fr.": "CHF"}
+_CURRENCY_SYMBOLS = {"ca$": "CAD", "c$": "CAD", "au$": "AUD", "a$": "AUD",
+                     "nz$": "NZD", "€": "EUR", "$": "USD", "£": "GBP",
+                     "chf": "CHF", "fr.": "CHF"}
 
 
 def _text(node: Node | None) -> str:
@@ -110,6 +113,8 @@ def parse_price(raw: Any) -> tuple[str | None, str | None]:
         text = str(raw).strip()
     if not text:
         return None, None
+    if len(text) > 2000:
+        return None, None
 
     currency: str | None = None
     lowered = text.lower()
@@ -124,6 +129,16 @@ def parse_price(raw: Any) -> tuple[str | None, str | None]:
 
     price_match = _PRICE_RE.search(text.replace(" ", " "))
     price = price_match.group(1).strip() if price_match else None
+    if price and re.search(r"[eE]", price):
+        from decimal import Decimal, InvalidOperation
+
+        try:
+            number = Decimal(price.replace(",", "."))
+            if not number.is_finite() or abs(number.adjusted()) > 1000:
+                return None, currency
+            price = format(number, "f")
+        except InvalidOperation:
+            return None, currency
     return price, currency
 
 

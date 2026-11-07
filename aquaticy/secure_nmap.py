@@ -115,6 +115,9 @@ def parse(xml_text: str) -> list[dict[str, Any]]:
         raise NmapError("Die nmap-Ausgabe ließ sich nicht lesen.") from exc
     hosts: list[dict[str, Any]] = []
     for host in wurzel.iter("host"):
+        status = host.find("status")
+        if status is not None and status.get("state") != "up":
+            continue
         adresse = ""
         for addr in host.iter("address"):
             if addr.get("addrtype") == "ipv4":

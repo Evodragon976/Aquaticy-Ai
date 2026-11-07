@@ -8,6 +8,7 @@ import re
 import socket
 import ssl
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,28 @@ from aquaticy.network_router import private_address
 
 MAC = re.compile(r"\b(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\b", re.I)
 IP = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+
+
+def _response(connection: socket.socket, *, ssh: bool = False) -> bytes:
+    output = bytearray()
+    deadline = time.monotonic() + 1.5
+    while len(output) < 4096:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        if hasattr(connection, "settimeout"):
+            connection.settimeout(remaining)
+        chunk = connection.recv(min(1024, 4096 - len(output)))
+        if not chunk:
+            break
+        output.extend(chunk)
+        if ssh:
+            if any(line.startswith(b"SSH-") and line.endswith(b"\n")
+                   for line in output.splitlines(keepends=True)):
+                break
+        elif b"\r\n\r\n" in output or b"\n\n" in output:
+            break
+    return bytes(output)
 
 
 def neighbours(subnet: str) -> list[dict[str, Any]]:
@@ -67,9 +90,11 @@ def inspect(subnet: str, host: str) -> dict[str, Any]:
     if 22 in device.ports:
         try:
             with socket.create_connection((address, 22), timeout=1.5) as connection:
-                banner = connection.recv(256).decode("ascii", "replace").strip()
-            if banner.startswith("SSH-"):
-                result["ssh_banner"] = banner[:200]
+                banner = _response(connection, ssh=True).decode("ascii", "replace")
+            identification = next((line for line in banner.splitlines()
+                                   if line.startswith("SSH-")), "")
+            if identification:
+                result["ssh_banner"] = identification.strip()[:200]
         except OSError:
             result["observations"].append("SSH-Banner konnte nicht gelesen werden.")
     for port in (443, 8443):
@@ -94,7 +119,7 @@ def inspect(subnet: str, host: str) -> dict[str, Any]:
             with socket.create_connection((address, port), timeout=1.5) as connection:
                 connection.sendall((f"HEAD / HTTP/1.0\r\nHost: {address}\r\n"
                                     "Connection: close\r\n\r\n").encode("ascii"))
-                header = connection.recv(4096).decode("latin1")
+                header = _response(connection).decode("latin1")
             lines = header.split("\r\n\r\n", 1)[0].splitlines()
             status = re.match(r"HTTP/\d\.\d (\d{3})", lines[0]) if lines else None
             if status:

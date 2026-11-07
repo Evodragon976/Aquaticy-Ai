@@ -28,6 +28,7 @@ import json
 import re
 import sqlite3
 import threading
+import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
@@ -191,7 +192,7 @@ def clean(raw: Any, *, base: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 
-_SPERREN: dict[str, threading.Lock] = {}
+_SPERREN: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
 _SPERREN_LOCK = threading.Lock()
 
 

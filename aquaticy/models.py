@@ -43,7 +43,7 @@ class Product(BaseModel):
     image_url: str | None = None
     price: str | None = None
     currency: str | None = None
-    rating: float | None = None
+    rating: float | None = Field(default=None, allow_inf_nan=False)
     specs: dict[str, str] = Field(default_factory=dict)
     availability: str | None = None
     source_domain: str = ""

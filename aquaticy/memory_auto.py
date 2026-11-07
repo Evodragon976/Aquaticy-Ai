@@ -189,6 +189,7 @@ def explicit_request(text: str) -> bool:
 
 def own_message(text: str) -> str:
     text = re.sub(r"(?s)```.*?```|~~~.*?~~~", " ", str(text or ""))
+    text = re.sub(r"(?ms)^[ \t]{0,3}(?:`{3,}|~{3,})[^\n]*(?:\n|$).*\Z", " ", text)
     text = re.sub(r'"[^"\n]*"|„[^“\n]*“|“[^”\n]*”', " ", text)
     lines = []
     for line in text.splitlines():
@@ -394,7 +395,19 @@ _VERGISS = re.compile(r"(?i)\b(?:vergiss|lösch\w*|loesch\w*|forget)\s*,?\s*(?:b
 
 def forget_request(text: str) -> str:
     """"Vergiss, dass ich Pilze mag" -> "pilze mag" (oder "" ohne solche Bitte)."""
-    treffer = _VERGISS.search(text or "")
+    text = own_message(text)
+    field = re.fullmatch(
+        r"(?i)\s*(?:bitte\s+|please\s+)?(?:vergiss|lösche|loesche|forget|erase)\s+"
+        r"(?:bitte\s+)?(?:mein(?:e[nrms]?)?|my)\s+"
+        r"(namen?|wohnort|ort|adresse|address|location|geburtstag|birthday|alter|age|"
+        r"beruf|job|herkunft|origin)\s*[.!?]*\s*", text)
+    if field:
+        aliases = {"namen": "name", "ort": "wohnort", "adresse": "wohnort",
+                   "address": "wohnort", "location": "wohnort", "birthday": "geburtstag",
+                   "age": "alter", "job": "beruf", "origin": "herkunft"}
+        name = field[1].casefold()
+        return "@field:" + aliases.get(name, name)
+    treffer = _VERGISS.search(text)
     if not treffer:
         return ""
     wert = re.sub(r"(?i)^(?:ich|i)\s+", "", treffer.group("w").strip())
@@ -488,7 +501,11 @@ def _store_facts(store: Any, facts: list[Fact],
 
 def forget_matching(store: Any, wunsch: str) -> list[str]:
     """Loescht Eintraege ueber den Nutzer, die zu *wunsch* passen. Returns: geloeschte Texte."""
-    woerter = [w for w in _norm(wunsch).split() if len(w) > 2 and w not in (
+    field = wunsch.removeprefix("@field:") if wunsch.startswith("@field:") else ""
+    if field not in {"name", "wohnort", "geburtstag", "alter", "beruf", "herkunft"}:
+        field = ""
+    forms = {"heisse": "heisst", "wohne": "wohnt", "arbeite": "arbeitet", "komme": "kommt"}
+    woerter = [forms.get(w, w) for w in _norm(wunsch).split() if w not in (
         "mag", "ich", "bin", "habe", "nicht", "dass", "the", "like", "and")]
     if store is None or not woerter:
         return []
@@ -496,7 +513,10 @@ def forget_matching(store: Any, wunsch: str) -> list[str]:
     store.invalidate_pending()
     for eintrag in person_entries(store, limit=None):
         text = _norm(f"{eintrag.text} {eintrag.topic}")
-        if set(woerter) <= set(text.split()) and store.forget(eintrag.id):
+        topic = str(eintrag.topic or "").strip().casefold()
+        matches = (topic == PERSON + ":" + field if field
+                   else set(woerter) <= set(text.split()))
+        if matches and store.forget(eintrag.id):
             weg.append(str(eintrag.text))
     return weg
 

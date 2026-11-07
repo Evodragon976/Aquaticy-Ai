@@ -169,7 +169,10 @@ def _zeit(datum: str) -> float:
 def _wann(stempel: float) -> str:
     if not stempel:
         return ""
-    return datetime.fromtimestamp(stempel).strftime("%d.%m. %H:%M")
+    try:
+        return datetime.fromtimestamp(stempel).strftime("%d.%m. %H:%M")
+    except (ValueError, OSError, OverflowError):
+        return ""
 
 
 def _ein_feed(feed: str, reader: Any) -> list[dict[str, Any]]:
@@ -198,7 +201,7 @@ def headlines(country: str = "de", lang: str = "de", count: int = HEADLINE_COUNT
         for eintrag in eintraege:
             titel = str(eintrag.get("titel") or "").strip()
             link = str(eintrag.get("link") or "").strip()
-            schluessel = re.sub(r"\W+", " ", titel.lower()).strip()
+            schluessel = " ".join(titel.casefold().split())
             if not titel or not link.startswith(("https://", "http://")):
                 continue
             stempel = _zeit(str(eintrag.get("datum") or ""))

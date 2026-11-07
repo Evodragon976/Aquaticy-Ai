@@ -2950,6 +2950,9 @@ class Agent:
             return False
         return self.secure_pro or clean_mode(mode or self.mode) != "code"
 
+    def _automatic_memory_allowed(self) -> bool:
+        return True
+
     def _memory_learn(self, question: str, mode: str = "") -> None:
         """Feste Muster sofort ablegen ("ich heisse Louis") -- vor der Antwort (15.3.4)."""
         from aquaticy import memory_auto
@@ -2957,7 +2960,7 @@ class Agent:
         self.toolbox.memory_blocked = not self._memory_allowed(mode)
         self.toolbox.memory_request = question
         self.toolbox.memory_optout = memory_auto.opted_out(question)
-        if self.toolbox.memory_blocked:
+        if self.toolbox.memory_blocked or not self._automatic_memory_allowed():
             return
 
         try:
@@ -2981,7 +2984,7 @@ class Agent:
         (memory_auto.worth_asking), nur mit Wolkenmodell, nur wenn das Hauptmodell in diesem
         Turn nicht schon selbst etwas abgelegt hat.
         """
-        if (not question or self.stopped or result.error
+        if (not question or self.stopped or result.error or not self._automatic_memory_allowed()
                 or getattr(self.toolbox, "memory_blocked", True)
                 or not getattr(self.settings, "memory_auto_model", True)):
             return

@@ -19,6 +19,7 @@ from __future__ import annotations
 import ipaddress
 import socket
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -314,56 +315,45 @@ def scan(
     with_names: bool = True,
     on_device: object = None,
     ports: tuple[int, ...] | None = None,
+    allowed: Callable[[], bool] | None = None,
 ) -> list[Device]:
-    """Durchsucht *subnet* (leer = das eigene Netz) nach erreichbaren Geraeten.
-
-    Zuerst wird nur geklopft -- ein Port je Adresse reicht, um zu wissen, dass
-    da etwas ist. Erst fuer die Geraete, die geantwortet haben, wird genauer
-    hingesehen. Das spart bei einem /24 den Grossteil der Versuche.
-
-    Raises:
-        NotPrivate: Bei oeffentlichen oder zu grossen Netzen.
-        ValueError: Wenn kein Netz erkennbar ist.
-    """
+    """Erkundet ein privates Netz; eine entzogene Freigabe stoppt neue Anfragen."""
     network = parse_subnet(subnet or own_subnet())
     if ports is None:
         ports = QUICK_PORTS if quick else FULL_PORTS
     elif not ports or len(ports) > 128 or not all(1 <= int(p) <= 65535 for p in ports):
         raise ValueError("Höchstens 128 gültige Ports je Scan.")
     addresses = [str(host) for host in network.hosts()] or [str(network.network_address)]
-
-
-
-
-
-
-
     pairs = [(address, port) for address in addresses for port in ports]
     observed: dict[str, list[int]] = {}
+
+    def probe(pair: tuple[str, int]) -> bool:
+        return (allowed is None or allowed()) and port_open(*pair)
+
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        answered = pool.map(lambda pair: port_open(*pair), pairs)
-        for (address, port), is_open in zip(pairs, answered, strict=True):
+        for (address, port), is_open in zip(pairs, pool.map(probe, pairs), strict=True):
             if is_open:
                 observed.setdefault(address, []).append(port)
-    living = list(observed)
-    if not with_names and not with_titles:
-        observed_devices = [Device(address=address, ports=found,
-                                   services=[KNOWN_PORTS[p] for p in found if p in KNOWN_PORTS])
-                            for address, found in observed.items()]
-        if callable(on_device):
-            for observed_device in observed_devices:
-                on_device(observed_device)
-        observed_devices.sort(key=lambda item: tuple(int(part) for part in item.address.split(".")))
-        return observed_devices
+
+    def describe(address: str) -> Device:
+        found = observed[address]
+        device = Device(address=address, ports=found,
+                        services=[KNOWN_PORTS[p] for p in found if p in KNOWN_PORTS])
+        if with_names and (allowed is None or allowed()):
+            device.name = hostname_of(address)
+        if with_titles:
+            for port in (8123, 80, 8080, 443, 8443, 3000, 5000, 8006, 9000):
+                if allowed is not None and not allowed():
+                    break
+                if port in found:
+                    device.title = web_title(address, port)
+                    if device.title:
+                        break
+        return device
 
     devices: list[Device] = []
-    with ThreadPoolExecutor(max_workers=min(max(len(living), 1), 32)) as pool:
-        for device in pool.map(
-            lambda address: check_host(address, ports, with_title=with_titles,
-                                       with_names=with_names), living
-        ):
-            if device is None:
-                continue
+    with ThreadPoolExecutor(max_workers=min(max(len(observed), 1), 32)) as pool:
+        for device in pool.map(describe, observed):
             devices.append(device)
             if callable(on_device):
                 on_device(device)

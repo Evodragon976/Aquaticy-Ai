@@ -384,6 +384,8 @@ def check_call(domain: str, service: str, entity_id: str = "", data: Any = None)
     if not NAME_RE.fullmatch(domain or "") or not NAME_RE.fullmatch(service or ""):
         raise HomeAssistantError(
             "Bereich und Dienst duerfen nur aus Kleinbuchstaben, Ziffern und _ bestehen.")
+    if data is not None and not isinstance(data, dict):
+        raise HomeAssistantError("Zusatzdaten müssen ein JSON-Objekt sein.")
     payload: dict[str, Any] = dict(data) if isinstance(data, dict) else {}
     verboten = sorted(TARGET_KEYS & set(payload))
     if verboten:

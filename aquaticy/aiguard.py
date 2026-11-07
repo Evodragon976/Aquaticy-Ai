@@ -911,10 +911,13 @@ def _vereinheitlicht(text: str) -> str:
 
     rest = [_MAX_STERNCHEN]
 
-    def _token(m: re.Match[str]) -> str:
-        wort = m.group()
+    @functools.lru_cache(maxsize=1024)
+    def vorbereiten(wort: str) -> str:
         wort = _anrede_abtrennen(wort) if re.search(r"[_\-.]", wort) else wort
-        wort = _entleet(_punktiert(wort))
+        return _entleet(_punktiert(wort))
+
+    def _token(m: re.Match[str]) -> str:
+        wort = vorbereiten(m.group())
         if re.search(r"[*#]", wort):
             if rest[0] <= 0:
                 return _funktionswort(wort)
@@ -1215,7 +1218,7 @@ def _kette(klein: str) -> tuple[int, int, bool]:
     """
     wurzeln: dict[str, int] = {}
     nur_schimpf = True
-    for wort in re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", klein):
+    for wort in dict.fromkeys(re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", klein)):
         wert, grund = _stufe_von(wort)
         if not wert:
             wert, grund = _zusammensetzung(wort), wort

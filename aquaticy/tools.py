@@ -3981,8 +3981,11 @@ class Toolbox:
         if store is None:
             return {"error": "Der Speicher ist abgeschaltet."}
         try:
+            if isinstance(entry_id, bool) or (isinstance(entry_id, float)
+                                              and not entry_id.is_integer()):
+                raise ValueError
             nummer = int(entry_id)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return {"error": "id bitte als Zahl aus recall_memory."}
         if nummer <= 0 or not store.forget(nummer):
             return {"error": "Eine Notiz mit dieser id gibt es nicht."}

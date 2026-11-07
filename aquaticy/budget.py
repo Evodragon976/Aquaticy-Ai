@@ -59,7 +59,7 @@ def _dateien(data_dir: Path) -> list[Path]:
         if eintrag.is_symlink():
             continue
         if eintrag.is_dir():
-            if eintrag.name == "users" and eintrag.parent == data_dir:
+            if eintrag.name in {"users", "voice-models"} and eintrag.parent == data_dir:
                 continue
             gefunden.extend(p for p in eintrag.rglob("*") if p.is_file() and not p.is_symlink())
         elif eintrag.is_file():

@@ -78,6 +78,9 @@ def _kasten(settings: Settings, scopes: list[str], *, direct: bool = False, writ
                 "end": {"dateTime": "2026-11-02T11:00:00+01:00"}})
         if request.method == "POST" and "/drafts" in adresse:
             return httpx.Response(200, json={"id": "d1"})
+        if request.method == "PATCH" and "/events/" in adresse:
+            return httpx.Response(200, json={
+                "id": request.url.path.rsplit("/", 1)[-1], "summary": "Neu"})
         if "/calendars/primary/events" in adresse:
             return httpx.Response(200, json={"items": [{
                 "id": "e0", "summary": "Zahnarzt", "description": google_beschreibung[0],

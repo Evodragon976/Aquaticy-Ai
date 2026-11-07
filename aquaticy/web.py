@@ -1008,28 +1008,43 @@ def trusted_proxies() -> list[Any]:
     return netze
 
 
-def client_ip(direkt: str, forwarded: str = "", real_ip: str = "") -> str:
-    """Die Adresse des Menschen am anderen Ende.
-
-    Hinter einem eingetragenen Proxy (``AQUATICY_TRUSTED_PROXIES``) die, die der
-    Proxy meldet -- sonst teilten sich alle Nutzer dessen eine Adresse: eine
-    Anfragegrenze fuer alle, und eine IP-Sperre traefe jeden (seit 9.5.16).
-    Genommen wird der LETZTE Eintrag: den hat der eigene Proxy angehaengt, alle
-    davor kann der Browser selbst mitgeschickt haben.
-    """
+def _trusted_proxy(address: str) -> bool:
     import ipaddress
 
     try:
-        quelle = ipaddress.ip_address(direkt.split("%", 1)[0])
+        parsed = ipaddress.ip_address(address.split("%", 1)[0])
     except ValueError:
+        return False
+    choices = [parsed]
+    if isinstance(parsed, ipaddress.IPv6Address) and parsed.ipv4_mapped is not None:
+        choices.append(parsed.ipv4_mapped)
+    return any(choice in network for choice in choices for network in trusted_proxies())
+
+
+def client_ip(direkt: str, forwarded: str = "", real_ip: str = "") -> str:
+    """Vertraute Proxy-Hops von rechts nach links bis zum Client aufloesen."""
+    import ipaddress
+
+    if not _trusted_proxy(direkt):
         return direkt
-    if not any(quelle in netz for netz in trusted_proxies()):
-        return direkt
-    for kandidat in [*reversed(forwarded.split(",")), real_ip]:
-        kandidat = kandidat.strip()
-        with contextlib.suppress(ValueError):
-            if kandidat:
-                return str(ipaddress.ip_address(kandidat))
+    last = ""
+    for candidate in reversed(forwarded.split(",")) if forwarded.strip() else ():
+        candidate = candidate.strip()
+        try:
+            parsed = ipaddress.ip_address(candidate)
+        except ValueError:
+            break
+        if isinstance(parsed, ipaddress.IPv6Address) and parsed.ipv4_mapped is not None:
+            parsed = parsed.ipv4_mapped
+        last = str(parsed)
+        if not _trusted_proxy(candidate):
+            return last
+    else:
+        if last:
+            return last
+    with contextlib.suppress(ValueError):
+        if real_ip.strip():
+            return str(ipaddress.ip_address(real_ip.strip()))
     return direkt
 
 
@@ -1136,20 +1151,10 @@ def _move_keys_into_vault(tresor: Any, env_path: Path | None, raw: dict[str, str
 
 
 def remove_env_keys(path: Path, names: set[str]) -> None:
-    """Streicht Zeilen aus einer .env -- fuer Schluessel, die dort nicht mehr hingehoeren."""
-    from aquaticy.memory import secure_file
+    from aquaticy.config import write_env_file
 
-    if not path.is_file() or not names:
-        return
-    zeilen = path.read_text(encoding="utf-8").splitlines()
-    bleiben = [
-        zeile for zeile in zeilen
-        if zeile.strip().startswith("#") or "=" not in zeile
-        or zeile.split("=", 1)[0].strip().removeprefix("export ").strip() not in names
-    ]
-    if bleiben != zeilen:
-        path.write_text("\n".join(bleiben).rstrip("\n") + "\n", encoding="utf-8")
-        secure_file(path)
+    if path.is_file() and names:
+        write_env_file({}, path, remove=names)
 
 
 def _apply_vm_size(settings: Settings, raw: dict[str, str], plan: str) -> None:
@@ -1992,12 +1997,13 @@ class ChatSession:
         from aquaticy import metering
         from aquaticy import sandbox as werkstatt
 
+        reservation = None
         try:
 
-            metering.check_work(self.settings(), "datei")
+            reservation = metering.reserve_work(self.settings(), "datei")
             antwort = werkstatt.shared(self.settings()).put_bytes(f"eingang/{schlicht}", data)
             if isinstance(antwort, dict) and antwort.get("written"):
-                metering.charge_work(self.settings(), "datei")
+                reservation.settle_work(metering.work_cost("datei"))
                 return str(antwort["written"])
         except metering.QuotaExceeded:
             return ""
@@ -2006,6 +2012,9 @@ class ChatSession:
 
             logging.getLogger("aquaticy.web").warning(
                 "Anhang nicht in die virtual machine gelegt", exc_info=True)
+        finally:
+            if reservation is not None:
+                reservation.cancel()
         return ""
 
     def _one_attachment(self, agent: Any, name: str, data: bytes) -> str:
@@ -2060,7 +2069,7 @@ class ChatSession:
         folder.mkdir(parents=True, exist_ok=True)
 
         ensure_room(self.settings().data_dir, len(data))
-        target = folder / f"{int(time.time() * 1000)}-{name}"
+        target = folder / f"{int(time.time() * 1000)}-{secrets.token_hex(8)}-{name}"
 
         from aquaticy.privacy import write_private
 
@@ -2322,21 +2331,33 @@ class ChatSession:
         """
         import tempfile
 
-        from aquaticy.export import Turn, export
+        from aquaticy.export import Turn, export, write_copy
+        from aquaticy.models import Product
 
-        entries = self._cache().recent_history(limit=5)
+        current = str(getattr(self._agent, "session_id", "") or "")
+        cache = self._cache()
+        entries = cache.recent_history(limit=5, session_id=current or None)
+        previous_research = bool(current and not entries)
+        if previous_research:
+            entries = cache.recent_history(limit=5)
         if not entries:
             return {"text": "Noch nichts zu exportieren — stell erst eine Frage."}
-        turns = [
-            Turn(
+        turns = []
+        for entry in entries:
+            products = []
+            raw_products = entry.meta.get("products")
+            for product in raw_products if isinstance(raw_products, list) else []:
+                if isinstance(product, dict):
+                    with contextlib.suppress(ValueError, TypeError):
+                        products.append(Product(**product))
+            turns.append(Turn(
                 question=entry.question,
                 answer=entry.answer,
                 sources=entry.meta.get("sources", []),
                 searches=entry.meta.get("searches", []),
                 skipped=entry.meta.get("skipped", {}),
-            )
-            for entry in entries
-        ]
+                products=products,
+            ))
         try:
             with tempfile.TemporaryDirectory(prefix="aquaticy-export-") as ordner:
                 path = export(turns, fmt, directory=Path(ordner))
@@ -2352,10 +2373,12 @@ class ChatSession:
             "csv": "text/csv;charset=utf-8",
         }[path.suffix.lstrip(".")]
         text = f"Export fertig: **{name}** — der Download startet."
+        if previous_research:
+            text += ("\n\nDieser Chat ist noch leer. Der Export enthält die letzten "
+                     "gespeicherten Recherchen aus deinem Konto.")
         if self.account is None:
             with contextlib.suppress(OSError):
-                ziel = Path.cwd() / name
-                ziel.write_text(inhalt, encoding="utf-8")
+                ziel = write_copy(inhalt, Path.cwd() / name)
                 text += f"\n\nEine Kopie liegt in `{ziel}`."
         return {"text": text, "download": {"name": name, "mime": mime, "content": inhalt}}
 
@@ -3648,6 +3671,7 @@ def save_values(payload: dict[str, Any]) -> Path:
         if session.profile is not None
         else find_env_file() or DEFAULT_ENV_PATH
     )
+    previous_settings = session.settings()
     written = write_env_file(values, target)
     if geheim and session.profile is not None:
         from aquaticy.keyvault import VaultError
@@ -3672,6 +3696,11 @@ def save_values(payload: dict[str, Any]) -> Path:
         upgrading.choose(UPGRADE_DIR, values["AQUATICY_MODEL"], session.ultra,
                          getattr(session.account, "id", "") or "")
     session.reload()
+    if (any(key.startswith("AQUATICY_VM_") for key in values)
+            and workshop_changed(previous_settings, session.settings())):
+        from aquaticy.coworker import stop_boxes
+
+        stop_boxes(previous_settings.data_dir)
     return written
 
 
@@ -4081,6 +4110,8 @@ def _coworker_insult(konto: Any, text: str, wo: str) -> str:
 
 def _json_int(wert: Any) -> int:
     """Eine Zahl aus einer JSON-Anfrage. Unsinn wirft TypeError, ValueError oder OverflowError."""
+    if isinstance(wert, bool) or (isinstance(wert, float) and not wert.is_integer()):
+        raise ValueError("Gib eine ganze Zahl ein.")
     return int(wert)
 
 
@@ -5434,14 +5465,8 @@ class Handler(BaseHTTPRequestHandler):
             return bool(getattr(self, "_cluster_https", False))
         if isinstance(self.connection, __import__("ssl").SSLSocket):
             return True
-        import ipaddress
-
         direkt = str(self.client_address[0] if self.client_address else "")
-        try:
-            quelle = ipaddress.ip_address(direkt.split("%", 1)[0])
-        except ValueError:
-            return False
-        if not any(quelle in netz for netz in trusted_proxies()):
+        if not _trusted_proxy(direkt):
             return False
         return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
 

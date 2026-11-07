@@ -90,7 +90,7 @@ SECRET_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
 
 _ASSIGNED_SECRET = _r(
     r"(?<![\w.-])([\w.-]{1,60})[\"']?[ \t]{0,8}(?::=|=|:)[ \t]{0,8}[bfru]{0,2}([\"'])"
-    r"([^\"'\s]{8,200})\2")
+    r"((?:\\[^\r\n]|(?!\2)[^\\\r\n]){6,})\2")
 _SECRET_NAME = _r(_SECRETISH, _I)
 
 
@@ -106,13 +106,9 @@ def _secret_value_ok(name: str, value: str) -> bool:
         return False
     if _POINTER_NAME.search(name):
         return False
-    if re.fullmatch(r"[A-Z][A-Z0-9_]+", value):
+    if name.casefold() == value.casefold():
         return False
-    if re.fullmatch(r"[a-z][a-z0-9_.-]*", value) and re.search(_SECRETISH, value, _I):
-        return False
-    if re.match(r"https?://[^@\s]*$", value):
-        return False
-    return "(?" not in value and "\\" not in value
+    return not re.match(r"https?://[^@\s]*$", value)
 
 
 RULES: tuple[Rule, ...] = (

@@ -474,7 +474,9 @@ class Watcher:
             return []
         ports = tuple(sorted(set(lan.FULL_PORTS) | set(RISK_PORTS) | set(MALWARE_PORTS)))
         devices = lan.scan(str(network), quick=False, with_titles=False, with_names=False,
-                           ports=ports)
+                           ports=ports, allowed=lambda: (
+                               not self.stop_event.is_set()
+                               and grant_active(self.directory, config)))
         if not grant_active(self.directory, config) or self.stop_event.is_set():
             return []
         inventory = {item["address"]: item for item in neighbours(str(network))}

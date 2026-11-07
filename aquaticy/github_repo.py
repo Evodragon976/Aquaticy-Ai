@@ -245,7 +245,11 @@ def redact(text: str) -> str:
             if re.search(r"-----END .*PRIVATE KEY", line):
                 key = False
         else:
-            lines.append(mask_secrets(line))
+            if re.fullmatch(r"[ +\-]?[A-Za-z0-9+/]{40,}={0,2}\s*", line):
+                lines.append("[Mögliches Schlüsselmaterial verdeckt]"
+                             + ("\n" if line.endswith("\n") else ""))
+            else:
+                lines.append(mask_secrets(line))
     return "".join(lines)
 
 

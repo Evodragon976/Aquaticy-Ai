@@ -2918,7 +2918,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.4.4";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.4.5";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -3946,7 +3946,8 @@ const PHASEN = { think: "Denken", web: "Websuche", code: "Code ausführen",
 const VM_GRUENDE_EN = { "seit 20 Minuten unbenutzt": "unused for 20 minutes",
   "aufgeräumt": "cleaned up", "Programm beendet": "program closed",
   "neu aufgebaut": "rebuilt", "Installation fertig": "installation finished",
-  "Coworker beendet": "coworker finished" };
+  "Coworker beendet": "coworker finished",
+  "Die Einstellungen der virtual machine wurden geändert": "virtual machine settings changed" };
 const KATEGORIEN_EN = { code: "programming",
   schnell: "short chat", schreiben: "writing", recherche: "research and questions" };
 function autoGrundEn(ev){
@@ -6113,7 +6114,7 @@ const EN = {
 
 "Termine eintragen und ändern": "Add and change appointments",
 "Mail-Entwürfe anlegen": "Create email drafts",
-"Sich etwas dauerhaft merken": "Remember something permanently",
+"Persönliche Notizen speichern oder löschen": "Save or delete personal notes",
 "Die Lagerverwaltung ändern": "Change the inventory",
 "Im Haus etwas schalten": "Switch something at home",
 "Das Heimnetz abfragen": "Query the home network",
@@ -8259,17 +8260,31 @@ const addonBox = $("#addonbox"), screenBox = $("#screenbox");
 let addonDaten = null, addonTakt = null;
 
 async function addonsLaden(){
-  let daten;
-  try { daten = await (await api("/api/addons")).json(); }
-  catch { $("#addon-note").textContent = "Die Add-ons ließen sich nicht laden."; return; }
-
-  if (!Array.isArray(daten?.addons)){
-    $("#addon-note").className = "note bad";
-    $("#addon-note").textContent = daten?.error || "Die Add-ons ließen sich nicht laden.";
-    return;
+  clearTimeout(addonTakt);
+  if (document.hidden || !addonBox.classList.contains("open")) return;
+  let retry = true;
+  try {
+    const res = await api("/api/addons");
+    if ([401,403].includes(res.status)) retry = false;
+    const daten = await res.json();
+    if (!res.ok){
+      $("#addon-note").className = "note bad";
+      $("#addon-note").textContent = daten?.error || "Die Add-ons ließen sich nicht laden.";
+      return;
+    }
+    if (!Array.isArray(daten?.addons)){
+      $("#addon-note").className = "note bad";
+      $("#addon-note").textContent = daten?.error || "Die Add-ons ließen sich nicht laden.";
+      return;
+    }
+    addonDaten = daten;
+    zeigeAddons();
+    retry = false;
+  } catch { $("#addon-note").textContent = "Die Add-ons ließen sich nicht laden."; }
+  finally {
+    if (retry && !document.hidden && addonBox.classList.contains("open"))
+      addonTakt = setTimeout(addonsLaden, 5000);
   }
-  addonDaten = daten;
-  zeigeAddons();
 }
 
 async function addonTun(body, knopf){
@@ -8816,8 +8831,13 @@ function zeigeAddons(){
 
   clearTimeout(addonTakt);
   const laeuft = (addonDaten?.addons || []).some(a => a.status === "installiert gerade");
-  if (laeuft && addonBox.classList.contains("open")) addonTakt = setTimeout(addonsLaden, 2000);
+  if (laeuft && !document.hidden && addonBox.classList.contains("open")) addonTakt = setTimeout(addonsLaden, 2000);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) clearTimeout(addonTakt);
+  else if (addonBox.classList.contains("open")) addonsLaden();
+});
 
 function addonsSchliessen(){ clearTimeout(addonTakt); closeOverlay(addonBox); }
 function addonsOeffnen(){
@@ -8885,20 +8905,21 @@ async function coworkerTun(body, knopf){
 async function coworkerLaden(){
   clearTimeout(coworkerTakt);
   if (document.hidden || !coworkerBox.classList.contains("open")) return;
+  let retry = true, pause = 5000;
   try {
     const res = await api("/api/coworkers");
+    if ([401,403].includes(res.status)) retry = false;
     if (!res.ok){ await res.text().catch(() => ""); return; }
     coworkerDaten = await res.json();
+    coworkerZeigen();
+    coworkerAbzeichen(coworkerDaten.badge);
+    const arbeitet = (coworkerDaten.coworkers || []).some(cw => cw.working);
+    pause = arbeitet ? 4000 : 15000;
   } catch {
     $("#coworker-note").textContent = "Die Coworker ließen sich nicht laden.";
-    return;
-  }
-  coworkerZeigen();
-  coworkerAbzeichen(coworkerDaten.badge);
-  if (coworkerBox.classList.contains("open")){
-
-    const arbeitet = (coworkerDaten.coworkers || []).some(cw => cw.working);
-    coworkerTakt = setTimeout(coworkerLaden, arbeitet ? 4000 : 15000);
+  } finally {
+    if (retry && !document.hidden && coworkerBox.classList.contains("open"))
+      coworkerTakt = setTimeout(coworkerLaden, pause);
   }
 }
 

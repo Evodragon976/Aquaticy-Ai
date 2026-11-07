@@ -159,7 +159,8 @@ def test_the_gate_enforces_the_rules(store) -> None:
     assert antwort["wartet_auf_freigabe"] and s.requested == [antwort["anfrage"]]
     offen = store.actions(s.cw.id)
     assert offen[0]["arguments"] == {"text": "Termin am Montag"}
-    assert offen[0]["summary"] == "Sich etwas dauerhaft merken — Inhalt: Termin am Montag"
+    assert offen[0]["summary"] == (
+        "Persönliche Notizen speichern oder löschen — Inhalt: Termin am Montag")
 
 
 def test_after_foreign_text_even_allowed_actions_wait(store) -> None:

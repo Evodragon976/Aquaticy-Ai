@@ -130,6 +130,16 @@ def cache_key(kind: str, *parts: Any) -> str:
     return f"{kind}:{hashlib.sha256(raw.encode('utf-8')).hexdigest()[:32]}"
 
 
+def _history_metadata(raw: str) -> dict[str, Any]:
+    from aquaticy.jsonutil import loads
+
+    try:
+        value = loads(raw or "{}")
+    except (ValueError, TypeError, RecursionError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def _snippet(row: Any, needle: str, width: int = 110) -> str:
     """Die Stelle um den Treffer herum -- Frage bevorzugt, sonst Antwort.
 
@@ -556,13 +566,21 @@ class Cache:
             return conn.execute("SELECT 1 FROM secure_chats WHERE session_id = ?",
                                 (session_id,)).fetchone() is not None
 
-    def recent_history(self, limit: int = 20, session_id: str | None = None) -> list[HistoryEntry]:
-        query = "SELECT * FROM history"
+    def recent_history(self, limit: int = 20, session_id: str | None = None, *,
+                       kind: str | None = None) -> list[HistoryEntry]:
+        query = "SELECT h.* FROM history h"
         params: list[Any] = []
+        conditions: list[str] = []
+        if kind in CHAT_KINDS:
+            query += " LEFT JOIN chat_modes m ON m.session_id = h.session_id"
+            conditions.append("COALESCE(m.kind, 'chat') = ?")
+            params.append(kind)
         if session_id:
-            query += " WHERE session_id = ?"
+            conditions.append("h.session_id = ?")
             params.append(session_id)
-        query += " ORDER BY id DESC LIMIT ?"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY h.id DESC LIMIT ?"
 
         params.append(max(1, int(limit)))
         with self._connect() as conn, closing(conn.cursor()) as cur:
@@ -575,7 +593,7 @@ class Cache:
                 created_at=row["created_at"],
                 question=self._open(row["question"], "history.question"),
                 answer=self._open(row["answer"], "history.answer"),
-                meta=json.loads(self._open(row["meta"], "history.meta") or "{}"),
+                meta=_history_metadata(self._open(row["meta"], "history.meta")),
             )
             for row in reversed(rows)
         ]
@@ -689,16 +707,23 @@ class Cache:
         title = " ".join((title or "").split())[:120]
         if not session_id:
             return ""
+        from aquaticy.budget import ensure_room, note_written
+
+        sealed = self._seal(title, "chat_titles.title") if title else ""
+        growth = len(sealed.encode("utf-8")) + 8192 if title else 0
+        if title:
+            ensure_room(self.db_path.parent, growth)
         with self._connect() as conn, closing(conn.cursor()) as cur:
             if title:
                 cur.execute(
                     "INSERT INTO chat_titles (session_id, title) VALUES (?, ?) "
                     "ON CONFLICT(session_id) DO UPDATE SET title = excluded.title",
-                    (session_id, self._seal(title, "chat_titles.title")),
+                    (session_id, sealed),
                 )
             else:
                 cur.execute("DELETE FROM chat_titles WHERE session_id = ?", (session_id,))
             conn.commit()
+        note_written(self.db_path.parent, growth)
         return title
 
     def delete_chat(self, session_id: str) -> int:
@@ -757,12 +782,19 @@ class Cache:
         text = " ".join(str(text).split())[: self.MAX_NOTE_LENGTH]
         if not text:
             return 0
+        from aquaticy.budget import ensure_room, note_written
+
+        sealed = self._seal(text, "notes.text")
+        growth = len(sealed.encode("utf-8")) + 8192
+        ensure_room(self.db_path.parent, growth)
         with self._connect() as conn, closing(conn.cursor()) as cur:
             cur.execute(
                 "INSERT INTO notes (created_at, text) VALUES (?, ?)",
-                (time.time(), self._seal(text, "notes.text")),
+                (time.time(), sealed),
             )
-            return int(cur.lastrowid or 0)
+            entry_id = int(cur.lastrowid or 0)
+        note_written(self.db_path.parent, growth)
+        return entry_id
 
     def list_notes(self, limit: int = 50) -> list[Note]:
         """Alle Notizen, neueste zuletzt."""
