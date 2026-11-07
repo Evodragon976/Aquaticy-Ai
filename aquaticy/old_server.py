@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import logging
 import os
 import re
 import shlex
@@ -20,6 +21,8 @@ import time
 from pathlib import Path
 
 import httpx
+
+LOG = logging.getLogger(__name__)
 
 _VERSION = re.compile(r'window\.__AQUATICY_VERSION__ = "([^"\\]{1,40})"')
 
@@ -139,12 +142,27 @@ def stop(pid: int, wait: float = 10.0) -> bool:
 
     Unter Windows nie: Dort waere os.kill(pid, 0) ein Strg+C an die ganze Prozessgruppe.
     """
-    if os.name == "nt" or not is_aquaticy(pid):
+    if os.name == "nt":
         return False
+    pidfd = -1
+    with contextlib.suppress(AttributeError, OSError):
+        # 15.5.7: Erst festhalten, dann pruefen, dann ueber genau diesen Griff beenden. So
+        # trifft das Signal nie einen anderen Prozess, der die Nummer inzwischen bekam.
+        pidfd = os.pidfd_open(int(pid))
     try:
-        os.kill(int(pid), signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        return False
+        if not is_aquaticy(pid):
+            return False
+        LOG.warning("[Sicherheit] Alter Aquaticy-Server (Prozess %s) wird beendet.", int(pid))
+        try:
+            if pidfd >= 0:
+                signal.pidfd_send_signal(pidfd, signal.SIGTERM)
+            else:
+                os.kill(int(pid), signal.SIGTERM)
+        except (OSError, ProcessLookupError):
+            return False
+    finally:
+        if pidfd >= 0:
+            os.close(pidfd)
     ende = time.monotonic() + wait
     while time.monotonic() < ende:
         if _exited(pid):
@@ -181,7 +199,12 @@ def aquaticy_servers() -> list[int]:
 
 
 def _ist_server(befehl: list[str]) -> bool:
-    """`aquaticy web ...` oder `python -m aquaticy.cli web ...` -- nichts anderes."""
+    """`aquaticy web ...`, `python -m aquaticy.cli web ...` -- oder ohne Befehl (15.5.7).
+
+    Ein schlichtes `aquaticy` startet den Server ebenfalls (im Hintergrund als
+    `python -m aquaticy.cli` ohne weitere Angaben). Bis 15.5.6 zaehlte das nicht: Der alte
+    Server blieb stehen, die neue Version wich auf den naechsten Port aus.
+    """
     if not befehl:
         return False
     program = Path(befehl[0]).name.lower()
@@ -190,8 +213,8 @@ def _ist_server(befehl: list[str]) -> bool:
         while args and args[0] in ("-u", "-B", "-E", "-s", "-S", "-I", "-O", "-OO", "-q"):
             args = args[1:]
         if args[:2] == ["-m", "aquaticy.cli"]:
-            return len(args) > 2 and args[2] == "web"
+            return len(args) == 2 or args[2] == "web"
         if not args:
             return False
         program, args = Path(args[0]).name.lower(), args[1:]
-    return program in ("aquaticy", "aquaticy.exe") and bool(args) and args[0] == "web"
+    return program in ("aquaticy", "aquaticy.exe") and (not args or args[0] == "web")

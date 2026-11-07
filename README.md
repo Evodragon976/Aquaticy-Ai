@@ -1,4 +1,4 @@
-# Aquaticy AI 15.5.6
+# Aquaticy AI 15.5.7
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,18 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.5.7:**
+
+- **Alte Server werden sicher erkannt.** Ein schlicht mit `aquaticy` gestarteter Server
+  (im Hintergrund `python -m aquaticy.cli` ohne weitere Angaben) zählte bisher nicht als
+  Server. Er blieb beim Start der neuen Version und bei `aquaticy stop` stehen. Jetzt wird
+  er erkannt.
+- **Beenden ohne Verwechslung.** Unter Linux hält Aquaticy den Prozess zuerst fest (pidfd),
+  prüft ihn dann und beendet genau diesen. Jede Beendigung steht als `[Sicherheit]` im
+  Protokoll. Weiter gilt: nur eigene Prozesse, nur echte Aquaticy-Server, und der Start
+  wird nie blockiert. Lässt sich ein alter Server nicht beenden, nimmt Aquaticy den
+  nächsten freien Port und sagt das.
 
 **Neu in 15.5.6:**
 
@@ -745,7 +757,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.5.6
+aquaticy --version            # 15.5.7
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
