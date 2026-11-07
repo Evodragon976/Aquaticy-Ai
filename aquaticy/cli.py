@@ -1056,9 +1056,14 @@ def _altes_aquaticy(port: int) -> None:
     from aquaticy import old_server
 
     laeuft = old_server.running_version(port)
-    if not laeuft:
-        return
+    # 15.5.6: Auch ohne Versionsnummer pruefen. Mit Konten zeigt der alte Server nur die
+    # Anmeldeseite, und die nennt keine Version. Dann blieb er laufen, die neue Version wich
+    # auf den naechsten Port aus, und der Browser zeigte unter der gewohnten Adresse weiter
+    # die alte ("Terminal 15.5.6, Website 15.4.4"). Der Prozess selbst verraet es sicher.
     prozesse = [pid for pid in old_server.listener_pids(port) if old_server.is_aquaticy(pid)]
+    if not laeuft and not prozesse:
+        return
+    laeuft = laeuft or "ältere Version"
     if not prozesse:
         console.print(f"[yellow]Auf Port {port} läuft Aquaticy {laeuft}, aber der Prozess "
                       "lässt sich hier nicht beenden. Beende ihn selbst.[/yellow]")

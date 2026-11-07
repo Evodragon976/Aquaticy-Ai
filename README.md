@@ -36,6 +36,10 @@ $ aquaticy
   (`+49 …` oder `0049 …`); Namen und Nummern wie `0151 …` bekommen nichts. Höchstens zehn
   Nummern, jede mit eigener Grenze pro Stunde. „Schreib mir das auf WhatsApp“ geht weiter
   nur an deinen eigenen Chat.
+- **Website zeigt wieder die richtige Version.** Ein alter Aquaticy-Prozess hinter der
+  Anmeldeseite wurde beim Start nicht erkannt (die Seite nennt keine Version). Die neue
+  Version wich dann auf den nächsten Port aus, und unter der gewohnten Adresse lief die alte
+  weiter. Jetzt erkennt Aquaticy den alten Prozess am Programm selbst und beendet ihn.
 
 **Neu in 15.5.5:**
 
