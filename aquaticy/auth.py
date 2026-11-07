@@ -25,12 +25,10 @@ from aquaticy.memory import secure_file
 SESSION_DAYS = 30
 
 
-
 EMAIL_RE = re.compile(r"^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$")
 USERNAME_RE = re.compile(r"^[^\x00-\x1f\x7f]{2,40}$")
 PRO_CODE_RE = re.compile(r"^[A-Z0-9]{9}$")
 PRO_CODE_IN_TEXT_RE = re.compile(r"(?<![A-Z0-9])[A-Z0-9]{9}(?![A-Z0-9])", re.IGNORECASE)
-
 
 
 ULTRA_SPECIALS = "!@#$%&*+-=?"
@@ -41,7 +39,6 @@ ULTRA_CODE_LEN = 14
 LOCAL_EMAIL_DOMAIN = "konto.aquaticy.lokal"
 SINGLE_TAKEN = ("Auf diesem Rechner gibt es schon ein Konto. Melde dich damit an. "
                 "Weitere Konten gibt es nur mit dem Kontensystem (aquaticy setup).")
-
 
 
 USERS_COLUMNS = (
@@ -91,12 +88,8 @@ class Account:
     created_at: float
     username: str = ""
 
-
-
-
     last_ip: str = ""
     last_seen: float = 0.0
-
 
     _credential: bytes = field(default=b"", repr=False, compare=False)
 
@@ -116,8 +109,6 @@ class Account:
     @property
     def plan_label(self) -> str:
         return {"ultra": "Ultra", "pro": "Pro"}.get(self.plan, "Normal")
-
-
 
 
 ARGON_PREFIX = b"argon2id$"
@@ -159,7 +150,6 @@ def _argon_verify(password: str, salt: bytes, pepper: bytes, stored: bytes) -> b
     except (ValueError, KeyError, UnicodeDecodeError):
         return False
 
-
     if not (8 <= params[0] <= 1024 * 1024 and 1 <= params[1] <= 10 and 1 <= params[2] <= 16):
         return False
     return hmac.compare_digest(_argon_hash(password, salt, pepper, params), stored)
@@ -184,9 +174,6 @@ def _password_hash(password: str, salt: bytes) -> bytes:
 
 def _secret_hash(value: str, pepper: bytes) -> str:
     return hmac.new(pepper, value.encode("utf-8"), hashlib.sha256).hexdigest()
-
-
-
 
 
 SESSION_IP_MODE = (os.environ.get("AQUATICY_SESSION_IP", "netz").strip().lower() or "netz")
@@ -218,8 +205,6 @@ def normalize_email(email: str) -> str:
     except UnicodeError as exc:
         raise ValueError("Bitte gib eine gültige E-Mail-Adresse ein.") from exc
     return value
-
-
 
 
 MIN_PASSWORD = 12
@@ -374,8 +359,6 @@ class RateLimiter:
         self._events: dict[str, deque[float]] = defaultdict(deque)
         self._lock = threading.Lock()
 
-
-
     SWEEP_AT = 10_000
 
     def allow(self, key: str) -> bool:
@@ -442,14 +425,11 @@ class AuthStore:
         self._pepper = self._load_pepper()
         from aquaticy.privacy import ServerSecrets
 
-
         self._secrets = ServerSecrets(self.data_dir)
 
         self._vault_secret: bytes | None = None
         self._setup()
         from aquaticy.learning import Learning
-
-
 
         Learning(self.data_dir)
 
@@ -505,9 +485,6 @@ class AuthStore:
                 """
             )
 
-
-
-
             self._migrate_tables(conn)
             columns = {str(row["name"]) for row in conn.execute("PRAGMA table_info(users)")}
             if "terms_version" not in columns:
@@ -521,7 +498,6 @@ class AuthStore:
             if "username" not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN username TEXT NOT NULL DEFAULT ''")
 
-
             conn.execute(
                 "UPDATE users SET username=CASE "
                 "WHEN instr(email, '@') > 1 THEN substr(email, 1, instr(email, '@') - 1) "
@@ -533,11 +509,8 @@ class AuthStore:
             if "last_seen" not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN last_seen REAL NOT NULL DEFAULT 0")
 
-
             if "created_ip" not in columns:
                 conn.execute("ALTER TABLE users ADD COLUMN created_ip TEXT NOT NULL DEFAULT ''")
-
-
 
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS account_devices ("
@@ -560,13 +533,11 @@ class AuthStore:
             conn.execute("CREATE TABLE IF NOT EXISTS privacy_state ("
                          "name TEXT PRIMARY KEY, value TEXT NOT NULL)")
 
-
             conn.execute("CREATE TABLE IF NOT EXISTS account_events ("
                          "user_id TEXT NOT NULL, at REAL NOT NULL, kind TEXT NOT NULL, "
                          "detail TEXT NOT NULL DEFAULT '', seen INTEGER NOT NULL DEFAULT 0)")
             self._seal_plain_rows(conn)
         secure_file(self.db_path)
-
 
     def _email_key(self, email: str) -> str:
         """Wonach eine E-Mail-Adresse gesucht wird: ihr Schluessel-Hash."""
@@ -619,7 +590,6 @@ class AuthStore:
                  self._secrets.seal(str(row["browser"] or ""), "geraet.browser"),
                  row["rowid"]),
             )
-
 
         conn.execute(
             "DELETE FROM account_devices WHERE (hardware != '' AND substr(hardware, 1, 5) "
@@ -678,7 +648,6 @@ class AuthStore:
         conn.execute("PRAGMA foreign_keys=OFF")
         try:
             conn.execute("BEGIN IMMEDIATE")
-
 
             neubau, verwaist, _ = zustand()
             if neubau:
@@ -794,7 +763,6 @@ class AuthStore:
                 code_from_input(pro_code).encode("utf-8"), self.pro_code.encode("utf-8")):
             raise ValueError("Der Pro-Code stimmt nicht.")
 
-
         if plan == "ultra" and not hmac.compare_digest(
                 (pro_code or "").strip().encode("utf-8", "surrogatepass"),
                 self.ultra_code.encode("utf-8")):
@@ -812,7 +780,6 @@ class AuthStore:
 
         adresse = _norm_ip(ip)
 
-
         pruefe_adresse = adresse
         try:
             import ipaddress as _ip
@@ -823,25 +790,16 @@ class AuthStore:
             pruefe_adresse = ""
         try:
             with self._lock, self._connect() as conn:
-
-
-
                 conn.execute("BEGIN IMMEDIATE")
                 if self.single and self._owner_row(conn) is not None:
                     raise ValueError(SINGLE_TAKEN)
-
 
                 if any(str(row[0]).casefold() == username.casefold() for row in
                        conn.execute("SELECT username FROM users")):
                     raise vergeben
 
-
-
-
                 pruefung = self._assess(conn, email, self.ip_key(pruefe_adresse), device)
                 if pruefung.suspicious:
-
-
                     print(f"[Konten] Registrierung {username}: "
                           f"{pruefung.points:g} Punkte – {', '.join(pruefung.reasons)}"
                           f" (ähnelt {pruefung.closest})"
@@ -881,15 +839,12 @@ class AuthStore:
                     conn.execute("INSERT OR REPLACE INTO single_owner (slot, user_id) "
                                  "VALUES (1, ?)", (user_id,))
         except sqlite3.IntegrityError as exc:
-
-
             raise vergeben from exc
         folder = self.profile_dir(user_id)
         secure_directory(folder)
         return Account(user_id, email, plan, now, username, self.ip_key(adresse),
                        now if adresse else 0.0, self._credential_for({
                            "id": user_id, "password_hash": password_hash, "password_salt": salt}))
-
 
     def _assess(self, conn: sqlite3.Connection, email: str, ip: str,
                 device: Any) -> Any:
@@ -927,8 +882,6 @@ class AuthStore:
         if not isinstance(device, DeviceInfo) or not (
                 device.cookie_hash or device.hardware_hash or device.browser_hash):
             return
-
-
 
         geraet = self._keyed(device)
         conn.execute(
@@ -1007,8 +960,6 @@ class AuthStore:
         except ValueError:
             return None
         if not isinstance(password, str) or len(password) > 128:
-
-
             _argon_hash("", b"\0" * 16, self._pepper)
             return None
         try:
@@ -1020,8 +971,6 @@ class AuthStore:
             row = conn.execute("SELECT * FROM users WHERE email = ?",
                                (self._email_key(email),)).fetchone()
         if row is None:
-
-
             _argon_hash(password, b"\0" * 16, self._pepper)
             return None
         salz, gespeichert = bytes(row["password_salt"]), bytes(row["password_hash"])
@@ -1029,8 +978,6 @@ class AuthStore:
             if not _argon_verify(password, salz, self._pepper, gespeichert):
                 return None
         else:
-
-
             if not hmac.compare_digest(_password_hash(password, salz), gespeichert):
                 return None
             neues_salz = secrets.token_bytes(16)
@@ -1043,7 +990,6 @@ class AuthStore:
                 if not updated:
                     current = conn.execute("SELECT * FROM users WHERE id=?",
                                            (row["id"],)).fetchone()
-
 
                     if current is None or not _argon_verify(
                             password, bytes(current["password_salt"]), self._pepper,
@@ -1140,8 +1086,6 @@ class AuthStore:
         Chats, Speicher oder Verlauf loescht, loescht nicht seinen Verbrauch.
         """
         from aquaticy.quota import Quota
-
-
 
         return Quota(self.db_path, account.id, float(account.created_at or 0.0),
                      plan=account.plan)
@@ -1310,7 +1254,6 @@ class AuthStore:
             )
         return self._account(matches[0]) if matches else None
 
-
     def is_known_device(self, user_id: str, device: Any) -> bool:
         """Kennt dieses Konto das Geraet schon (Geraete-Kennung oder Hardware+Browser)?"""
         from aquaticy.devices import DeviceInfo
@@ -1355,7 +1298,6 @@ class AuthStore:
                 return False
             rows = conn.execute("SELECT cookie_hash FROM account_devices WHERE user_id=?",
                                 (zeile["id"],)).fetchall()
-
 
         return bool(geraet.cookie_hash) and any(
             hmac.compare_digest(str(geraet.cookie_hash), str(r["cookie_hash"] or ""))
@@ -1452,8 +1394,6 @@ class AuthStore:
             conn.execute("BEGIN IMMEDIATE")
             self._require_current_credential(conn, account)
 
-
-
             upgrading.forget_account(self.data_dir, account.id)
             forget_states(profile)
             guardrails.forget_verdicts()
@@ -1494,7 +1434,6 @@ class AuthStore:
             for table, column in (("token_usage", "account_id"),
                                   ("token_sessions", "account_id"),
                                   ("aiguard_flags", "user_id"),
-
 
                                   ("aiguard_chat_locks", "user_id"),
                                   ("account_devices", "user_id"),

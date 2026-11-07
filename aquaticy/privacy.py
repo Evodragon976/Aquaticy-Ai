@@ -59,7 +59,6 @@ def key_root(folder: Path | str) -> tuple[Path, str]:
     """
     ordner = Path(folder).resolve()
 
-
     if ordner.parent.name == "users" and re.fullmatch(r"[0-9a-f]{32}", ordner.name):
         return ordner.parent.parent, ordner.name
     return ordner, "lokal"
@@ -94,7 +93,6 @@ class Sealer:
 
         self._aead = AESGCM(key)
 
-
     def seal_bytes(self, data: bytes, aad: str) -> bytes:
         nonce = secrets.token_bytes(_NONCE)
         return FILE_MAGIC + nonce + self._aead.encrypt(nonce, bytes(data), aad.encode("utf-8"))
@@ -115,7 +113,6 @@ class Sealer:
             return self._aead.decrypt(roh[:_NONCE], roh[_NONCE:], aad.encode("utf-8"))
         except (InvalidTag, ValueError) as exc:
             raise CipherError("Verschlüsselte Daten lassen sich nicht öffnen.") from exc
-
 
     def seal_text(self, text: str, aad: str) -> str:
         if not text:
@@ -161,9 +158,6 @@ def read_private(path: Path | str, profile: Path | str | None = None) -> bytes:
         return daten
     profil = Path(profile) if profile is not None else quelle.resolve().parent.parent
     return profile_sealer(profil).open_bytes(daten, "datei:" + quelle.name)
-
-
-
 
 
 class ServerSecrets:

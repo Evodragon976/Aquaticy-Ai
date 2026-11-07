@@ -150,9 +150,10 @@ def test_notification_failure_preserves_scan_and_retries_unacknowledged_findings
     watcher = secure_pro.Watcher(tmp_path, unavailable)
     assert watcher.tick()
     assert watcher.last_checked > 0 and not watcher.error
-    assert watcher.announced == set()
+    # 15.5.5: Die Messenger-Zustellung steht getrennt vom Chat in "messaged".
+    assert watcher.messaged == set()
     notices = []
     watcher.notify = lambda text: notices.append(text) or True
     watcher.tick()
     assert len(notices) == 1 and "Telnet" in notices[0]
-    assert watcher.announced
+    assert watcher.messaged

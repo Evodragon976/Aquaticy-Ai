@@ -96,12 +96,7 @@ def load_rules(path: str | None = None) -> SiteRules:
     )
 
 
-
-
-
-
 _NIE_INHALT = frozenset({"script", "style", "noscript", "template", "svg", "iframe"})
-
 
 
 _TRAEGER = frozenset({"html", "body", "main", "article"})
@@ -132,7 +127,6 @@ def strip_noise(html: str, rules: SiteRules | None = None) -> str:
         if inhalt and gesamt > 0:
             weg = sum(len(n.text(separator=" ", strip=True)) for n in inhalt)
             if weg > 2000 and weg > gesamt * _GROSSER_ANTEIL:
-
                 continue
         for node in nodes:
             if node.tag not in _NIE_INHALT and _traegt_inhalt(node, gesamt):
@@ -192,7 +186,6 @@ def extract_text(html: str, url: str = "", rules: SiteRules | None = None) -> st
         or ""
     )
     if not text.strip():
-
         text = HTMLParser(cleaned).text(separator="\n", strip=True) or ""
     return drop_consent_paragraphs(text, rules)
 
@@ -225,8 +218,6 @@ def extract_pdf_text(data: bytes) -> tuple[str, str]:
             title = str(metadata.title)
         return text.strip(), title.strip()
     except Exception:
-
-
         return "", ""
 
 
@@ -239,9 +230,6 @@ def page_title(html: str) -> str:
         meta = tree.css_first('meta[property="og:title"]')
         title = (meta.attributes.get("content") or "").strip() if meta else ""
     return re.sub(r"\s+", " ", title)[:200]
-
-
-
 
 
 def _contains_any(haystack: str, needles: list[str]) -> str:
@@ -272,20 +260,14 @@ def classify_failure(
         or _contains_any(page_title(html).lower(), rules.blocked_markers)
         or _contains_any(html_lower[:200_000], rules.blocked_html_markers)
     ):
-
-
-
         return "blocked_bot_wall"
 
     enough_text = len(text.strip()) >= MIN_CONTENT_CHARS
     if not enough_text:
-
-
         if _contains_any(html_lower[:200_000], rules.consent_wall_markers) or _contains_any(
             text_lower, rules.consent_phrases
         ):
             return "consent_required"
-
 
         if _contains_any(text_lower, rules.paywall_markers) or _contains_any(
             html_lower[:200_000], rules.paywall_markers
@@ -293,11 +275,9 @@ def classify_failure(
             return "paywall"
         return "empty"
 
-
     consent_hits = sum(1 for phrase in rules.consent_phrases if phrase in text_lower)
     if consent_hits >= 3 and len(text.strip()) < 1200:
         return "consent_required"
-
 
     if len(text.strip()) < 900 and _contains_any(text_lower, rules.paywall_markers):
         return "paywall"
@@ -309,9 +289,6 @@ def needs_browser(html: str, text: str, rules: SiteRules | None = None) -> bool:
     """Wuerde ein JavaScript-Rendering (Stufe 3) hier vermutlich helfen?"""
     reason = classify_failure(html, text, None, rules)
     return reason in {"consent_required", "empty"}
-
-
-
 
 
 class RobotsRules:
@@ -384,15 +361,12 @@ class RobotsRules:
         return True if bester is None else bester[1]
 
 
-
-
 ROBOTS_TTL = 24 * 3600
 ROBOTS_ERROR_TTL = 300
 
 
 class RobotsPolicy:
     """Fragt und cached `robots.txt` je Origin."""
-
 
     _GESPERRT = RobotsRules([(False, "/")])
 
@@ -421,8 +395,6 @@ class RobotsPolicy:
             return "robots_disallowed"
         origin = f"{parsed.scheme}://{parsed.netloc}"
 
-
-
         with self._lock:
             bekannt = self._frisch(origin)
             sperre = None if bekannt else self._origin_locks.setdefault(origin, threading.Lock())
@@ -446,22 +418,17 @@ class RobotsPolicy:
         return eintrag is not None and eintrag[1] > time.monotonic()
 
     def _load(self, origin: str) -> tuple[RobotsRules | None, float]:
-
-
-
         try:
             response = netguard.get(self._client, urljoin(origin, "/robots.txt"),
                                     max_bytes=(lambda _kopf: (ROBOTS_MAX_BYTES, True)),
                                     timeout=10)
         except netguard.BlockedTarget:
-
             return None, ROBOTS_ERROR_TTL
         except httpx.HTTPError:
             return self._GESPERRT, ROBOTS_ERROR_TTL
         if response.status_code >= 500:
             return self._GESPERRT, ROBOTS_ERROR_TTL
         if response.status_code >= 400:
-
             return None, ROBOTS_TTL
         return RobotsRules.parse(response.text, self._user_agent), ROBOTS_TTL
 
@@ -488,13 +455,8 @@ class DomainThrottle:
         return sleep_for
 
 
-
-
-
 HTML_CONTENT_TYPES = ("text/html", "application/xhtml", "text/plain", "application/xml")
 IMAGE_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
-
-
 
 
 EUMETSAT_LATEST_IMAGE = (
@@ -526,10 +488,6 @@ def dynamic_visual_page(url: str) -> bool:
     }
 
 
-
-
-
-
 LIVE_PLAYER_MARKERS = (
     "<video",
     ".m3u8",
@@ -543,8 +501,6 @@ LIVE_PLAYER_MARKERS = (
     "player.vimeo.com",
     "player.twitch.tv",
 )
-
-
 
 
 PLACEHOLDER_MARKERS = (
@@ -620,8 +576,6 @@ class Fetcher:
         self.respect_robots = respect_robots
         self.enable_browser = enable_browser
 
-
-
         self._client = netguard.guarded_client(
             headers={
                 "User-Agent": user_agent,
@@ -636,7 +590,6 @@ class Fetcher:
         self.robots = RobotsPolicy(self._client, user_agent)
         self.throttle = DomainThrottle(delay_seconds)
 
-
     def close(self) -> None:
         self._client.close()
 
@@ -645,7 +598,6 @@ class Fetcher:
 
     def __exit__(self, *exc_info: object) -> None:
         self.close()
-
 
     def fetch(self, url: str, *, want_products: bool = False) -> PageResult:
         """Laedt *url* und gibt lesbaren Text (und optional Produktdaten) zurueck."""
@@ -668,16 +620,11 @@ class Fetcher:
             domain == blocked or domain.endswith(f".{blocked}")
             for blocked in self.rules.known_blocking_domains
         ):
-
-
             result.skipped_reason = "blocked_by_list"
             return result
 
         problem, aussetzer = netguard.url_check(url)
         if problem:
-
-
-
             result.skipped_reason = "dns_error" if aussetzer else "not_public"
             return result
 
@@ -690,10 +637,6 @@ class Fetcher:
         self.throttle.wait(domain)
 
         try:
-
-
-
-
             response, sperre = self._get_following(url)
             if sperre:
                 result.skipped_reason = sperre
@@ -719,11 +662,6 @@ class Fetcher:
         result.source_domain = domain_of(result.final_url) or domain
 
         if response.status_code in (401, 402, 403, 407, 429):
-
-
-
-
-
             result.skipped_reason = f"blocked_http_{response.status_code}"
             return result
         if response.status_code >= 400:
@@ -804,15 +742,9 @@ class Fetcher:
                 return None, "Die Adresse ist nicht öffentlich erreichbar."
             domain = domain_of(current)
             if self.respect_robots and not self.robots.allows(current):
-
-
-
                 return None, "robots.txt erlaubt diesen Abruf nicht."
             self.throttle.wait(domain)
             try:
-
-
-
                 response = netguard.get(
                     self._client,
                     current,
@@ -845,17 +777,9 @@ class Fetcher:
             if not any(kind in content_type for kind in HTML_CONTENT_TYPES):
                 return None, "Die Quelle liefert kein unterstütztes Bild."
 
-
-
             if domain_of(final) == "view.eumetsat.int":
                 current = EUMETSAT_LATEST_IMAGE
                 continue
-
-
-
-
-
-
 
             if dynamic_visual_page(final) or live_player_page(response.text):
                 captured = self._capture(final)
@@ -880,11 +804,8 @@ class Fetcher:
             for _, candidate in sorted(candidates, key=lambda item: item[0]):
                 absolute = urljoin(final, candidate)
 
-
                 if placeholder_image(absolute) or not public_web_url(absolute):
                     continue
-
-
 
                 if final.startswith("https://") and absolute.startswith("http://"):
                     absolute = "https://" + absolute[len("http://") :]
@@ -945,15 +866,11 @@ class Fetcher:
             try:
                 product = extract_product(html, result.final_url or result.url)
             except Exception:
-
-
                 product = None
             if product is not None:
                 result.products = [product]
                 result.product_hint = True
             elif has_spec_heading(HTMLParser(html)):
-
-
                 result.product_hint = True
         return result
 
@@ -966,5 +883,4 @@ class Fetcher:
         try:
             return render_page(url, user_agent=self.user_agent, timeout=self.timeout)
         except Exception:
-
             return None

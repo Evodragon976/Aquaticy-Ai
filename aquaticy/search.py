@@ -35,7 +35,6 @@ OPEN_ENGINES = ("duckduckgo", "mojeek", "startpage", "brave", "yahoo", "wikipedi
 KEYLESS_BACKENDS = ("duckduckgo", "ddg", "open", "searxng")
 
 
-
 OPEN_BACKEND_NAMES = frozenset({"duckduckgo", "ddg", "open"})
 
 
@@ -80,7 +79,6 @@ class _DuckDuckGoHTML(HTMLParser):
             self._item[self._field] += data
 
 
-
 _LEERE_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
                          "meta", "source", "track", "wbr"})
 
@@ -95,7 +93,6 @@ def _result_url(value: str) -> str:
     host = (parsed.hostname or "").lower().rstrip(".")
     if (host == "duckduckgo.com" or host.endswith(".duckduckgo.com")) \
             and parsed.path.startswith("/l/"):
-
         return (parse_qs(parsed.query).get("uddg") or [""])[0]
     return value
 
@@ -146,9 +143,6 @@ class SearchOptions:
     country: str = "de"
     lang: str = "de"
 
-
-
-
     api_key: str | None = None
 
     engines: str = ""
@@ -173,9 +167,6 @@ def _dedupe(results: list[SearchResult], count: int) -> list[SearchResult]:
         if len(out) >= count:
             break
     return out
-
-
-
 
 
 def _search_open(query: str, options: SearchOptions) -> list[SearchResult]:
@@ -205,10 +196,6 @@ def _search_open(query: str, options: SearchOptions) -> list[SearchResult]:
             backend=backend,
         )
     except DDGSException as exc:
-
-
-
-
         try:
             return _search_duckduckgo_html(query, options)
         except (httpx.HTTPError, SearchError) as fallback:
@@ -287,9 +274,6 @@ def _search_searxng(query: str, options: SearchOptions) -> list[SearchResult]:
         )
         for item in payload
     ]
-
-
-
 
 
 def _plain(value: Any) -> str:
@@ -429,9 +413,6 @@ def search_web(
     except SearchError:
         raise
     except (httpx.HTTPError, ValueError, AttributeError, TypeError, KeyError) as exc:
-
-
-
         raise SearchError(f"Die Suche ist gerade gestört ({type(exc).__name__}).") from exc
     return _dedupe(roh, count)
 
@@ -483,7 +464,6 @@ def search_news(
     return _dedupe(results, count)
 
 
-
 def search_broadly(
     queries: Sequence[str],
     count: int,
@@ -516,8 +496,6 @@ def search_broadly(
         return [], []
     if len(wanted) == 1:
         return runner(wanted[0], count), wanted
-
-
 
     per_query = min(count + 4, 20)
 

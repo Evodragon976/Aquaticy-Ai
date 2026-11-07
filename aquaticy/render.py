@@ -77,7 +77,6 @@ class ChatRenderer:
         self._skips: list[str] = []
         self._streaming_answer = False
 
-
     def handle(self, event: str, payload: dict[str, Any]) -> None:
         handler = getattr(self, f"_on_{event}", None)
         if handler is not None:
@@ -222,7 +221,6 @@ class ChatRenderer:
         self._flush_reading()
         tasks = payload.get("tasks", [])
         if payload.get("direct"):
-
             self.console.print(
                 Text.assemble(("  [Direkt] ", "bold magenta"), ("ohne Zerlegen", "white"))
             )
@@ -416,7 +414,6 @@ class ChatRenderer:
                 "-- oben steht der Zwischenstand.[/yellow]"
             )
 
-
     def _reading_text(self) -> Text:
         text = Text.assemble(
             ("  [Lese]  ", "bold cyan"), (f"{self._fetch_count} Seiten...", "white")
@@ -447,7 +444,6 @@ class ChatRenderer:
             self._live.stop()
             self._live = None
 
-
     def reset(self) -> None:
         self._stop_live()
         self._answer.clear()
@@ -462,9 +458,6 @@ class ChatRenderer:
         if text.strip():
             self.console.print()
             self.console.print(Markdown(text))
-
-
-
 
 
 def image_backend() -> str:
@@ -497,9 +490,6 @@ def render_image(console: Console, url: str, width: int = 34) -> bool:
     if backend == "none" or not url:
         return False
     try:
-
-
-
         from aquaticy import netguard
 
         with netguard.image_client(timeout=10) as client:
@@ -609,4 +599,3 @@ def print_visuals(console: Console, visuals: list[dict[str, str]]) -> None:
         console.print()
         render_image(console, url)
         console.print(Text.assemble(("[Bild] ", ""), (url, "blue")))
-

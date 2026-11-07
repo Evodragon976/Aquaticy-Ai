@@ -76,7 +76,6 @@ LOG = logging.getLogger("aquaticy.metering")
 DEFAULT_OUTPUT_RESERVE = 4_096
 
 
-
 WORK_COSTS: dict[str, tuple[str, int]] = {
     "werkstatt": ("je angefangene Sekunde Rechenzeit in der virtual machine", 150),
     "werkstatt_start": ("je Start einer virtual machine", 750),
@@ -147,7 +146,6 @@ def record(
         try:
             quota.record(rein + raus, model)
         except Exception:
-
             LOG.exception("Kontingent: Verbrauch liess sich nicht eintragen (%s)", model)
 
 
@@ -185,7 +183,6 @@ class Reservation:
         try:
             self._quota.settle(self._nummer, rein + raus, self.model)
         except Exception:
-
             LOG.exception("Kontingent: Verrechnen fehlgeschlagen (%s)", self.model)
 
     def cancel(self) -> None:
@@ -210,7 +207,6 @@ class Reservation:
         try:
             self._quota.settle(self._nummer, max(0, int(tokens)), self.model)
         except Exception:
-
             LOG.exception("Kontingent: Serverarbeit liess sich nicht verrechnen (%s)",
                           self.model)
 
@@ -250,7 +246,6 @@ def estimate(messages: Any, max_tokens: Any = None, tools: Any = None) -> int:
     except (TypeError, ValueError):
         raus = DEFAULT_OUTPUT_RESERVE
     return max(1, rein + max(0, raus))
-
 
 
 MIN_OUTPUT_TOKENS = 256
@@ -308,7 +303,6 @@ def usage_of(usage: Any) -> tuple[int, int] | None:
     return rein, raus
 
 
-
 def work_cost(kind: str, amount: float = 1.0) -> int:
     """Was *amount* Einheiten dieser Arbeit kosten -- angefangene Einheiten zaehlen voll."""
     _, je = WORK_COSTS.get(kind, ("", 0))
@@ -344,7 +338,6 @@ def reserve_work(settings: Any, kind: str, amount: float = 1.0) -> Reservation:
         return Reservation(settings, f"server:{kind}", None, 0)
     nummer = quota.reserve(work_cost(kind, amount), f"server:{kind}")
     return Reservation(settings, f"server:{kind}", quota, nummer)
-
 
 
 def _counted(messages: Any, response: Any) -> tuple[int, int]:
@@ -395,8 +388,6 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
         access(modell)
     kwargs["messages"] = prepare_messages(settings, modell, kwargs.get("messages"))
 
-
-
     context = kwargs.get("num_ctx")
     if not enforce and isinstance(context, int) and context > 0:
         required = 256 + int(kwargs.get("max_tokens") or 256)
@@ -406,9 +397,6 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
                 required += len(content.encode("utf-8", "replace")) + 128
         kwargs["num_ctx"] = max(context, ((required + 1023) // 1024) * 1024)
     if kwargs.get("stream"):
-
-
-
         raise ValueError("metering.completion streamt nicht -- dafuer Agent._reserve nehmen.")
     if enforce:
         check(settings, model=modell)
@@ -416,7 +404,6 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
                             kwargs.get("max_tokens"))
         if deckel is not None:
             kwargs["max_tokens"] = deckel
-
 
     try:
         buchung = reserve(settings, modell, estimate(kwargs.get("messages"),
@@ -433,7 +420,6 @@ def completion(settings: Any, *, enforce: bool = True, **kwargs: Any) -> Any:
         response = llmcall.completion(**kwargs)
     except BaseException as exc:
         buchung.cancel()
-
 
         from aquaticy.system import is_gone_error, mark_retired
 

@@ -18,17 +18,11 @@ MEDIA_ID = re.compile(r"^[0-9]{13}-[0-9a-f]{16}(?:-fest|-ki)?\.(?:jpg|png|webp|g
 MAX_SNAPSHOTS = 200
 
 
-
-
 AI_MARK = "-ki"
 MAX_AI_IMAGES = 300
 
 
-
 MAX_KEPT = 200
-
-
-
 
 
 KEEP_MARK = "-fest"
@@ -74,8 +68,6 @@ def save_snapshot(
     media_id = f"{int(time.time() * 1000):013d}-{digest}{marke}{extension}"
     target = directory / media_id
     if not target.exists():
-
-
         from aquaticy.privacy import write_private
 
         write_private(target, content, data_dir)

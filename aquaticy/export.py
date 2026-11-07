@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 import httpx
 
-from aquaticy import netguard
+from aquaticy import netguard, zeit
 from aquaticy.models import Product
 
 FORMATS = ("html", "md", "csv")
@@ -80,9 +80,6 @@ def _slug(text: str, limit: int = 40) -> str:
     return (slug[:limit].rstrip("-")) or "recherche"
 
 
-
-
-
 FORMULA_START = ("=", "+", "-", "@", "\t", "\r", "\n", "\uff1d", "\uff0b", "\uff0d", "\uff20")
 
 
@@ -108,15 +105,12 @@ class _SafeCsv:
 
 def default_path(turns: list[Turn], fmt: str, directory: Path) -> Path:
     """Baut einen Dateinamen aus Zeitstempel und erster Frage."""
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = zeit.jetzt().strftime("%Y%m%d-%H%M%S")
     topic = _slug(turns[0].question) if turns else "recherche"
     return directory / f"aquaticy-{stamp}-{topic}.{fmt}"
 
 
-
 MAX_IMAGE_BYTES = 8_000_000
-
-
 
 
 IMAGE_SUFFIXES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
@@ -143,11 +137,7 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     mapping: dict[str, str] = {}
 
-
-
     counter = 0
-
-
 
     with netguard.image_client(timeout=timeout) as client:
         for turn in turns:
@@ -173,9 +163,6 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
     return mapping
 
 
-
-
-
 def _md_text(text: object) -> str:
     """Linktext aus fremden Seiten: Klammern maskiert (9.5.34).
 
@@ -194,7 +181,7 @@ def to_markdown(turns: list[Turn], image_map: dict[str, str] | None = None) -> s
     """Markdown mit Bild-Links."""
     image_map = image_map or {}
     lines: list[str] = ["# aquaticy-Recherche", ""]
-    lines.append(f"_{datetime.now().strftime('%d.%m.%Y %H:%M')}_")
+    lines.append(f"_{zeit.jetzt().strftime('%d.%m.%Y %H:%M')}_")
     lines.append("")
 
     for turn in turns:
@@ -239,9 +226,6 @@ def to_markdown(turns: list[Turn], image_map: dict[str, str] | None = None) -> s
             lines.append("")
 
     return "\n".join(lines).rstrip() + "\n"
-
-
-
 
 
 HTML_STYLE = """
@@ -307,7 +291,7 @@ def to_html(turns: list[Turn], image_map: dict[str, str] | None = None) -> str:
         "<title>aquaticy-Recherche</title>",
         f"<style>{HTML_STYLE}</style></head><body>",
         "<h1>aquaticy-Recherche</h1>",
-        f'<p class="meta">{_e(datetime.now().strftime("%d.%m.%Y %H:%M"))}</p>',
+        f'<p class="meta">{_e(zeit.jetzt().strftime("%d.%m.%Y %H:%M"))}</p>',
     ]
 
     for turn in turns:
@@ -379,9 +363,6 @@ def to_html(turns: list[Turn], image_map: dict[str, str] | None = None) -> str:
     return "\n".join(parts)
 
 
-
-
-
 def write_csv(turns: list[Turn], path: Path) -> Path:
     with _atomic_output(path) as temporary:
         _write_csv(turns, temporary)
@@ -411,7 +392,6 @@ def _write_csv(turns: list[Turn], path: Path) -> Path:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = _SafeCsv(csv.writer(handle))
         if not products:
-
             writer.writerow(["frage", "antwort", "quellen"])
             for turn in turns:
                 writer.writerow(
@@ -438,9 +418,6 @@ def _write_csv(turns: list[Turn], path: Path) -> Path:
                 ]
             )
     return path
-
-
-
 
 
 def export(
@@ -470,8 +447,6 @@ def export(
         if with_images and fmt in ("html", "md"):
             asset_dir = target.with_suffix("") / "bilder"
             image_map = {
-
-
 
                 url: (Path(asset_dir.parent.name) / "bilder" / name).as_posix()
                 for url, name in download_images(turns, asset_dir).items()

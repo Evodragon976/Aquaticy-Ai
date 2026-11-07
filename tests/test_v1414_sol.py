@@ -271,11 +271,12 @@ def test_large_alert_batches_are_delivered_without_truncation(tmp_path):
     messages = []
     watcher = secure_pro.Watcher(tmp_path, lambda text: messages.append(text) or True)
     lines = [f"Befund {i}: " + "x" * 400 for i in range(20)]
-    assert watcher._deliver(lines, False)
+    # 15.5.5: _deliver bekommt den Weg (Messenger oder Chat) mit.
+    assert watcher._deliver(lines, False, watcher.notify, "Messenger")
     assert len(messages) > 1 and all(len(m) <= 2900 for m in messages)
     assert ''.join(m.removeprefix('[Aquaticy Secure Pro]\n') for m in messages) == '\n'.join(lines)
     watcher.notify = lambda text: text != messages[-1]
-    assert not watcher._deliver(lines, False)
+    assert not watcher._deliver(lines, False, watcher.notify, "Messenger")
 
 
 @pytest.mark.parametrize("tool", ["secure_advisories", "secure_read_advisory"])

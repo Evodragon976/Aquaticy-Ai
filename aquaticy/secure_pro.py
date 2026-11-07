@@ -263,7 +263,7 @@ def own_addresses(router: str = "") -> frozenset[str]:
 
 
 class Watcher:
-    def __init__(self, directory: Path, notify: Callable[[str], bool],
+    def __init__(self, directory: Path, notify: Callable[[str], bool | None],
                  report: Callable[[str], bool] | None = None) -> None:
         self.directory = directory
         self.notify = notify
@@ -272,6 +272,8 @@ class Watcher:
         self.thread: threading.Thread | None = None
         self.known: set[str] | None = None
         self.announced: set[str] = set()
+        # 15.5.5: getrennt -- was im Chat steht, kann am Messenger noch fehlen.
+        self.messaged: set[str] = set()
         self.wake = threading.Event()
         self.last_findings: list[str] = []
         self.important: list[str] = []
@@ -437,6 +439,7 @@ class Watcher:
             if self._configuration != token:
                 self._configuration = token
                 self.announced.clear()
+                self.messaged.clear()
                 self.last_findings = []
                 self.important = []
                 self.events = []
@@ -459,6 +462,7 @@ class Watcher:
         if str(network) != self._network:
             self.known = None
             self.announced.clear()
+            self.messaged.clear()
             self._network = str(network)
         from aquaticy.secure_network import neighbours
 
@@ -677,6 +681,7 @@ class Watcher:
         self._inventory = inventory
         wichtig = sorted(text for text, item in befunde.items() if item["level"] == WICHTIG)
         self.announced.intersection_update(findings | set(aufgaben))
+        self.messaged.intersection_update(findings | set(aufgaben))
         with self._lock:
             self.last_findings = sorted(findings)[:200]
             self.important = wichtig[:200]
@@ -689,14 +694,21 @@ class Watcher:
             self.devices = sorted(inventory.values(), key=lambda item: tuple(
                 int(part) for part in item["address"].split(".")))[:256]
         self._remember(befunde, options(read(self.directory)), config=config)
-        new = [text for text in dict.fromkeys(wichtig + aufgaben)
-               if text not in self.announced][:20]
-        if new and not self.stop_event.is_set() and config_token(read(self.directory)) == token:
-            abwehr = any(befunde.get(text, {}).get("kind") in (
-                "malware", "arp_spoof", "port_scan", "brute_force", "risk_port",
-                "vulnerability") for text in new)
-            if self._deliver(new, abwehr):
+        alle_neu = list(dict.fromkeys(wichtig + aufgaben))
+        new = [text for text in alle_neu if text not in self.announced][:20]
+        fehlt_messenger = [text for text in alle_neu if text not in self.messaged][:20]
+        if ((new or fehlt_messenger) and not self.stop_event.is_set()
+                and config_token(read(self.directory)) == token):
+            def abwehr(texte: list[str]) -> bool:
+                return any(befunde.get(text, {}).get("kind") in (
+                    "malware", "arp_spoof", "port_scan", "brute_force", "risk_port",
+                    "vulnerability") for text in texte)
+
+            if new and self._deliver(new, abwehr(new), self.report, "Chat"):
                 self.announced.update(new)
+            if fehlt_messenger and self._deliver(fehlt_messenger, abwehr(fehlt_messenger),
+                                                 self.notify, "Messenger"):
+                self.messaged.update(fehlt_messenger)
         return new
 
     def _remember(self, befunde: dict[str, dict[str, Any]], gewaehlt: dict[str, Any], *,
@@ -743,28 +755,39 @@ class Watcher:
                 else:
                     item.pop("name", None)
 
-    def _deliver(self, lines: list[str], abwehr: bool) -> bool:
-        """Meldet Wichtiges an Messenger und Secure-Pro-Chat. True, wenn es ankam."""
+    def _deliver(self, lines: list[str], abwehr: bool,
+                 weg: Callable[[str], bool | None] | None, name: str) -> bool:
+        """Meldet Wichtiges auf einem Weg (Messenger oder Chat). True, wenn es dort ankam.
+
+        Gibt der Weg None zurueck (kein Messenger gekoppelt), gilt das als erledigt. Scheitert
+        Messenger, bleibt die Meldung offen und geht bei der naechsten Pruefung erneut raus
+        (15.5.5; vorher genuegte der Chat, und der Messenger bekam sie nie).
+        """
         prefix = SIGNATURE + "\n"
         suffix = ("\nSchreib im Secure-Pro-Chat, was ich tun soll, zum Beispiel "
                   "„Sperre Port 4444 auf 192.168.1.20“. Jede Abwehr braucht dein Ja."
                   if abwehr else "")
         body = "\n".join(lines)
         size = 2900 - len(prefix) - len(suffix)
+        if weg is None or not body:
+            return False  # kein Weg: nichts zugestellt (bleibt offen, falls er dazukommt)
         delivered = True
         for offset in range(0, len(body), size):
             message = prefix + body[offset:offset + size] + suffix
-            angekommen = False
-            for weg, name in ((self.notify, "Messenger"), (self.report, "Chat")):
-                if weg is None:
-                    continue
-                try:
-                    angekommen = bool(weg(message)) or angekommen
-                except Exception:
-                    LOG.warning("Secure-Pro-Hinweis (%s) konnte nicht zugestellt werden; "
-                                "die Prüfergebnisse bleiben verfügbar.", name)
-            delivered = delivered and angekommen
-        return delivered and bool(body)
+            try:
+                ergebnis = weg(message)
+            except Exception:
+                ergebnis = False
+            if ergebnis is None:
+                if name == "Messenger":
+                    LOG.info("Secure Pro: kein Messenger gekoppelt -- die Meldung steht im "
+                             "Secure-Pro-Chat.")
+                return True
+            if not ergebnis:
+                LOG.warning("Secure-Pro-Hinweis (%s) konnte nicht zugestellt werden; "
+                            "nächster Versuch bei der nächsten Prüfung.", name)
+                delivered = False
+        return delivered
 
     def _wait_seconds(self) -> float | None:
         """Wie lange bis zur naechsten Pruefung -- None: nur auf Anfrage."""

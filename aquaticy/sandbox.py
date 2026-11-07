@@ -96,17 +96,10 @@ MEMORY_MB = 3072
 DISK_GB = 4
 
 
-
-
-
-
-
 VM_SIZES: dict[str, dict[str, int]] = {
     "normal": {"cpus": CPUS, "memory_mb": MEMORY_MB, "disk_gb": DISK_GB},
     "plus": {"cpus": 4, "memory_mb": 6144, "disk_gb": 20},
 }
-
-
 
 
 BLENDER_TIMEOUT = 90
@@ -120,22 +113,16 @@ COMMAND_TIMEOUT = 30
 MAX_TIMEOUT = 120
 
 
-
 MAX_OUTPUT = 8000
 
 
 MAX_READ_BYTES = 200_000
 
 
-
-
-
 MAX_FILE_BYTES = 20 * 1024 * 1024
 
 
 MAX_LIST = 500
-
-
 
 
 DEFAULT_IMAGE = "docker.io/library/python:3.12-slim"
@@ -148,8 +135,6 @@ RUN_AS = "1000:1000"
 
 
 DESKTOP_IMAGE = "aquaticy-werkstatt-desktop:local"
-
-
 
 
 DESKTOP_PID_LIMIT = 1024
@@ -170,8 +155,6 @@ DESKTOP_HELPER = "aquaticy-desktop"
 NETWORK_SCRIPT = "/usr/local/sbin/aquaticy-netz"
 
 
-
-
 BLOCKED_RANGES = (
     "10.0.0.0/8",
     "100.64.0.0/10",
@@ -182,10 +165,7 @@ BLOCKED_RANGES = (
 )
 
 
-
-
 ROOT_PATH = "/usr/sbin:/sbin:/usr/bin:/bin"
-
 
 
 MAX_SHOT_BYTES = 5 * 1024 * 1024
@@ -242,7 +222,6 @@ def _runs(binary: str, *args: str, timeout: float = 8.0) -> subprocess.Completed
     )
 
 
-
 _CLEANUP_RE = re.compile(r"^\s*(rm|rmdir|truncate|du|ls|df)(\s[^;&|`$<>(){}\n]*)?$")
 
 
@@ -273,7 +252,6 @@ def _runs_capped(
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert process.stdout is not None and process.stderr is not None
 
-
     readers = [
         threading.Thread(target=drain, args=(process.stdout, stdout, MAX_OUTPUT * 2)),
         threading.Thread(target=drain, args=(process.stderr, stderr, MAX_OUTPUT)),
@@ -301,7 +279,6 @@ def _works(binary: str) -> bool:
     """Antwortet die Laufzeit ueberhaupt? Ein installierter Client ohne
     laufenden Dienst ist so gut wie keiner."""
 
-
     feld = "{{.Version.Version}}" if Path(binary).name.startswith("podman") \
         else "{{.ServerVersion}}"
     try:
@@ -323,7 +300,6 @@ def _has_gvisor(binary: str) -> bool:
     except (OSError, subprocess.SubprocessError):
         return False
     return found.returncode == 0 and "runsc" in found.stdout
-
 
 
 PROXY_VARS = tuple(n for name in ("HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "ALL_PROXY",
@@ -362,21 +338,17 @@ def find_runtime() -> Runtime | None:
         diese Datei verhindern soll.
     """
 
-
     da = [b for b in ("podman", "docker") if shutil.which(b) and _works(b)]
     for binary in da:
         if _has_gvisor(binary):
             return Runtime(binary, "gvisor", f"{binary} + gVisor", ("--runtime", "runsc"))
     if "podman" in da:
-
         if _podman_rootless():
             return Runtime("podman", "podman", "Podman (ohne Wurzelrechte)")
         return Runtime("podman", "podman-root", "Podman (gehaertet)")
     if "docker" in da:
         return Runtime("docker", "docker", "Docker (gehaertet)")
     return None
-
-
 
 
 RUNTIME_TTL = 60.0
@@ -421,7 +393,6 @@ def runtime_known() -> tuple[bool, Runtime | None]:
         try:
             threading.Thread(target=neu_suchen, name="aquaticy-laufzeit", daemon=True).start()
         except RuntimeError:
-
             with _LAUFZEIT_LOCK:
                 _LAUFZEIT["sucht"] = False
     return bekannt, wert
@@ -463,9 +434,6 @@ def _cut(text: str, limit: int = MAX_OUTPUT) -> tuple[str, bool]:
     return text[:half] + "\n… [gekuerzt] …\n" + text[-half:], True
 
 
-
-
-
 PATH_CHARS = re.compile(r"^[A-Za-z0-9._/\- ]+$")
 
 
@@ -496,13 +464,11 @@ def safe_path(path: str) -> str:
     return full
 
 
-
 ADDON_VOLUME_RE = re.compile(r"^aquaticy-addon-[0-9a-f]{12}-[a-z_]{2,20}$")
 
 ADDON_PATH_RE = re.compile(r"^/addons/[a-z_]{2,20}$")
 
 ADDON_LABEL = "aquaticy-addon=1"
-
 
 
 BUILD_TIMEOUT = 3600
@@ -671,7 +637,6 @@ def ensure_addon_volume(runtime: Runtime, volume: str, image: str) -> None:
     )
     if prepared.returncode != 0:
         if short_name_problem(prepared.stderr):
-
             raise SandboxUnavailable(missing_image_text(runtime, image))
         raise SandboxUnavailable(
             "Datentraeger fuers Add-on liess sich nicht vorbereiten: "
@@ -721,20 +686,13 @@ class Sandbox:
         internet: bool = False,
         lan: bool = False,
     ) -> None:
-
         self.user_mode = bool(user_mode)
 
-
-
-
         self.internet = bool(internet) and not self.user_mode
-
 
         self.lan = bool(lan) and (self.user_mode or bool(internet))
 
         self.browser_agent = browser_agent
-
-
 
         self.addon_mounts = {
             volume: ziel
@@ -743,7 +701,6 @@ class Sandbox:
         }
 
         self.headless = bool(headless)
-
 
         self.image = image or (DESKTOP_IMAGE if self.netz_offen else DEFAULT_IMAGE)
         self.idle_seconds = max(60, int(idle_minutes) * 60)
@@ -761,7 +718,6 @@ class Sandbox:
         self._timer: threading.Timer | None = None
         self._quota_warned = False
 
-
         self._over_quota = False
 
         self._quota_ok = True
@@ -769,7 +725,6 @@ class Sandbox:
         self._last_quota_check = 0.0
 
         self.last_used = 0.0
-
 
     @property
     def name(self) -> str:
@@ -780,14 +735,10 @@ class Sandbox:
         return bool(self._name)
 
     def _emit(self, event: str, **payload: Any) -> None:
-
-
-
         if not self.on_event:
             return
         with contextlib.suppress(Exception):
             self.on_event(event, payload)
-
 
     def ensure(self) -> str:
         """Startet die virtual machine, falls sie nicht schon laeuft.
@@ -833,7 +784,6 @@ class Sandbox:
                 if self.user_mode and not self.headless:
                     self._start_desktop()
             except Exception:
-
                 self._destroy_locked("Start fehlgeschlagen")
                 raise
             self._touch_locked()
@@ -874,8 +824,6 @@ class Sandbox:
                 "Datentraeger liess sich nicht anlegen: " + made.stderr.strip()[:300]
             )
 
-
-
         prepared = _runs(
             runtime.binary,
             "run", "--rm",
@@ -901,12 +849,7 @@ class Sandbox:
         desktop = self.user_mode
         offen = self.netz_offen
 
-
-
         netz = [] if offen else ["--network", "none"]
-
-
-
 
         faehigkeiten = ["--cap-drop", "ALL",
                         *(("--cap-add", "NET_ADMIN") if offen and not self.lan else ())]
@@ -931,14 +874,6 @@ class Sandbox:
             "--ulimit", f"nofile={dateien}:{dateien}",
             "--ulimit", f"fsize={self.disk_gb * 1024 * 1024 * 1024}",
 
-
-
-
-
-
-
-
-
             "-v", f"{self._volume}:{WORKDIR}{kein_kopieren}",
             *(
                 flag
@@ -946,8 +881,6 @@ class Sandbox:
                 for flag in ("-v", f"{volume}:{ziel}{kein_kopieren}")
             ),
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m",
-
-
 
             *(("--storage-opt", f"size={self.disk_gb}G") if self._quota_ok else ()),
             "--workdir", WORKDIR,
@@ -957,18 +890,12 @@ class Sandbox:
             "--env", "LANG=C.UTF-8",
             "--env", "PYTHONDONTWRITEBYTECODE=1",
 
-
-
-
             *(flag for name in PROXY_VARS for flag in ("--env", f"{name}=")),
             *(("--http-proxy=false",) if kein_kopieren == "" else ()),
             "--label", "aquaticy-werkstatt=1",
             "--label", instance_label(),
         ]
         if offen:
-
-
-
             flags += ["--tmpfs", "/run:rw,nosuid,nodev,size=8m"]
         if desktop:
             flags += [
@@ -1005,14 +932,11 @@ class Sandbox:
             *self._run_flags(),
             self.image,
 
-
             *self._command(),
         ]
         started = _runs(runtime.binary, *args, timeout=300)
         quota_unsupported = quota_unsupported_message(started.stderr)
         if started.returncode != 0 and quota_unsupported:
-
-
             self._quota_ok = False
             args = [*self._run_flags(), self.image, *self._command()]
             started = _runs(runtime.binary, *args, timeout=300)
@@ -1028,7 +952,6 @@ class Sandbox:
                     f" (Fehlt das Abbild? '{runtime.binary} pull {self.image}' holt es einmalig.)"
                 )
             if short_name_problem(started.stderr):
-
                 hilfe = " " + missing_image_text(runtime, self.image)
                 started.stderr = "Das Abbild ist nicht da."
             raise SandboxUnavailable(
@@ -1187,7 +1110,6 @@ class Sandbox:
         found = _runs(runtime.binary, "inspect", "--format", "{{.State.Running}}", self._name)
         return found.returncode == 0 and found.stdout.strip() == "true"
 
-
     def run(self, command: str, timeout: int = COMMAND_TIMEOUT) -> RunResult:
         """Fuehrt *command* in der virtual machine aus.
 
@@ -1202,7 +1124,6 @@ class Sandbox:
         runtime = self.runtime
         assert runtime is not None
         if self._over_quota and not cleanup_command(command):
-
             return RunResult(
                 exit_code=125, stdout="",
                 stderr=(f"[virtual machine] Voll: mehr als {self.disk_gb} GB belegt. Erst "
@@ -1214,8 +1135,6 @@ class Sandbox:
         self._emit("vm_run", command=command[:200])
         started = time.monotonic()
 
-
-
         stop = threading.Event()
         waechter = None
         if not self._quota_ok:
@@ -1226,7 +1145,6 @@ class Sandbox:
                 runtime.binary,
                 "exec", "--user", RUN_AS, "--workdir", WORKDIR, name,
                 "sh", "-c", command,
-
 
                 timeout=limit + 5,
             )
@@ -1240,7 +1158,6 @@ class Sandbox:
                 truncated=cut_out or cut_err,
             )
         except subprocess.TimeoutExpired:
-
             self._kill_processes()
             result = RunResult(
                 exit_code=124,
@@ -1263,7 +1180,6 @@ class Sandbox:
         if self._over_quota:
             raise ValueError(f"Die virtual machine ist voll (mehr als {self.disk_gb} GB) -- "
                              "erst aufräumen.")
-
 
     WATCH_SECONDS = 3.0
 
@@ -1455,7 +1371,6 @@ class Sandbox:
             "sh", "-c",
             f'find "{full}" -type f -not -path "*/.git/*" 2>/dev/null '
 
-
             f"| head -n {MAX_LIST} | tr '\\n' '\\000' | xargs -0 -r stat -c '%s %n' 2>/dev/null",
             timeout=30,
         )
@@ -1486,7 +1401,6 @@ class Sandbox:
             return round(int(done.stdout.strip() or 0) / (1024 * 1024), 2)
         except ValueError:
             return 0.0
-
 
     def touch(self) -> None:
         """Setzt die Uhr zurueck: erst zwanzig Minuten Ruhe raeumen auf."""
@@ -1579,8 +1493,6 @@ def sweep(runtime: Runtime | None = None) -> int:
     if runtime is None:
         return 0
 
-
-
     found = _runs(
         runtime.binary, "ps", "--all", "--quiet", "--filter", "label=aquaticy-werkstatt=1",
         "--filter", f"label={instance_label()}", timeout=30,
@@ -1601,13 +1513,10 @@ def sweep(runtime: Runtime | None = None) -> int:
     return len(ids)
 
 
-
-
 _shared: dict[str, Sandbox] = {}
 _review_boxes: weakref.WeakSet[Sandbox] = weakref.WeakSet()
 _shared_lock = threading.Lock()
 _shared_registered = False
-
 
 
 _KEEP = object()
@@ -1630,8 +1539,6 @@ def shared(settings: Any = None, on_event: Any = _KEEP) -> Sandbox:
         box = _shared.get(key)
         if box is None:
             user_mode = bool(getattr(settings, "vm_user_mode", False))
-
-
 
             lan = bool(getattr(settings, "vm_lan", False))
             internet = (bool(getattr(settings, "vm_internet", False)) or lan) and not user_mode

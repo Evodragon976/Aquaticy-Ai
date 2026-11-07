@@ -65,7 +65,6 @@ def relevant_context(cw: Any, store: Any, settings: Any) -> str:
     candidates: list[tuple[int, str, str]] = []
 
     def consider(source: str, text: str) -> None:
-
         text = str(text or "")
         from aquaticy.github_repo import redact
         from aquaticy.injection import clean_text

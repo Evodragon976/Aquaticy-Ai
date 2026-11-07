@@ -57,8 +57,6 @@ PROVIDERS: dict[str, dict[str, str]] = {
 KEY_NAMES = frozenset(p["key"] for p in PROVIDERS.values())
 
 
-
-
 SIGN_IN: dict[str, tuple[str, ...]] = {
     "mistral": ("google", "apple", "microsoft", "email"),
     "nvidia_nim": ("google", "email"),
@@ -97,7 +95,6 @@ class LinkError(RuntimeError):
     """Der Anbieter hat abgelehnt oder war nicht erreichbar."""
 
 
-
 def _http(client: httpx.Client | None) -> httpx.Client:
     return client or httpx.Client(timeout=TIMEOUT, follow_redirects=False)
 
@@ -115,7 +112,6 @@ def _int(wert: Any) -> int | None:
         return int(str(wert).strip())
     except (TypeError, ValueError):
         return None
-
 
 
 _TOKEN_HEADERS: tuple[tuple[str, str, str], ...] = (
@@ -226,8 +222,6 @@ def _inspect_mistral(http: httpx.Client, key: str) -> dict[str, Any]:
     return info
 
 
-
-
 _NVIDIA_CHAT = re.compile(r"instruct|chat|nemotron|deepseek|qwen|kimi|glm|gpt-oss|mixtral",
                           re.IGNORECASE)
 _NVIDIA_SKIP = re.compile(
@@ -241,8 +235,6 @@ _NVIDIA_FIRST = ("nvidia/llama-3.3-nemotron-super-49b-v1.5", "nvidia/nvidia-nemo
 
 
 def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
-
-
     probe = _probe(http, f"{NVIDIA_API}/chat/completions", key, _NVIDIA_FIRST[1])
     if probe.status_code in (401, 403):
         raise _fehler(probe, "NVIDIA NIM")
@@ -282,7 +274,6 @@ def _inspect_nvidia(http: httpx.Client, key: str) -> dict[str, Any]:
         info["note"] = ("Wie viel du noch hast, sagt NVIDIA hier nicht. Kostenlos gehen 40 Fragen "
                         "pro Minute.")
     return info
-
 
 
 def _path(data_dir: Path | str) -> Path:
@@ -371,7 +362,6 @@ def best_model(settings: Any, provider: str) -> str:
         if treffer:
             return sorted(treffer, reverse=True)[0]
     return modelle[0] if modelle else ""
-
 
 
 def council_roles(settings: Any) -> tuple[list[tuple[str, str]], tuple[str, str] | None]:

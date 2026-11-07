@@ -36,7 +36,6 @@ def check_llm(
         if api_base:
             kwargs["api_base"] = api_base
 
-
         from aquaticy import llmcall
         from aquaticy.pace import paced
 

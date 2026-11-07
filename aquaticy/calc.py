@@ -97,8 +97,6 @@ def calculate(expression: str) -> float:
         raise CalcError(f"Kein gueltiger Ausdruck: {exc.msg}.") from exc
     result = _evaluate(tree)
     if isinstance(result, complex):
-
-
         raise CalcError(
             "Das Ergebnis ist keine reelle Zahl (z. B. Wurzel aus einer negativen Zahl).")
     if isinstance(result, float) and (math.isinf(result) or math.isnan(result)):

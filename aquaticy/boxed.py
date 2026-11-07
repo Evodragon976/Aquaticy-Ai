@@ -37,13 +37,11 @@ BOX_MARKERS: tuple[tuple[str, str], ...] = (
 )
 
 
-
 HOST_SOCKETS: tuple[str, ...] = (
     "/var/run/docker.sock",
     "/run/docker.sock",
     "/run/podman/podman.sock",
 )
-
 
 
 NESTED_RUNTIMES: tuple[str, ...] = ("podman", "docker")
@@ -93,8 +91,6 @@ def in_a_box() -> bool:
     """Laeuft dieser Prozess in einem Container?"""
     if _first_marker():
         return True
-
-
 
     try:
         gruppen = Path("/proc/self/cgroup").read_text(encoding="utf-8", errors="replace")
@@ -146,9 +142,6 @@ def posture() -> Posture:
     innen = nested_runtime()
     if innen:
         offen.append(f"innere Kiste fuer die virtual machine ({innen})")
-
-
-
 
     for pfad in reachable_host_sockets() if boxed else ():
         loecher.append(

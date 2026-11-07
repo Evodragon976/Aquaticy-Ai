@@ -62,9 +62,6 @@ RULES_VERSION = "2026-11-02"
 SETTING_KEY = "AQUATICY_LEGAL_GUARD"
 
 
-
-
-
 UNAVAILABLE = "Rechtsprüfung nicht erreichbar"
 
 
@@ -79,8 +76,6 @@ class Rule:
     text: str
 
     instead: str
-
-
 
     short: str = ""
 
@@ -222,7 +217,6 @@ RULES: tuple[Rule, ...] = (
 )
 
 
-
 FREEDOM = (
     "Meinung, Kritik, Satire, Presse, Kunst, Wissenschaft und Recherche bleiben frei "
     "(Art. 5 Abs. 1 und 3 GG). Ein Thema zu erklären — auch diese Regeln und das Recht "
@@ -234,7 +228,6 @@ FREEDOM = (
 BY_ID: dict[str, Rule] = {rule.id: rule for rule in RULES}
 
 
-
 GENERIC = Rule(
     "rechtsrahmen",
     "Rechtsrahmen",
@@ -244,22 +237,14 @@ GENERIC = Rule(
 )
 
 
-
-
-
-
 SENSITIVE_TOOLS: dict[str, str] = {
     "find_profiles": "sucht öffentliche Profile und Einträge zu einem Namen",
     "inspect_public_visual": "öffnet ein Kamera-, Straßen- oder Satellitenbild",
     "mail_draft": "legt im Postfach des Nutzers einen Mail-Entwurf an",
     "create_image": "erstellt ein neues Bild aus einer Beschreibung (KI-Bildmodell)",
 
-
-
     "desktop_type": "tippt im User mode Text in ein Programm der virtual machine (mit Internet)",
     "desktop_open": "öffnet im User mode ein Programm, im Browser eine Webadresse",
-
-
 
     "vm_run": "führt in der virtual machine (Linux-Container) einen Befehl aus oder "
               "installiert etwas",
@@ -269,13 +254,10 @@ SENSITIVE_TOOLS: dict[str, str] = {
 }
 
 
-
 STOP_TOOL_ABUSE = frozenset({"malware", "angriff"})
 
 
-
 JUDGE_CHARS = 3_500
-
 
 
 CACHE_SIZE = 256
@@ -288,12 +270,8 @@ JUDGE_SCHEMA: dict[str, Any] = {
         "regel": {"type": "string", "enum": ["", *BY_ID]},
         "grund": {"type": "string"},
 
-
-
-
         "missbrauch": {"type": "boolean"},
         "missbrauch_art": {"type": "string"},
-
 
         "missbrauch_schwere": {"type": "integer"},
     },
@@ -337,10 +315,6 @@ def rules_prompt() -> str:
     )
 
 
-
-
-
-
 _DRAENGEN = re.compile(
     r"\b(?:bitte|bite|pls|plz|please|plea+se|komm\s+schon|come\s+on|"
     r"mach(?:\s+(?:es|das|mal))?\s+(?:doch|trotzdem|einfach|bitte)|"
@@ -352,7 +326,6 @@ _DRAENGEN = re.compile(
     r"sei\s+nicht\s+so|ich\s+bitte\s+dich|hypothetisch|rollenspiel|tu\s+so\s+als)\b",
     re.IGNORECASE,
 )
-
 
 
 _FUELLE_TEXT = """
@@ -376,13 +349,6 @@ def pleads_again(text: str) -> bool:
     rest = _DRAENGEN.sub(" ", kurz.lower())
     inhalt = [w for w in re.findall(r"[^\W\d_]{4,}", rest) if w not in _FUELLE]
     return len(inhalt) <= 1
-
-
-
-
-
-
-
 
 
 _EIGEN_WER_TEXT = "ich mein meine meinen meinem meiner meines mir mich i my me mine"
@@ -450,7 +416,6 @@ def own_data_request(text: str) -> bool:
     selbst = any(teil <= gesetzt for teil in (
         {"wo", "bin", "ich"}, {"where", "am", "i"}, {"wohne", "ich"}, {"live", "i"}))
     return selbst or bool(gesetzt & _EIGEN_ORT and gesetzt & _EIGEN_BESITZ)
-
 
 
 _HINWEIS = "[Hinweis an den Prüfer"
@@ -607,9 +572,7 @@ class Verdict:
     rule: Rule | None = None
     reason: str = ""
 
-
     source: str = "pruefer"
-
 
     abuse: bool = False
     abuse_kind: str = ""
@@ -634,7 +597,6 @@ def parse_verdict(raw: str, *, require_abuse: bool = False,
     if not isinstance(payload, dict):
         return None
     zulaessig = payload.get("zulaessig")
-
 
     if isinstance(zulaessig, str) and zulaessig.strip().lower() in ("true", "false"):
         zulaessig = zulaessig.strip().lower() == "true"
@@ -664,7 +626,6 @@ def parse_verdict(raw: str, *, require_abuse: bool = False,
     except (TypeError, ValueError, OverflowError):
         schwere = 0
     if missbrauch and schwere == 0:
-
         schwere = 2
     if not missbrauch:
         schwere = 0
@@ -674,8 +635,6 @@ def parse_verdict(raw: str, *, require_abuse: bool = False,
     regel = str(payload.get("regel") or "").strip().lower()
     return Verdict(False, BY_ID.get(regel, GENERIC), grund, abuse=missbrauch, abuse_kind=art,
                    abuse_severity=schwere)
-
-
 
 
 _NOCHMAL_SINNLOS = ("Timeout", "Connection", "Authentication", "PermissionDenied",
@@ -693,7 +652,6 @@ def schema_retry_useful(exc: BaseException) -> bool:
     if any(teil in name for teil in _NOCHMAL_SINNLOS):
         return False
 
-
     status = getattr(exc, "status_code", None)
     if isinstance(status, int):
         return status in (400, 422)
@@ -709,7 +667,6 @@ def error_text(exc: BaseException, settings: Any, model: str) -> str:
     from aquaticy.system import is_gone_error
 
     if is_gone_error(exc):
-
         return (f"{model} hat der Anbieter abgeschaltet (410, Ende der Laufzeit). "
                 "Bitte im Chat ein anderes Modell wählen.")
     text = " ".join(str(exc).split())
@@ -743,7 +700,6 @@ def _ask_model(prompt: str, model: str, settings: Settings) -> str:
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=160,
-
 
                 timeout=max(15.0, float(settings.planner_timeout) * 2),
                 **extra,
@@ -810,14 +766,10 @@ def judge(
         return ALLOWED
     if (not tool and not baseline and _HINWEIS not in context
             and own_data_request(text)):
-
-
-
         return Verdict(True, source="eigen")
     with _cache_lock:
         generation = _cache_generation
     from aquaticy.system import replacement
-
 
     modelle = list(dict.fromkeys(replacement(settings, m) for m in (
         settings.effective_subagent_model, settings.model) if m))
@@ -860,18 +812,12 @@ def judge(
         try:
             raw = fragen(prompt, model, settings)
         except Exception as exc:
-
-
             fehler = error_text(exc, settings, model)
             LOG.warning("Rechtsprüfung: %s", fehler)
             from aquaticy.system import is_gone_error, mark_retired, replacement
 
-
             nachfolger = model
             if is_gone_error(exc):
-
-
-
                 key = None
                 mark_retired(model, settings)
                 nachfolger = replacement(settings, model)
@@ -886,15 +832,8 @@ def judge(
             continue
         letztes = index == len(modelle) - 1
         if (not verdict.allowed or verdict.abuse) and vorlaeufig is None and not letztes:
-
-
-
-
-
             vorlaeufig = verdict
             continue
-
-
 
         if baseline:
             verdict = Guard._baseline(tool, verdict)
@@ -906,8 +845,6 @@ def judge(
 
         if tool and vorlaeufig.abuse and normalize_category(
                 vorlaeufig.abuse_kind) in STOP_TOOL_ABUSE:
-
-
             return Verdict(False, GENERIC, "Die Sicherheitsprüfung ist nicht abgeschlossen.",
                            "unklar" if unklar else "ausfall")
         verdict = replace(vorlaeufig, abuse=False, abuse_kind="", abuse_severity=0)
@@ -917,8 +854,6 @@ def judge(
                        "unklar")
     return Verdict(False, GENERIC, fehler or "Das Modell für die Prüfung hat nicht geantwortet.",
                    "ausfall")
-
-
 
 
 ENGLISH_REFUSAL = {
@@ -996,11 +931,6 @@ def event_payload(verdict: Verdict, stage: str, tool: str = "") -> dict[str, Any
     }
 
 
-
-
-
-
-
 BASELINE_VM_TOOLS = frozenset({"vm_run", "vm_write", "blender_run", "desktop_type", "lan_ssh"})
 BASELINE_IMAGE_RULES = frozenset({"menschenwuerde", "persoenlichkeit", "ruf"})
 BASELINE_TOOLS = BASELINE_VM_TOOLS | {"create_image"}
@@ -1024,11 +954,7 @@ class Guard:
         self._ask = ask
         self.baseline = baseline
 
-
         self.fallback: Callable[[], Sequence[str]] | None = None
-
-
-
 
         self.topic = ""
 
@@ -1049,7 +975,6 @@ class Guard:
     def _baseline(tool: str, verdict: Verdict) -> Verdict:
         """Was vom Urteil im Grundschutz zaehlt."""
         if verdict.source in ("ausfall", "unklar"):
-
             return verdict
         if tool in BASELINE_VM_TOOLS:
             from aquaticy.aiguard import normalize_category
@@ -1064,15 +989,12 @@ class Guard:
 
     def _judge_call(self, tool: str, arguments: dict[str, Any]) -> Verdict:
         if tool == "desktop_open" and not str(arguments.get("target") or "").strip():
-
-
             return ALLOWED
         try:
             text = json.dumps(arguments, ensure_ascii=False, sort_keys=True, default=str)
         except (TypeError, ValueError):
             text = str(arguments)
         text = text or "{}"
-
 
         digest = hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()
         ergebnis = ALLOWED

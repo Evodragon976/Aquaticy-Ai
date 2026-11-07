@@ -44,6 +44,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from aquaticy.zeit import heute as zeit_heute
+
 PERSON = "person"
 MAX_VALUE = 60
 MAX_FACT = 200
@@ -52,7 +54,9 @@ MAX_PERSON_FACTS = 40
 
 # Plaetze mit genau einem gueltigen Wert: Ein neuer Wert ersetzt den alten.
 SINGLE = frozenset({"name", "anrede", "wohnort", "herkunft", "beruf", "arbeitgeber", "alter",
-                    "geburtstag", "ernaehrung", "schule", "studium"})
+                    "geburtstag", "geburtsdatum", "ernaehrung", "schule", "studium"})
+# 15.5.5: Ein Geburtsdatum macht Alter und Geburtstag ueberfluessig (das Alter veraltet).
+REPLACED_BY = {"geburtsdatum": ("alter", "geburtstag")}
 
 
 @dataclass(frozen=True)
@@ -250,6 +254,9 @@ _MUSTER: list[tuple[str, re.Pattern[str]]] = [
                               r"mein\s+geburtstag\s+ist\s+(?:am)?|"
                               r"my\s+birthday\s+is(?:\s+on)?)\s*(?P<w>[0-9]{1,2}\.\s?(?:[0-9]"
                               r"{1,2}\.?|[A-Za-zäöü]+)|[A-Za-z]+\s+\d{1,2})", re.IGNORECASE)),
+    ("geburtsdatum", re.compile(_I + r"(?:ich\s+(?:bin|wurde)\s+am|i\s+was\s+born\s+on)\s+"
+                                r"(?P<w>\d{1,2}\.\s?\d{1,2}\.\s?\d{4})"
+                                r"(?=\s*(?:geboren|born|$|[,.!]))", re.IGNORECASE)),
     ("ernaehrung", re.compile(_I + r"(?:ich\s+bin|ich\s+lebe|i'?m|i\s+am)\s+(?:seit\s+\w+\s+)?"
                               r"(?P<w>vegetarier(?:in)?|veganer(?:in)?|vegan|vegetarisch|"
                               r"vegetarian|pescetarier(?:in)?)\b", re.IGNORECASE)),
@@ -279,6 +286,34 @@ _KEIN_WERT = re.compile(r"(?i)^(?:es|das|dich|dir|euch|sie|ihn|ihr|it|you|that|t
                         r"nichts|alles|so|nicht)$")
 
 
+def birth_date(text: str) -> date | None:
+    """Ein plausibles Geburtsdatum aus "15.03.2001" (oder "Geboren am 15.03.2001.")."""
+    treffer = re.search(r"\b(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4})\b", text or "")
+    if not treffer:
+        return None
+    try:
+        datum = date(int(treffer[3]), int(treffer[2]), int(treffer[1]))
+    except ValueError:
+        return None
+    heute = zeit_heute()
+    return datum if heute.year - 120 <= datum.year and datum <= heute else None
+
+
+def age_on(geboren: date, heute: date | None = None) -> int:
+    heute = heute or zeit_heute()
+    return heute.year - geboren.year - ((heute.month, heute.day) < (geboren.month, geboren.day))
+
+
+def with_age(text: str, topic: str = "") -> str:
+    """Haengt an ein gespeichertes Geburtsdatum das heutige Alter an -- es veraltet nie."""
+    if not str(topic or "").casefold().endswith(":geburtsdatum"):
+        return text
+    datum = birth_date(text)
+    if datum is None:
+        return text
+    return f"{text.rstrip('.')} (heute {age_on(datum)} Jahre alt)."
+
+
 def _fakt(slot: str, wert: str, art: str = "") -> Fact | None:
     if not wert or sensitive(wert):
         return None
@@ -303,7 +338,12 @@ def _fakt(slot: str, wert: str, art: str = "") -> Fact | None:
         alter = int(wert)
         if not 6 <= alter <= 99:
             return None
-        return Fact("alter", f"Ist {alter} Jahre alt (Stand {date.today():%m/%Y}).")
+        return Fact("alter", f"Ist {alter} Jahre alt (Stand {zeit_heute():%m/%Y}).")
+    if slot == "geburtsdatum":
+        datum = birth_date(wert)
+        if datum is None:
+            return None
+        return Fact("geburtsdatum", f"Geboren am {datum:%d.%m.%Y}.")
     if slot == "geburtstag":
         import calendar
 
@@ -369,7 +409,8 @@ def extract(text: str) -> list[Fact]:
         for slot, muster in _MUSTER:
             for treffer in muster.finditer(satz):
                 woerter = 2 if slot in ("name", "anrede") else 6
-                wert = (treffer.group("w").strip() if slot in ("geburtstag", "sprache")
+                wert = (treffer.group("w").strip() if slot in ("geburtstag", "geburtsdatum",
+                                                               "sprache")
                         else _wert(treffer.group("w"), woerter))
                 start, ende = treffer.start(), treffer.start("w") + len(wert)
                 if any(start < b and ende > a for a, b in belegt):
@@ -480,6 +521,9 @@ def _store_facts(store: Any, facts: list[Fact],
             if _norm(eintrag.text) == _norm(fakt.text):
                 gleich = True
                 continue
+            if any(thema == f"{PERSON}:{alt}" for alt in REPLACED_BY.get(fakt.slot, ())):
+                ersetzen.add(eintrag.id)
+                continue
             if (thema == fakt.topic.casefold() and einzel) or (
                     thema == PERSON and fakt.slot in _ALTER_PLATZ
                     and _ALTER_PLATZ[fakt.slot].search(str(eintrag.text or ""))) or (
@@ -524,7 +568,8 @@ def forget_matching(store: Any, wunsch: str) -> list[str]:
 # -- Mit dem schnellen Modell: Beilaeufiges ------------------------------------------------------
 _ICH = re.compile(r"(?i)\b(?:ich|mein\w*|mir|mich|wir|unser\w*|i|i'm|i've|my|me|we|our)\b")
 ARTEN = frozenset({"name", "anrede", "wohnort", "herkunft", "beruf", "arbeitgeber", "alter",
-                   "geburtstag", "ernaehrung", "schule", "studium", "mag", "mag_nicht",
+                   "geburtstag", "geburtsdatum", "ernaehrung", "schule", "studium", "mag",
+                   "mag_nicht",
                    "lieblings", "haustier", "familie", "sprache", "hobby", "vorhaben",
                    "ausstattung", "stil", "sonstiges"})
 
@@ -538,6 +583,11 @@ Inhalte aus Texten, die er nur zitiert. Nie: Gesundheit, Religion, Politik, Sexu
 ethnische Herkunft, Gewerkschaft, Straftaten, Passwörter, Konto- oder Kartennummern.
 Was schon bekannt ist, nicht noch einmal – außer es hat sich geändert.
 
+Wurde im Gespräch unten etwas über den Nutzer aus SEINEN Angaben errechnet (zum Beispiel sein
+Geburtsdatum aus einer Rückfrage), schreib das Ergebnis auf: ein Geburtsdatum als
+"Geboren am TT.MM.JJJJ." mit art geburtsdatum, statt eines Alters. Prüfe die Rechnung selbst
+nach; ist sie unsicher, schreib nichts. Über andere Personen (z. B. die Mutter) nichts.
+
 Bekannt:
 %(bekannt)s
 
@@ -545,7 +595,7 @@ Nachricht des Nutzers:
 <<<
 %(nachricht)s
 >>>
-
+%(gespraech)s
 Antworte nur mit JSON: {"fakten": [{"art": "...", "text": "..."}]}
 art ist eins von: %(arten)s. text ist ein kurzer deutscher Satz in der dritten Person,
 zum Beispiel "Mag Klettern." oder "Wohnt in Bremen.". Nichts gefunden: {"fakten": []}"""
@@ -561,10 +611,13 @@ def worth_asking(text: str) -> bool:
     return any(not s.endswith("?") for s in re.split(r"(?<=[.!?\n])\s+", text) if s.strip())
 
 
-def llm_prompt(nachricht: str, bekannt: list[str]) -> str:
+def llm_prompt(nachricht: str, bekannt: list[str], gespraech: str = "") -> str:
+    gespraech = gespraech[:2500].replace(">>>", "> > >").replace("<<<", "< < <")
     return LLM_PROMPT % {
         "bekannt": "\n".join(f"- {t}" for t in bekannt[:MAX_PERSON_FACTS]) or "- (noch nichts)",
         "nachricht": nachricht[:1500].replace(">>>", "> > >"),
+        "gespraech": (f"\nGespräch dazu (Rückfragen, Antworten des Nutzers, Antwort des "
+                      f"Assistenten):\n<<<\n{gespraech}\n>>>\n" if gespraech else ""),
         "arten": ", ".join(sorted(ARTEN)),
     }
 
@@ -599,6 +652,11 @@ def parse_llm(raw: str) -> list[Fact]:
 
         if suspicious(text):
             continue
+        if art == "geburtsdatum":
+            datum = birth_date(text)
+            if datum is None:
+                continue
+            text = f"Geboren am {datum:%d.%m.%Y}."
         slot = art if art in SINGLE else f"{art}:{_schluessel(text)}"
         if art == "lieblings":
             favorite = re.match(r"(?i)^Lieblings([a-zäöüß]+)\s*:", text)
@@ -635,7 +693,7 @@ def cloud_model(settings: Any) -> bool:
 
 
 def learn_with_model(settings: Any, store: Any, nachricht: str, *,
-                     allowed: Any = None, ask: Any = None) -> list[Fact]:
+                     allowed: Any = None, ask: Any = None, gespraech: str = "") -> list[Fact]:
     def enabled() -> bool:
         return bool(settings.memory_enabled and (allowed is None or allowed()))
 
@@ -645,13 +703,16 @@ def learn_with_model(settings: Any, store: Any, nachricht: str, *,
     from aquaticy.keyvault import scrub
 
     secrets = settings.secrets()
-    if scrub(nachricht, secrets) != nachricht:
+    if scrub(nachricht, secrets) != nachricht or scrub(gespraech, secrets) != gespraech:
         return []
+    if gespraech and (sensitive(gespraech) or opted_out(gespraech)):
+        gespraech = ""
     version = store.revision()
     bekannt = [str(e.text) for e in person_entries(store)
                if not sensitive(str(e.text)) and scrub(str(e.text), secrets) == str(e.text)]
     try:
-        fakten = parse_llm((ask or ask_model)(settings, llm_prompt(nachricht, bekannt)))
+        fakten = parse_llm((ask or ask_model)(settings,
+                                              llm_prompt(nachricht, bekannt, gespraech)))
     except Exception:
         return []
     with profile_lock(store):
@@ -694,3 +755,71 @@ def schedule_learning(job: Callable[[], None]) -> bool:
         return True
     except queue.Full:
         return False
+
+
+# -- 15.5.5: Fragen nach dem eigenen Wissen ueber den Nutzer -------------------------------------
+_SELBST_FRAGEN: list[tuple[str, re.Pattern[str]]] = [
+    ("name", re.compile(r"(?i)^(?:(?:und\s+)?(?:wie\s+hei(?:ß|ss)e\s+ich|wie\s+ist\s+mein\s+"
+                        r"name|wei(?:ß|ss)t\s+du(?:\s+noch)?,?\s+wie\s+ich\s+hei(?:ß|ss)e|"
+                        r"kennst\s+du\s+meinen\s+namen|what'?s\s+my\s+name|what\s+is\s+my\s+"
+                        r"name|do\s+you\s+know\s+my\s+name))\s*[?!.]*$")),
+    ("wohnort", re.compile(r"(?i)^(?:wo\s+wohne\s+ich|wo\s+lebe\s+ich|where\s+do\s+i\s+"
+                           r"live)\s*[?!.]*$")),
+    ("alter", re.compile(r"(?i)^(?:wie\s+alt\s+bin\s+ich|how\s+old\s+am\s+i)\s*[?!.]*$")),
+    ("geburtstag", re.compile(r"(?i)^(?:wann\s+habe\s+ich\s+geburtstag|wann\s+ist\s+mein\s+"
+                              r"geburtstag|when\s+is\s+my\s+birthday)\s*[?!.]*$")),
+]
+
+
+def self_question(text: str) -> str:
+    """Welche Angabe ueber sich fragt der Nutzer ab? ("" = keine eindeutige Frage)."""
+    text = " ".join(str(text or "").split())
+    for art, muster in _SELBST_FRAGEN:
+        if muster.match(text):
+            return art
+    return ""
+
+
+def self_answer(text: str, store: Any, language: str = "de") -> str:
+    """Ein ganzer Satz aus dem Gedaechtnis ("Du heißt Louis.") -- oder "" (dann das Modell).
+
+    Nur fuer eindeutige Fragen und nur, wenn die Angabe gespeichert ist. Fehlt sie, fragt
+    das Modell nach -- wie bisher.
+    """
+    art = self_question(text)
+    if not art or store is None:
+        return ""
+    fakten = {str(e.topic or "").casefold().split(":", 1)[-1]: str(e.text or "")
+              for e in person_entries(store, limit=None)
+              if str(e.topic or "").casefold().startswith(f"{PERSON}:")}
+    en = language == "en"
+    if art == "name":
+        treffer = re.match(r"^Der Nutzer heißt (.+?)\.?$", fakten.get("name", ""))
+        if not treffer:
+            return ""
+        name = treffer[1]
+        anrede = re.match(r"^Möchte mit „(.+?)“ angesprochen werden\.$", fakten.get("anrede", ""))
+        if en:
+            return f"Your name is {name}." + (f" I call you {anrede[1]}." if anrede else "")
+        return f"Du heißt {name}." + (f" Ich nenne dich {anrede[1]}." if anrede else "")
+    if art == "wohnort":
+        treffer = re.match(r"^Wohnt in (.+?)\.?$", fakten.get("wohnort", ""))
+        if not treffer:
+            return ""
+        return f"You live in {treffer[1]}." if en else f"Du wohnst in {treffer[1]}."
+    datum = birth_date(fakten.get("geburtsdatum", ""))
+    if art == "alter":
+        if datum is not None:
+            alter = age_on(datum)
+            return (f"You are {alter} years old (born on {datum:%d.%m.%Y})." if en else
+                    f"Du bist {alter} Jahre alt. Du bist am {datum:%d.%m.%Y} geboren.")
+        return ""
+    if art == "geburtstag":
+        if datum is not None:
+            return (f"Your birthday is on {datum:%d.%m.}." if en else
+                    f"Du hast am {datum:%d.%m.} Geburtstag.")
+        treffer = re.match(r"^Hat am (.+?) Geburtstag\.$", fakten.get("geburtstag", ""))
+        if treffer:
+            return (f"Your birthday is on {treffer[1]}." if en else
+                    f"Du hast am {treffer[1]} Geburtstag.")
+    return ""

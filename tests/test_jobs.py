@@ -27,6 +27,7 @@ from aquaticy.coworker_schedule import (
     price_condition_met,
 )
 from aquaticy.models import Product
+from aquaticy.zeit import BERLIN
 
 
 def test_stuendlich_nimmt_die_naechste_volle_minute() -> None:
@@ -42,18 +43,19 @@ def test_stuendlich_bleibt_in_derselben_stunde_wenn_die_minute_noch_kommt() -> N
 
 
 def test_taeglich_springt_auf_morgen_wenn_die_zeit_vorbei_ist() -> None:
-    jetzt = datetime(2026, 9, 6, 14, 0, 0).timestamp()
-    naechster = datetime.fromtimestamp(next_time("daily", 8, 0, 0, jetzt))
-    assert naechster == datetime(2026, 9, 7, 8, 0, 0)
+    # 15.5.5: Zeitplaene rechnen in deutscher Zeit, nicht mehr in der Uhr des Servers.
+    jetzt = datetime(2026, 9, 6, 14, 0, 0, tzinfo=BERLIN).timestamp()
+    naechster = datetime.fromtimestamp(next_time("daily", 8, 0, 0, jetzt), BERLIN)
+    assert naechster == datetime(2026, 9, 7, 8, 0, 0, tzinfo=BERLIN)
 
 
 def test_woechentlich_trifft_den_gewuenschten_tag() -> None:
 
-    jetzt = datetime(2026, 9, 6, 14, 0, 0).timestamp()
-    naechster = datetime.fromtimestamp(next_time("weekly", 9, 30, 2, jetzt))
+    jetzt = datetime(2026, 9, 6, 14, 0, 0, tzinfo=BERLIN).timestamp()
+    naechster = datetime.fromtimestamp(next_time("weekly", 9, 30, 2, jetzt), BERLIN)
     assert naechster.weekday() == 2
     assert (naechster.hour, naechster.minute) == (9, 30)
-    assert naechster > datetime(2026, 9, 6, 14, 0, 0)
+    assert naechster > datetime(2026, 9, 6, 14, 0, 0, tzinfo=BERLIN)
 
 
 def test_unbekannter_rhythmus_wird_taeglich() -> None:

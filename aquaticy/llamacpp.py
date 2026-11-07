@@ -113,9 +113,6 @@ class Install:
         return f"llama.cpp {self.tag} ({art})"
 
 
-
-
-
 def vulkan_loader() -> bool:
     """Ist der Vulkan-Lader da? Ohne ihn startet die Vulkan-Ausgabe nicht.
 
@@ -151,9 +148,6 @@ def platform_names(system: str = "", machine: str = "", *, gpu: bool = False,
         if x64:
             return ["win-vulkan-x64", "win-cpu-x64"] if gpu else ["win-cpu-x64"]
     return []
-
-
-
 
 
 def _headers() -> dict[str, str]:
@@ -269,7 +263,6 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
                 raise LlamaError(f"Der Download antwortet mit {antwort.status_code}.")
             if antwort.headers.get("content-encoding", "identity").strip().lower() not in (
                     "", "identity"):
-
                 raise LlamaError("Die Datei kam in einem unerwarteten Format an.")
             pruefer = hashlib.sha256()
             geladen = 0
@@ -293,9 +286,6 @@ def download(asset: dict[str, Any], ziel: Path, *, http: httpx.Client,
     if not hmac.compare_digest(ist, soll):
         raise LlamaError("Die Prüfsumme stimmt nicht — die Datei wird verworfen.")
     return ist
-
-
-
 
 
 def _safe_name(name: str) -> PurePosixPath | None:
@@ -406,8 +396,6 @@ def unpack_tar(archiv: Path, ziel: Path) -> None:
             if _safe_name(mitglied.name) is None:
                 raise LlamaError("Das Archiv enthält einen unsicheren Pfad.")
         try:
-
-
             tf.extractall(ziel, members=mitglieder, filter="data")
         except tarfile.FilterError as exc:
             raise LlamaError("Das Archiv enthält einen unsicheren Eintrag.") from exc
@@ -450,9 +438,6 @@ def _starts(programm: Path, plattform: str = "") -> tuple[bool, str]:
     if vulkan and "vulkan" not in text.lower():
         return False, "keine Grafikkarte für Vulkan gefunden"
     return True, ""
-
-
-
 
 
 def _trusted(ordner: Path) -> bool:
@@ -506,9 +491,6 @@ def system_dirs() -> list[Path]:
     return ordner
 
 
-
-
-
 class Installer:
     """Haelt llama.cpp fuer diesen Server bereit.
 
@@ -535,7 +517,6 @@ class Installer:
         self.message = ""
         self.progress = 0
         self.tag = ""
-
 
     def names(self) -> list[str]:
         """Die passenden Ausgaben fuer diesen Server (einmal ermittelt)."""
@@ -584,7 +565,6 @@ class Installer:
                             and int(treffer.group("tag")[1:]) > int(beste[1:] or 0)):
                         beste = treffer.group("tag")
         return beste
-
 
     def ensure(self, tag: str) -> Install | None:
         """Die Installation von *tag* -- oder None, solange sie noch geladen wird."""
@@ -681,7 +661,6 @@ class Installer:
                     letzter = str(exc)
                     if name not in ACCELERATED:
                         raise LlamaError(letzter) from exc
-
 
                     with self._lock:
                         self._schlecht.add(name)

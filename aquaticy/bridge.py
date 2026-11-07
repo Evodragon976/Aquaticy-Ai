@@ -101,7 +101,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 
-
 SIGNATURE = "[Aquaticy]"
 
 
@@ -128,9 +127,6 @@ TRIGGER = re.compile(r"^\s*@?aquaticy\b[\s,:;!.\-]*", re.IGNORECASE)
 
 class BridgeError(ValueError):
     """Ein Satz fuer Menschen."""
-
-
-
 
 
 def _dir(settings: Any) -> Path:
@@ -261,9 +257,6 @@ def set_config(settings: Any, messenger: str, daten: Any, *, ready: str = "") ->
     return neu
 
 
-
-
-
 def chat_key(messenger: str, titel: str) -> str:
     norm = " ".join(str(titel or "").split()).casefold()
     return hashlib.sha256(f"{messenger}|{norm}".encode()).hexdigest()[:16]
@@ -306,9 +299,6 @@ def remember(liste: list[str], neu: str) -> None:
         liste.remove(neu)
     liste.append(neu)
     del liste[:-MAX_SEEN]
-
-
-
 
 
 @dataclass(frozen=True)
@@ -368,7 +358,6 @@ def decide(config: dict[str, Any], titel: str, gruppe: bool | None,
     if not titel:
         return Decision(False, why="Der Chat hat keinen lesbaren Titel.")
     ist_gruppe = gruppe is not False
-
 
     if (not ist_gruppe and nur_ausgehend and not titel.startswith("~")
             and SELF_TITLE.search(titel)):
@@ -443,10 +432,6 @@ def strip_trigger(text: str, group: bool) -> str | None:
         rest = text[treffer.end():].strip()
         return rest or None
     return (text[treffer.end():].strip() if treffer else (text or "").strip()) or None
-
-
-
-
 
 
 PUBLIC_TOOLS = frozenset({
@@ -563,9 +548,6 @@ def trust_note(decision: Decision, config: dict[str, Any]) -> str:
     return "".join(teile)
 
 
-
-
-
 # ---------------------------------------------------------------------------------------------
 # Slash-Befehle im Messenger (12.7.9 Sol)
 # ---------------------------------------------------------------------------------------------
@@ -675,9 +657,6 @@ def is_own_text(text: str) -> bool:
     """Hat die Bruecke diese Nachricht selbst geschrieben?"""
     kopf = " ".join(str(text or "").split())
     return bool(_OWN_START.match(kopf))
-
-
-
 
 
 @dataclass
@@ -819,9 +798,6 @@ def read_prompt(messenger: str, raster: str) -> str:
     )
 
 
-
-
-
 def ready_problem(settings: Any, messenger: str, pro: bool) -> str:
     """Kann die Bruecke laufen? Returns: "" -- oder ein Satz, was fehlt."""
     from aquaticy import addons
@@ -862,9 +838,6 @@ def capped_config(settings: Any, messenger: str, config: dict[str, Any]) -> dict
             "wo") != "alle":
         return {**config, "wer": "einzeln"}
     return config
-
-
-
 
 
 class VisionDriver:
@@ -946,16 +919,12 @@ class VisionDriver:
         self._sleep(1)
 
 
-
-
-
 def bridge_agent_class() -> type:
     """Der Agent der Bruecke -- gebaut erst, wenn er gebraucht wird (schwere Importe)."""
     from aquaticy.agent import Agent
 
     class BridgeAgent(Agent):
         """Ein Agent mit genau den Werkzeugen, die der Chat bekommen darf."""
-
 
         OWN_HINTS = False
 
@@ -967,7 +936,6 @@ def bridge_agent_class() -> type:
             self.use_subagents = settings.max_subagents > 0
             self.structured = False
             self.recheck = False
-
 
             self.toolbox.gate = self._tor
 
@@ -1017,8 +985,6 @@ class AgentAnswerer:
 
     def _build(self, settings: Any, erlaubt: frozenset[str], zusatz: str, trusted: bool) -> Any:
         def melden(name: str, payload: dict[str, Any]) -> None:
-
-
             if name == "abuse" and trusted and self._on_abuse is not None:
                 with contextlib.suppress(Exception):
                     self._on_abuse(dict(payload))
@@ -1087,7 +1053,6 @@ class AgentAnswerer:
         if eintrag is None or eintrag[1] != stand:
             agent = self._build(settings, erlaubt, zusatz, decision.trusted)
             if eintrag is not None:
-
                 if (eintrag[3] <= erlaubt and eintrag[4] == rolle
                         and eintrag[5] == basis_stand):
                     agent.messages.extend(eintrag[0].messages[1:])
@@ -1218,9 +1183,6 @@ class AgentAnswerer:
             self._discard(key)
 
 
-
-
-
 @dataclass
 class Report:
     """Was ein Durchgang getan hat."""
@@ -1312,7 +1274,6 @@ class Bridge:
         self._clock = clock
         self._sleep = sleep
 
-
     def _note(self, store: StateStore, messenger: str, **felder: Any) -> None:
         def aendern(eintrag: dict[str, Any]) -> None:
             status = _dictof(eintrag.setdefault("status", {}))
@@ -1331,7 +1292,6 @@ class Bridge:
 
     def _count_reply(self, store: StateStore, messenger: str) -> None:
         count_reply(store, messenger, self._clock())
-
 
     def run_once(self, messenger: str) -> Report:
         rep = Report(messenger)
@@ -1385,7 +1345,6 @@ class Bridge:
         neu: dict[str, str] = {}
         todo: list[ChatEntry] = []
         for eintrag in scan.chats:
-
             if not decide(config, eintrag.titel, eintrag.gruppe is True).allow:
                 continue
             key = chat_key(messenger, eintrag.titel)
@@ -1446,7 +1405,6 @@ class Bridge:
             if is_own_text(msg.text):
                 continue
 
-
             if not entscheidung.group and msg.von != ("ich" if entscheidung.selbst else "andere"):
                 continue
             auftrag = strip_trigger(msg.text, entscheidung.group)
@@ -1499,9 +1457,6 @@ class Bridge:
         rep.beantwortet += 1
         self._count_reply(store, messenger)
         self._sleep(0)
-
-
-
 
 
 class Runner:
@@ -1582,9 +1537,6 @@ class Runner:
                     return
             self._wake.wait(self.TICK)
             self._wake.clear()
-
-
-
 
 
 def catalogue() -> dict[str, Any]:

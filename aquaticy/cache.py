@@ -85,10 +85,8 @@ CREATE TABLE IF NOT EXISTS privacy_state (
 """
 
 
-
 SEALED_COLUMNS = (("history", "question"), ("history", "answer"), ("history", "meta"),
                   ("chat_titles", "title"), ("notes", "text"))
-
 
 
 CHAT_KINDS = ("chat", "code")
@@ -147,7 +145,6 @@ def _snippet(row: Any, needle: str, width: int = 110) -> str:
     schneller wiedererkennt als den der Antwort.
     """
 
-
     klein = needle.casefold()
     for feld in ("question", "answer"):
         text = " ".join(str(row[feld] or "").split())
@@ -187,7 +184,6 @@ class HistoryEntry:
     meta: dict[str, Any]
 
 
-
 PURGE_EVERY = 600.0
 _LAST_PURGE: dict[str, float] = {}
 _PURGE_LOCK = threading.Lock()
@@ -199,8 +195,6 @@ _INIT_LOCKS: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValu
 
 @contextmanager
 def _initializing(path: Path) -> Iterator[None]:
-
-
     key = str(path.resolve())
     with _INIT_LOCK:
         lock = _INIT_LOCKS.get(key)
@@ -222,7 +216,6 @@ class Cache:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         from aquaticy.privacy import profile_sealer
 
-
         self._sealer = profile_sealer(self.db_path.parent)
         with _initializing(self.db_path):
             with self._connect() as conn:
@@ -230,17 +223,12 @@ class Cache:
                 self._seal_old_rows(conn)
                 clean_cache = self._seal_old_cache(conn)
             if clean_cache:
-
-
-
-
                 with self._connect() as conn:
                     conn.execute("VACUUM")
                     busy, _, _ = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
                     if not busy:
                         conn.execute("INSERT OR REPLACE INTO privacy_state VALUES ('cache', '2')")
         self._maybe_purge()
-
 
     def _seal(self, text: str, spalte: str) -> str:
         return self._sealer.seal_text(str(text or ""), spalte)
@@ -287,13 +275,11 @@ class Cache:
         if state is not None:
             return str(state[0]) != "2"
 
-
         if not conn.in_transaction:
             conn.execute("BEGIN IMMEDIATE")
         state = conn.execute("SELECT value FROM privacy_state WHERE name='cache'").fetchone()
         if state is not None:
             return str(state[0]) != "2"
-
 
         conn.execute("PRAGMA secure_delete=ON")
         while True:
@@ -311,13 +297,11 @@ class Cache:
                           and self._open(payload, "cache.payload")
                           else self._seal(payload, "cache.payload"))
 
-
                 title = (label if label.startswith(TEXT_PREFIX) and self._open(label, "cache.label")
                          else self._seal(label, "cache.label"))
                 growth = max(0, len(sealed.encode()) + len(title.encode())
                              - len(payload.encode()) - len(label.encode()))
                 keep = fits(self.db_path.parent, growth)
-
 
                 conn.execute("DELETE FROM cache WHERE key=?", (row["key"],))
                 if keep:
@@ -371,17 +355,12 @@ class Cache:
         conn = sqlite3.connect(self.db_path, timeout=0)
         conn.row_factory = sqlite3.Row
         try:
-
-
-
-
             frist = time.monotonic() + 10
             while True:
                 try:
                     conn.execute("PRAGMA journal_mode=WAL")
                     break
                 except sqlite3.OperationalError as exc:
-
                     code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
                     if (code not in
                             (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
@@ -394,7 +373,6 @@ class Cache:
             conn.commit()
         finally:
             conn.close()
-
 
     def get(self, key: str) -> Any | None:
         """Gibt den gecachten Wert zurueck oder `None`, wenn abgelaufen/unbekannt."""
@@ -427,13 +405,10 @@ class Cache:
         payload = self._seal(json.dumps(value, ensure_ascii=False), "cache.payload")
         label = self._seal(label, "cache.label")
 
-
-
         from aquaticy.budget import fits, note_written
 
         self._maybe_purge()
         groesse = len(payload.encode("utf-8")) + len(label.encode("utf-8"))
-
 
         with self._connect() as conn:
             row = conn.execute(
@@ -473,7 +448,6 @@ class Cache:
             )
             return {row["kind"]: row["n"] for row in cur.fetchall()}
 
-
     def add_history(
         self,
         session_id: str,
@@ -495,7 +469,6 @@ class Cache:
         from aquaticy.budget import ensure_room, note_written
 
         daten = json.dumps(meta or {}, ensure_ascii=False)
-
 
         groesse = (len(question.encode()) + len(answer.encode()) + len(daten.encode())) * 4 // 3
         ensure_room(self.db_path.parent, groesse)
@@ -598,9 +571,7 @@ class Cache:
             for row in reversed(rows)
         ]
 
-
     MAX_NOTE_LENGTH = 500
-
 
     def mark_unread(self, session_id: str, reason: str = "auftrag") -> None:
         """Merkt vor, dass in diesem Chat etwas Ungelesenes steht."""
@@ -673,8 +644,6 @@ class Cache:
         if not needle or not limit:
             return []
 
-
-
         klein = needle.casefold()
         matches: list[dict[str, Any]] = []
         sql, werte = _summaries(kind)
@@ -736,9 +705,6 @@ class Cache:
         if not session_id:
             return 0
         with self._connect() as conn, closing(conn.cursor()) as cur:
-
-
-
             cur.execute("SELECT meta FROM history WHERE session_id = ?", (session_id,))
             bilder: set[str] = set()
             for zeile in cur.fetchall():

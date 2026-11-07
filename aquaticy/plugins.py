@@ -252,7 +252,6 @@ TOOL_HINTS = {
 }
 
 
-
 DEFAULT_QUESTIONS = {
     "github": "Zeig mir meine zuletzt aktualisierten Repos und was dort offen ist.",
     "feeds": "Was ist neu in meinen Feeds?",
@@ -334,7 +333,6 @@ def match(line: str, settings: Any, ultra: bool) -> PluginTurn | None:
         return None
     argument = (treffer.group(2) or "").strip()
     if addon_id in REVIEW_PLUGINS:
-
         return PluginTurn(addon_id, treffer.group(1).lower(), argument, mode="code")
     if addon_id in DESKTOP_PLUGINS:
         return PluginTurn(addon_id, treffer.group(1).lower(), argument, mode="code",

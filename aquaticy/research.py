@@ -74,7 +74,6 @@ def matches_subject(url: str, query: set[str], question: str = "") -> bool:
     if not last & query:
         return False
 
-
     for name in re.findall(r"\b[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+){1,3}\b",
                            unicodedata.normalize("NFKC", question)):
         named = words(name)
@@ -160,7 +159,6 @@ class ResearchCache:
             if not source_url(url) or suspicious(body):
                 continue
 
-
             if not matches_subject(url, query, question):
                 continue
             if len(words(body[:48000]) & used) < 3:
@@ -239,7 +237,6 @@ class ResearchCache:
         for key, sealed, source, created, expires in rows:
             text = store.secrets.open(sealed, "research-text:" + key)
             url = store.secrets.open(source, "research-source:" + key)
-
 
             valid = secrets.compare_digest(key, store.secrets.blind(
                 "research-fact", store.owner + "\n" + url + "\n" + text))

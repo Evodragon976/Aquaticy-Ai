@@ -52,7 +52,6 @@ VERDICT_LABELS_EN = {"BESTAETIGT": "confirmed", "ABWEICHUNG": "found a differenc
                      "UNKLAR": "nothing solid found"}
 
 
-
 from aquaticy.starttexte import GREETINGS, SUGGESTIONS  # noqa: E402
 
 
@@ -66,7 +65,6 @@ def start_texts() -> dict[str, Any]:
         "roles_en": dict(ROLE_LABELS_EN),
         "verdicts_en": dict(VERDICT_LABELS_EN),
     }
-
 
 
 def size_text(nbytes: Any) -> str:
@@ -151,7 +149,6 @@ def with_groups(chats: list[dict[str, Any]], now: float | None = None) -> list[d
     return [{**chat, "group": chat_group(chat.get("touched"), now)} for chat in chats]
 
 
-
 def _hhmm(stunde: Any, minute: Any) -> str:
     return f"{int(stunde or 0):02d}:{int(minute or 0):02d}"
 
@@ -162,7 +159,6 @@ def job_view(job: dict[str, Any]) -> dict[str, Any]:
            "image": "Bildsuche"}.get(str(job.get("kind") or ""), "Recherche")
     minuten = {"minutes5": 5, "minutes15": 15, "minutes30": 30}.get(str(job.get("rhythm")))
     rhythmus = str(job.get("rhythm") or "")
-
 
     if rhythmus == "always":
         takt = "die ganze Zeit"
@@ -187,13 +183,11 @@ def job_view(job: dict[str, Any]) -> dict[str, Any]:
             "toggle_label": "Anhalten" if job.get("enabled") else "Weiter"}
 
 
-
 def provider_view() -> list[dict[str, str]]:
     """Die Anbieter mit dem Satz, der unter der Auswahl steht."""
     liste = []
     for kennung, name, schluessel, beispiel, form in PROVIDERS:
         if schluessel:
-
             hinweis = (f"{name} braucht einen Schlüssel"
                        + (f" (beginnt mit {form})" if form else "")
                        + f". Den verknüpfst du unter Add-ons → {name} — sonst gilt der "
@@ -208,7 +202,6 @@ def provider_view() -> list[dict[str, str]]:
             "note": hinweis,
         })
     return liste
-
 
 
 def header_view(

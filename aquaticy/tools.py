@@ -50,21 +50,16 @@ AskHandler = Callable[[str, list[str]], str]
 VisualInspector = Callable[[str, str], str]
 
 
-
 MAX_QUESTIONS = 2
-
 
 
 MAX_BATCH = 5
 
 
-
 ASK_GAVE_UP_AFTER = 120.0
 
 
-
 YES_WORDS = frozenset({"ja", "j", "yes", "ok", "mach", "los", "klar", "ja, mach"})
-
 
 
 SUBAGENT_SCHEMA: dict[str, Any] = {
@@ -194,7 +189,6 @@ PUBLIC_VISUAL_SCHEMA: dict[str, Any] = {
 }
 
 
-
 NEWS_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -217,16 +211,6 @@ NEWS_SCHEMA: dict[str, Any] = {
 }
 
 
-
-
-
-
-
-
-
-
-
-
 PROFILE_SITES: tuple[tuple[str, str], ...] = (
     ("Instagram", "instagram.com"),
     ("LinkedIn", "linkedin.com"),
@@ -241,7 +225,6 @@ PROFILE_SITES: tuple[tuple[str, str], ...] = (
     ("GitHub", "github.com"),
     ("Reddit", "reddit.com"),
 )
-
 
 
 MAX_PROFILE_SITES = 8
@@ -343,8 +326,6 @@ CALC_SCHEMA: dict[str, Any] = {
 }
 
 
-
-
 MEMORY_WRITE_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -368,6 +349,29 @@ MEMORY_WRITE_SCHEMA: dict[str, Any] = {
                     "type": "string",
                     "description": "Ein Stichwort zum Wiederfinden, z.B. 'Wohnort' oder 'Laptop'.",
                 },
+            },
+            "required": ["text"],
+        },
+    },
+}
+
+
+MESSENGER_SEND_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "messenger_send",
+        "description": (
+            "Schickt dem Nutzer eine Nachricht in SEINEN EIGENEN Chat auf WhatsApp oder Signal "
+            "(\"Nachricht an dich selbst\"). Nimm es, wenn er darum bittet (\"schreib mir das "
+            "auf WhatsApp\", \"schick mir die Liste per Signal\"). An andere Personen geht "
+            "damit nichts. Schreib den Text fertig ausformuliert, ohne Markdown-Tabellen."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "messenger": {"type": "string", "enum": ["whatsapp", "signal", ""],
+                              "description": "Leer: der erste gekoppelte Messenger."},
+                "text": {"type": "string", "description": "Die Nachricht, höchstens 3000 Zeichen."},
             },
             "required": ["text"],
         },
@@ -416,7 +420,6 @@ MEMORY_READ_SCHEMA: dict[str, Any] = {
         },
     },
 }
-
 
 
 LAN_SCHEMA: dict[str, Any] = {
@@ -542,7 +545,6 @@ HA_CALL_SCHEMA: dict[str, Any] = {
 }
 
 
-
 ASK_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -624,11 +626,6 @@ MEMORY_SCHEMA: dict[str, Any] = {
 }
 
 
-
-
-
-
-
 CALENDAR_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -694,7 +691,6 @@ MAIL_READ_SCHEMA: dict[str, Any] = {
         },
     },
 }
-
 
 
 CALENDAR_ADD_SCHEMA: dict[str, Any] = {
@@ -782,8 +778,6 @@ GOOGLE_WRITE_SCHEMAS: tuple[dict[str, Any], ...] = (
     CALENDAR_EDIT_SCHEMA,
     MAIL_DRAFT_SCHEMA,
 )
-
-
 
 
 STORAGE_FIND_SCHEMA: dict[str, Any] = {
@@ -879,14 +873,6 @@ STORAGE_EDIT_SCHEMA: dict[str, Any] = {
         },
     },
 }
-
-
-
-
-
-
-
-
 
 
 VM_RUN_DESCRIPTION = (
@@ -991,12 +977,6 @@ VM_FILES_SCHEMA: dict[str, Any] = {
 }
 
 
-
-
-
-
-
-
 BLENDER_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -1045,8 +1025,6 @@ BLENDER_SCHEMA: dict[str, Any] = {
 }
 
 
-
-
 WORK_TOOLS: dict[str, str] = {
     "secure_advisories": "suche", "secure_read_advisory": "seite",
     "secure_ssh": "werkstatt", "secure_defend": "werkstatt",
@@ -1063,8 +1041,6 @@ WORK_TOOLS: dict[str, str] = {
 }
 
 
-
-
 UNTRUSTED_SOURCES = frozenset({
     "web_search", "search_news", "fetch_page", "inspect_public_visual", "find_profiles",
     "local_places", "github", "github_write", "weather", "read_feeds", "mail_search",
@@ -1072,15 +1048,10 @@ UNTRUSTED_SOURCES = frozenset({
     "news_tagesschau", "wikipedia", "currency", "holidays",
     "calendar_events", "desktop_look", "desktop_windows", "research_subtasks",
 
-
-
     "vm_run", "vm_read", "vm_files", "blender_run", "ha_states", "lan_ssh",
     "secure_status", "secure_scan", "secure_inspect", "secure_advisories", "secure_read_advisory",
     "secure_devices", "secure_findings", "secure_ssh", "secure_defend", "secure_nmap",
 })
-
-
-
 
 
 CONFIRM_AFTER_UNTRUSTED: dict[str, str] = {
@@ -1091,7 +1062,7 @@ CONFIRM_AFTER_UNTRUSTED: dict[str, str] = {
     "remember": "sich etwas dauerhaft merken",
     "save_memory": "etwas im Speicher ablegen",
     "forget_memory": "etwas aus dem Speicher löschen",
-
+    "messenger_send": "dir eine Nachricht per WhatsApp oder Signal schicken",
 
     "lan_scan": "das Heimnetz durchsuchen",
     "lan_check": "ein Gerät im Heimnetz abfragen",
@@ -1135,8 +1106,6 @@ VM_SCHEMAS: tuple[dict[str, Any], ...] = (
     VM_FILES_SCHEMA,
     BLENDER_SCHEMA,
 )
-
-
 
 
 DESKTOP_SCHEMAS: tuple[dict[str, Any], ...] = (
@@ -1297,7 +1266,6 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
     disk_gb = max(1, int(getattr(settings, "vm_disk_gb", DISK_GB) or DISK_GB))
     user_mode = bool(getattr(settings, "vm_user_mode", False))
 
-
     schemas = list(copy.deepcopy(VM_SCHEMAS + (DESKTOP_SCHEMAS if user_mode else ())))
     if getattr(settings, "vm_lan", False) and getattr(settings, "lan_enabled", False):
         schemas.append(copy.deepcopy(SSH_SCHEMA))
@@ -1305,8 +1273,6 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
 
     aktiv = addons.active_ids(settings) if getattr(settings, "data_dir", None) else []
     if user_mode and "blender" not in aktiv:
-
-
         schemas = [s for s in schemas if s["function"]["name"] != "blender_run"]
     apps = addons.desktop_apps(settings) if user_mode and aktiv else []
     zusatz = (
@@ -1330,9 +1296,6 @@ def vm_schemas_for(settings: Any) -> tuple[dict[str, Any], ...]:
                 disk_gb=disk_gb,
             )
     return tuple(schemas)
-
-
-
 
 
 GITHUB_SCHEMA: dict[str, Any] = {
@@ -1570,9 +1533,6 @@ def addon_schemas_for(settings: Any, pro: bool = True) -> list[dict[str, Any]]:
     return schemas
 
 
-
-
-
 SETTING_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
@@ -1656,7 +1616,6 @@ class ToolStats:
     calculations: int = 0
     notes_saved: int = 0
 
-
     questions: int = 0
     memories: int = 0
     lan_scans: int = 0
@@ -1719,12 +1678,9 @@ class ToolStats:
         self.addon_calls = 0
 
 
-
-
 TRANSIENT_SKIPS = frozenset({
     "timeout", "network_error", "dns_error", "robots_unavailable", "blocked_http_429",
 })
-
 
 
 FAILED_PAGE_SECONDS = 3600
@@ -1781,20 +1737,17 @@ class Toolbox:
         self._secure_checks = 0
         self._secure_nmaps = 0
 
-
         self.untrusted_seen = False
-
 
         self.coworker_write_ok: Callable[[str], bool] | None = None
 
         self.learning_ticket = ""
 
-
-
         self.user_said = ""
 
-
         self._memory_store: Any = None
+        # 15.5.5: "schreib mir das auf WhatsApp" -- setzt der Server fuer den Besitzer.
+        self.messenger_sender: Callable[[str, str], dict[str, Any]] | None = None
         # 15.3.4: im Code-Modus kein Gedaechtnis (setzt der Agent je Turn).
         self.memory_blocked = False
         self.memory_request: str | None = None
@@ -1813,15 +1766,9 @@ class Toolbox:
 
         self.seen_results: dict[str, SearchResult] = {}
 
-
-
         self.avoid_domains: set[str] = set()
 
-
-
-
         self.claim_sources = False
-
 
         self._google_client: Any = None
 
@@ -1829,20 +1776,12 @@ class Toolbox:
 
         self._sandbox_box: Any = None
 
-
         self.on_settings_changed: Any = None
-
-
-
-
-
 
         self.guard: Guard | None = Guard(
             settings, baseline=not getattr(settings, "legal_guard", True))
 
         self.screen_reader: Callable[[bytes, str], str] | None = None
-
-
 
         self.coworker_ha_approval: Callable[[dict[str, Any]], bool] | None = None
         self.private_context: list[str] = []
@@ -1869,7 +1808,6 @@ class Toolbox:
         if self.on_event:
             self.on_event(event, payload)
 
-
     def _plan_queries(self, query: str, extra: list[str] | None) -> list[str]:
         """Welche Anfragen wirklich rausgehen.
 
@@ -1891,15 +1829,6 @@ class Toolbox:
                 if candidate.lower() not in {q.lower() for q in wanted}:
                     wanted.append(candidate)
         wanted = wanted[:limit]
-
-
-
-
-
-
-
-
-
 
         ort = (self.settings.location or "").strip()
         if ort and not any(mentions_place(anfrage, ort) for anfrage in wanted):
@@ -1970,9 +1899,6 @@ class Toolbox:
             try:
                 results, used = search_broadly(wanted, count, configured)
             except SearchError as exc:
-
-
-
                 if self.settings.search_backend in OPEN_BACKEND_NAMES:
                     self._emit("error", message=str(exc))
                     return {"query": label, "results": [], "error": str(exc)}
@@ -2002,7 +1928,6 @@ class Toolbox:
             ]
             skipped = len(results) - len(fresh)
 
-
             if fresh:
                 results = fresh
 
@@ -2015,7 +1940,6 @@ class Toolbox:
             "results": [result.as_tool_dict() for result in results],
         }
         if cached is not None:
-
             payload["cached"] = True
         if skipped:
             payload["note"] = (
@@ -2024,14 +1948,12 @@ class Toolbox:
             )
         return payload
 
-
     def fetch_page(self, url: str) -> dict[str, Any]:
         """Laedt eine Seite und gibt lesbaren Text plus Produktdaten zurueck."""
         url = (url or "").strip()
         self._emit("fetch", url=url)
 
         key = cache_key("page", url)
-
 
         with self.cache.filling(key) if self.cache else contextlib.nullcontext():
             cached = self.cache.get(key) if self.cache else None
@@ -2069,8 +1991,6 @@ class Toolbox:
                 }
             )
             if self.claim_sources and domain:
-
-
                 self.avoid_domains.add(domain)
             for product in page.products:
                 self.stats.products.append(product)
@@ -2083,7 +2003,6 @@ class Toolbox:
         if not page.ok:
             hint = self.seen_results.get(url)
             if hint:
-
                 payload["search_title"] = hint.title
                 payload["search_snippet"] = hint.snippet
         return payload
@@ -2093,7 +2012,6 @@ class Toolbox:
         if not (page.ok and self.spec_extractor and page.text):
             return
         if not page.product_hint:
-
             return
         if page.products and page.products[0].specs:
             return
@@ -2112,7 +2030,6 @@ class Toolbox:
                     source_domain=page.source_domain,
                 )
             ]
-
 
     def _google(self) -> Any:
         """Der Zugriff auf das verbundene Konto, einmal je Toolbox aufgebaut."""
@@ -2213,15 +2130,6 @@ class Toolbox:
         self._emit("mail_done", found=1)
         return mail
 
-
-
-
-
-
-
-
-
-
     def _google_write_ready(self, tool: str = "") -> str:
         problem = self._google_ready()
         if problem:
@@ -2232,8 +2140,6 @@ class Toolbox:
                 "Aendern in den Einstellungen unter 'Gmail & Kalender' frei und "
                 "verbindet danach neu. Sag ihm das, statt es zu umgehen."
             )
-
-
 
         erlaubt = self._google().write_access() if tool else None
         if erlaubt is not None:
@@ -2370,8 +2276,6 @@ class Toolbox:
         if problem:
             return {"error": problem}
         try:
-
-
             from aquaticy.google import mail_addresses
 
             to = mail_addresses(to) if to else ""
@@ -2394,7 +2298,6 @@ class Toolbox:
         self.stats.google_writes += 1
         self._emit("mail_written", subject=subject)
         return answer
-
 
     def _storage(self) -> Any:
         """Der Zugriff aufs Lager, einmal je Toolbox aufgebaut."""
@@ -2540,7 +2443,6 @@ class Toolbox:
         self._emit("storage_done", found=1, action="geaendert")
         return {"changed": entry}
 
-
     def _profile_env(self) -> Path | None:
         """Die `.env` des Kontos -- oder None, wenn Aquaticy allein laeuft.
 
@@ -2642,8 +2544,6 @@ class Toolbox:
         self._emit("setting", label=preference.label, value=stored)
 
         if preference.name in (preferences.APPEARANCE, preferences.PALETTE):
-
-
             if preference.name == preferences.APPEARANCE:
                 self._emit("appearance", theme="light" if stored == "hell" else "dark")
             else:
@@ -2673,8 +2573,6 @@ class Toolbox:
                 "laeuft noch mit den alten Werten weiter."
             ),
         }
-
-
 
     def _sandbox(self) -> Any:
         """Die gemeinsame virtual machine -- gebaut beim ersten Zugriff."""
@@ -2885,7 +2783,6 @@ class Toolbox:
                 )
         return answer
 
-
     def _addon_call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Die Werkzeuge der Add-ons. Ausgeschaltet heisst: gibt es nicht."""
         from aquaticy import addons
@@ -2927,7 +2824,6 @@ class Toolbox:
         if name == "weather":
             ort = str(arguments.get("place") or self.settings.location or "")
             if rechte["orte"] == "meiner":
-
                 ort = str(self.settings.location or "")
                 if not ort:
                     return {"error": (
@@ -2993,8 +2889,6 @@ class Toolbox:
                 return geschrieben
             pfad = geschrieben["written"]
             from aquaticy.addons import werkstatt_command_for_blender
-
-
 
             programm = (
                 werkstatt_command_for_blender()
@@ -3062,8 +2956,6 @@ class Toolbox:
         if art is None or metering.quota_of(self.settings) is None:
             return self._after_untrusted(name, self._call(name, arguments))
         try:
-
-
             vorab = metering.reserve_work(self.settings, art)
         except metering.QuotaExceeded as exc:
             return {"error": str(exc), "kontingent": True}
@@ -3071,8 +2963,6 @@ class Toolbox:
         try:
             payload = self._call(name, arguments)
         except Exception as exc:
-
-
             payload = {"error": f"{type(exc).__name__}: {exc}"}
         try:
             vorab.settle_work(self._work_cost(name, art, payload, vorher))
@@ -3091,8 +2981,6 @@ class Toolbox:
 
     @untrusted_seen.setter
     def untrusted_seen(self, wert: bool) -> None:
-
-
         self._untrusted_hard = bool(wert)
         self._untrusted_soft = False
 
@@ -3116,16 +3004,11 @@ class Toolbox:
         from aquaticy import injection
 
         if payload.get("error"):
-
             return injection.clean(payload)
         markiert, arten = injection.mark(name, payload)
 
-
-
         eigenes_haus = (name == "ha_states" and getattr(self.settings, "ha_direct", False)
                         and getattr(self.settings, "ha_control", False))
-
-
 
         eigener_kalender = (name == "calendar_events"
                             and getattr(self.settings, "google_direct", False)
@@ -3298,9 +3181,6 @@ class Toolbox:
         if self.guard is not None and name in SENSITIVE_TOOLS:
             verdict = self.guard.check_call(name, arguments)
             if verdict.abuse:
-
-
-
                 from aquaticy.aiguard import normalize_category
                 from aquaticy.guardrails import STOP_TOOL_ABUSE
 
@@ -3418,8 +3298,6 @@ class Toolbox:
                 timeout=int(arguments.get("timeout") or 0),
             )
         if name == "vm_write":
-
-
             inhalt = arguments.get("text", arguments.get("content"))
             if inhalt is None:
                 return {"error": "vm_write braucht den Dateiinhalt im Feld 'text'."}
@@ -3450,6 +3328,9 @@ class Toolbox:
             return self.recall_memory(query=str(arguments.get("query") or ""))
         if name == "forget_memory":
             return self.forget_memory(arguments.get("id"))
+        if name == "messenger_send":
+            return self.messenger_send(str(arguments.get("messenger") or ""),
+                                       str(arguments.get("text") or ""))
         if name == "lan_scan":
             return self.lan_scan(
                 subnet=str(arguments.get("subnet") or ""),
@@ -3608,7 +3489,6 @@ class Toolbox:
             return self.desktop_action("windows")
         return {"error": f"Unbekanntes Werkzeug '{name}'."}
 
-
     def search_news(self, query: str, count: int = 0) -> dict[str, Any]:
         """News-Suche; faellt bei Ausfall auf die normale Websuche zurueck.
 
@@ -3622,7 +3502,6 @@ class Toolbox:
             schlagzeilen = self._headlines(count)
             if schlagzeilen is not None:
                 return schlagzeilen
-
 
         query = with_place((query or "").strip(), self.settings.location)
         count = int(count or self.settings.max_results_default)
@@ -3641,7 +3520,6 @@ class Toolbox:
                     query, count=count, country=self.settings.country, lang=self.settings.lang
                 )
             except SearchError:
-
                 self._emit("fallback", source="news", target="websuche")
                 try:
                     results = search_web(
@@ -3654,7 +3532,6 @@ class Toolbox:
                     self._emit("error", message=str(exc))
                     return {"query": query, "results": [], "error": str(exc)}
             if self.cache:
-
                 self.cache.set(
                     key,
                     [result.model_dump() for result in results],
@@ -3683,7 +3560,6 @@ class Toolbox:
         else:
             results = headlines(land, sprache, menge)
             if results and self.cache:
-
                 self.cache.set(key, [r.model_dump() for r in results], kind="news",
                                label="Schlagzeilen", ttl=600)
         if not results:
@@ -3698,7 +3574,6 @@ class Toolbox:
                      "Meldungen selbst: was passiert ist, Quelle und Uhrzeit. Keine Liste "
                      "von Nachrichtenseiten."),
         }
-
 
     def find_profiles(self, name: str, platforms: list[str] | None = None) -> dict[str, Any]:
         """Sucht, was es zu einem Namen ausserhalb der eigenen Website gibt.
@@ -3736,8 +3611,6 @@ class Toolbox:
             return dict(cached)
 
         def eine(position: int, label: str, domain: str) -> tuple[str, list[SearchResult]]:
-
-
             if position:
                 time.sleep(min(position * 0.25, 2.0))
             try:
@@ -3772,7 +3645,6 @@ class Toolbox:
 
         for label, domain in sites:
             treffer = ergebnisse.get(label, [])
-
 
             passend = [
                 item
@@ -3809,7 +3681,6 @@ class Toolbox:
             self.cache.set(key, payload, kind="profiles", label=name, ttl=6 * 3600)
         self._emit("profiles_done", name=name, hits=len(gefunden))
         return payload
-
 
     def local_places(self, what: str, where: str = "", radius_km: float = 0.0) -> dict[str, Any]:
         """Sucht Orte in OpenStreetMap statt in einer Suchmaschine.
@@ -3886,13 +3757,10 @@ class Toolbox:
                 "gehoeren gegengeprueft, sie veralten in der Karte am schnellsten."
             )
         if self.cache:
-
-
             self.cache.set(key, payload, kind="places", label=f"{what} in {where}",
                            ttl=None if orte else FAILED_PAGE_SECONDS)
         self._emit("places_done", what=what, hits=len(orte))
         return payload
-
 
     def calculate(self, expression: str) -> dict[str, Any]:
         """Exakte Arithmetik -- damit das Modell nie selbst rechnen muss."""
@@ -3904,7 +3772,6 @@ class Toolbox:
             return {"expression": expression, "result": calculate_pretty(expression)}
         except CalcError as exc:
             return {"expression": expression, "error": str(exc)}
-
 
     def remember(self, text: str) -> dict[str, Any]:
         """Notiz auf den dauerhaften Merkzettel des Nutzers schreiben."""
@@ -3922,7 +3789,6 @@ class Toolbox:
         self.stats.notes_saved += 1
         self._emit("remember", text=text)
         return {"saved": True, "note_id": note_id, "text": text}
-
 
     def _memory(self) -> Any:
         """Den Speicher oeffnen -- oder None, wenn er abgeschaltet ist (oder Code-Modus)."""
@@ -3975,6 +3841,24 @@ class Toolbox:
         self._emit("memory_save", text=entry.text, topic=entry.topic)
         return {"saved": True, "id": entry.id, "topic": entry.topic}
 
+    def messenger_send(self, messenger: str, text: str) -> dict[str, Any]:
+        """Eine Nachricht in den eigenen WhatsApp/Signal-Chat des Nutzers (15.5.5)."""
+        if self.messenger_sender is None:
+            return {"error": "WhatsApp oder Signal ist hier nicht gekoppelt. Koppeln geht in "
+                             "der App unter Add-ons."}
+        text = str(text or "").strip()
+        if not text:
+            return {"error": "Leere Nachricht."}
+        if len(text) > 3000:
+            return {"error": "Die Nachricht ist zu lang (höchstens 3000 Zeichen)."}
+        messenger = str(messenger or "").strip().lower()
+        if messenger not in ("", "whatsapp", "signal"):
+            return {"error": "messenger bitte whatsapp oder signal."}
+        ergebnis = self.messenger_sender(messenger, text)
+        if not ergebnis.get("error"):
+            self._emit("messenger_send", messenger=ergebnis.get("messenger", messenger))
+        return ergebnis
+
     def forget_memory(self, entry_id: Any) -> dict[str, Any]:
         """Loescht eine Notiz -- nur auf Bitte des Nutzers (15.3.4)."""
         store = self._memory()
@@ -4014,7 +3898,6 @@ class Toolbox:
                 else ""
             ),
         }
-
 
     def secure_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         from aquaticy.secure_chat import DEFENSE, LOCAL, public_query
@@ -4564,7 +4447,6 @@ class Toolbox:
             }
         return {"host": host, "reachable": True, **device.as_dict()}
 
-
     def ha_states(self, search: str = "", domain: str = "") -> dict[str, Any]:
         """Liest Zustaende aus Home Assistant."""
         from aquaticy.homeassistant import MAX_ENTITIES, HomeAssistantError, from_settings
@@ -4644,14 +4526,9 @@ class Toolbox:
                 )
             }
         try:
-
-
             check_call(domain, service, entity_id, data)
         except HomeAssistantError as exc:
             return {"error": str(exc)}
-
-
-
 
         if domain in PROTECTED_DOMAINS:
             target = entity_id or domain
@@ -4684,7 +4561,6 @@ class Toolbox:
             "entity_id": entity_id,
             "changed": len(changed),
         }
-
 
     def ask_user(self, question: str = "", options: Any = None,
                  questions: Any = None) -> dict[str, Any]:
@@ -4721,7 +4597,6 @@ class Toolbox:
         gesamt = len(fragen)
         antworten: list[dict[str, str]] = []
         for nummer, (frage, choices) in enumerate(fragen, start=1):
-
             zaehler = {"index": nummer, "total": gesamt} if gesamt > 1 else {}
             self._emit("ask", question=frage, options=choices, **zaehler)
             begonnen = time.monotonic()
@@ -4775,7 +4650,6 @@ class Toolbox:
             if text and text not in [f for f, _ in liste]:
                 liste.append((text, optionen(wahl)))
         return liste[:MAX_BATCH]
-
 
     def research_subtasks(self, tasks: Any) -> dict[str, Any]:
         """Gibt Teilfragen an parallele Subagenten ab."""

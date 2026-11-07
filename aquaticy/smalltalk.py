@@ -686,7 +686,6 @@ def art_von(text: str, *, frage_offen: bool = False) -> Art | None:
             continue
         if frage_offen and art.name == "danke" and re.match(
                 r"(?:ok(?:ay)?|super|top|perfekt|cool|klasse|prima|alles\s+klar)\b", kern):
-
             continue
         if art.muster.fullmatch(kern):
             return art

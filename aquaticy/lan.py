@@ -56,20 +56,16 @@ KNOWN_PORTS: dict[int, str] = {
 }
 
 
-
 QUICK_PORTS: tuple[int, ...] = (22, 80, 443, 445, 631, 1883, 8006, 8080, 8123, 9100, 11434, 32400)
 
 
 FULL_PORTS: tuple[int, ...] = tuple(sorted(KNOWN_PORTS))
 
 
-
 CONNECT_TIMEOUT = 0.35
 
 
-
 WORKERS = 200
-
 
 
 MAX_HOSTS = 512
@@ -83,7 +79,6 @@ class Device:
     name: str = ""
     ports: list[int] = field(default_factory=list)
     services: list[str] = field(default_factory=list)
-
 
     title: str = ""
 
@@ -99,8 +94,6 @@ class Device:
     @property
     def label(self) -> str:
         return self.title or self.name or self.address
-
-
 
 
 HOME_NETWORKS: tuple[ipaddress.IPv4Network, ...] = tuple(
@@ -123,12 +116,8 @@ def is_private_net(network: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bo
     Netz, auch wenn die Adressen offiziell dem Provider-Bereich gehoeren.
     """
 
-
-
     if not isinstance(network, ipaddress.IPv4Network):
         return False
-
-
 
     return any(network.subnet_of(bereich) for bereich in HOME_NETWORKS)
 
@@ -252,10 +241,7 @@ def web_title(address: str, port: int, timeout: float = 1.5) -> str:
     if not isinstance(ip, ipaddress.IPv4Address) or not any(ip in n for n in HOME_NETWORKS):
         return ""
 
-
     try:
-
-
         frist = time.monotonic() + max(5.0, 3 * float(timeout))
         with httpx.stream("GET", url, timeout=timeout, verify=False,
                           headers={"Accept-Encoding": "gzip, deflate"},

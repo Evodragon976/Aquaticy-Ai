@@ -45,7 +45,6 @@ ACCESS_LEVELS = ("off", "read", "write")
 REQUEST_TIMEOUT = 10.0
 
 
-
 MAX_ROWS = 50
 
 
@@ -64,9 +63,6 @@ def normalize_url(url: str) -> str:
         return ""
     if "://" not in url:
         url = f"http://{url}"
-
-
-
 
     if any(ord(zeichen) < 33 or ord(zeichen) == 127 for zeichen in url):
         return ""
@@ -122,7 +118,6 @@ class Storage:
         self._http = client or httpx.Client(timeout=timeout, follow_redirects=False,
                                           trust_env=False)
 
-
     @property
     def configured(self) -> bool:
         return bool(self.url) and self.access != "off"
@@ -134,7 +129,6 @@ class Storage:
     def close(self) -> None:
         with contextlib.suppress(Exception):
             self._http.close()
-
 
     def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         if not self.url:
@@ -194,7 +188,6 @@ class Storage:
             )
         return data
 
-
     def rooms(self) -> list[dict[str, Any]]:
         """Alle Raeume mit der Zahl ihrer Moebel und Artikel."""
         return _rows(self._request("GET", "/api/rooms"))
@@ -223,7 +216,6 @@ class Storage:
             params={"q": query, "limit": max(1, min(int(limit or 20), MAX_ROWS))},
         )
         return _rows(data.get("results") if isinstance(data, dict) else data)
-
 
     def add_item(self, furniture_id: int, name: str, quantity: int = 1) -> dict[str, Any]:
         """Legt einen Artikel an. Die Nummer vergibt der Server."""
@@ -285,11 +277,6 @@ class Storage:
         )
 
 
-
-
-
-
-
 DROP_FIELDS = frozenset({"imageFile", "createdAt", "updatedAt", "prefix", "seq"})
 
 
@@ -317,9 +304,6 @@ def _explain(response: httpx.Response) -> str:
     if response.status_code == 400:
         return detail or "Die Angaben waren unvollstaendig oder unzulaessig."
     return f"Lagerverwaltung antwortet mit {response.status_code}: {detail or 'kein Grund genannt'}"
-
-
-
 
 
 def discover(subnet: str = "", timeout: float = 1.0) -> list[str]:

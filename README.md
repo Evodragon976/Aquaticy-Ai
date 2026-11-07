@@ -1,4 +1,4 @@
-# Aquaticy AI 15.4.5
+# Aquaticy AI 15.5.5
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,41 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.5.5:**
+
+- **Google verbinden geht wieder.** Aquaticy öffnet sich unter `http://127.0.0.1:8765`, Google
+  schickte aber nach `http://localhost:8765` zurück. Für den Browser sind das zwei Adressen:
+  Anmeldung und Ablauf-Cookie fehlten, die Verbindung scheiterte. Jetzt nutzt der Rücksprung
+  dieselbe Adresse wie dein Browser. Kommt er woanders an (anderes Gerät, andere Adresse),
+  zeigt die Seite die Adresse zum Kopieren für die Einstellungen.
+- **Erschlossenes Wissen merken.** Fragst du „Wie alt bin ich?“ und beantwortest die Rückfrage
+  mit einer Rechnung (zum Beispiel über den Geburtstag deiner Mutter), merkt sich Aquaticy das
+  Ergebnis. Gespeichert wird das Geburtsdatum, das Alter rechnet Aquaticy jeden Tag neu aus.
+  „Ich bin am 15.03.2001 geboren“ erkennt es auch direkt.
+- **Antworten als ganzer Satz.** „Wie heiße ich?“ beantwortet Aquaticy sofort mit „Du heißt
+  Louis.“, ohne langes Nachdenken. Das gilt auch für Wohnort, Alter und Geburtstag. Steht die
+  Angabe nicht im Gedächtnis, fragt Aquaticy nach.
+- **„Schreib mir das auf WhatsApp/Signal“.** Aquaticy schickt die Nachricht selbst in deinen
+  eigenen Chat. An andere Personen schickt es nichts. Hat Aquaticy vorher fremde Inhalte
+  gelesen, fragt es erst nach.
+- **Secure Pro meldet Angriffe und Schwachstellen wieder per WhatsApp/Signal.** Bisher zählte
+  eine Meldung als zugestellt, sobald sie im Secure-Pro-Chat stand. Scheiterte der Messenger,
+  kam sie dort nie an. Jetzt versucht Aquaticy es bei der nächsten Prüfung erneut. Warnungen
+  gehen auch raus, wenn der Chat über den Messenger aus ist.
+- **HTTPS im Heimnetz und über Tailscale.** Mit `--lan` oder im Hintergrund ist Aquaticy auch
+  unter `https://aquaticy.local:8443` erreichbar und über Tailscale unter
+  `https://<rechner>.<tailnet>.ts.net:8443`. Das Tailscale-Zertifikat ist echt (dafür im
+  Tailnet „HTTPS Certificates“ einschalten). Fürs Heimnetz lädst du einmal je Gerät das
+  Zertifikat unter `/zertifikat` herunter und vertraust ihm. Es gilt nur für Adressen im
+  Heimnetz. `aquaticy.local` braucht mDNS (avahi oder `pip install zeroconf`). Abschalten mit
+  `AQUATICY_HOME_HTTPS=false`, anderer Port mit `AQUATICY_HTTPS_PORT`.
+- **Immer deutsche Zeit.** Aquaticy rechnet mit der Zeit in Deutschland, mit Sommer- und
+  Winterzeit, egal wie die Uhr des Servers steht (im Container meist UTC). Das Modell kennt
+  Datum und Uhrzeit. Coworker-Aufträge wie „jeden Tag um 8 Uhr“ laufen um 8 Uhr deutscher
+  Zeit, im Sommer wie im Winter. Tageszähler, Exporte und Secure-Pro-Zeiten nutzen sie auch.
+- **Aufgeräumt:** rund 2900 überflüssige Leerzeilen im Code entfernt, ohne Änderung am
+  Programm (geprüft über den Syntaxbaum).
 
 **Neu in 15.4.5: 66 weitere nachgewiesene Fehlerursachen korrigiert.**
 
@@ -696,7 +731,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.4.5
+aquaticy --version            # 15.5.5
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -1527,8 +1562,10 @@ Hat es Mails oder Webseiten gelesen, fragt es trotzdem. Dein eigener Kalender z�
 1. Auf [console.cloud.google.com](https://console.cloud.google.com/) ein Projekt anlegen.
 2. **APIs und Dienste → Bibliothek:** „Gmail API“ und „Google Calendar API“ aktivieren.
 3. **OAuth-Zustimmungsbildschirm:** Nutzertyp „Extern“, dich als Testnutzer eintragen.
-4. **Anmeldedaten → OAuth-Client-ID**, Typ **Desktop-App**, Weiterleitung
-   `http://localhost:8765/google`.
+4. **Anmeldedaten → OAuth-Client-ID**, Typ **Desktop-App**. Eine Weiterleitung trägst du
+   nicht ein: Aquaticy nutzt dieselbe Adresse wie dein Browser (`http://127.0.0.1:8765/google`
+   oder `http://localhost:8765/google`). Landest du nach der Zustimmung auf einer Seite mit
+   einer Adresse zum Kopieren, füge sie in den Einstellungen ein.
 5. Client-ID und Client-Secret in *Einstellungen → Gmail & Kalender* eintragen (oder als
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`), dann **Verbinden**.
 

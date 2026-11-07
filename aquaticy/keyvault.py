@@ -55,10 +55,6 @@ class Slot:
     note: str
 
 
-
-
-
-
 SLOTS: tuple[Slot, ...] = (
     Slot("NVIDIA_NIM_API_KEY", "NVIDIA NIM", "modell", "nvapi-…",
          "Für die NVIDIA-Modelle (nvidia_nim/…), zum Beispiel Nemotron."),
@@ -66,13 +62,6 @@ SLOTS: tuple[Slot, ...] = (
          "Für die Mistral-Modelle (mistral/…), zum Beispiel Mistral Large und Codestral."),
 )
 SLOT_BY_NAME: dict[str, Slot] = {slot.name: slot for slot in SLOTS}
-
-
-
-
-
-
-
 
 
 INTERNAL_SECRETS = frozenset({"AQUATICY_GITHUB_TOKEN", "HA_TOKEN", "HA_TOKEN_URL",
@@ -169,14 +158,12 @@ class KeyVault:
                 """
             )
 
-
             bekannt = set(SLOT_BY_NAME) | INTERNAL_SECRETS
             for zeile in conn.execute("SELECT name FROM api_keys WHERE account_id = ?",
                                       (self.account_id,)).fetchall():
                 if zeile["name"] not in bekannt:
                     conn.execute("DELETE FROM api_keys WHERE account_id = ? AND name = ?",
                                  (self.account_id, zeile["name"]))
-
 
     def set(self, name: str, value: str) -> None:
         """Legt einen Schluessel ab (oder ersetzt ihn)."""
@@ -235,7 +222,6 @@ class KeyVault:
                 (self.account_id, str(name)),
             ).rowcount
         return bool(weg)
-
 
     def _rows(self) -> list[sqlite3.Row]:
         with self._lock, self._connect() as conn:

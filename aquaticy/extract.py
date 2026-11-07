@@ -46,10 +46,6 @@ MAX_SPECS = 40
 MAX_SPEC_VALUE_LEN = 160
 
 
-
-
-
-
 _PRICE_RE = re.compile(
     r"([+-]?(?:\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)"
     r"(?:[eE][+-]?\d+)?)(?!\d)"
@@ -150,9 +146,6 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
-
-
-
 def _iter_jsonld_objects(tree: HTMLParser) -> list[dict[str, Any]]:
     objects: list[dict[str, Any]] = []
     for node in tree.css('script[type="application/ld+json"]'):
@@ -162,7 +155,6 @@ def _iter_jsonld_objects(tree: HTMLParser) -> list[dict[str, Any]]:
         try:
             data = loads(raw)
         except (ValueError, RecursionError):
-
             try:
                 data = loads(f"[{raw.strip().rstrip(',')}]")
             except (ValueError, RecursionError):
@@ -266,9 +258,6 @@ def product_from_jsonld(tree: HTMLParser, base_url: str) -> Product | None:
     return None
 
 
-
-
-
 def _meta(tree: HTMLParser, *names: str) -> str | None:
     for name in names:
         for selector in (f'meta[property="{name}"]', f'meta[name="{name}"]'):
@@ -297,9 +286,6 @@ def product_from_opengraph(tree: HTMLParser, base_url: str) -> Product | None:
         availability=_meta(tree, "product:availability", "og:availability"),
         source_domain=domain_of(base_url),
     )
-
-
-
 
 
 def _itemprop(tree: HTMLParser | Node, prop: str) -> str | None:
@@ -358,9 +344,6 @@ def product_from_microdata(tree: HTMLParser, base_url: str) -> Product | None:
     )
 
 
-
-
-
 def _clean_spec(key: str, value: str) -> tuple[str, str] | None:
     key = key.strip().rstrip(":").strip()
     value = value.strip()
@@ -410,9 +393,6 @@ def has_spec_heading(tree: HTMLParser) -> bool:
     return False
 
 
-
-
-
 def _merge(base: Product, extra: Product | None) -> Product:
     """Fuellt leere Felder von *base* aus *extra* auf."""
     if extra is None:
@@ -441,8 +421,6 @@ def extract_product(html: str, base_url: str) -> Product | None:
     from_micro = product_from_microdata(tree, base_url)
 
     if product is None:
-
-
         candidate = from_micro or from_og
         if candidate is None:
             return None

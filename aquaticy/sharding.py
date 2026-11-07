@@ -94,9 +94,6 @@ class TunnelError(RuntimeError):
     """Der Tunnel ist kaputt oder nicht vom Verbund."""
 
 
-
-
-
 def find_binary(env: str, names: tuple[str, ...]) -> str:
     """Wo das Programm liegt -- "" wenn es fehlt. Die Umgebung darf es vorgeben."""
     vorgabe = os.environ.get(env, "").strip()
@@ -299,9 +296,6 @@ def _beenden(proc: subprocess.Popen | None) -> None:
             proc.kill()
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.wait(timeout=5)
-
-
-
 
 
 def tunnel_keys(link: bytes, master: bytes, mitglied: bytes) -> tuple[bytes, bytes]:
@@ -595,9 +589,6 @@ class Tunnel:
                 sock.close()
 
 
-
-
-
 class RpcWorker:
     """Der rpc-server dieses Servers -- nur auf 127.0.0.1."""
 
@@ -710,7 +701,6 @@ class SplitServer:
         if geraete:
             cmd += ["--rpc", ",".join(geraete)]
 
-
         umgebung = {**os.environ, "LLAMA_API_KEY": schluessel}
         try:
             self._proc = _start(cmd, self.log, umgebung)
@@ -773,9 +763,6 @@ def _gesund(port: int) -> bool:
         return False
 
 
-
-
-
 class Manager:
     """Haelt die Prozesse passend zur Einstellung im Verbund -- alle drei Sekunden."""
 
@@ -786,7 +773,6 @@ class Manager:
         self.context_tokens = context_tokens
         log_dir = Path(verbund.dir)
         from aquaticy.llamacpp import Installer
-
 
         self.llama = Installer(log_dir.parent / "llama.cpp", gpu=nvidia_card)
         self.worker = RpcWorker(log_dir, locate=lambda: self._programm("rpc"),
@@ -800,7 +786,6 @@ class Manager:
         self._neu = threading.Event()
         self._modelle: tuple[float, list[dict[str, Any]]] = (0.0, [])
         self._thread: threading.Thread | None = None
-
 
     def start(self) -> None:
         global _AKTIV
@@ -840,7 +825,6 @@ class Manager:
     def wake(self) -> None:
         """Einstellungen im Hintergrund anwenden, ohne den HTTP-Aufruf zu blockieren."""
         self._wake.set()
-
 
     def _fassung(self) -> str:
         """Die Fassung von llama.cpp, die der Master fuer den Verbund gewaehlt hat."""
@@ -898,7 +882,6 @@ class Manager:
         eintrag = self._installation()
         return None if eintrag is None or eintrag.accelerated else False
 
-
     def tick(self) -> None:
         with self._lock:
             if not self._stop.is_set():
@@ -915,15 +898,11 @@ class Manager:
             return
         master = v.is_master
         if master and not self._fassung() and not self._selbst_gebaut():
-
-
             gewaehlt = self.llama.chosen()
             if gewaehlt:
                 with contextlib.suppress(Exception):
                     v.set_split_llama(gewaehlt)
             elif self.llama.phase != "fehler":
-
-
                 self.server.phase = "wartet"
                 self.server.message = self.llama.message or "Sucht die passende Fassung " \
                                                             "von llama.cpp …"
@@ -950,7 +929,6 @@ class Manager:
         bereit = [n for n in lebendig if _split_ready(v.loads.get(n))]
         if self.server.running():
             if any(n not in bereit for n in self.server.workers):
-
                 self.server.stop()
                 self.server.phase, self.server.message = (
                     "wartet", "Ein Server ist weggefallen — verteile neu …")
@@ -985,7 +963,6 @@ class Manager:
                              "auf den Servern installiert?")
         gguf = ollama_gguf(modell, self.ollama_url())
 
-
         v = self.verbund
         aktuell = v.split()
         if (self._stop.is_set() or not v.enabled or not v.joined or not v.is_master
@@ -993,7 +970,6 @@ class Manager:
                 != self._wunsch or self._neu.is_set()):
             return
         noetig = needed_gb(gguf.stat().st_size / 1_000_000_000)
-
 
         eigen = (node_memory_gb(self._karte_oder_offen())
                  if eigener is None or eigener.ready else 0.0)
@@ -1006,7 +982,6 @@ class Manager:
         self.server.start(self.verbund, modell, gguf, bereit,
                           eigener.port if eigener is not None and eigener.ready else 0,
                           kontext, binary)
-
 
     def worker_status(self) -> dict[str, Any]:
         """Fuer das Lebenszeichen an die anderen Server: bin ich bereit?
@@ -1066,7 +1041,6 @@ class Manager:
             "server_binary": bool(self._programm("server", laden=False)[0]),
             "self": self.worker.status(),
 
-
             "auto_install": bool(self.llama.names()),
             "llama": {**self.llama.status(), "fassung": self._fassung(),
                       "label": eintrag.label() if eintrag is not None else ""},
@@ -1097,4 +1071,3 @@ def endpoint() -> tuple[str, str]:
     with _LOCK:
         aktiv = _AKTIV
     return aktiv.endpoint() if aktiv is not None else ("", "")
-

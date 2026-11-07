@@ -987,7 +987,7 @@ class NativeHub:
         self._timers: dict[str, threading.Timer] = {}
         self.dropped = 0
         # Meldungen an den Besitzer (Coworker): was gerade nicht ankommt, wartet kurz.
-        self._pending: dict[str, list[tuple[float, str]]] = {}
+        self._pending: dict[str, list[tuple[float, str, bool]]] = {}
         self._sent_at: dict[str, collections.deque[float]] = {}
         _HUBS[_hub_key(self.directory)] = self
 
@@ -1088,9 +1088,63 @@ class NativeHub:
             else:
                 with self._lock:
                     warte = self._pending.setdefault(name, [])
-                    warte.append((self._clock(), text))
+                    warte.append((self._clock(), text, False))
                     del warte[:-NOTIFY_QUEUE]
         return gesendet
+
+    def owner_channels(self) -> list[str]:
+        """Messenger, die gekoppelt sind und den eigenen Chat des Besitzers kennen."""
+        return [name for name in MESSENGERS
+                if self.transport(name).has_session() and self.transport(name).own_chat()]
+
+    def message_owner(self, messenger: str, text: str) -> str:
+        """Auf Wunsch im Chat ("schreib mir das auf WhatsApp"), 15.5.5.
+
+        Nur in den eigenen Chat des Besitzers. Returns: "gesendet", "wartet" (Verbindung wird
+        aufgebaut, die Nachricht geht gleich raus) oder "" (nicht gekoppelt oder pausiert).
+        """
+        if messenger not in MESSENGERS or (self._paused is not None and self._paused()):
+            return ""
+        if messenger not in self.owner_channels():
+            return ""
+        eins = self.transport(messenger)
+        if eins.status().state == CONNECTED:
+            return "gesendet" if self._send_owner(messenger, eins, text) else ""
+        with self._lock:
+            warte = self._pending.setdefault(messenger, [])
+            warte.append((self._clock(), text, True))
+            del warte[:-NOTIFY_QUEUE]
+        with contextlib.suppress(Exception):
+            ok, _ = eins.available()
+            if ok and not eins.running:
+                eins.start()
+        return "wartet"
+
+    def alert_owner(self, text: str) -> list[str]:
+        """Eine Warnung an den Besitzer (Secure Pro, 15.5.5). Returns: gesendet oder wartend.
+
+        Anders als notify_owner auch dann, wenn der Chat ueber diesen Messenger aus ist: Wer
+        WhatsApp oder Signal gekoppelt hat, will von einem Angriff erfahren. Die Verbindung
+        wird dafuer kurz aufgebaut und danach wieder getrennt (siehe _settle).
+        """
+        if self._paused is not None and self._paused():
+            return []
+        angenommen: list[str] = []
+        for name in self.owner_channels():
+            eins = self.transport(name)
+            if eins.status().state == CONNECTED and self._send_owner(name, eins, text):
+                angenommen.append(name)
+                continue
+            with self._lock:
+                warte = self._pending.setdefault(name, [])
+                warte.append((self._clock(), text, True))
+                del warte[:-NOTIFY_QUEUE]
+            angenommen.append(name)
+            with contextlib.suppress(Exception):
+                ok, _ = eins.available()
+                if ok and not eins.running:
+                    eins.start()
+        return angenommen
 
     def _send_owner(self, name: str, eins: Transport, text: str) -> bool:
         jetzt = self._clock()
@@ -1114,9 +1168,10 @@ class NativeHub:
             warte = self._pending.pop(name, [])
         jetzt = self._clock()
         eins = self.transport(name)
-        for zeit, text in warte:
+        for zeit, text, dringend in warte:
             if jetzt - zeit <= NOTIFY_KEEP_SECONDS and (
-                    self._paused is None or not self._paused()) and self._wanted(name):
+                    self._paused is None or not self._paused()) and (
+                    dringend or self._wanted(name)):
                 self._send_owner(name, eins, text)
 
     # -- nach dem Koppeln --------------------------------------------------------

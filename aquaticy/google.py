@@ -50,17 +50,11 @@ GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
 CALENDAR_API = "https://www.googleapis.com/calendar/v3"
 
 
-
 SCOPES = (
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
 )
-
-
-
-
-
 
 
 CALENDAR_WRITE_SCOPE = "https://www.googleapis.com/auth/calendar.events"
@@ -87,12 +81,10 @@ def granted_write(scopes: list[str]) -> tuple[bool, bool] | None:
 TOKEN_FILE = "google.json"
 
 
-
 EXPIRY_MARGIN = 60
 
 
 MAX_RESULTS = 20
-
 
 
 MAX_BODY_CHARS = 6000
@@ -135,9 +127,6 @@ class Tokens:
     @property
     def stale(self) -> bool:
         return not self.access_token or time.time() >= self.expires_at - EXPIRY_MARGIN
-
-
-
 
 
 class TokenStore:
@@ -187,7 +176,6 @@ class TokenStore:
                               refresh_token=data.get("refresh_token", ""), expires_at=expiry,
                               email=data.get("email", ""), scopes=scopes)
             except (OSError, ValueError, TypeError, OverflowError):
-
                 return Tokens()
 
     def save(self, tokens: Tokens) -> None:
@@ -199,7 +187,6 @@ class TokenStore:
             fd, temporary = tempfile.mkstemp(prefix=".google-", dir=self.path.parent)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
-
                     secure_file(Path(temporary))
                     handle.write(encrypted)
                 os.replace(temporary, self.path)
@@ -218,9 +205,6 @@ class TokenStore:
     def clear(self) -> None:
         with self._lock, contextlib.suppress(FileNotFoundError):
             self.path.unlink()
-
-
-
 
 
 def consent_url(
@@ -347,8 +331,6 @@ def _explain(response: httpx.Response) -> str:
     with contextlib.suppress(ValueError):
         body = response.json()
         if isinstance(body, dict):
-
-
             fehler = body.get("error")
             detail = str(
                 body.get("error_description")
@@ -356,6 +338,9 @@ def _explain(response: httpx.Response) -> str:
                 or fehler
                 or ""
             )
+    if "redirect_uri_mismatch" in detail:
+        return ("Google kennt diese Rücksprung-Adresse nicht. Lege in der Google Cloud Console "
+                "eine OAuth-Client-ID vom Typ „Desktop-App“ an und trag sie hier ein.")
     if response.status_code == 401:
         return f"Google lehnt die Anmeldung ab ({detail or 'nicht autorisiert'})."
     if response.status_code == 403:
@@ -364,9 +349,6 @@ def _explain(response: httpx.Response) -> str:
             "Kalender-API im Projekt aktiviert und das Konto als Testnutzer eingetragen?"
         )
     return f"Google antwortet mit {response.status_code}: {detail or 'kein Grund genannt'}"
-
-
-
 
 
 class Google:
@@ -384,10 +366,7 @@ class Google:
         self.store = store
         self._http = client or httpx.Client(timeout=REQUEST_TIMEOUT)
 
-
     def tokens(self) -> Tokens:
-
-
         return self.store.load()
 
     def connected(self) -> bool:
@@ -456,7 +435,6 @@ class Google:
         except ValueError as exc:
             raise GoogleError("Google hat keine verwertbare Antwort geschickt.") from exc
 
-
     def events(self, days: int = 7, query: str = "", count: int = 10) -> list[dict[str, Any]]:
         """Termine der naechsten *days* Tage, zeitlich sortiert.
 
@@ -477,7 +455,6 @@ class Google:
             params["q"] = query
         data = self._get(f"{CALENDAR_API}/calendars/primary/events", params)
         return [_event(item) for item in data.get("items", [])]
-
 
     def search_mail(self, query: str = "", count: int = 8) -> list[dict[str, Any]]:
         """Sucht Mails. *query* ist die Gmail-Suchsyntax (`from:`, `newer_than:` ...)."""
@@ -537,10 +514,6 @@ class Google:
             "text": body[:MAX_BODY_CHARS],
             "shortened": len(body) > MAX_BODY_CHARS,
         }
-
-
-
-
 
     def _write(
         self,
@@ -670,9 +643,6 @@ class Google:
         if not subject and not body:
             raise GoogleError("Ein Entwurf ohne Betreff und ohne Text waere leer.")
 
-
-
-
         nachricht = EmailMessage()
         if to:
             nachricht["To"] = mail_addresses(to)
@@ -697,16 +667,12 @@ class Google:
             self._http.close()
 
 
-
-
-
 def _resource_id(value: str) -> str:
     """Nur eine opake Mail-/Termin-Kennung, nie Pfade, Query oder Escape-Sequenzen."""
     value = value.strip(" ")
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,1024}", value):
         raise GoogleError("Diese Mail oder diesen Termin finde ich nicht.")
     return value
-
 
 
 _ADRESSE = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$")

@@ -48,7 +48,6 @@ DESIGN_KEYS = ("accent", "bg", "sidebar")
 DEFAULT_DESIGN: dict[str, str] = {key: "" for key in DESIGN_KEYS}
 
 
-
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -73,16 +72,13 @@ THEMES = ("light", "dark", "system")
 FONT_SIZES = ("normal", "small", "large")
 
 
-
 MODES = ("normal", "code", "pro")
 
 
 EFFORTS = ("low", "medium", "high")
 
 
-
 AGENT_COUNTS = range(1, 51)
-
 
 
 FIELDS: dict[str, tuple[Any, Any]] = {
@@ -103,13 +99,9 @@ FIELDS: dict[str, tuple[Any, Any]] = {
     "agents": (12, AGENT_COUNTS),
     "visual_sources": (False, bool),
 
-
     "autoscroll": (True, bool),
     "voice_ok": (False, bool),
 }
-
-
-
 
 
 _YES = frozenset({True, "1", "true", "True", "on", "ja", "yes"})
@@ -141,7 +133,6 @@ def clean_flag(value: Any, standard: bool) -> bool:
     if isinstance(value, str):
         value = value.strip()
     elif value is not None and not isinstance(value, (bool, int, float)):
-
         return standard
     if value in _YES:
         return True
@@ -189,9 +180,6 @@ def clean(raw: Any, *, base: dict[str, Any] | None = None) -> dict[str, Any]:
     return stand
 
 
-
-
-
 _SPERREN: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
 _SPERREN_LOCK = threading.Lock()
 
@@ -235,7 +223,6 @@ class UIState:
             gespeichert = json.loads(row["state"])
         except (TypeError, ValueError):
             return defaults()
-
 
         return clean(gespeichert)
 

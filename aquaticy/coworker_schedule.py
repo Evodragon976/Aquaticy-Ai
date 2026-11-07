@@ -28,11 +28,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
+from aquaticy import zeit
+
 LOG = logging.getLogger("aquaticy.coworker.schedule")
-
-
-
-
 
 
 RHYTHMS = (
@@ -53,11 +51,7 @@ RHYTHM_NAMES = {
 }
 
 
-
-
-
 TICK_SECONDS = 20
-
 
 
 MAX_JOBS = 20
@@ -85,21 +79,14 @@ MIGRATIONS = {
     "source_url": "TEXT NOT NULL DEFAULT ''",
     "image_id": "TEXT NOT NULL DEFAULT ''",
 
-
-
     "image_note": "TEXT NOT NULL DEFAULT ''",
 }
-
 
 
 KINDS = ("research", "visual", "price", "image")
 
 
-
 MONITORING = ("visual", "price", "image")
-
-
-
 
 
 SHORT_RHYTHMS = frozenset({"always", "minutes1", "minutes5", "minutes15", "minutes30"})
@@ -111,8 +98,6 @@ def rhythm_for(kind: str, rhythm: str) -> str:
     if str(kind or "research") not in MONITORING and takt in SHORT_RHYTHMS:
         return "hourly"
     return takt
-
-
 
 
 def claim_run(db_path: Any, job_id: int) -> bool:
@@ -127,13 +112,7 @@ def release_run(db_path: Any, job_id: int) -> None:
     release(db_path, job_id)
 
 
-
-
 GUARD_STATE = "abgelehnt nach Rechtsrahmen"
-
-
-
-
 
 
 TOKEN_LIMIT_STATE = "Kontingent erreicht"
@@ -154,7 +133,6 @@ def _number(value: str) -> float | None:
     if not raw:
         return None
     if "," in raw and "." in raw:
-
         decimal = "," if raw.rfind(",") > raw.rfind(".") else "."
         thousands = "." if decimal == "," else ","
         raw = raw.replace(thousands, "").replace(decimal, ".")
@@ -173,8 +151,6 @@ def _number(value: str) -> float | None:
 
 def price_condition_met(question: str, products: list[Any]) -> bool | None:
     """Evaluate common price limits from structured, page-derived product data."""
-
-
 
     kandidaten = [
         m for m in re.finditer(
@@ -255,22 +231,19 @@ def clean_rhythm(value: str) -> str:
 def next_time(rhythm: str, hour: int, minute: int, weekday: int, now: float = 0.0) -> float:
     """Wann der Auftrag das naechste Mal faellig ist.
 
-    Gerechnet wird in Ortszeit: wer "jeden Morgen um acht" sagt, meint acht
-    Uhr bei sich, nicht in UTC.
+    Gerechnet wird in deutscher Zeit (15.5.5, vorher die Uhr des Servers, im Container
+    meist UTC): wer "jeden Morgen um acht" sagt, meint acht Uhr in Deutschland, im Sommer
+    wie im Winter.
     """
+    from aquaticy.zeit import BERLIN
+
     stempel = now or time.time()
-    jetzt = datetime.fromtimestamp(stempel)
+    jetzt = datetime.fromtimestamp(stempel, BERLIN)
     rhythm = clean_rhythm(rhythm)
     hour = max(0, min(23, int(hour)))
     minute = max(0, min(59, int(minute)))
 
-
-
-
     if rhythm == "always":
-
-
-
         return stempel
 
     intervals = {"minutes1": 1, "minutes5": 5, "minutes15": 15, "minutes30": 30}
@@ -292,7 +265,6 @@ def next_time(rhythm: str, hour: int, minute: int, weekday: int, now: float = 0.
         if ziel <= jetzt:
             ziel += timedelta(days=1)
         return ziel.timestamp()
-
 
     wunsch = max(0, min(6, int(weekday)))
     vorlauf = (wunsch - ziel.weekday()) % 7
@@ -406,12 +378,7 @@ def clean_schedule(raw: Any) -> dict[str, Any]:
             "image_id": image, "image_note": str(raw.get("image_note") or "")[:6000]}
 
 
-
-
 OFFER_URL_RE = re.compile(r"https?://[^\s<>\]\)\"']{6,}")
-
-
-
 
 
 TRACKING_PARAMS = frozenset({
@@ -512,7 +479,6 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
     from aquaticy.guardrails import UNAVAILABLE
 
     try:
-
         metering.check(settings)
     except metering.QuotaExceeded:
         return (TOKEN_LIMIT_STATE, "")
@@ -521,8 +487,6 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
     monitoring = job.kind in MONITORING
 
     def ereignis(name: str, payload: dict[str, Any]) -> None:
-
-
         if name == "abuse" and on_abuse is not None:
             try:
                 on_abuse(job, payload)
@@ -538,8 +502,6 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
     try:
         frage = job.question
         if job.kind == "image":
-
-
             gesehen = job.image_note.strip()
             if not gesehen:
                 gesehen = describe_job_image(agent, job, settings)
@@ -602,16 +564,11 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
         antwort = str(getattr(result, "answer", "") or "").strip()
         chat = str(getattr(agent, "session_id", ""))
         if str(getattr(result, "error", "") or "") == UNAVAILABLE:
-
-
             return (UNAVAILABLE, "")
         if getattr(result, "error", "") or getattr(result, "stopped", False):
             return ("Fehler: Antwort nicht abgeschlossen", "")
         regel = str(getattr(result, "guarded", "") or "")
         if regel:
-
-
-
             return (f"{GUARD_STATE}: {regel}", "")
         if not antwort:
             return ("ohne Antwort", chat)
@@ -636,8 +593,6 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
                     return ("kein prüfbarer Preis gefunden", "")
                 matched = verified
 
-
-
             if job.kind == "image" and not verified_offer_url(
                 antwort, list(getattr(result, "sources", []) or [])
             ):
@@ -645,7 +600,7 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
             if not matched:
                 return ("noch nicht erfüllt", "")
             meta = result.meta() if hasattr(result, "meta") else {}
-            checked = datetime.now().astimezone().isoformat(timespec="seconds")
+            checked = zeit.jetzt().isoformat(timespec="seconds")
             meta["monitor_checked_at"] = checked
             if agent_factory is not None:
                 meta["coworker"] = job.id
@@ -660,8 +615,6 @@ def run_job(job: Job, settings: Any, on_abuse: Any = None, *,
             meta = result.meta() if hasattr(result, "meta") else {}
             meta["coworker"] = job.id
             cache.add_history(chat, job.question, antwort, meta)
-
-
 
         with contextlib.suppress(Exception):
             cache.mark_unread(chat, reason="auftrag")

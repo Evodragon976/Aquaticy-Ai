@@ -2300,7 +2300,8 @@ def test_the_consent_link_is_built_on_request(client, monkeypatch: pytest.Monkey
     assert status == 200 and data["ok"] is True
     assert "accounts.google.com" in data["url"]
     assert "gmail.readonly" in data["url"]
-    assert data["redirect"].startswith("http://localhost:")
+    # 15.5.5: dieselbe Loopback-Adresse wie im Browser (der Test spricht mit 127.0.0.1)
+    assert data["redirect"].startswith("http://127.0.0.1:")
 
 
 def test_connecting_without_credentials_says_so(client, monkeypatch: pytest.MonkeyPatch) -> None:

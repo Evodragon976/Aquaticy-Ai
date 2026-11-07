@@ -46,7 +46,6 @@ class Gate:
     """Ein Taktgeber je Anbieter: so viele pro Minute, so viele gleichzeitig."""
 
     def __init__(self, rpm: int = 0, parallel: int = 0) -> None:
-
         self.rpm = max(0, int(rpm))
         self.parallel = max(0, int(parallel))
         self.spacing = 60.0 / self.rpm if self.rpm else 0.0
@@ -59,7 +58,6 @@ class Gate:
     @contextmanager
     def slot(self) -> Iterator[None]:
         """Haelt einen Platz frei, solange der Aufruf laeuft."""
-
 
         belegt = self._slots.acquire(timeout=MAX_WAIT) if self._slots is not None else False
         if self._slots is not None and not belegt:
@@ -81,9 +79,6 @@ class Gate:
         finally:
             if belegt and self._slots is not None:
                 self._slots.release()
-
-
-
 
 
 _gates: dict[str, Gate] = {}

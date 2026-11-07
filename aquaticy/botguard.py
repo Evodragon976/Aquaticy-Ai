@@ -87,11 +87,9 @@ VISIT_TTL = 15 * 60
 HUMAN_TTL = 5 * 60
 
 
-
 _SECRET = secrets.token_bytes(32)
 _NONCE = re.compile(r"[0-9]{1,12}")
 _SEED = re.compile(r"[0-9a-f]{32}")
-
 
 
 _SKRIPT = re.compile(
@@ -102,7 +100,6 @@ _SKRIPT = re.compile(
 )
 
 _SENDET_FETCH = re.compile(r"\b(?:Chrome|Chromium|Edg|Firefox)/")
-
 
 
 def score(script_like: bool, failures: int, new_device: bool) -> int:
@@ -141,7 +138,6 @@ def fingerprint(headers: Mapping[str, str] | Any, proof_ok: bool, webdriver: boo
     if not agent.lower().startswith("mozilla/5.0") or _SKRIPT.search(agent):
         gruende.append("user-agent")
 
-
     if fetch_metadata and _SENDET_FETCH.search(agent) and (
             kopf("Sec-Fetch-Site").lower() != "same-origin"
             or kopf("Sec-Fetch-Mode").lower() not in {"cors", "same-origin"}):
@@ -153,7 +149,6 @@ def fingerprint(headers: Mapping[str, str] | Any, proof_ok: bool, webdriver: boo
     if webdriver:
         gruende.append("webdriver")
     return gruende
-
 
 
 def _b64(daten: bytes) -> str:
@@ -251,7 +246,6 @@ def check(proof: Any, kinds: Iterable[str]) -> bool:
     return _USED.take(samen, ausgestellt + dauer)
 
 
-
 def human_track(track: Any) -> bool:
     """Sieht die Bewegung am Regler nach einem Menschen aus?
 
@@ -287,7 +281,6 @@ def human_track(track: Any) -> bool:
     return mittel > 0 and streuung / mittel >= 0.05
 
 
-
 def address_key(adresse: str) -> str:
     """Unter welcher Adresse gezaehlt wird: IPv4 einzeln, IPv6 je /64-Netz.
 
@@ -303,7 +296,6 @@ def address_key(adresse: str) -> str:
             return str(ip.ipv4_mapped)
         return str(ipaddress.IPv6Network(f"{ip}/64", strict=False))
     return str(ip)
-
 
 
 class Failures:

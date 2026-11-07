@@ -95,8 +95,6 @@ class Wahl:
         return self.model.split("/", 1)[-1] if self.model else ""
 
 
-
-
 _CACHE_TTL = 30.0
 _cache: dict[str, tuple[float, str]] = {}
 _cache_lock = threading.Lock()

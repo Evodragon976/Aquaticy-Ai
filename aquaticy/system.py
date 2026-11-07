@@ -37,16 +37,11 @@ PROVIDER_LABELS: dict[str, str] = {
 }
 
 
-
 PROVIDER_MODELS: dict[str, str] = {
 
     "nvidia_nim": "nvidia_nim/nvidia/llama-3.3-nemotron-super-49b-v1.5",
     "mistral": "mistral/mistral-large-latest",
 }
-
-
-
-
 
 
 FAST_MODELS: dict[str, str] = {
@@ -56,7 +51,6 @@ FAST_MODELS: dict[str, str] = {
 
 
 MAX_PICKER_MODELS = 8
-
 
 
 RETIRED_MODELS = frozenset({
@@ -70,7 +64,6 @@ MAX_RETIRED_SCOPES = 64
 _retired_seen: OrderedDict[str, OrderedDict[str, None]] = OrderedDict()
 _retired_lock = threading.Lock()
 _retirement_generation = 0
-
 
 
 PREFERRED_MODELS: dict[tuple[str, str], tuple[str, ...]] = {
@@ -214,15 +207,10 @@ def replacement(settings: Any, model: str) -> str:
         provider_choice(settings, anbieter, "main") or model
 
 
-
-
 CODING_MODELS: dict[str, str] = {
     "nvidia_nim": "nvidia_nim/qwen/qwen2.5-coder-32b-instruct",
     "mistral": "mistral/codestral-latest",
 }
-
-
-
 
 
 CODING_ORDER: tuple[str, ...] = ("mistral", "nvidia_nim")
@@ -231,16 +219,6 @@ PROVIDER_KEYS: dict[str, str] = {
     "nvidia_nim": "NVIDIA_NIM_API_KEY",
     "mistral": "MISTRAL_API_KEY",
 }
-
-
-
-
-
-
-
-
-
-
 
 
 PROVIDER_LIMITS: dict[str, tuple[int, int]] = {
@@ -256,9 +234,6 @@ def provider_limits(provider: str) -> tuple[int, int]:
     Hand eintraegt, drosselt Aquaticy nicht.
     """
     return PROVIDER_LIMITS.get(provider or "", (0, 0))
-
-
-
 
 
 def cpu_load() -> dict[str, Any]:
@@ -289,7 +264,6 @@ def memory_use() -> dict[str, Any]:
         free = values.get("MemAvailable", values.get("MemFree", 0)) * 1024
         if total:
             return _memory_dict(total, total - free)
-
 
     try:
         total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
@@ -369,10 +343,6 @@ def snapshot(data_dir: Path | str | None = None) -> dict[str, Any]:
     }
 
 
-
-
-
-
 SOURCE_LABELS: dict[str, str] = {"own": "Dein Schlüssel", "operator": "Gestellt"}
 
 
@@ -408,8 +378,6 @@ def model_origin(settings: Any, model_id: str, fallback: str = "operator") -> st
         return str(quelle(model_id)) if callable(quelle) else fallback
     except Exception:
         return fallback
-
-
 
 
 _ZUGANG_AUS_UMGEBUNG: dict[str, tuple[str, ...]] = {
@@ -462,7 +430,6 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
 
     model_id = str(model_id or "").strip()
     if not model_id or model_id == SPLIT_MODEL_ID:
-
         return False
     name = local_name(model_id)
     if name:
@@ -470,7 +437,6 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
                             else installed)
     provider = provider_of(model_id)
     if not provider or is_retired(model_id, settings):
-
         return False
     try:
         weg = getattr(settings, "route", None)
@@ -546,12 +512,9 @@ def strongest_models(
 
     wanted = str(getattr(settings, "code_model", "") or "").strip()
 
-
     if wanted and model_usable(settings, wanted):
         dazu(wanted, PROVIDER_LABELS.get(provider_of(wanted), "eigenes"), "von dir eingetragen",
              model_origin(settings, wanted))
-
-
 
     anbieter = sorted(
         (p for p in CODING_ORDER if key_origin(settings, p)),
@@ -665,7 +628,6 @@ def available_models(settings: Any) -> list[dict[str, str]]:
     for name in lokal:
         model = known_model(name)
 
-
         gleich = local_name(current) and is_installed(local_name(current), [name])
         found.append(_mit_herkunft(
             {
@@ -677,16 +639,12 @@ def available_models(settings: Any) -> list[dict[str, str]]:
             "operator",
         ))
 
-
-
     anbieter = sorted(
         (p for p in PROVIDER_KEYS if key_origin(settings, p)),
         key=lambda p: key_origin(settings, p) != "own",
     )
     for provider in anbieter:
         herkunft = key_origin(settings, provider)
-
-
 
         schnell = provider_choice(settings, provider, "fast")
         for model_id in provider_models(settings, provider):
@@ -697,16 +655,11 @@ def available_models(settings: Any) -> list[dict[str, str]]:
                     "label": model_id.split("/", 1)[-1],
                     "kind": PROVIDER_LABELS.get(provider, provider),
 
-
                     "note": "Klein und schnell: kurze Antworten in Sekunden" if klein
                     else PROVIDER_NOTES.get(provider, "Über die Schnittstelle des Anbieters"),
                 },
                 model_origin(settings, model_id, herkunft),
             ))
-
-
-
-
 
     if (current and not any(item["id"] == current for item in found)
             and model_usable(settings, current, lokal)):

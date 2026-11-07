@@ -25,8 +25,6 @@ MAX_FACTS = 2000
 MAX_CONTRIBUTIONS = 200
 
 
-
-
 MIN_CONFIRMATIONS = 2
 LIFETIME = 30 * 86400
 
@@ -284,7 +282,6 @@ class Learning:
             self._prune(conn, now)
 
     def set_consent(self, enabled: object, version: str) -> dict:
-
         if type(enabled) is not bool or (enabled and version != LEGAL_VERSION):
             raise ValueError("Bitte bestätige die aktuelle Erklärung zum gemeinsamen Lernen.")
         with self.connect() as conn:
@@ -429,7 +426,6 @@ class Learning:
             ).fetchall()
         result = []
         for key, sealed, source in rows:
-
             text = self.secrets.open(sealed, "learning-text:" + key)
             url = self.secrets.open(source, "learning-source:" + key)
             if (

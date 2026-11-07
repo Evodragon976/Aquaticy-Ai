@@ -11,18 +11,13 @@ if TYPE_CHECKING:
 
 
 def cache_key(*parts: Any) -> str:
-
     raw = json.dumps(parts, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def scope(settings: Settings, models: list[str]) -> str | None:
     try:
-
-
-
         return cache_key(str(settings.data_dir.resolve()),
                          [(model, settings.fast_kwargs_for(model)) for model in models])
     except Exception:
-
         return None

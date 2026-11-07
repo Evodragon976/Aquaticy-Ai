@@ -66,6 +66,8 @@ from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
+from aquaticy import zeit
+
 
 @dataclass(frozen=True)
 class AddOn:
@@ -264,8 +266,6 @@ PLUGIN_CONTENT: dict[str, tuple[str, ...]] = {
 }
 
 
-
-
 @dataclass(frozen=True)
 class Recht:
     """Eine Einstellung im Add-on-Fenster: eine Frage, zwei oder drei Antworten.
@@ -346,12 +346,10 @@ RIGHTS: dict[str, tuple[Recht, ...]] = {
 MESSENGERS = ("whatsapp", "signal")
 
 
-
 OTHER_MESSENGERS = ("telegram",)
 
 
 RETIRED = ("telegram",)
-
 
 
 STRICTEST = {"zugriff": "lesen", "wo": "einzeln"}
@@ -428,9 +426,6 @@ def messenger_rights(settings: Any, name: str) -> dict[str, str]:
     return dict(STRICTEST)
 
 
-
-
-
 FIREFOX = "_firefox"
 
 
@@ -438,7 +433,6 @@ MOUNT_ROOT = "/addons"
 
 
 INSTALL_TIMEOUT = 1800
-
 
 
 INSTALL_SOURCE = ""
@@ -472,9 +466,6 @@ def user_agent() -> str:
     from aquaticy import __version__
 
     return f"aquaticy/{__version__} (+https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai)"
-
-
-
 
 
 def _data_dir(settings: Any) -> Path:
@@ -671,7 +662,6 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
         laeuft = installing(settings, addon.id)
         status = str(eintrag.get("status") or ("bereit" if eintrag.get("installed") else ""))
         if status == "installiert gerade" and not laeuft:
-
             status, eintrag["message"] = "fehler", "Die Installation wurde unterbrochen."
         liste.append({
             "id": addon.id,
@@ -715,9 +705,6 @@ def public_view(settings: Any, pro: bool) -> dict[str, Any]:
         "user_mode": bool(getattr(settings, "vm_user_mode", False)),
         "active": active_ids(settings, pro),
     }
-
-
-
 
 
 def _konto(settings: Any) -> str:
@@ -806,7 +793,6 @@ def _install_job(settings: Any, addon: AddOn, on_done: Any = None) -> None:
                 "installiert Aquaticy nichts."
             )
         image = getattr(settings, "vm_desktop_image", "") or werkstatt.DESKTOP_IMAGE
-
 
         werkstatt.ensure_image(
             runtime, image, build=True,
@@ -923,9 +909,6 @@ def mark_installed(settings: Any, addon_id: str) -> None:
 def active_or_installed(settings: Any) -> list[str]:
     state = load_state(settings)
     return [key for key in CATALOG if (state.get(key) or {}).get("installed")]
-
-
-
 
 
 def _env_target(settings: Any) -> Path:
@@ -1057,8 +1040,6 @@ def _reset_profile(settings: Any, addon: AddOn) -> None:
     if fertig.returncode != 0:
         raise AddOnError("Abmelden hat nicht geklappt: " + fertig.stdout.strip()[-300:])
     if addon.programm == "webapp":
-
-
         fertig = werkstatt._runs(
             runtime.binary, "run", "--rm", "--network", "none", "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges", "--user", werkstatt.RUN_AS,
@@ -1110,9 +1091,6 @@ def _private_host(host: str) -> bool:
     with contextlib.suppress(ValueError):
         return not ipaddress.ip_address(host).is_global
     return False
-
-
-
 
 
 _throttle_lock = threading.Lock()
@@ -1233,7 +1211,6 @@ def github_call(
         except (ValueError, TypeError):
             return {"error": "number bitte als ganze Zahl."}
 
-
     if braucht_repo and (not REPO_RE.fullmatch(repo)
                          or any(t in (".", "..") for t in repo.split("/"))):
         return {"error": "repo bitte als 'besitzer/name'."}
@@ -1352,8 +1329,6 @@ def github_call(
     except (httpx.HTTPError, ValueError) as exc:
         return {"error": f"GitHub nicht erreichbar ({type(exc).__name__})."}
     except (AttributeError, TypeError, KeyError, IndexError):
-
-
         return {"error": "GitHub hat unerwartet geantwortet."}
     finally:
         if eigener:
@@ -1515,7 +1490,6 @@ def _github_action(hole: Any, action: str, repo: str, nummer: int, path: str, re
             "gesamt": treffer.get("total_count")}
 
 
-
 WMO = {
     0: "klar", 1: "überwiegend klar", 2: "teils bewölkt", 3: "bedeckt", 45: "Nebel",
     48: "Nebel mit Reif", 51: "leichter Nieselregen", 53: "Nieselregen",
@@ -1612,9 +1586,6 @@ def weather(place: str, days: Any = 3, *, client: httpx.Client | None = None) ->
         "tage": tage_liste,
         "quelle": "Open-Meteo (open-meteo.com), Daten u. a. vom DWD — CC BY 4.0",
     }
-
-
-
 
 
 TAGESSCHAU_PER_HOUR = 60
@@ -1790,7 +1761,7 @@ def holidays(country: str = "DE", year: Any = None, region: str = "",
     if not re.fullmatch(r"[A-Z]{2}", land):
         return {"error": "Land bitte als zweistelligen Code, z.B. DE, AT, CH."}
     try:
-        jahr = int(str(year)) if year not in (None, "") else time.localtime().tm_year
+        jahr = int(str(year)) if year not in (None, "") else zeit.jahr()
     except ValueError:
         return {"error": "Das Jahr ist keine Zahl."}
     if not 1990 <= jahr <= 2100:
@@ -1826,7 +1797,6 @@ def holidays(country: str = "DE", year: Any = None, region: str = "",
         })
     return {"land": land, "jahr": jahr, "bundesland": bundesland, "feiertage": tage,
             "quelle": "Nager.Date (date.nager.at)"}
-
 
 
 def _local(tag: str) -> str:
@@ -1889,7 +1859,6 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
         felder = {_local(kind.tag): kind for kind in element}
 
         def erstes(*namen: str, felder: dict[str, ET.Element] = felder) -> ET.Element | None:
-
             for name in namen:
                 if felder.get(name) is not None and _text(felder[name]):
                     return felder[name]
@@ -2001,9 +1970,6 @@ def read_feeds(
     for eintrag in alle:
         eintrag.pop("_zeit", None)
     return {"eintraege": alle[:grenze], "feeds": len(feeds), "probleme": probleme}
-
-
-
 
 
 APP_OF = {"whatsapp": "whatsapp", "signal": "signal", "blender": "blender"}

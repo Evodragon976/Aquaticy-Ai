@@ -52,6 +52,7 @@ from json import dumps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aquaticy import zeit
 from aquaticy.jsonutil import loads
 
 if TYPE_CHECKING:
@@ -60,19 +61,15 @@ if TYPE_CHECKING:
     from aquaticy.config import Settings
 
 
-
 NEEDED = 2
 
 LOG = logging.getLogger("aquaticy.aiguard")
 
 
-
 DECISION_TTL = 3600.0
 
 
-
 MIN_LENGTH = 12
-
 
 
 INSULT_REPEAT = 3
@@ -95,7 +92,6 @@ def _chat_key(chat: Any) -> str:
     gekuerzt gespeichert, aber ungekuerzt verglichen -- eine lange Kennung
     waere nie als gesperrt erkannt worden)."""
     return str(chat or "").strip()[:80]
-
 
 
 GUARD_VERSION = "2026-10-26"
@@ -136,7 +132,6 @@ class Ban:
         if rest < 3600:
             return f"noch {max(1, math.ceil(rest / 60))} Min."
 
-
         stunden_gesamt = math.ceil(rest / 3600)
         tage, stunden = divmod(stunden_gesamt, 24)
         if tage >= 1:
@@ -144,22 +139,7 @@ class Ban:
         return f"noch {stunden} Std."
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 KATEGORIEN = ("beleidigung", "jailbreak", "malware", "angriff", "rechtsbruch")
-
 
 
 _MUSTER_ARTEN = frozenset({"jailbreak", "angriff", "rechtsbruch"})
@@ -183,7 +163,6 @@ _SYNONYME = {
     "sprengstoff": "angriff", "bombe": "angriff", "cyberangriff": "angriff",
     "identitätsdiebstahl": "angriff", "sabotage": "angriff", "waffe": "angriff",
 
-
     "rechtsbruch": "rechtsbruch", "diebstahl": "rechtsbruch", "betrug": "rechtsbruch",
     "straftat": "rechtsbruch", "erpressung": "rechtsbruch", "nötigung": "rechtsbruch",
     "noetigung": "rechtsbruch", "koerperverletzung": "rechtsbruch",
@@ -195,7 +174,6 @@ _SYNONYME = {
     "bedrohung": "rechtsbruch", "geldwäsche": "rechtsbruch", "geldwaesche": "rechtsbruch",
     "fraud": "rechtsbruch", "theft": "rechtsbruch", "extortion": "rechtsbruch",
     "blackmail": "rechtsbruch",
-
 
     "verleumdung": "rechtsbruch", "üble nachrede": "rechtsbruch", "nachrede": "rechtsbruch",
     "freiheitsberaubung": "rechtsbruch", "entführung": "rechtsbruch",
@@ -245,11 +223,9 @@ _SYNONYME = {
 }
 
 
-
 _SYNONYME_NACH_LAENGE = tuple(sorted(
     ((k, v) for k, v in _SYNONYME.items() if len(k) >= 5 and k.isalpha()),
     key=lambda kv: -len(kv[0])))
-
 
 
 _KEINE_ARTEN_ENDUNGEN = (
@@ -284,7 +260,6 @@ def normalize_category(art: str) -> str:
         return _SYNONYME[wort]
     teile = [t for t in re.split(r"[^a-zäöüß]+", wort) if t]
 
-
     if _KEINE_ART.search(wort) or "".join(teile).endswith(_KEINE_ARTEN_ENDUNGEN):
         return ""
 
@@ -296,7 +271,6 @@ def normalize_category(art: str) -> str:
             if form in _SYNONYME:
                 return _SYNONYME[form]
 
-
     for teil in teile:
         if teil.endswith(_KEINE_ARTEN_ENDUNGEN):
             continue
@@ -305,26 +279,6 @@ def normalize_category(art: str) -> str:
                 if len(form) > len(schluessel) and form.endswith(schluessel):
                     return kategorie
     return ""
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 _BELEIDIGUNG_STUFEN: tuple[tuple[int, tuple[str, ...]], ...] = (
@@ -338,7 +292,6 @@ _BELEIDIGUNG_STUFEN: tuple[tuple[int, tuple[str, ...]], ...] = (
         "nervensaege", "pathetic", "trash", "garbage", "junk", "idiotisch", "lächerlich",
         "laecherlich", "ridiculous", "witzfigur", "lachnummer", "flasche", "nichtsnutz",
         "embarrassment", "disgrace", "clueless", "incompetent", "inkompetent",
-
 
         "lusche", "weichei", "warmduscher", "jammerlappen", "schwächling", "schwaechling",
         "feigling", "memme", "simp", "sheesh", "muppet", "twerp", "goober", "dummerchen",
@@ -415,8 +368,6 @@ _BELEIDIGUNG_STUFEN: tuple[tuple[int, tuple[str, ...]], ...] = (
 )
 
 
-
-
 _MEHRDEUTIG = frozenset({
     "esel", "kuh", "sau", "schwein", "ratte", "affe", "otto", "clown", "kasper", "lump",
     "pfeife", "pfosten", "fool", "nerd", "opfer", "lauch", "lappen", "zicke", "hure",
@@ -427,7 +378,6 @@ _MEHRDEUTIG = frozenset({
     "horst", "niete", "eumel", "memme", "simp", "spiesser", "spießer", "banause",
     "schnepfe", "trulla", "jerk",
 })
-
 
 
 _NAMEN = frozenset({"otto", "kasper", "mongo", "honk"})
@@ -455,7 +405,6 @@ def _gedehnt(wort: str) -> str:
     return re.sub(r"(.)\1+", r"\1", wort)
 
 
-
 _WURZELN: dict[str, tuple[int, str]] = {}
 for _stufe, _liste in _BELEIDIGUNG_STUFEN:
     for _grund in _liste:
@@ -478,7 +427,6 @@ _BELEIDIGUNG_WENDUNGEN: tuple[tuple[int, str], ...] = (
     (3, "hurensohn du"), (3, "stück scheiße"), (3, "stueck scheisse"), (3, "stück scheisse"),
     (3, "stück dreck"),
 )
-
 
 
 _NUR_ALLEIN = frozenset({"deine mutter", "your mom", "yo mama"})
@@ -512,7 +460,6 @@ _WENDUNGEN: tuple[tuple[int, re.Pattern[str]], ...] = tuple(
             + r"(?:(?:die|deine)\s+fresse|die\s+schnauze|dein\s+(?:[^\W\d_]+\s+)?maul|"
             r"'?s\s+maul)\b|\bhalt(?:'s|s|\s+'s)\s+maul\b|"
 
-
             r"^(?:(?:ey|hey|jetzt|einfach|mal|du)\s+)*schnauze(?:\s+(?:du|jetzt))?\s*$|"
             r"\bfuck\s+(?:this|that)\s+(?:bot|ai|ki|shit|app)\b|\byou\s+(?:really\s+)?suck\b|"
             r"\b(?:ai|ki|bot|aquaticy)\s+sucks\b|\bshut\s+the\s+fuck\s+up\b|^f+\s*u+$|"
@@ -527,8 +474,6 @@ _WENDUNGEN: tuple[tuple[int, re.Pattern[str]], ...] = tuple(
 
             r"^\s*bring\s+dich\s+(?:doch\s+)?um\b|(?<!\blet's\s)(?<!\blets\s)\bgo\s+die\b"
             r"(?!\s+(?:the|my|your|some|eggs?|it|them|this|that|hair|clothes|shirts?)\b)"),
-
-
 
         (4, r"\bich\s+(?:bring|bringe|werde|will|wird|mach|mache)\s+dich\s+"
             r"(?:[^\W\d_]+\s+){0,3}?(?:um|umbringen|t(?:ö|oe)ten|abstechen|erschie(?:ß|ss)en|"
@@ -555,13 +500,10 @@ _WENDUNGEN: tuple[tuple[int, re.Pattern[str]], ...] = tuple(
 )
 
 
-
-
 _WENDUNGEN_GESTAUCHT: tuple[tuple[int, re.Pattern[str]], ...] = tuple(
     (stufe, re.compile(re.sub(r"(?<!\\)([a-zäöüß])\1", r"\1+", muster.pattern), re.IGNORECASE))
     for stufe, muster in _WENDUNGEN
 )
-
 
 
 _PHRASEN_WOERTER: frozenset[str] = frozenset(
@@ -570,7 +512,6 @@ _PHRASEN_WOERTER: frozenset[str] = frozenset(
 ) | frozenset(w for _, wendung in _BELEIDIGUNG_WENDUNGEN for w in wendung.split() if len(w) >= 4
               ) | frozenset({"verpiss", "screw", "halts", "maul", "klappe", "fresse", "schnauze",
                              "piece", "shit", "shut", "kill", "yourself", "stirb", "verrecke"})
-
 
 
 _META = re.compile(
@@ -591,7 +532,6 @@ _ZITAT_ANLASS = re.compile(
     r"erkannt|erkennt|\bokay\b|\bok\b|erlaubt|verboten|drohung|\bmeme|spruch|slang|"
     r"ausdruck|jugendwort|suizid|selbstmord|suicid|\bhöflich|\bhoeflich|\bfrech|\bgemein|"
 
-
     r"anzeig|\bklage|\bverklag|polizei|\bgericht|\bstrafe|\bsue\b|\bpolice\b|"
     r"\bmeint\w*\s+(?:[^\W\d_]+\s+){0,3}mit\b|\bmeans?\b|\bmeant\b|\bmeaning\b",
     re.IGNORECASE,
@@ -606,11 +546,6 @@ _REDE = re.compile(
     r"geschrieben|textet|getextet|nannte|genannt|beschimpft|says|said|shouts|shouted|yells|"
     r"yelled|replies|replied|wrote|texted|called\s+me|told\s+me|gedroht|drohte|droht|"
     r"threatened|threatens)"
-
-
-
-
-
 
     r"(?:(?:\s+(?:zu\s+)?(?:mir|uns|me|us))?\s*[:,]|"
     r"(?:\s+(?!(?:dir|dich|euch|you|ihnen)\b)[^\W\d_]+){1,3}?\s*:)\s*[^\n.?!]*")
@@ -685,8 +620,6 @@ def _entleet(token: str) -> str:
     kern = token.rstrip("!?.,;:)")
     rest = token[len(kern):]
 
-
-
     neu = kern.translate(_LEET)
     buchstaben = len(re.findall(r"[^\W\d_]", kern))
     if re.fullmatch(r"(?:[^\W\d_]|[*#])+(?:['’][^\W\d_]+)*", neu) and (
@@ -705,8 +638,6 @@ def _punktiert(token: str) -> str:
             r"[^\W\d_]+(?:['’][^\W\d_]+)*", wort):
         return wort + treffer.group(2)
     return token
-
-
 
 
 _FUNKTIONSWOERTER = (
@@ -728,8 +659,6 @@ def _funktionswort(token: str) -> str:
     gedehnt = re.sub(r"(.)\1+", r"\1", kern)
     passend = _FUNKTION_GEDEHNT.get(gedehnt)
     return passend + token[len(kern):] if passend else token
-
-
 
 
 _GEBEUGT: frozenset[str] = frozenset(
@@ -798,8 +727,6 @@ def _sternchen_kern(token: str) -> str:
         return ohne
     teile = [re.escape(t) for t in re.split(r"[*#]+", kern)]
 
-
-
     luecken = [len(z) for z in re.findall(r"[*#]+", kern)]
     muster = re.compile("^" + "".join(
         teil + (rf"[^\W\d_]{{{luecken[i]},{luecken[i] + 1}}}" if i < len(luecken) else "")
@@ -807,23 +734,17 @@ def _sternchen_kern(token: str) -> str:
     passend = {grund for _, liste in _BELEIDIGUNG_STUFEN for grund in liste
                if len(grund) >= 4 and muster.match(grund)}
     if not passend:
-
         passend = {wort for wort in _GEBEUGT | set(_FUNKTIONSWOERTER) | _PHRASEN_WOERTER
                    if len(wort) >= 4 and muster.match(wort)}
     fluch = {w for w in ("fuck", "fick") if muster.match(w)}
     passend -= {"fuck", "fick"}
     if fluch and not passend:
-
         return "fuck" if "fuck" in fluch else "fick"
 
     gruppen = {w.replace("ö", "oe").replace("ä", "ae").replace("ü", "ue").replace("ß", "ss")
                for w in passend}
     if len(gruppen) == 1 and passend:
         return max(passend, key=lambda w: sum(z in "äöüß" for z in w))
-
-
-
-
 
     sterne = len(re.findall(r"[*#]", kern))
     if not passend and 1 <= sterne <= 2 and len(kern) >= 5:
@@ -840,8 +761,6 @@ def _sternchen_kern(token: str) -> str:
                 treffer_woerter.add(kandidat)
         if len(treffer_woerter) == 1:
             return treffer_woerter.pop()
-
-
 
     return token
 
@@ -893,10 +812,7 @@ def _vereinheitlicht(text: str) -> str:
     klein = unicodedata.normalize("NFKC", str(text or "")).lower()
     klein = _UNSICHTBAR.sub("", klein).translate(_DOPPELGAENGER)
 
-
     klein = _symbole_raus(_ohne_akzente(klein))
-
-
 
     for trenner in (r"[.\-_·/\\]+", r" +"):
         klein = re.sub(
@@ -904,10 +820,6 @@ def _vereinheitlicht(text: str) -> str:
             functools.partial(_zusammen, trenner), klein)
 
     klein = re.sub(r"(?<=[^\W\d_]) ?['’] ?(?=[^\W\d_](?:\s|$|[^\W\d_]))", "'", klein)
-
-
-
-
 
     rest = [_MAX_STERNCHEN]
 
@@ -932,9 +844,6 @@ def _vereinheitlicht(text: str) -> str:
     return " ".join(klein.split())
 
 
-
-
-
 _VORNE = ("voll", "ober", "riesen", "mega", "super", "ultra", "erz", "kack", "scheiß",
           "scheiss", "dreck", "drecks", "mist", "hohl", "dumm", "blöd", "bloed", "schwach",
           "flach", "hack", "knall", "doof", "dämlich", "daemlich", "stroh", "pimmel", "arsch",
@@ -943,7 +852,6 @@ _VORNE = ("voll", "ober", "riesen", "mega", "super", "ultra", "erz", "kack", "sc
 _HINTEN = ("kopf", "köpfe", "fresse", "gesicht", "birne", "zange", "horst", "batz", "nase",
            "backe", "bratze", "spaten", "pfosten", "pfeife", "tüte", "tuete", "sack", "bot",
            "ki", "brot", "hirn", "hose", "lappen", "vogel", "affe", "kuh", "sau", "schwein")
-
 
 
 _LOB_VORNE = frozenset({"super", "mega", "ultra"})
@@ -959,7 +867,6 @@ def _zusammensetzung(wort: str) -> int:
             continue
         rest = wort[len(vorne):].lstrip("s-")
 
-
         if vorne not in _LOB_VORNE and (
                 rest in _HINTEN or any(rest == h + e for h in _HINTEN
                                        for e in ("e", "en", "n", "s"))):
@@ -970,12 +877,7 @@ def _zusammensetzung(wort: str) -> int:
     return 0
 
 
-
-
 _ENDUNGEN_GEDEHNT = tuple((endung, _gedehnt(endung)) for endung in _ENDUNGEN)
-
-
-
 
 
 _KEINE_SCHIMPFWOERTER = frozenset({
@@ -1003,16 +905,10 @@ def _stufe_von(wort: str) -> tuple[int, str]:
         stamm = gedehnt[: len(gedehnt) - len(kurz)] if endung else gedehnt
         treffer = _WURZELN.get(stamm)
 
-
-
-
         if (treffer and (not endung or len(treffer[1]) > 3)
                 and _nicht_kuerzer(wort, treffer[1] + endung)):
             return treffer
     if wort.startswith("l") and len(wort) >= 5:
-
-
-
         ersatz = _stufe_von("i" + wort[1:])
         if ersatz[0] >= 2 and ersatz[1] not in _MEHRDEUTIG:
             return ersatz
@@ -1022,7 +918,6 @@ def _stufe_von(wort: str) -> tuple[int, str]:
 def _zusammengesetzt(klein: str) -> str:
     """ "arsch loch" -> "arschloch": ein getrenntes Schimpfwort wieder zusammen."""
     def verbunden(token: str) -> str:
-
         teile = re.split(r"[-_.·]+", token)
         if len(teile) < 2 or not all(t.isalpha() for t in teile):
             return token
@@ -1091,11 +986,8 @@ def _satzteil_stufe(teil: str, ganze_woerter: int, anrede: bool = False) -> int:
         mehrdeutig = grund in _MEHRDEUTIG
         vor = _ARTIKEL + r"\s+(?:[^\W\d_]+\s+)?" if mehrdeutig else _LUECKE
 
-
         ohne_artikel = mehrdeutig and grund not in _NAMEN
         gerichtet = (
-
-
 
             re.search(rf"^{_AUSRUF}{_ANREDE}\s+(?:{_FUELLWORT}\s+)*{_ADJEKTIV}{w}(?![-\w])"
                       + (_KEIN_VERB if mehrdeutig else ""), teil)
@@ -1138,19 +1030,11 @@ def _satzteil_stufe(teil: str, ganze_woerter: int, anrede: bool = False) -> int:
                 and not re.match(r"(?:der|die|das|den|the|this|dieser|diese|they|he|she|we|"
                                  r"er|sie|es|wir|they're|he's|she's)\b", teil))
 
-
             or (anrede and len(woerter) == 1 and wert >= 2 and not mehrdeutig)
         )
         if gerichtet:
             stufe = max(stufe, wert)
     return stufe
-
-
-
-
-
-
-
 
 
 _GANZ_ENDE = r"(?=[\s.!?…]*$)"
@@ -1166,7 +1050,6 @@ _DROHUNGEN_GANZ: tuple[tuple[int, re.Pattern[str]], ...] = tuple(
             r"your\s+(?:face|head|skull|teeth|legs?)\b"),
         (4, r"\bdu\s+bist\s+(?:so\s+)?gut\s+wie\s+tot" + _GANZ_ENDE),
         (4, r"\byou(?:'re|\s+are)\s+(?:so\s+)?dead\s+meat" + _GANZ_ENDE),
-
 
         (4, r"\bich\s+(?:z(?:ü|ue)nde|z(?:ü|ue)nd|werde|will)\s+(?:dir\s+)?(?:dein\w*|euer\w*)\s+"
             r"(?:haus|wohnung|auto|bude|laden)\s+(?:[^\W\d_]+\s+)?(?:an|anz(?:ü|ue)nden|"
@@ -1189,11 +1072,8 @@ _DROHUNGEN_GANZ: tuple[tuple[int, re.Pattern[str]], ...] = tuple(
             r"echt\s+|v(?:ö|oe)llig\s+|such\s+a\s+|a\s+|so\s+fucking\s+)?"
             r"(?:behindert|retarded|retard|spast|spasti|mongo)\b"),
 
-
     )
 )
-
-
 
 
 _KETTEN_BEIWERK = frozenset({
@@ -1242,7 +1122,6 @@ def _mit_kette(klein: str, stufe: int, ueber_wendung: bool) -> int:
         return stufe
     anzahl, hoechste, nur_schimpf = _kette(klein)
 
-
     if not stufe and nur_schimpf and hoechste >= 2:
         stufe = hoechste
     if stufe and anzahl >= 3:
@@ -1288,10 +1167,8 @@ def _insult_level(text: str, wendungen: tuple[tuple[int, re.Pattern[str]], ...] 
         return 0
     klein = _GEGENTEIL.sub(r"\1 ", klein)
     if _ZITAT_ANLASS.search(_ZITATE.sub(" ", klein)):
-
         klein = _ZITATE.sub(" ", klein)
     ganze_woerter = len(re.findall(r"[^\W\d_]+", klein))
-
 
     titel = _TITELZEILE.match(roh)
 
@@ -1301,7 +1178,6 @@ def _insult_level(text: str, wendungen: tuple[tuple[int, re.Pattern[str]], ...] 
     anrede = bool(re.search(rf"\b{_ANREDE}\b", klein))
     stufe = 0
     if not ueber_wendung:
-
         for wert, muster in _DROHUNGEN_GANZ:
             if muster.search(klein):
                 stufe = max(stufe, wert)
@@ -1312,13 +1188,10 @@ def _insult_level(text: str, wendungen: tuple[tuple[int, re.Pattern[str]], ...] 
     for nummer, teil in enumerate(teile):
         if (not teil or _META.search(teil) or _VERNEINTE_MEINUNG.search(teil)
                 or _ROLLE.search(teil)):
-
-
             continue
         folgt = teile[nummer + 1] if nummer + 1 < len(teile) else ""
         if re.match(r"(?:sagt|sagte|meint|meinte|schreibt|schrieb|ruft|rief|fragt|fragte|"
                     r"says|said|asks|asked|writes|wrote)\b", folgt):
-
             continue
         if not ueber_wendung:
             for wert, muster in wendungen:
@@ -1332,26 +1205,15 @@ def _insult_level(text: str, wendungen: tuple[tuple[int, re.Pattern[str]], ...] 
     return _mit_kette(klein, stufe, ueber_wendung)
 
 
-
-
-
-
-
-
-
-
-
 _HERABSETZEN: tuple[tuple[int, str], ...] = (
     (1, r"beleidig|beschimpf|runter\s*(?:mach|putz)|nieder\s*mach|verarsch|dissen|disse\b|"
         r"l(?:ä|ae)cherlich\s+(?:zu\s+)?mach|lustig\s+mach|(?:ä|ae)rger(?:n|e)?\b|"
         r"mach\w*\s+(?:[^\W\d_]+\s+){0,3}l(?:ä|ae)cherlich|(?:ü|ue)ber\s+[^.?!]{0,30}lustig|"
         r"insult|make\s+fun|mock|trash\s*talk|diss\b|roast"),
 
-
     (1, r"fertig\s*(?:zu\s*)?mach|fertigzumach|destroy"),
     (2, r"dem(?:ü|ue)tig|erniedrig|blo(?:ß|ss)\s*(?:zu\s*)?stell|"
         r"mobb|zur\s+sau\s+mach|klein\s*mach|humiliat|bully|"
-
 
         r"(?<=ihn\s)verletz|(?<=sie\s)verletz|(?<=ihn\s)kr(?:ä|ae)nk|(?<=sie\s)kr(?:ä|ae)nk|"
         r"(?:ihn|sie|ihm|ihr)\s+(?:[^\W\d_]+\s+){1,2}(?:verletz|kr(?:ä|ae)nk)"),
@@ -1420,8 +1282,6 @@ def _nahes_ziel(satz: str, stamm: str) -> bool:
     Auftrag zum Herabsetzen -- und damit ein Bann fuer einen Tag.
     """
     for verb in re.finditer(rf"\b(?:{stamm})", satz):
-
-
         englisch = bool(_ENGLISCHES_VERB.match(satz, verb.start()))
         vorn = None if englisch else re.search(rf"(?:\S+\s+){{0,{_NAEHE}}}$",
                                                satz[: verb.start()])
@@ -1430,8 +1290,6 @@ def _nahes_ziel(satz: str, stamm: str) -> bool:
         hinten = re.match(rf"(?:\s*\S+){{0,{_NAEHE}}}", satz[hinten_start:])
         fenster = []
         if _ZIEL.search(satz[verb.start(): hinten_start]):
-
-
             return True
         if vorn:
             fenster.append((vorn.start(), satz[vorn.start(): verb.start()]))
@@ -1442,20 +1300,15 @@ def _nahes_ziel(satz: str, stamm: str) -> bool:
                 davor = satz[: anfang + ziel.start()]
                 danach = satz[anfang + ziel.end():]
 
-
                 vorne = nummer == 0 and vorn is not None
                 if re.match(r"['’]s\b", danach) or (vorne and _KEIN_OBJEKT.search(davor)):
                     continue
-
-
-
 
                 zwischen = stueck[ziel.end():] if vorne else stueck[: ziel.start()]
                 if len(zwischen.split()) > (2 if vorne else 1):
                     continue
                 return True
     return False
-
 
 
 _ABWEHR = re.compile(
@@ -1472,7 +1325,6 @@ _ABWEHR = re.compile(
     r"\bis\s+(?:this|that|it)\s+(?:bullying|an?\s+insult)|"
     r"strafbar|bedeut|\bwarum\b|\bwhy\b|disstrack\s+von|\bschach|\bspiel|mario|"
 
-
     r"\bchess\b|\bgame\b|\bmatch\b|geburtstag|birthday|\bparty\b|hochzeit|wedding|"
     r"debatte|\bdebate|diskussion|wettkampf|turnier|tournament|"
 
@@ -1485,7 +1337,6 @@ _ABWEHR = re.compile(
     r"harmlos|streich|\bprank|aprilscherz|1\.\s*april|"
     r"nicht\s+(?:mehr\s+)?(?:(?:ü|ue)ber\s+)?[^.?!]{0,30}lustig|\bbeibring|\bbei\s*zu\s*bringen",
 )
-
 
 
 _WETTKAMPF = re.compile(
@@ -1554,11 +1405,8 @@ def demeaning_request(text: str, previous: str = "") -> int:
     if previous and _enthaelt_schimpfwort(previous) and (
             _NOCH_MEHR.search(ohne_zitat) and (_ENTGEGNUNG.search(ohne_zitat)
                                                or _ZIEL.search(ohne_zitat))):
-
-
         return 1
     stufe = 0
-
 
     for satz in re.split(r"[.!?\n;]+", ohne_zitat):
         if not _BITTE.search(satz) or _ABWEHR.search(satz) or _WETTKAMPF.search(satz):
@@ -1568,23 +1416,14 @@ def demeaning_request(text: str, previous: str = "") -> int:
                 stufe = max(stufe, wert)
         if re.search(r"\b(?:call(?:ing|s)?|nenn\w*|bezeichn\w*)\s+(?:him|her|them|ihn|sie)\b",
                      satz) and _enthaelt_schimpfwort(satz):
-
             stufe = max(stufe, 1)
         if _ABSICHT.search(satz):
             stufe = max(stufe, 2)
         if not stufe and re.search(
                 rf"{_HART.pattern}\s+(?:[^\W\d_]+\s+){{0,2}}{_ENTGEGNUNG.pattern}", satz
         ) and not _SACHLICH.search(satz):
-
             stufe = 1
     return stufe
-
-
-
-
-
-
-
 
 
 _SECURITY_TOPIC = re.compile(
@@ -1606,12 +1445,10 @@ _SECURITY_TOPIC = re.compile(
     r"cybersecurity|cyber[\s-]?security|cyberangriff|cyberattacke|"
     r"hacking|\bhacker\b|gehackt|"
 
-
     r"hack(?:en|e|st|t)?\s+(?:ich\s+|man\s+|du\s+|wir\s+)?"
     r"(?:in|into|einen?|meinen?|deinen?|fremde[nrs]?|das|die|den|"
     r"ein\s+system|server|account|konto|wlan|wifi|router|netzwerk|handy|passwort|kamera|"
     r"webcam|smartphone|instagram|whatsapp|facebook|e-?mail)|"
-
 
     r"(?:passw(?:o|ö|oe)rt(?:er)?|hash(?:es)?|wlan|wifi|lizenz|software|verschl(?:ü|ue)sselung|"
     r"anmeldung|login|2fa|zwei[\s-]?faktor|authentifiz\w*|passwortschutz)"
@@ -1625,7 +1462,6 @@ _SECURITY_TOPIC = re.compile(
     r"fremde[ns]?\s+(?:konto|account|wlan|handy|ger(?:ä|ae)t)\s+(?:knacken|hacken|(?:ü|ue)bernehmen))",
     re.IGNORECASE,
 )
-
 
 
 _SECURITY_HARMLOS = re.compile(
@@ -1668,10 +1504,6 @@ def security_topic(text: str) -> bool:
     if not klein:
         return False
 
-
-
-
-
     rest = _ohne_harmlos(klein)
     return bool(_SECURITY_TOPIC.search(rest))
 
@@ -1679,7 +1511,6 @@ def security_topic(text: str) -> bool:
 @dataclass(frozen=True, slots=True)
 class Action:
     """Was Ai-guard mit einem Vorfall tut."""
-
 
     kind: str
 
@@ -1726,8 +1557,6 @@ def decide(category: str, severity: int, prior: int = 0) -> Action:
         return Action("none", category=art)
 
     if art == "beleidigung":
-
-
         return {
             1: Action("chat", category=art, reason="unangemessene Sprache"),
             2: Action("ban", 1, art, "schwere Beleidigung"),
@@ -1736,15 +1565,12 @@ def decide(category: str, severity: int, prior: int = 0) -> Action:
         }[stufe]
 
     if art == "malware":
-
-
         return {
             1: Action("ban", 4, art, "Versuch, Schadsoftware zu erstellen"),
             2: Action("ban", 14, art, "Versuch, Schadsoftware zu erstellen"),
             3: Action("ban", 30, art, "Versuch, Schadsoftware zu bauen und auszuführen"),
             4: Action("ban", 0, art, "wiederholter Bau von Schadsoftware"),
         }[stufe]
-
 
     if prior + 1 < NEEDED:
         return Action("none", category=art, reason="einzelner Anhaltspunkt")
@@ -1753,9 +1579,6 @@ def decide(category: str, severity: int, prior: int = 0) -> Action:
              "rechtsbruch": "wiederholte schwere Rechtsverstöße",
              "jailbreak": "wiederholte Versuche, die Schutzregeln auszuhebeln"}[art]
     return Action("ban", dauer, art, grund)
-
-
-
 
 
 JUDGE_SCHEMA: dict[str, Any] = {
@@ -1845,7 +1668,6 @@ def _ask_one(prompt: str, settings: Settings, model: str) -> str:
     try:
         response = aufruf(response_format=schema)
     except Exception as exc:
-
         if not schema_retry_useful(exc):
             LOG.warning("Ai-guard: %s", error_text(exc, settings, model))
             raise
@@ -1938,13 +1760,10 @@ def classify(
     from aquaticy import smalltalk
 
     if smalltalk.art_von(text) is not None:
-
         return False, ""
     from aquaticy.guardrails import own_data_request
 
     if own_data_request(text):
-
-
         return False, ""
     with _cache_lock:
         generation = _cache_generation
@@ -1958,8 +1777,6 @@ def classify(
             return bekannt[1]
     frage = ask or _ask_model
     from aquaticy.system import retirement_generation
-
-
 
     retirement = retirement_generation()
     try:
@@ -1975,24 +1792,10 @@ def classify(
     return urteil
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 ANSWER_REFUSAL = (
     "Dabei kann ich nicht helfen. Dieser Inhalt ist nicht angemessen, deshalb habe ich "
     "meine Antwort zurückgezogen. Bei etwas anderem helfe ich gern weiter."
 )
-
 
 
 _ANTWORT_STICHWORTE = re.compile(
@@ -2003,7 +1806,6 @@ _ANTWORT_STICHWORTE = re.compile(
     r"hasspredigt|hate\s+speech|schadsoftware|schadcode|ransomware|keylogger|trojaner|"
     r"\bmalware|exploit|phishing|ddos|brute[\s-]?force|drogen\s*herstell|drug\s+synthesis|"
     r"\bmeth\b|amphetamin\s*herstell|\bgift\b|giftgas|nervengas|"
-
 
     r"bomb(?:e|en|s)?\b|\w*waffe(?!l)|\bguns?\b|firearm|schie(?:ß|ss)pulver|gunpowder|"
     r"fentanyl|carfentanil|\bricin|\brizin|\bsarin|\bsoman\b|\btabun\b|\bvx\b|novi?chok|"
@@ -2105,9 +1907,6 @@ def answer_problem(
         return ""
     fliess = _ohne_code_und_zitate(roh)[:20000]
 
-
-
-
     if insult_level(_SPRECHER.sub(" ", fliess)) >= 2:
         return "Beleidigung"
 
@@ -2150,9 +1949,6 @@ def answer_problem(
     return urteil[1] if urteil and urteil[0] else ""
 
 
-
-
-
 def _norm_ip(ip: str) -> str:
     """Eine Adresse in einheitlicher Schreibweise -- oder "" wenn keine."""
     try:
@@ -2179,7 +1975,6 @@ def _muster_anzahl(conn: Any, user_id: str, jetzt: float) -> int:
     return int(anzahl)
 
 
-
 _BANN_STUFEN = (1, 7, 30, 0)
 
 
@@ -2202,7 +1997,6 @@ class AiGuard:
         self.db_path = Path(db_path)
         self._lock = threading.Lock()
         from aquaticy.privacy import ServerSecrets
-
 
         self._secrets = ServerSecrets(self.db_path.parent)
         self._setup()
@@ -2260,7 +2054,6 @@ class AiGuard:
                 """
             )
 
-
             spalten_bans = {str(r["name"]) for r in conn.execute("PRAGMA table_info(aiguard_bans)")}
             if "until" not in spalten_bans:
                 conn.execute("ALTER TABLE aiguard_bans ADD COLUMN until REAL NOT NULL DEFAULT 0")
@@ -2273,7 +2066,6 @@ class AiGuard:
                 conn.execute("ALTER TABLE aiguard_flags ADD COLUMN severity INTEGER NOT NULL "
                              "DEFAULT 0")
 
-
             for zeile in conn.execute("SELECT subject FROM aiguard_bans "
                                       "WHERE subject LIKE 'ip:%' AND subject NOT LIKE 'ip:#%'"
                                       ).fetchall():
@@ -2282,7 +2074,6 @@ class AiGuard:
                     conn.execute("UPDATE OR IGNORE aiguard_bans SET subject=? WHERE subject=?",
                                  (neu, zeile[0]))
                 conn.execute("DELETE FROM aiguard_bans WHERE subject=?", (zeile[0],))
-
 
     def note(self, user_id: str, kind: str, detail: str = "", chat: str = "",
              *, enforce: bool = True) -> bool:
@@ -2309,7 +2100,6 @@ class AiGuard:
             ).fetchone()
             neu = schon is None
             if neu:
-
                 art = normalize_category(kind)
                 cur.execute(
                     "INSERT INTO aiguard_flags (user_id, at, kind, detail, chat, category) "
@@ -2318,11 +2108,6 @@ class AiGuard:
                      art if art in _MUSTER_ARTEN else ""),
                 )
 
-
-
-
-
-
             anzahl = _muster_anzahl(cur, user_id, time.time())
             erreicht = int(anzahl) >= NEEDED
             gesperrt = erreicht and enforce
@@ -2330,14 +2115,11 @@ class AiGuard:
                 grund = f"{int(anzahl)} Anhaltspunkte für Missbrauch (zuletzt: {kind})"
                 cur.execute(
 
-
-
                     "INSERT INTO aiguard_bans (subject, at, reason, by) VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(subject) DO UPDATE SET at=excluded.at, reason=excluded.reason, "
                     "by=excluded.by, until=0 WHERE aiguard_bans.until > 0",
                     (f"user:{user_id}", time.time(), "Ai-guard: " + grund, "ai-guard"),
                 )
-
 
         if gesperrt:
             LOG.warning("Ai-guard: Konto %s gesperrt — %s", user_id, kind)
@@ -2379,18 +2161,13 @@ class AiGuard:
         jetzt = time.time()
         chat = _chat_key(chat)
 
-
-
         with self._lock, self._connect() as conn:
             schon = conn.execute(
                 "SELECT 1 FROM aiguard_flags WHERE user_id=? AND category=? AND chat=? "
                 "AND chat!=''", (user_id, art, chat),
             ).fetchone()
 
-
-
             vorher = _muster_anzahl(conn, user_id, jetzt)
-
 
             (schwere_vorher,) = conn.execute(
                 "SELECT COUNT(*) FROM aiguard_flags WHERE user_id=? AND category=? "
@@ -2398,9 +2175,6 @@ class AiGuard:
             ).fetchone()
             wiederholt = False
             if art == "beleidigung" and stufe == 1:
-
-
-
                 (leichte,) = conn.execute(
                     "SELECT COUNT(*) FROM aiguard_flags WHERE user_id=? AND category=? "
                     "AND at>?", (user_id, "beleidigung", jetzt - INSULT_WINDOW),
@@ -2414,12 +2188,10 @@ class AiGuard:
                     (user_id, jetzt, art, _sauber(detail or art, 200), chat, art, stufe),
                 )
 
-
         if schon is not None and art in _MUSTER_ARTEN:
             return Action("none", category=art, reason="schon vermerkt")
         massnahme = decide(art, stufe, int(vorher))
         if reason and massnahme.kind != "none":
-
             massnahme = Action(massnahme.kind, massnahme.days, art, _sauber(reason, 120))
         if wiederholt and massnahme.kind == "ban":
             massnahme = Action("ban", massnahme.days, art, "wiederholte Beleidigungen")
@@ -2472,7 +2244,6 @@ class AiGuard:
         with self._connect() as conn:
             return _muster_anzahl(conn, str(user_id), time.time())
 
-
     def ban_user(self, user_id: str, reason: str = "", by: str = "terminal",
                  until: float = 0.0) -> None:
         self._ban(f"user:{user_id!s}", reason or "Von Hand gesperrt", by, until)
@@ -2501,9 +2272,6 @@ class AiGuard:
                       until)
 
     def _ban(self, subject: str, reason: str, by: str, until: float = 0.0) -> None:
-
-
-
         with self._lock, self._connect() as conn:
             conn.execute(
                 "INSERT INTO aiguard_bans (subject, at, reason, by, until) VALUES (?, ?, ?, ?, ?) "
@@ -2514,7 +2282,6 @@ class AiGuard:
                 (subject, time.time(), _sauber(reason, 200), _sauber(by, 60),
                  float(until or 0.0)),
             )
-
 
     def lock_chat(self, user_id: str, chat: str, reason: str = "") -> None:
         """Sperrt genau einen Chat -- neue Chats bleiben moeglich."""
@@ -2606,14 +2373,12 @@ class AiGuard:
         return [_ban_of(r) for r in rows]
 
 
-
 BANNED_MESSAGE = (
     "Dieses Konto ist gesperrt. Ai-guard hat einen schweren Verstoß gegen die "
     "Nutzungsregeln erkannt. Oben links unter der Versionsnummer steht unter „Info“, "
     "warum und wie lange. Wenn du das für einen Irrtum hältst, wende dich an den "
     "Betreiber dieser Installation."
 )
-
 
 
 DEMEANING_REASON = "Auftrag, jemanden zu beleidigen oder herabzusetzen"
@@ -2633,8 +2398,6 @@ CHAT_LOCKED_MESSAGE = (
     "In diesem Chat kannst du nicht mehr schreiben — Ai-guard hat ihn wegen "
     "unangemessener Sprache gesperrt. Du kannst einen neuen Chat beginnen."
 )
-
-
 
 
 VM_SWITCH_MESSAGE = (
@@ -2660,7 +2423,7 @@ def ban_info(ban: Ban | None, now: float | None = None) -> dict[str, Any]:
         dauer, bis = "dauerhaft", ""
     else:
         dauer = ban.remaining_text(now)
-        bis = time.strftime("%d.%m.%Y, %H:%M Uhr", time.localtime(ban.until))
+        bis = zeit.text(ban.until, "%d.%m.%Y, %H:%M Uhr")
     return {"banned": True, "reason": grund, "duration": dauer, "until": bis,
             "permanent": ban.until <= 0, "what_to_do": WHAT_TO_DO}
 

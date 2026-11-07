@@ -42,10 +42,6 @@ NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 
-
-
-
-
 OVERPASS_MIRRORS = (
     OVERPASS_URL,
     "https://overpass.kumi.systems/api/interpreter",
@@ -53,20 +49,13 @@ OVERPASS_MIRRORS = (
 )
 
 
-
-
-
 OVERPASS_TRY_SECONDS = 11.0
-
 
 
 GEOCODE_TRY_SECONDS = 8.0
 
 
-
 GEOCODE_TRIES = 2
-
-
 
 
 MIN_INTERVAL = 1.05
@@ -77,8 +66,6 @@ _zuletzt = 0.0
 MAX_PLACES = 30
 MAX_RADIUS_M = 15000
 DEFAULT_RADIUS_M = 4000
-
-
 
 
 CATEGORIES: dict[str, str] = {
@@ -171,8 +158,6 @@ def _warte() -> None:
 
 
 def _client(user_agent: str, timeout: float) -> httpx.Client:
-
-
     from aquaticy import netguard
 
     return netguard.guarded_client(
@@ -194,8 +179,6 @@ def geocode(place: str, user_agent: str, timeout: float = 15.0) -> tuple[float, 
     frist = min(timeout, GEOCODE_TRY_SECONDS)
     treffer: Any = None
     letzter: Exception | None = None
-
-
 
     for _ in range(GEOCODE_TRIES):
         _warte()
@@ -225,7 +208,6 @@ def geocode(place: str, user_agent: str, timeout: float = 15.0) -> tuple[float, 
         return lat, lon, str(erster.get("display_name", place))
     except (KeyError, TypeError, ValueError) as exc:
         raise PlacesError("Die Ortssuche gab etwas Unerwartetes zurueck.") from exc
-
 
 
 _ENDUNGEN = ("", "s", "e", "es", "n", "en", "er", "ern", "ei", "erei", "laden", "läden",
@@ -269,7 +251,6 @@ def _filter_for(what: str) -> str:
     if gefunden:
         return gefunden
 
-
     sicher = "".join(zeichen for zeichen in text if zeichen.isalnum() or zeichen in " -äöüß")
     sicher = sicher.strip()[:40]
     if not sicher:
@@ -300,9 +281,6 @@ def find_places(
 
     frist = min(timeout, OVERPASS_TRY_SECONDS)
 
-
-
-
     abfrage = (
         f"[out:json][timeout:{max(5, int(frist))}];"
         f"{_filter_for(what)}(around:{radius},{lat},{lon});"
@@ -319,9 +297,6 @@ def find_places(
                 geladen = antwort.json()
             fehler = _overpass_fehler(geladen)
             if fehler:
-
-
-
                 raise PlacesError(fehler)
             daten = geladen
             break

@@ -64,17 +64,13 @@ APPS: dict[str, str] = {
     "terminal": "Terminal",
     "grafik": "Bildbearbeitung (GIMP)",
 
-
     "whatsapp": "WhatsApp Web (Add-on)",
     "signal": "Signal Desktop (Add-on)",
     "blender": "Blender (Add-on)",
 }
 
 
-
 MESSENGER_HOSTS = frozenset({"web.whatsapp.com", "web.telegram.org"})
-
-
 
 
 MESSENGER_TEXT_RE = re.compile(
@@ -87,7 +83,6 @@ def messenger_host(host: str) -> bool:
     """Ist *host* eine Messenger-Web-App -- egal wie geschrieben?"""
     name = (host or "").strip().rstrip(".").lower()
     return any(name == ziel or name.endswith("." + ziel) for ziel in MESSENGER_HOSTS)
-
 
 
 READ_ONLY_KEYS = frozenset({
@@ -154,7 +149,6 @@ REFUSE: dict[str, tuple[str, str]] = {
 }
 
 
-
 TRIGGER_KEYS = frozenset({"Return", "KP_Enter", "ISO_Enter", "Linefeed", "space"})
 
 
@@ -178,11 +172,6 @@ NO_VISION = (
 
 class DesktopError(RuntimeError):
     """Der Desktop ist nicht bedienbar (kein User mode, kein Bildmodell ...)."""
-
-
-
-
-
 
 
 _DIGIT_RUN = re.compile(r"[0-9]+(?:[ -][0-9]+)*")
@@ -276,9 +265,6 @@ def payment_data(text: str) -> bool:
         return True
     gross = text.upper()
     return any(_iban_at(gross, treffer.start()) for treffer in _IBAN_START.finditer(gross))
-
-
-
 
 
 _RASTER = (
@@ -426,9 +412,6 @@ def ask_vision(image: bytes, prompt: str, settings: Any, max_tokens: int = 600) 
     return str(response.choices[0].message.content or "").strip()
 
 
-
-
-
 Emit = Callable[..., None]
 Ask = Callable[[str, list[str]], str]
 
@@ -460,10 +443,6 @@ class Desktop:
         self._emit_hook = emit
         self._vision = vision
 
-
-
-
-
     def see(self, image: bytes, prompt: str) -> str:
         """Fragt das Vision-Modell zu einem Bildschirmfoto."""
         return self._see(image, prompt)
@@ -472,7 +451,6 @@ class Desktop:
                    timeout: float = 60) -> dict[str, Any]:
         """Ruft das Hilfsprogramm des Desktops auf (click, type, key ...)."""
         return self._helper(*args, stdin=stdin, timeout=timeout)
-
 
     def _emit(self, event: str, **payload: Any) -> None:
         if self._emit_hook is not None:
@@ -532,7 +510,6 @@ class Desktop:
             "was": what,
         }
 
-
     def _messenger(self) -> tuple[str, dict[str, str]]:
         """Ist vorn ein Messenger? Returns: (Name, Rechte) oder ("", {})."""
         from aquaticy.addons import messenger_of, messenger_rights
@@ -561,7 +538,6 @@ class Desktop:
         antwort = parse_object(self._see(self.box.screenshot(), chat_prompt())) or {}
         chat = str(antwort.get("chat") or "").strip()[:80]
         if antwort.get("gruppe") is not False:
-
             return self._refuse("messenger_gruppe", f"{name}: {chat or 'unklarer Chat'}"), ""
         return None, chat
 
@@ -572,7 +548,6 @@ class Desktop:
         except (TypeError, ValueError, OverflowError):
             return None
         return number if 0 <= number < upper else None
-
 
     def screenshot(self) -> bytes:
         return self.box.screenshot()
@@ -593,7 +568,6 @@ class Desktop:
 
     def windows(self) -> dict[str, Any]:
         return self._helper("windows", timeout=20)
-
 
     def click(
         self,
@@ -673,9 +647,6 @@ class Desktop:
             return self._refuse("zahlung", "Zahlungsdaten im Text")
         ausserhalb = sorted({zeichen for zeichen in text if ord(zeichen) > 0xFFFF})
         if ausserhalb:
-
-
-
             return {
                 "error": (
                     "Diese Zeichen kann die virtual machine nicht eintippen: "
@@ -685,8 +656,6 @@ class Desktop:
                 )
             }
         if MESSENGER_TEXT_RE.search(text):
-
-
             return self._refuse("messenger_browser", "Adresse getippt")
         messenger, rechte = self._messenger()
         if messenger:
@@ -704,9 +673,6 @@ class Desktop:
             return self._refuse("zahlung", "Zahlungsfeld")
         if art in ("captcha", "anmelden"):
             return self._refuse(art, "Eingabefeld")
-
-
-
 
         if "\n" in text and feld not in ("dokument", "terminal"):
             return {
@@ -742,8 +708,6 @@ class Desktop:
             self._messenger() if any(t not in READ_ONLY_KEYS for t in liste) else ("", {})
         )
         if messenger and rechte.get("zugriff") != "schreiben":
-
-
             fremd = [taste for taste in liste if taste not in READ_ONLY_KEYS]
             if fremd:
                 return self._refuse("messenger_lesen", f"{messenger}: {' '.join(fremd)}")
@@ -802,8 +766,6 @@ class Desktop:
                     "Nutzer selbst: Einstellungen -> virtual machine -> Add-ons."
                 )}
             if ziel and app != "blender":
-
-
                 return {"error": f"{APPS[app]} oeffnet sich ohne target."}
         if ziel:
             if app == "browser":

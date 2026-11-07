@@ -40,7 +40,6 @@ SESSION_SECONDS = 5 * 3600
 WEEK_TOKENS = 2_000_000
 
 
-
 PRO_SESSION_TOKENS = 533_333
 PRO_WEEK_TOKENS = 4_000_000
 
@@ -138,9 +137,6 @@ class Quota:
         self.account_id = str(account_id)
         self.created_at = float(created_at or 0.0)
 
-
-
-
         self.plan = "pro" if str(plan or "").lower() == "pro" else "normal"
         self.factor = max(1.0, float(factor or 1.0))
         self._lock = _lock_for(self.db_path)
@@ -184,7 +180,6 @@ class Quota:
                 );
                 """
             )
-
 
     def _session_start(self, conn: sqlite3.Connection, now: float) -> float | None:
         row = conn.execute(
@@ -244,7 +239,6 @@ class Quota:
                 (self.account_id, now - KEEP_SECONDS),
             )
 
-
     def reserve(self, tokens: int, model: str = "", now: float | None = None) -> int:
         """Prueft und bucht in EINER Transaktion -- Returns: die Nummer der Buchung.
 
@@ -279,9 +273,6 @@ class Quota:
                            self.week_tokens - self._sum(conn, woche_anfang))
                 zeile = None
 
-
-
-
                 if frei <= 0 or bedarf > frei:
                     conn.execute("ROLLBACK")
                 else:
@@ -299,8 +290,6 @@ class Quota:
             finally:
                 conn.close()
         if zeile is None:
-
-
             self.check(bedarf, now)
             raise QuotaExceeded(
                 "Der Rest deines Kontingents reicht für diese Anfrage nicht mehr. Eine "
@@ -347,7 +336,6 @@ class Quota:
                     "AND account_id = ?",
                     (tokens, str(model or "")[:120], int(reservation), self.account_id),
                 )
-
 
     def status(self, now: float | None = None) -> dict[str, Any]:
         """Der Stand in Prozent und Uhrzeiten -- das, was der Browser zeigt.
@@ -433,7 +421,6 @@ def when_phrase(text: str) -> str:
 def public(stand: dict[str, Any]) -> dict[str, Any]:
     """Der Stand ohne Tokenzahlen -- so geht er an den Browser."""
     return {key: wert for key, wert in stand.items() if not key.startswith("_")}
-
 
 
 UNLIMITED: dict[str, Any] = {"limited": False}

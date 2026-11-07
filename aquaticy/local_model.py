@@ -61,9 +61,6 @@ class LocalModel:
         return self.tools and self.vision
 
 
-
-
-
 DUAL_MODELS: tuple[LocalModel, ...] = (
     LocalModel("gemma4:12b", 6.6, 10, "Vision + Werkzeuge, guter Allrounder", vision=True),
     LocalModel("qwen3-vl:8b", 6.1, 12, "Vision + Werkzeuge, sehr langer Kontext", vision=True),
@@ -84,10 +81,6 @@ LOCAL_MODELS: tuple[LocalModel, ...] = (
 DEFAULT_MODEL = LOCAL_MODELS[0]
 
 
-
-
-
-
 VISION_MODELS: tuple[LocalModel, ...] = (
     LocalModel(
         "gemma3:4b", 3.3, 6, "Offizielles Google-Modell, sieht gut", tools=False, vision=True
@@ -106,10 +99,6 @@ VISION_MODELS: tuple[LocalModel, ...] = (
 DEFAULT_VISION_MODEL = VISION_MODELS[0]
 
 
-
-
-
-
 SUBAGENT_MODELS: tuple[LocalModel, ...] = (
     LocalModel("qwen3:1.7b", 1.4, 3, "Klein und flink, ruft zuverlässig Werkzeuge auf"),
     LocalModel("qwen2.5:3b", 1.9, 4, "Etwas größer, etwas gründlicher"),
@@ -123,9 +112,6 @@ DEFAULT_SUBAGENT_MODEL = SUBAGENT_MODELS[0]
 
 class LocalModelError(RuntimeError):
     """Etwas an der lokalen Einrichtung ist schiefgegangen."""
-
-
-
 
 
 def ollama_binary() -> str | None:
@@ -151,9 +137,6 @@ def install_command() -> list[str] | None:
     """
     system = platform.system()
     if system == "Linux":
-
-
-
         return ["sh", "-c", 'set -eu\n'
                 'installer=$(mktemp)\n'
                 'trap \'rm -f "$installer"\' EXIT\n'
@@ -226,8 +209,6 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
 
     from aquaticy.ollama_setup import PARALLEL, _parallel
 
-
-
     try:
         parsed = urlsplit(base_url)
         if (parsed.scheme != "http" or parsed.hostname not in ("localhost", "127.0.0.1", "::1")
@@ -246,8 +227,6 @@ def start_server(base_url: str = DEFAULT_OLLAMA_URL, wait_seconds: float = 20.0)
     binary = ollama_binary()
     if binary is None:
         return False
-
-
 
     extra: dict[str, Any] = {}
     if platform.system() == "Windows":
@@ -297,9 +276,6 @@ def _default_runner(command: list[str]) -> int:
         return subprocess.run(command, check=False, timeout=1800).returncode
     except (OSError, subprocess.SubprocessError):
         return 1
-
-
-
 
 
 def _pull_http(name: str, base_url: str) -> Iterator[str]:
@@ -391,8 +367,6 @@ def pull_model(
                 process.wait()
         if process.stdout is not None:
             process.stdout.close()
-
-
 
 
 def local_name(model_id: str) -> str:
@@ -518,7 +492,6 @@ def free_memory(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
         if use.active:
             return []
 
-
         return [name for name in loaded_models(base_url) if unload_model(name, base_url)]
 
 
@@ -530,10 +503,6 @@ def model_size_gb(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> float | None
             if isinstance(size, (int, float)) and size > 0:
                 return round(size / 1_000_000_000, 1)
     return None
-
-
-
-
 
 
 CAPABILITY_TTL = 600.0
@@ -549,7 +518,6 @@ MAX_MODEL_INFO_BYTES = 8 * 1024 * 1024
 
 _FEHLT: dict[tuple[str, str, str], tuple[float, set[str]]] = {}
 _CAPS_LOCK = threading.Lock()
-
 
 
 _FEHLT_RE = re.compile(r"does not support (thinking|tools)", re.IGNORECASE)
@@ -579,8 +547,6 @@ def _show(name: str, base_url: str = DEFAULT_OLLAMA_URL,
             roh = loads(read_response(antwort, MAX_MODEL_INFO_BYTES, frist)) \
                 if antwort.status_code == 200 else None
         if isinstance(roh, dict):
-
-
             info = roh.get("model_info")
             arch = info.get("general.architecture") if isinstance(info, dict) else None
             aufbau: dict[str, Any] = {}
@@ -630,10 +596,6 @@ def ollama_capabilities(name: str, base_url: str = DEFAULT_OLLAMA_URL,
             _CAPS.clear()
         _CAPS[schluessel] = (jetzt, faehig)
     return faehig
-
-
-
-
 
 
 CONTEXT_RAM_BYTES = 5 * 1024 ** 3
@@ -689,7 +651,6 @@ def kv_bytes_per_token(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> int:
         else [_zahl(koepfe)] * schichten
     if len(heads) != schichten or not all(heads):
         return 0
-
 
     kv_heads = (kv if isinstance(kv, list) and len(kv) == schichten else
                 [(_zahl(kv) or h) if not isinstance(kv, list) else h for h in heads])
@@ -772,9 +733,6 @@ def can(model_id: str, faehigkeit: str, base_url: str = DEFAULT_OLLAMA_URL,
     return None if faehig is None else faehigkeit in faehig
 
 
-
-
-
 PROBE_TOOL = {
     "type": "function",
     "function": {
@@ -840,9 +798,6 @@ def verify_tool_calling(model_id: str, api_base: str = DEFAULT_OLLAMA_URL) -> tu
     elif isinstance(first, dict):
         name = str(first.get("function", {}).get("name", ""))
     return True, f"Werkzeug aufgerufen: {name or '(ohne Namen)'}"
-
-
-
 
 
 def total_memory_gb() -> float | None:
@@ -1059,10 +1014,6 @@ def gpu_hint() -> str:
     return line[0].strip() if line else ""
 
 
-
-
-
-
 RESOURCE_MARKERS = (
     "model runner has unexpectedly stopped",
     "resource limitations",
@@ -1070,7 +1021,6 @@ RESOURCE_MARKERS = (
     "cudamalloc",
     "insufficient memory",
     "failed to allocate",
-
 
     "requires more system memory",
     "more memory than is available",
@@ -1081,7 +1031,6 @@ def resource_problem(detail: str) -> bool:
     """Deutet die Fehlermeldung auf zu wenig Speicher hin?"""
     lowered = detail.lower()
     return any(marker in lowered for marker in RESOURCE_MARKERS)
-
 
 
 PROBE_COLOR = (220, 20, 20)

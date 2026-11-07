@@ -34,14 +34,11 @@ def _run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     except (OSError, subprocess.SubprocessError) as exc:
         raise SetupError("Ollama-Einrichtung: Befehl konnte nicht ausgeführt werden.") from exc
     if result.returncode:
-
         raise SetupError("Ollama-Einrichtung: Dienstbefehl fehlgeschlagen.")
     return result
 
 
 def _parallel(value: str) -> bool:
-
-
     return (len(value) <= 19 and value.isascii() and value.isdecimal()
             and 2 <= int(value) <= 2 ** 63 - 1)
 
@@ -145,8 +142,6 @@ def _macos(*, running: bool) -> None:
         _run(["launchctl", "bootout", domain, str(target)], capture_output=True)
     _write(target, content)
     _run(["launchctl", "bootstrap", domain, str(target)], capture_output=True)
-
-
 
 
 _WINDOWS = r"""

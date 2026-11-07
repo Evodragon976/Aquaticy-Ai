@@ -35,6 +35,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Protocol
 
+from aquaticy import zeit
+
 MINOR_GAIN = 5.0
 
 MAJOR_GAIN = 30.0
@@ -61,9 +63,6 @@ _BUILDING = threading.Lock()
 
 class UpgradeError(ValueError):
     """Ein Hinweis fuer Menschen (geht als solcher in die Oberflaeche)."""
-
-
-
 
 
 def version_text(version: list[int] | tuple[int, int]) -> str:
@@ -127,9 +126,6 @@ def model_name(base: str, version: list[int] | tuple[int, int]) -> str:
     if tuple(int(x) for x in version) == (1, 0):
         return base
     return f"{PREFIX}{slug(base)}:{int(version[0])}.{int(version[1])}"
-
-
-
 
 
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -266,9 +262,6 @@ def _owner(account_id: str) -> str:
     return hashlib.sha256(f"aquaticy-upgrade:{account_id or 'lokal'}".encode()).hexdigest()[:32]
 
 
-
-
-
 @dataclass
 class Choice:
     model: str
@@ -320,7 +313,7 @@ def _choices(state: dict[str, Any], ultra: bool, now: float) -> dict[str, list[C
                 ist_vorher = (version_text(eintrag["version"]) == vorher.get("version")
                               and float(vorher.get("until", 0)) > now)
                 if ist_vorher:
-                    tage = time.strftime("%d.%m.", time.localtime(float(vorher["until"])))
+                    tage = zeit.text(float(vorher["until"]), "%d.%m.")
                     liste.append(Choice(eintrag["model"], label(base, eintrag["version"]),
                                         f"Vorherige Version · wählbar bis {tage}", "previous"))
                 elif ultra:
@@ -359,7 +352,6 @@ def picker_entries(data_dir: Path, models: list[dict[str, Any]], ultra: bool,
     rest = [m for m in models
             if _model_key(_local(str(m.get("id", "")))) not in eigene
             and not _model_key(_local(str(m.get("id", "")))).startswith(PREFIX)]
-
 
     da = {_model_key(_local(str(m.get("id", "")))) for m in models
           if _local(str(m.get("id", "")))}
@@ -432,7 +424,6 @@ def resolve(data_dir: Path, model_id: str, ultra: bool, account_id: str = "",
             return f"ollama_chat/{sichtbar[key]}"
         return f"ollama_chat/{aktuell}"
     if key.startswith(PREFIX):
-
         raise UpgradeError("Diese Modellversion ist nicht mehr verfügbar.")
     return model_id
 
@@ -459,9 +450,6 @@ def choose(data_dir: Path, model_id: str, ultra: bool, account_id: str = "") -> 
                 return
 
 
-
-
-
 def launch_notice(data_dir: Path, account_id: str, now: float | None = None
                   ) -> dict[str, Any] | None:
     """Die neueste Freigabe, die dieses Konto noch nicht gesehen hat."""
@@ -477,7 +465,6 @@ def launch_notice(data_dir: Path, account_id: str, now: float | None = None
         for start in track.get("launches", []):
             if start["id"] in gesehen or now - float(start["at"]) > LAUNCH_NOTICE:
                 continue
-
 
             if start.get("to_model") != aktuell:
                 continue
@@ -524,9 +511,6 @@ def forget_account(data_dir: Path, account_id: str) -> None:
                 changed = True
         if changed:
             save(data_dir, state)
-
-
-
 
 
 def _add_tracks(state: dict[str, Any], local_models: list[str]) -> None:
@@ -605,7 +589,6 @@ def upgrade(data_dir: Path, base: str, now: float | None = None) -> dict[str, An
                  "to_label": label(base, eintrag["version"]), "to_model": eintrag["model"]}
         track.setdefault("launches", []).append(start)
         del track["launches"][:-20]
-
 
         state["pins"] = {}
         state["generation"] = int(state.get("generation", 0)) + 1
@@ -693,9 +676,6 @@ def view(data_dir: Path, now: float | None = None) -> dict[str, Any]:
         "minor": MINOR_GAIN, "major": MAJOR_GAIN,
         "tracks": straenge,
     }
-
-
-
 
 
 class Backend(Protocol):
@@ -913,8 +893,6 @@ def _train_track(data_dir: Path, base: str, facts: list[dict[str, str]],
         if stopped() or not valid_knowledge():
             return None
         if gain <= 0:
-
-
             with _edit(data_dir) as state:
                 if state["enabled"] and int(state["generation"]) == revision:
                     _track(state, base)["trained_hash"] = facts_hash(facts)
@@ -1050,7 +1028,6 @@ class Trainer:
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-
         with contextlib.suppress(Exception), _edit(self.data_dir) as state:
             state["running"] = False
             state["managed_knowledge"] = self.manifest is not None
@@ -1085,7 +1062,6 @@ class Trainer:
                       cancelled=self.stop_event.is_set, manifest=self.manifest)
 
     def _loop(self) -> None:
-
         with contextlib.suppress(Exception):
             self._once()
         while not self.stop_event.is_set():
@@ -1093,7 +1069,6 @@ class Trainer:
             self.wake_event.clear()
             if self.stop_event.is_set():
                 break
-
 
             with contextlib.suppress(Exception):
                 state = load(self.data_dir)

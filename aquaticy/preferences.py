@@ -38,7 +38,6 @@ APPEARANCE = "aussehen"
 PALETTE = "farbschema"
 
 
-
 PALETTE_IDS: dict[str, str] = {
     "standard": "",
     "schlicht": "mono",
@@ -151,7 +150,6 @@ CATALOGUE: tuple[Preference, ...] = (
 )
 
 
-
 PROTECTED: dict[str, str] = {
     "AQUATICY_HA_CONTROL": "ob ich im Haus schalten darf",
     "AQUATICY_HA_DIRECT": "ob ich im Haus ohne Rückfrage schalten darf",
@@ -177,8 +175,6 @@ PROTECTED: dict[str, str] = {
         "WhatsApp, Signal, Blender, Wetter, Feeds)"
     ),
 }
-
-
 
 
 PROTECTED_ALIASES: dict[str, str] = {
@@ -257,7 +253,6 @@ def coerce(preference: Preference, value: str) -> str:
     """
     raw = str(value if value is not None else "").strip()
 
-
     from aquaticy.config import env_value_problem
 
     problem = env_value_problem(raw)
@@ -275,7 +270,6 @@ def coerce(preference: Preference, value: str) -> str:
         raise BadValue("Fuer das Erscheinungsbild geht 'hell' oder 'dunkel'.")
 
     if preference.name == PALETTE:
-
         raw = (
             raw.lower()
             .replace("é", "e")
@@ -330,7 +324,6 @@ def coerce(preference: Preference, value: str) -> str:
         model = fix_model_id(raw)
         problem = model_problem(model)
         if problem:
-
             raise BadValue(problem.replace("\n", " "))
         return model
 
@@ -367,7 +360,6 @@ def store(preference: Preference, value: str, profile_env: Path | None = None) -
         return written
     target = find_env_file() or DEFAULT_ENV_PATH
     written = write_env_file({preference.key: value}, target)
-
 
     load_env(written, override=True)
     reset_settings_cache()

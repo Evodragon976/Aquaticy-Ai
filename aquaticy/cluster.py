@@ -116,7 +116,6 @@ _TAILSCALE_V6 = ipaddress.ip_network("fd7a:115c:a1e0::/48")
 SHARED_DB = "accounts.sqlite3"
 
 
-
 _ROOT_SKIP = re.compile(r"^(aquaticy\.sqlite3|accounts\.sqlite3)(-wal|-shm|-journal)?$|\.tmp$"
                         r"|^addons\.json$")
 
@@ -150,7 +149,6 @@ def parse_port(value: Any) -> int:
     if not 1 <= port <= 65535:
         raise ClusterError("Diesen Port gibt es nicht. Nimm eine Zahl von 1 bis 65535.")
     return port
-
 
 
 def _hkdf(key: bytes, salt: bytes, info: str, length: int = 32) -> bytes:
@@ -363,7 +361,6 @@ def resolve_address(address: str, *, family: int = socket.AF_UNSPEC) -> str:
         raise ClusterError("Der MagicDNS-Name darf nur auf Tailscale-Adressen zeigen.")
 
     return _address_for_family(sorted(addresses, key=lambda item: ":" in item), family)
-
 
 
 def _unquote(text: Any) -> Any:
@@ -681,7 +678,6 @@ def snapshot_sqlite(path: Path, target: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
-
 def _is_sqlite(path: Path) -> bool:
     if not path.name.endswith(_SQLITE_SUFFIXES):
         return False
@@ -758,11 +754,9 @@ def write_atomic(target: Path, data: bytes) -> None:
         tmp.unlink(missing_ok=True)
 
 
-
 @dataclass
 class Hooks:
     """Was der Verbund von der Weboberflaeche braucht."""
-
 
     load: Callable[[], dict[str, Any]] = lambda: {}
 
@@ -773,7 +767,6 @@ class Hooks:
     restart: Callable[[], None] = lambda: None
 
     ask: Callable[[dict[str, Any]], None] | None = None
-
 
     hardware: Callable[[], dict[str, Any]] = lambda: {}
 
@@ -859,7 +852,6 @@ class Cluster:
         self._sweep_snapshots()
         self.notice = ""
 
-
     def _load_json(self, name: str, default: Any) -> Any:
         with contextlib.suppress(OSError, ValueError):
             daten = json.loads((self.dir / name).read_text(encoding="utf-8"))
@@ -881,7 +873,6 @@ class Cluster:
         knoten["name"] = (socket.gethostname() or "aquaticy")[:60]
         self._save_json("node.json", knoten)
         return knoten
-
 
     @property
     def node_id(self) -> str:
@@ -932,7 +923,6 @@ class Cluster:
         """Hoert der Server ueberhaupt auf das Netz (``--lan``)?"""
         return self.host not in ("127.0.0.1", "localhost", "::1")
 
-
     def start(self) -> None:
         """Startet Finden und Abgleich -- nur, wenn der Schalter an ist."""
         if not self.enabled or self._threads:
@@ -961,7 +951,6 @@ class Cluster:
         else:
             self.stop()
             self.discovered.clear()
-
 
     def beacon(self) -> dict[str, Any]:
         return {"app": "aquaticy", "v": 1, "node": self.node_id, "name": self.node["name"],
@@ -1050,7 +1039,6 @@ class Cluster:
             return [dict(v, member=v["node"] in mitglieder)
                     for v in sorted(self.discovered.values(), key=lambda v: v["name"])]
 
-
     def _seen_nonce(self, nonce: str) -> bool:
         jetzt = _now()
         with self._lock:
@@ -1126,7 +1114,6 @@ class Cluster:
         self.last_ok[node] = _now()
         return daten if isinstance(daten, dict) else {}
 
-
     def handle_rpc(self, raw: bytes, source_ip: str) -> bytes:
         """Beantwortet einen verschluesselten Aufruf. Antwort: verschluesselt."""
         if not self.joined or not lan_ip_ok(source_ip):
@@ -1138,8 +1125,6 @@ class Cluster:
         except ClusterError as exc:
             ergebnis = {"error": str(exc)}
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
-
-
             ergebnis = {"error": f"{type(exc).__name__} beim Bearbeiten von „{op}“."}
         return seal(key, json.dumps(ergebnis).encode(), f"reply:{nonce}")
 
@@ -1205,7 +1190,6 @@ class Cluster:
             return {"ok": True}
         raise ClusterError("Unbekannter Aufruf.")
 
-
     def my_load(self) -> dict[str, Any]:
         try:
             last = dict(self.hooks.load() or {})
@@ -1264,7 +1248,6 @@ class Cluster:
         aktiv = sum(1 for u, n in list(self.homes.items())
                     if n == node and jetzt - self._activity.get(u, 0) < IDLE_SECONDS)
 
-
         return (2.0 * _zahl(last.get("runs"), 100_000) + aktiv
                 + 2.0 * _zahl(last.get("cpu"), 1_000))
 
@@ -1316,9 +1299,6 @@ class Cluster:
             self._activity[user] = jetzt
             jetzt_heim = self.homes.get(user, "")
             if self.split_on:
-
-
-
                 if jetzt_heim == self.node_id:
                     return jetzt_heim
                 if jetzt_heim and self.alive(jetzt_heim):
@@ -1328,8 +1308,6 @@ class Cluster:
                 self._set_home(user, self.node_id)
                 return self.node_id
             if jetzt_heim and self.alive(jetzt_heim):
-
-
                 falsch = self.misplaced(user, jetzt_heim)
                 if jetzt - zuletzt < IDLE_SECONDS and not falsch:
                     return jetzt_heim
@@ -1339,11 +1317,8 @@ class Cluster:
                     return jetzt_heim
                 return self._move(user, jetzt_heim, bester)
             if jetzt_heim:
-
-
                 return jetzt_heim
             bester = self.least_loaded(user)
-
 
             quelle = jetzt_heim or self.master_node()
             if quelle and quelle != bester and self.alive(quelle):
@@ -1364,9 +1339,6 @@ class Cluster:
             else:
                 self.call(neu, "pull", {"user": user, "from": alt}, timeout=300.0)
         except (ClusterError, OSError, ValueError, sqlite3.Error):
-
-
-
             self._set_home(user, alt)
             return alt
         self._set_home(user, neu)
@@ -1438,7 +1410,6 @@ class Cluster:
 
     def forget_home(self, user: str) -> None:
         self._local_seen.pop(user, None)
-
 
     def split(self) -> dict[str, Any]:
         """Die Einstellung "Serverlast aufteilen" -- steht in der Mitgliederliste."""
@@ -1547,7 +1518,6 @@ class Cluster:
             raise ClusterError("Ungültige Anfrage.")
         return schluessel, zufall
 
-
     def public_info(self) -> dict[str, Any]:
         """Die Mitgliederliste ohne Schluessel -- die gehen nur ueber "rekey"."""
         info = dict(self.info or {})
@@ -1586,8 +1556,6 @@ class Cluster:
             if isinstance(homes, dict):
                 neue = {str(u): str(n) for u, n in homes.items() if _USER_RE.fullmatch(str(u))}
 
-
-
                 abgegeben = [u for u, n in self.homes.items()
                              if n == self.node_id and neue.get(u, n) != self.node_id]
                 angenommen = [u for u, n in neue.items()
@@ -1604,8 +1572,6 @@ class Cluster:
             return self._assign_locks.setdefault(user, threading.Lock())
 
     def _adopt_quietly(self, user: str) -> None:
-
-
         with self._runtime_lock(user):
             with self._lock:
                 if self._stop.is_set() or self.homes.get(user) != self.node_id:
@@ -1751,7 +1717,6 @@ class Cluster:
             self.db.uninstall()
         self.notice = "Dieser Server arbeitet wieder allein."
         print("  [Verbund] Dieser Server ist nicht mehr im Verbund und arbeitet allein.")
-
 
     def _sync_loop(self) -> None:
         runde = 0
@@ -2032,7 +1997,6 @@ class Cluster:
                     quelle.unlink()
             return {"data": _b64(daten), "eof": eof}
 
-
     def _sweep_orphans(self) -> None:
         """Profilordner geloeschter Konten verschwinden auch auf den Kopien."""
         users = self.data_dir / "users"
@@ -2051,7 +2015,6 @@ class Cluster:
                 shutil.rmtree(ordner, ignore_errors=True)
                 self._orphans.pop(user, None)
                 self.synced.pop(user, None)
-
 
     def _root_files(self) -> list[str]:
         out = []
@@ -2101,8 +2064,6 @@ class Cluster:
         db = SharedDb(staging / SHARED_DB)
         db.install()
 
-
-
         zeiger = db.cursors()
         zeiger.pop(self.node_id, None)
         zeiger[master] = db.last_seq()
@@ -2145,7 +2106,6 @@ class Cluster:
         shutil.rmtree(staging, ignore_errors=True)
         print(f"  [Verbund] Beigetreten. Die bisherigen Daten liegen unter {sicherung}.")
         self.hooks.restart()
-
 
     def invite(self, address: str, port: int) -> Invite:
         """Schickt eine Einladung an einen anderen Server."""
@@ -2219,7 +2179,6 @@ class Cluster:
     def confirm(self, invite_id: str, code: str) -> Invite:
         """Master: Code vom anderen Server pruefen -- und erst dann Daten freigeben."""
 
-
         with self._confirm_lock:
             return self._confirm(invite_id, code)
 
@@ -2286,7 +2245,6 @@ class Cluster:
         self.start()
         threading.Thread(target=self.broadcast, daemon=True).start()
         return einladung
-
 
     def handle_hello(self, payload: dict[str, Any], source_ip: str) -> dict[str, Any]:
         from cryptography.hazmat.primitives.asymmetric.x25519 import (
@@ -2434,7 +2392,6 @@ class Cluster:
             with contextlib.suppress(OSError):
                 datei.unlink()
 
-
     def forward(self, handler: Any, user: str, body: bytes, https: bool,
                 client_ip: str) -> bool:
         """Reicht eine Anfrage an den Heimserver weiter. False = selbst bedienen."""
@@ -2452,7 +2409,6 @@ class Cluster:
             except (ClusterError, OSError, ValueError, httpx.HTTPError) as exc:
                 self.last_ok.pop(heim, None)
                 self.forget_home(user)
-
 
                 raise ForwardingError(
                     "Die Antwort des Heimservers fehlt oder ist unvollständig. "
@@ -2516,7 +2472,6 @@ class Cluster:
         if op != "proxy" or not _USER_RE.fullmatch(str(args.get("u", ""))):
             raise ClusterError("Ungültige Weiterleitung.")
         return args, nonce, key
-
 
     def view(self) -> dict[str, Any]:
         self.poll_answers()

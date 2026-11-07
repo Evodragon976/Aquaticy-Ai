@@ -68,7 +68,6 @@ BLOCKED_NAMES = frozenset({
 BLOCKED_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa", ".intranet")
 
 
-
 DECISION_TTL = 30.0
 
 _decisions: dict[tuple[str, int], tuple[float, str, bool]] = {}
@@ -122,15 +121,11 @@ def ip_allowed(value: str) -> bool:
         elif ip.teredo is not None:
             return False
         elif ip in _NAT64:
-
-
             return ip_allowed(str(ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)))
         if getattr(ip, "is_site_local", False):
-
             return False
     return bool(ip.is_global) and not (ip.is_multicast or ip.is_reserved or ip.is_loopback
                                        or ip.is_link_local or ip.is_private)
-
 
 
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
@@ -171,7 +166,6 @@ def checked_addresses(host: str, port: int | None) -> list[str]:
         return [name]
     kurz = _numeric_ipv4(name)
     if kurz:
-
         if not ip_allowed(kurz):
             raise BlockedTarget(f"{name} ist keine öffentliche Adresse.")
         return [kurz]
@@ -196,7 +190,6 @@ def _decide(host: str, port: int) -> tuple[str, bool]:
     except BlockedTarget as exc:
         return str(exc), False
     return "", False
-
 
 
 UNRESOLVED_TTL = 5.0
@@ -260,8 +253,6 @@ def check_url(url: str, request: httpx.Request | None = None) -> None:
         raise (Unresolvable if aussetzer else BlockedTarget)(problem, request=request)
 
 
-
-
 class ProxySetupError(OSError):
     """``AQUATICY_PROXY`` ist gesetzt, aber so nicht nutzbar (9.6.0)."""
 
@@ -292,8 +283,6 @@ def upstream_proxy() -> tuple[str, int, str] | None:
             return None
     teile = urlsplit(wert if "://" in wert else f"http://{wert}")
     if teile.scheme != "http" or not teile.hostname:
-
-
         raise ProxySetupError(
             "AQUATICY_PROXY wird nicht unterstützt (nur http://host:port) -- kein Abruf.")
     anmeldung = ""
@@ -316,7 +305,6 @@ def _connect_request(adresse: str, port: int, anmeldung: str) -> bytes:
 def _connect_answer_ok(kopf: bytes) -> bool:
     erste = kopf.split(b"\r\n", 1)[0].split()
     return len(erste) >= 2 and erste[1] == b"200"
-
 
 
 ATTEMPT_SECONDS = 2.5
@@ -367,9 +355,6 @@ class _GuardedBackend(httpcore.SyncBackend):
         for nummer, adresse in enumerate(reihe):
             frist = _restzeit(timeout)
             if nummer < len(reihe) - 1:
-
-
-
                 frist = ATTEMPT_SECONDS if frist is None else min(frist, ATTEMPT_SECONDS)
             try:
                 if proxy is None:
@@ -403,7 +388,6 @@ class _GuardedBackend(httpcore.SyncBackend):
             stream.close()
             raise httpcore.ConnectError("Der Proxy hat die Verbindung abgelehnt.")
         return stream
-
 
 
 _FRIST: contextvars.ContextVar[float | None] = contextvars.ContextVar(
@@ -455,8 +439,6 @@ def guarded_transport(**kwargs: Any) -> httpx.HTTPTransport:
     transport = httpx.HTTPTransport(**kwargs)
     pool = getattr(transport, "_pool", None)
     if pool is None or not hasattr(pool, "_network_backend"):
-
-
         raise RuntimeError("httpx/httpcore hat sich geändert: Netzschutz nicht einsetzbar.")
     pool._network_backend = _GuardedBackend()
     return transport
@@ -474,12 +456,10 @@ def guarded_client(**kwargs: Any) -> httpx.Client:
     haken["request"] = [_request_hook, *haken.get("request", [])]
     kwargs.setdefault("transport", guarded_transport())
 
-
     kopf = httpx.Headers(kwargs.pop("headers", None) or {})
     kopf.setdefault("Accept-Encoding", ACCEPT_ENCODING)
     kwargs["headers"] = kopf
     return httpx.Client(event_hooks=haken, **kwargs)
-
 
 
 Limit = int | Callable[[httpx.Headers], tuple[int, bool]]
@@ -506,7 +486,6 @@ def _gesamtfrist(client: httpx.Client, timeout: Any) -> float:
     except (TypeError, ValueError):
         sekunden = 30.0
     return max(30.0, 4 * sekunden)
-
 
 
 ACCEPT_ENCODING = "gzip, deflate"
@@ -547,7 +526,6 @@ def _stuecke(response: httpx.Response, rest: Callable[[], int]) -> Iterator[byte
         raise httpx.DecodingError("Nicht unterstützte Komprimierung der Antwort.",
                                   request=response.request)
     if hasattr(response, "_content"):
-
         yield from response.iter_bytes()
         return
     if verfahren in {"", "identity"}:
@@ -612,7 +590,6 @@ def read_response(response: httpx.Response, max_bytes: int,
     return _lesen(response, limit, deadline)
 
 
-
 _WEG = frozenset({"content-encoding", "content-length", "transfer-encoding"})
 
 
@@ -673,7 +650,6 @@ def _get(client: httpx.Client, aktuell: str, frist: float, max_bytes: Limit,
                 request.headers.pop(name, None)
             request.url = request.url.copy_with(username=None, password=None)
 
-
             scoped = httpx.Cookies()
             for cookie in client.cookies.jar:
                 if cookie.domain:
@@ -722,8 +698,6 @@ def browser_route(route: Any) -> None:
         route.continue_()
     else:
         route.abort("blockedbyclient")
-
-
 
 
 PROXY_IDLE = 60.0
@@ -929,8 +903,6 @@ def browser_proxy() -> BrowserProxy:
         if _browser_proxy is None or not _browser_proxy.open:
             _browser_proxy = BrowserProxy()
         return _browser_proxy
-
-
 
 
 BROWSER_NET_ARGS: tuple[str, ...] = (

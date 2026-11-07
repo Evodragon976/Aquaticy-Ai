@@ -67,7 +67,6 @@ class PageResult(BaseModel):
     title: str = ""
     text: str = ""
 
-
     skipped_reason: str = ""
 
     via: str = "http"
@@ -107,9 +106,6 @@ class PageResult(BaseModel):
                 product.model_dump(exclude_none=True) for product in self.products
             ]
         return payload
-
-
-
 
 
 HTTP_REFUSALS: dict[int, str] = {

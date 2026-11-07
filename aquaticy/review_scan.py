@@ -43,7 +43,6 @@ class Rule:
 
     unless: re.Pattern[str] | None = None
 
-
     in_call: bool = False
 
     next_line: re.Pattern[str] | None = None
@@ -83,9 +82,6 @@ SECRET_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Privater Schlüssel",
      _r(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY")),
 )
-
-
-
 
 
 _ASSIGNED_SECRET = _r(
@@ -386,7 +382,6 @@ def _scan_unit(unit: Unit) -> list[Hint]:
     for index, zeile in enumerate(zeilen):
         if not zeile.strip():
             continue
-
 
         war_text = bool(im_text)
         for zeichen in ('"""', "'''"):

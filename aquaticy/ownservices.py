@@ -187,7 +187,6 @@ def calendar_days(text: str) -> int:
     return 7
 
 
-
 def home_domain(text: str) -> str:
     """Der Home-Assistant-Bereich, nach dem zuerst gesehen wird -- "" = Uebersicht."""
     klein = str(text or "").lower()

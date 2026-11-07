@@ -39,7 +39,6 @@ from aquaticy.subagents import Task, as_task
 MAX_ROUNDS = 2
 
 
-
 MAX_RETRY = 8
 
 PLAN_PROMPT = """\
@@ -319,7 +318,6 @@ def review_results(
     roh = [roh] if isinstance(roh, str) else roh if isinstance(roh, list) else []
     fehlt = [str(eintrag).strip() for eintrag in roh if str(eintrag).strip()]
     nachrunde = _tasks_from(payload.get("nachrunde"), retry, max(0, int(strong)))
-
 
     ok = urteil.startswith("gut") and not nachrunde
     return Review(ok=ok, missing=fehlt[:10], retries=nachrunde)

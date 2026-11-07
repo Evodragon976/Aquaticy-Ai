@@ -45,9 +45,7 @@ from pathlib import Path
 MAX_BYTES = 400_000_000
 
 
-
 CLEANUP_AT = 0.9
-
 
 
 MAX_ENTRY_CHARS = 8_000
@@ -56,26 +54,16 @@ MAX_ENTRY_CHARS = 8_000
 MAX_RECALL = 8
 
 
-
-
-
 SEARCH_WINDOW = 5_000
 
 
 KEY_FILE = "memory.key"
 
 
-
-
-
-
 SALT_FILE = "memory.salt"
 
 
-
-
 LEGACY_KEY_SALT = b"aquaticy-ai-memory-v1"
-
 
 
 FERNET_PREFIX = "gAAAAA"
@@ -157,8 +145,6 @@ def load_secret_file(path: Path, factory: Callable[[], bytes], minimum_size: int
                         and getattr(exc, "winerror", None) not in {1, 50, 1314}):
                     raise
 
-
-
                 guard_path = path.parent / ".aquaticy-keylock.db"
                 with closing(sqlite3.connect(guard_path, timeout=15)) as guard:
                     secure_file(guard_path)
@@ -194,8 +180,6 @@ class Cipher:
         from cryptography.fernet import Fernet, MultiFernet
 
         if passphrase:
-
-
             salz = _salt_for(key_path.parent)
             self._fernet = MultiFernet([
                 Fernet(_key_from_passphrase(passphrase, salz)),
@@ -286,7 +270,6 @@ class Entry:
         return {"id": self.id, "topic": self.topic, "text": self.text, "when": self.created_at}
 
 
-
 UNREADABLE = "[nicht lesbar — falscher Schlüssel oder beschädigt]"
 
 
@@ -347,9 +330,6 @@ class Memory:
                 """
             )
 
-
-
-
     def used_bytes(self) -> int:
         """Wie viel Platz das ganze Profil belegt -- Speicher, Verlauf,
         Zwischenspeicher, Uploads UND Bilder (aquaticy/budget.py, seit 9.5.15).
@@ -384,7 +364,6 @@ class Memory:
 
     def full(self) -> bool:
         return self.used_bytes() >= MAX_BYTES
-
 
     def revision(self) -> int:
         with closing(self._connect()) as conn:
@@ -457,7 +436,6 @@ class Memory:
             row = conn.execute("SELECT * FROM memory WHERE id = ?", (new_id,)).fetchone()
         return self._read(row)
 
-
     def recall(self, query: str = "", limit: int = MAX_RECALL) -> list[Entry]:
         """Sucht Notizen zu *query*; ohne Suchwort die juengsten.
 
@@ -478,8 +456,6 @@ class Memory:
 
         hits = [entry for entry in entries if needle in f"{entry.topic} {entry.text}".casefold()]
         if not hits:
-
-
             words = [word for word in needle.split() if len(word) > 3][:4]
             hits = [
                 entry
@@ -512,7 +488,6 @@ class Memory:
             text, topic = UNREADABLE, ""
         return Entry(id=int(row["id"]), text=text, topic=topic,
                      created_at=str(row["created_at"] or ""))
-
 
     def forget(self, entry_id: int) -> bool:
         with closing(self._connect()) as conn, conn:
@@ -558,8 +533,6 @@ class Memory:
         """
         from aquaticy.budget import forget
         from aquaticy.budget import make_room as gemeinsam
-
-
 
         freed = gemeinsam(self.data_dir)
         forget(self.data_dir)

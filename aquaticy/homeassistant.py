@@ -36,18 +36,11 @@ COMMON_URLS: tuple[str, ...] = (
 HA_PORT = 8123
 
 
-
-
 PROTECTED_DOMAINS: frozenset[str] = frozenset(
     {"lock", "alarm_control_panel", "cover", "water_heater", "climate", "vacuum",
 
-
-
      "script", "scene", "button"}
 )
-
-
-
 
 
 NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
@@ -56,10 +49,8 @@ NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
 ENTITY_RE = re.compile(r"^[a-z0-9_]{1,64}\.[a-z0-9_]{1,128}$")
 
 
-
 TARGET_KEYS: frozenset[str] = frozenset({"area_id", "device_id", "floor_id", "label_id",
                                          "target"})
-
 
 
 ALLOWED_DOMAINS: frozenset[str] = frozenset(
@@ -81,9 +72,6 @@ ALLOWED_DOMAINS: frozenset[str] = frozenset(
         "button",
     }
 )
-
-
-
 
 
 DIRECT_DOMAINS: frozenset[str] = frozenset(
@@ -140,11 +128,6 @@ def direct_allowed(arguments: dict[str, Any]) -> bool:
     return True
 
 
-
-
-
-
-
 STATES_TTL = 10.0
 
 
@@ -164,8 +147,6 @@ def forget_states(profile: Path | str | None = None) -> None:
         for key in list(_states_cache):
             if scope is None or key[0] == scope:
                 _states_cache.pop(key, None)
-
-
 
 
 MAX_ENTITIES = 60
@@ -211,10 +192,6 @@ def normalize_url(url: str) -> str:
         url = f"http://{url}"
 
     from urllib.parse import urlparse
-
-
-
-
 
     if any(ord(zeichen) < 33 or ord(zeichen) == 127 for zeichen in url):
         return ""
@@ -263,13 +240,11 @@ class HomeAssistant:
                 json=payload,
                 timeout=self.timeout,
 
-
                 trust_env=False,
             )
         except httpx.HTTPError as exc:
             raise HomeAssistantError(f"{self.url} nicht erreichbar: {exc}") from exc
         except (httpx.InvalidURL, ValueError, UnicodeError) as exc:
-
             raise HomeAssistantError("Die Adresse von Home Assistant ist ungültig.") from exc
         if response.status_code == 401:
             raise HomeAssistantError(
@@ -284,7 +259,6 @@ class HomeAssistant:
             return response.json()
         except ValueError:
             return response.text
-
 
     def ping(self) -> str:
         """Prueft die Verbindung und gibt die Version zurueck."""
@@ -318,8 +292,6 @@ class HomeAssistant:
             raise HomeAssistantError("Unerwartete Antwort auf die Zustandsabfrage.")
         entities = [_entity(item) for item in raw if isinstance(item, dict)]
         with _states_lock:
-
-
             if generation == _states_generation:
                 _states_cache.pop(key, None)
                 while len(_states_cache) >= MAX_STATE_CACHES:
@@ -346,7 +318,6 @@ class HomeAssistant:
         for entity in self.states():
             counts[entity.domain] = counts.get(entity.domain, 0) + 1
         return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
-
 
     def call(self, domain: str, service: str, entity_id: str = "", data: Any = None) -> list[Any]:
         """Ruft einen Dienst auf, etwa `light.turn_on`.

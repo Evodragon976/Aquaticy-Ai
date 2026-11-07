@@ -2918,7 +2918,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.4.5";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.5.5";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -4822,6 +4822,8 @@ async function verfolge(hole, steps, bubble, text){
       case "memory_read": step(steps, "[Speicher]", ev.query); break;
       case "memory_save": step(steps, "[Merke]", ev.text); break;
       case "memory_forget": step(steps, "[Vergessen]", ev.text); break;
+      case "messenger_send":
+        step(steps, "[Messenger]", ev.messenger === "signal" ? "Signal" : "WhatsApp"); break;
       case "lan_scan": step(steps, "[Netz]", `${ev.subnet} …`); break;
       case "lan_done": step(steps, "[Netz]",
         sp(`${ev.found} ${ev.found === 1 ? "Gerät" : "Geräte"} erreichbar`,
@@ -6410,6 +6412,7 @@ const EN = {
 "[Speicher]": "[Memory]",
 "[Merke]": "[Remembers]",
 "[Vergessen]": "[Forgot]",
+"[Messenger]": "[WhatsApp/Signal]",
 "[Modell]": "[Model]",
 "[Aufruf]": "[Call]",
 "[Zurueck]": "[Result]",

@@ -40,14 +40,6 @@ DEFAULT_ENV_PATH = Path.home() / ".config" / "aquaticy" / ".env"
 DEFAULT_MODEL = "mistral/mistral-large-latest"
 
 
-
-
-
-
-
-
-
-
 PROVIDER_KEYS: dict[str, str] = {
     "mistral": "MISTRAL_API_KEY",
     "nvidia_nim": "NVIDIA_NIM_API_KEY",
@@ -55,16 +47,6 @@ PROVIDER_KEYS: dict[str, str] = {
     "ollama_chat": "",
     "lm_studio": "",
 }
-
-
-
-
-
-
-
-
-
-
 
 
 CLOUD_PROVIDERS: frozenset[str] = frozenset({"mistral", "nvidia_nim"})
@@ -199,7 +181,6 @@ def load_env(path: Path | None = None, *, override: bool = False) -> Path | None
     """Laedt die `.env` in die Prozessumgebung und gibt den benutzten Pfad zurueck."""
     env_path = path or find_env_file()
     if env_path and env_path.is_file():
-
         load_dotenv(env_path, override=override, interpolate=False)
         return env_path
     return None
@@ -224,7 +205,6 @@ def _env_bool(name: str, default: bool) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on", "ja"}
-
 
 
 _GUARD_OFF = frozenset({"0", "false", "no", "off", "nein", "aus"})
@@ -267,17 +247,10 @@ def selected_vision_model(settings: Settings) -> str:
     return main if any(marker in lowered for marker in VISION_MODEL_MARKERS) else ""
 
 
-
-
-
-
 NO_KEY = "kein-schluessel"
 
 
-
 SPLIT_MODEL_ID = "hosted_vllm/aquaticy-verbund"
-
-
 
 
 GENERIC_KEY_NAME = "AQUATICY_API_KEY"
@@ -296,20 +269,12 @@ def api_key_name_for(model: str) -> str:
     return GENERIC_KEY_NAME if _env_str(GENERIC_KEY_NAME) else ""
 
 
-
-
-
-
-
-
 KNOWN_PREFIXES: frozenset[str] = frozenset({
     *PROVIDER_KEYS, "anthropic", "openai", "gemini",
     "azure", "bedrock", "cerebras", "cohere", "deepseek", "fireworks_ai",
     "groq", "hosted_vllm", "huggingface", "openrouter", "perplexity",
     "sambanova", "together_ai", "vertex_ai", "xai",
 })
-
-
 
 
 OLLAMA_THINKERS = re.compile(
@@ -364,8 +329,6 @@ def suggest_model(model: str) -> str:
         if resolve_model(candidate):
             return candidate
     return ""
-
-
 
 
 OLLAMA_PORT = 11434
@@ -430,7 +393,6 @@ class Settings:
     vision_model: str = ""
     api_base: str = ""
 
-
     api_keys: dict[str, str] = field(default_factory=dict)
     search_keys: dict[str, str] = field(default_factory=dict)
     search_backend: str = "duckduckgo"
@@ -457,19 +419,11 @@ class Settings:
 
     planner_timeout: float = 20.0
 
-
-
-
-
     context_tokens: int = 16384
 
     subagent_model: str = ""
 
-
     code_model: str = ""
-
-
-
 
     vm_size: str = "normal"
     vm_image: str = ""
@@ -478,14 +432,9 @@ class Settings:
     vm_disk_gb: int = 4
     vm_cpus: int = 2  # wie sandbox.CPUS (ein Test prueft das)
 
-
-
     vm_user_mode: bool = False
 
-
     vm_internet: bool = False
-
-
 
     vm_lan: bool = False
 
@@ -493,13 +442,7 @@ class Settings:
 
     subagent_budget: int = 6
 
-
-
     subagent_parallel: int = 0
-
-
-
-
 
     rpm: int = 0
     parallel_calls: int = 0
@@ -510,29 +453,17 @@ class Settings:
 
     github_token: str = ""
 
-
-
     ha_control: bool = False
 
-
-
     ha_direct: bool = False
-
-
 
     google_direct: bool = False
 
     memory_enabled: bool = True
 
-
-
     memory_key: str = ""
 
-
     google_enabled: bool = False
-
-
-
 
     google_write: bool = False
 
@@ -540,7 +471,6 @@ class Settings:
     google_client_secret: str = ""
 
     storage_url: str = ""
-
 
     storage_access: str = "read"
 
@@ -550,47 +480,24 @@ class Settings:
     #: Anmeldung mit Nutzername und Passwort. Wird in ``aquaticy setup`` gewaehlt.
     accounts: bool = False
 
-
-
-
     legal_guard: bool = True
-
-
-
 
     answer_check: bool = True
     auto_model: bool = False
 
-
     council: bool = False
-
-
 
     quota: Any = None
 
-
-
     own_key_names: frozenset[str] = frozenset()
-
-
-
-
 
     operator_search_backends: frozenset[str] | None = None
 
-
-
     account_email: str = ""
-
 
     secret_vault: Any = None
 
-
-
     own_api_base: str = ""
-
-
-
 
     api_base_for: str = ""
 
@@ -599,11 +506,7 @@ class Settings:
     cache_ttl_hours: int = 24
     max_results_default: int = 8
 
-
-
     search_variants: int = 3
-
-
 
     user_agent: str = field(
         default_factory=lambda: (
@@ -620,7 +523,6 @@ class Settings:
     model_access: Callable[[str], None] | None = field(default=None, repr=False, compare=False)
 
     model_context: Callable[[str], str] | None = field(default=None, repr=False, compare=False)
-
 
     @property
     def db_path(self) -> Path:
@@ -643,8 +545,6 @@ class Settings:
         """
         limit = max(1, int(limit or 1))
 
-
-
         from aquaticy.pace import limits_for
 
         _, erlaubt = limits_for(provider_of(self.effective_subagent_model))
@@ -655,9 +555,6 @@ class Settings:
         local = provider_of(self.effective_subagent_model) in ("ollama", "ollama_chat")
         if local:
             return 2
-
-
-
 
         return limit
 
@@ -734,8 +631,6 @@ class Settings:
             return "", False
         des_kontos = self.api_base == self.own_api_base
 
-
-
         bezug = self.model if des_kontos or not self.api_base_for else self.api_base_for
         local = provider_of(model) in ("ollama", "ollama_chat")
         same = provider_of(model) == provider_of(bezug) or (
@@ -760,7 +655,6 @@ class Settings:
         nicht, oder der Aufruf ginge an den falschen Rechner.
         """
         if model == SPLIT_MODEL_ID:
-
             return "operator"
         name = self.key_name_for(model)
         if not (name and name in self.own_key_names and self.api_keys.get(name)):
@@ -849,9 +743,6 @@ class Settings:
         if self.model_access is not None:
             self.model_access(model)
         if model == SPLIT_MODEL_ID:
-
-
-
             from aquaticy.sharding import endpoint
 
             adresse, schluessel = endpoint()
@@ -864,25 +755,12 @@ class Settings:
             provider_of(model) in ("ollama", "ollama_chat")
             and provider_of(self.api_base_for or self.model) in ("ollama", "ollama_chat"))
 
-
         adresse, adresse_des_kontos = self.route(model)
         if self.key_source(model) == "own":
-
-
-
-
-
-
-
             kwargs["api_key"] = self.key_for(model)
             if adresse_des_kontos:
                 kwargs["api_base"] = adresse
         elif adresse_des_kontos:
-
-
-
-
-
             kwargs["api_base"] = adresse
             kwargs["api_key"] = NO_KEY
         elif gleich:
@@ -939,16 +817,11 @@ class Settings:
         """
         name = (model or "").lower()
         if provider_of(model) in ("ollama", "ollama_chat"):
-
-
-
-
             from aquaticy.local_model import can
 
             kann = can(model, "thinking", self.ollama_base(model), str(self.data_dir.resolve()))
             if kann is not None:
                 return kann
-
 
             return OLLAMA_THINKERS.search(name) is not None
         return any(
@@ -970,14 +843,9 @@ class Settings:
             kwargs["reasoning_effort"] = "disable"
             return kwargs
 
-
-
-
-
         if self.thinks(model):
             kwargs["reasoning_effort"] = "low"
         kwargs["drop_params"] = True
-
 
         return kwargs
 
@@ -1035,7 +903,6 @@ def get_settings() -> Settings:
         vm_image=_env_str("AQUATICY_VM_IMAGE"),
         vm_idle_minutes=_env_int("AQUATICY_VM_IDLE_MINUTES", 20),
 
-
         vm_memory_mb=_env_int("AQUATICY_VM_MEMORY_MB", 0) or vm_preset["memory_mb"],
         vm_disk_gb=_env_int("AQUATICY_VM_DISK_GB", 0) or vm_preset["disk_gb"],
         vm_cpus=_env_int("AQUATICY_VM_CPUS", 0) or vm_preset["cpus"],
@@ -1086,9 +953,7 @@ def reset_settings_cache() -> None:
     get_settings.cache_clear()
 
 
-
 ENV_KEY_RE = re.compile(r"[A-Z_][A-Z0-9_]{0,99}")
-
 
 
 _ENV_BAD_CHARS = re.compile(r"[\x00-\x1f\x7f\x85\u2028\u2029]")

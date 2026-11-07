@@ -25,9 +25,11 @@ import sqlite3
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import date, timedelta
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
+
+from aquaticy import zeit
 
 CHARS_PER_TOKEN = 3
 
@@ -37,11 +39,6 @@ def tokens(text: str) -> int:
     if not text:
         return 0
     return -(-len(text) // CHARS_PER_TOKEN)
-
-
-
-
-
 
 
 IMAGE_INPUT_TOKENS = 1_500
@@ -123,7 +120,7 @@ class UsageLog:
         """Traegt einen Aufruf ein. Fehler hier duerfen keine Antwort kosten."""
         if tokens_in <= 0 and tokens_out <= 0:
             return
-        heute = date.today().isoformat()
+        heute = zeit.heute().isoformat()
         name = (model or "unbekannt").strip() or "unbekannt"
         try:
             with self._lock, self._connect() as conn:
@@ -139,14 +136,12 @@ class UsageLog:
                     (heute, name, max(0, tokens_in), max(0, tokens_out)),
                 )
         except sqlite3.Error:
-
-
             pass
 
     def summary(self, days: int = 7) -> dict[str, Any]:
         """Heute, die letzten Tage, insgesamt -- und je Modell."""
-        seit = (date.today() - timedelta(days=max(1, days) - 1)).isoformat()
-        heute = date.today().isoformat()
+        seit = (zeit.heute() - timedelta(days=max(1, days) - 1)).isoformat()
+        heute = zeit.heute().isoformat()
         leer = {"tokens_in": 0, "tokens_out": 0, "calls": 0}
         try:
             with self._connect() as conn:

@@ -75,13 +75,6 @@ Deine Teilfrage lautet:
 %(task)s"""
 
 
-
-
-
-
-
-
-
 ROLE_EXTRA = {
     "standard": "",
     "zahlen": """
@@ -121,13 +114,8 @@ alt. Ist etwas seit Jahren unveraendert, sag auch das.
 }
 
 
-
 ROLE_LABELS = {"standard": "", "zahlen": "Zahlen", "gegenstimmen": "Gegenstimmen",
                "frisch": "Aktuelles", "tiefe": "Spurensuche"}
-
-
-
-
 
 
 _ROLE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -156,10 +144,6 @@ def role_for(task: str) -> str:
         if treffer > punkte:
             beste, punkte = rolle, treffer
     return beste
-
-
-
-
 
 
 CHECK_PROMPT = """\
@@ -200,7 +184,6 @@ def verdict_of(text: str) -> str:
     for urteil in VERDICTS:
         if anfang.startswith(urteil):
             return urteil
-
 
     kopf = (text or "").strip().upper()[:200]
     for urteil in VERDICTS:
@@ -250,11 +233,6 @@ Bei blosser Konversation: {"recherche": false, "teilfragen": [], "rueckfrage": "
 %(context)sNachricht: %(question)s"""
 
 
-
-
-
-
-
 ANGLES = (
     "Preise, Kosten und Gebuehren",
     "Erfahrungen, Kritik und bekannte Probleme",
@@ -271,10 +249,6 @@ ANGLES = (
     "Foerderungen, Rabatte und Zuschuesse",
     "Erfahrungsberichte aus Foren und Gruppen",
 )
-
-
-
-
 
 
 SOURCES = (
@@ -319,8 +293,6 @@ def spread_tasks(question: str, tasks: Sequence[Any], limit: int) -> list[Task]:
         if len(out) >= limit:
             break
 
-
-
     for quelle in SOURCES:
         for angle in ANGLES:
             if len(out) >= limit:
@@ -329,7 +301,6 @@ def spread_tasks(question: str, tasks: Sequence[Any], limit: int) -> list[Task]:
         if len(out) >= limit:
             break
     return _distinct(out)[:limit]
-
 
 
 PLANNER_SCHEMA: dict[str, Any] = {
@@ -486,7 +457,6 @@ def _parse_plan(raw: str, question: str, limit: int) -> tuple[bool, list[str]]:
                 payload = None
 
     if not isinstance(payload, dict):
-
         tasks = _parse_task_list(raw)
         return True, (tasks[:limit] if tasks else [question.strip()])
 
@@ -495,8 +465,6 @@ def _parse_plan(raw: str, question: str, limit: int) -> tuple[bool, list[str]]:
 
     roh = payload.get("teilfragen") or []
     if isinstance(roh, str):
-
-
         roh = [roh]
     tasks = [
         str(item).strip() for item in (roh if isinstance(roh, list) else [])
@@ -536,18 +504,9 @@ def _parse_task_list(raw: str) -> list[str]:
     return [str(item).strip() for item in data if str(item).strip()]
 
 
-
-
-
-
-
-
-
 NORMAL_DEADLINE = 40.0
 NORMAL_CALL_TIMEOUT = 45.0
 NORMAL_FETCH_TIMEOUT = 8.0
-
-
 
 
 NORMAL_FILL = 6
@@ -587,7 +546,6 @@ class Task:
     """
 
     text: str
-
 
     angle: str = ""
 
@@ -630,13 +588,11 @@ class SubagentResult:
     tool_calls: int = 0
     error: str = ""
 
-
     role: str = "standard"
 
     angle: str = ""
 
     strong: bool = False
-
 
     check: str = ""
     verdict: str = ""
@@ -706,8 +662,6 @@ def _run_one(
     box = toolbox or Toolbox(settings, cache=cache, on_event=None)
     owns_box = toolbox is None
 
-
-
     rollentext = ROLE_EXTRA[role]
     if angle.strip():
         rollentext = f"\nDein Auftrag im Team: {angle.strip()}\n{rollentext}"
@@ -715,22 +669,15 @@ def _run_one(
     if getattr(settings, "legal_guard", True):
         from aquaticy.guardrails import subagent_note
 
-
-
-
         rolle, _, rest = auftrag.partition("\n\n")
         regeln = subagent_note().strip()
         auftrag = f"{rolle}\n\n{regeln}\n\n{rest}" if rest else f"{regeln}\n\n{auftrag}"
     guard = getattr(box, "guard", None)
     if guard is not None and not guard.topic:
-
-
         guard.topic = task
     messages: list[dict[str, Any]] = [{"role": "user", "content": auftrag}]
     budget = max(1, int(budget) or settings.subagent_budget)
     used = 0
-
-
 
     model_in_use = model or settings.effective_subagent_model
     ende = time.monotonic() + deadline if deadline > 0 else 0.0
@@ -739,11 +686,8 @@ def _run_one(
     try:
         while used < budget:
             if ende and used and time.monotonic() >= ende:
-
                 break
             if stop is not None and stop.is_set():
-
-
                 result.error = result.error or "Abgebrochen."
                 break
             try:
@@ -775,8 +719,6 @@ def _run_one(
             from aquaticy.agent import repair_tool_calls, run_calls, tool_calls_from_text
 
             if not calls:
-
-
                 aus_text = tool_calls_from_text(
                     content, (t["function"]["name"] for t in TOOL_SCHEMAS), task)
                 if aus_text:
@@ -801,10 +743,6 @@ def _run_one(
             messages.append(
                 {"role": "assistant", "content": content, "tool_calls": call_dicts}
             )
-
-
-
-
 
             room = max(0, budget - used)
             doable, cut = call_dicts[:room], call_dicts[room:]
@@ -848,7 +786,6 @@ def _run_one(
             )
 
         if not result.summary:
-
             messages.append(
                 {
                     "role": "user",
@@ -896,17 +833,9 @@ def _run_one(
             )
 
 
-
-
-
-
-
-
-
 STAGGER_AFTER = 4
 LAUNCH_STAGGER = 0.08
 MAX_LAUNCH_DELAY = 2.0
-
 
 
 STRONG_EXTRA_BUDGET = 6
@@ -977,12 +906,7 @@ def run_subagents(
     if not clean:
         return []
 
-
-
     roles = [task.role for task in clean]
-
-
-
 
     checkers = max(0, min(int(checkers), max(1, parallel)))
     if on_event:
@@ -998,10 +922,6 @@ def run_subagents(
         if checkers:
             on_event("checkers", {"count": checkers})
 
-
-
-
-
     from aquaticy.fetch import Fetcher
 
     shared_fetcher = Fetcher(
@@ -1012,11 +932,6 @@ def run_subagents(
         enable_browser=settings.enable_playwright,
     )
     boxes = [Toolbox(settings, cache=cache, fetcher=shared_fetcher) for _ in clean]
-
-
-
-
-
 
     shared_domains: set[str] = set()
     for box in boxes:
@@ -1053,8 +968,6 @@ def run_subagents(
                 % {"task": result.task, "summary": result.summary[:4000]},
             )
         finally:
-
-
             box.close(close_fetcher=False)
         if geprueft.error:
             return
@@ -1062,14 +975,9 @@ def run_subagents(
         result.verdict = verdict_of(geprueft.summary)
         result.check_sources = list(geprueft.sources)
 
-
         result.searches.extend(geprueft.searches)
 
     try:
-
-
-
-
         def einer(task: Task, box: Toolbox) -> SubagentResult:
             """Ein Agent. Die starken laufen auf dem starken Modell und
             bekommen mehr Budget -- sie sitzen an den schweren Auftraegen."""
@@ -1100,9 +1008,6 @@ def run_subagents(
                 time.sleep(min(position * LAUNCH_STAGGER, MAX_LAUNCH_DELAY))
             ergebnis = einer(task, box)
             if checkers:
-
-
-
                 auftrag = pool.submit(pruefe, ergebnis)
                 with schloss:
                     offene_pruefungen.append(auftrag)
@@ -1115,10 +1020,6 @@ def run_subagents(
             ]
             results = [future.result() for future in futures]
 
-
-
-
-
         for auftrag in offene_pruefungen:
             fehler = auftrag.exception()
             if fehler is not None and on_event:
@@ -1128,4 +1029,3 @@ def run_subagents(
         for box in boxes:
             box.close(close_fetcher=False)
         shared_fetcher.close()
-

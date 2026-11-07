@@ -39,9 +39,9 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, cast
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
-from aquaticy import INTERNAL, VERSION_LABEL, __version__, botguard, cluster, webview
+from aquaticy import INTERNAL, VERSION_LABEL, __version__, botguard, cluster, webview, zeit
 from aquaticy.auth import Account, AuthStore, RateLimiter, pro_code_for
 from aquaticy.cache import CHAT_KINDS, Cache, chat_kind_of
 from aquaticy.config import (
@@ -79,31 +79,19 @@ STATIC_FILES: dict[str, str] = {
 }
 
 
-
 DEFAULT_PORT = 8765
-
 
 
 HEARTBEAT_SECONDS = 10.0
 
 
-
-
 MAX_RUN_EVENTS = 20_000
-
-
-
 
 
 PAST_THE_LIMIT = frozenset({"done"})
 
 
-
-
-
-
 RESUME_WINDOW = 7 * 24 * 3600
-
 
 
 PIN_WINDOW = 15 * 60
@@ -128,14 +116,12 @@ class Run:
         self.id = run_id
         self.question = question
 
-
         self.chat = ""
         self.mode = ""
         self.started = time.time()
         self.finished = 0.0
         self.events: list[dict[str, Any]] = []
         self.done = False
-
 
         self.delivered = False
         self._cond = threading.Condition()
@@ -147,8 +133,6 @@ class Run:
             if len(self.events) < MAX_RUN_EVENTS or event.get("type") in PAST_THE_LIMIT:
                 self.events.append(event)
             elif not self._clipped:
-
-
                 self._clipped = True
                 self.events.append(
                     {
@@ -218,7 +202,6 @@ class RunBook:
     Oberflaeche nimmt genau den Lauf wieder auf, den ``/api/runstate`` nannte.
     """
 
-
     KEEP = 8
 
     HARD = 32
@@ -232,14 +215,10 @@ class RunBook:
         """Ein neuer Lauf -- atomar angelegt und unter seiner Kennung abgelegt."""
         with self._lock:
             if sum(not r.done for r in self._runs.values()) >= self.HARD:
-
-
                 raise RunCapacityError("Zu viele Anfragen laufen in diesem Chat. Warte auf eine "
                                        "Antwort.")
             lauf = Run(secrets.token_hex(8), question)
             self._runs[lauf.id] = lauf
-
-
 
             while len(self._runs) > self.KEEP:
                 alt = next((k for k, r in self._runs.items() if r.done), None)
@@ -262,10 +241,7 @@ class RunBook:
 RUNS = RunBook()
 
 
-
 STRONG_TTL = 30.0
-
-
 
 
 _strong_cache: dict[str, dict[str, Any]] = {}
@@ -359,24 +335,16 @@ SETTING_KEYS: tuple[str, ...] = (
 )
 
 
-
-
-
-
 NUMBERS: dict[str, tuple[int, int]] = {
-
 
     "AQUATICY_SEARCH_VARIANTS": (1, 3),
     "AQUATICY_MAX_SUBAGENTS": (1, 12),
     "AQUATICY_SUBAGENT_BUDGET": (1, 40),
 
-
-
     "AQUATICY_SUBAGENT_PARALLEL": (0, 12),
     "AQUATICY_RPM": (1, 100_000),
     "AQUATICY_PARALLEL_CALLS": (1, 64),
     "AQUATICY_MAX_TOOL_CALLS": (1, 200),
-
 
     "AQUATICY_CONTEXT_TOKENS": (256, 2_000_000),
     "AQUATICY_PLANNER_TIMEOUT": (1, 600),
@@ -389,17 +357,14 @@ CHOICES: dict[str, tuple[str, ...]] = {
 }
 
 
-
 MAX_VALUE_CHARS = 2_000
 
 
 HA_TOKEN_FIELD = "__HA_TOKEN__"
 
 
-
 GOOGLE_ID_FIELD = "__GOOGLE_ID__"
 GOOGLE_SECRET_FIELD = "__GOOGLE_SECRET__"
-
 
 
 MAX_UPLOAD_BYTES = 25_000_000
@@ -408,12 +373,7 @@ MAX_UPLOAD_BYTES = 25_000_000
 MAX_UPLOADS = 5
 
 
-
-
-
 MAX_MESSAGE_CHARS = 100_000
-
-
 
 
 MAX_BODY_BYTES = MAX_UPLOAD_BYTES * MAX_UPLOADS * 4 // 3 + 1_000_000
@@ -421,9 +381,6 @@ REQUEST_READ_TIMEOUT = 30.0
 
 
 IMAGE_TYPES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-
-
-
 
 
 BLOCKED_UPLOAD_SUFFIXES = frozenset({
@@ -455,7 +412,6 @@ def blocked_upload(name: str) -> bool:
 _UPLOAD_TRENNER = re.compile(r"[.\s;:%$\x00-\x1f\x7f]+")
 
 
-
 _IMAGE_MAGIC = (
     (b"\x89PNG\r\n\x1a\n", "image/png"), (b"\xff\xd8\xff", "image/jpeg"),
     (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif"), (b"BM", "image/bmp"),
@@ -479,18 +435,13 @@ def looks_like_image(data: bytes) -> bool:
     return bool(image_mime(data))
 
 
-
 TEXT_TYPES = {".txt", ".md", ".csv", ".json", ".log", ".yaml", ".yml"}
-
-
 
 
 KEEP_UPLOADS = 50
 
 
-
 MAX_FILE_CHARS = 20_000
-
 
 
 TOKEN: str = ""
@@ -532,7 +483,6 @@ def public_error(text: str) -> str:
     if not wert or _TECHNISCH.search(wert):
         return GENERIC_ERROR
     return wert
-
 
 
 _BIBLIOTHEK = re.compile(
@@ -608,6 +558,11 @@ SHARDING: Any = None
 WEBSITE: Any = None
 
 PUBLIC_SERVER: Any = None
+# 15.5.5: HTTPS im Heimnetz und ueber Tailscale (aquaticy/homename.py)
+HOME_TLS: Any = None
+HOME_SERVER: Any = None
+HOME_ANNOUNCER: Any = None
+HOME_CA_ROUTES = frozenset({"/zertifikat", "/aquaticy-ca.crt"})
 
 
 LAN_ONLY = False
@@ -621,9 +576,6 @@ _CLUSTER_RESTART = threading.Event()
 CLUSTER_LOCAL = frozenset({"/api/auth/status", "/api/auth/login", "/api/auth/register",
                            "/api/auth/logout", "/api/auth/challenge", "/api/consent",
                            "/api/cluster"})
-
-
-
 
 
 POST_WHEN_BANNED = frozenset({
@@ -655,12 +607,7 @@ AUTH_BODY_BYTES = 16_384
 REQUEST_LIMIT = RateLimiter(attempts=240, window_seconds=60)
 
 
-
-
-
-
 ADDRESS_LIMIT = RateLimiter(attempts=1200, window_seconds=60)
-
 
 
 KEY_TEST_LIMIT = RateLimiter(attempts=10, window_seconds=60)
@@ -715,7 +662,6 @@ _INT_SETTINGS = {
     "AQUATICY_CONTEXT_TOKENS": "context_tokens",
     "AQUATICY_PLANNER_TIMEOUT": "planner_timeout",
 }
-
 
 
 NORMAL_CONTEXT_CAP = 32_768
@@ -775,13 +721,10 @@ def header_for(settings: Settings) -> dict[str, Any]:
 
         modell = str(kopf.get("model") or "")
 
-
-
         if modell and not local_name(modell) and not model_usable(settings, modell):
             auto = str(kopf.get("model_label") or "").startswith("Auto · ")
             kopf["model_label"] = ("Auto · " if auto else "") + "Modell wählen"
     if UPGRADE_DIR is not None:
-
         from aquaticy import upgrading
 
         with contextlib.suppress(Exception):
@@ -826,7 +769,6 @@ def system_gauges(data: dict[str, Any]) -> list[dict[str, Any]]:
                                 f"{speicher.get('entries')} Notizen",
                          "percent": speicher.get("percent")})
     return anzeigen
-
 
 
 ROLE_LABELS = {"modelle": "Modelle und etwas Website", "website": "Nur Website"}
@@ -925,9 +867,6 @@ def account_quota(profile: Path, account: Account | None = None) -> Any:
             return AUTH.quota(konto)
     erstellt = float(getattr(account, "created_at", 0.0) or 0.0)
     return Quota(profile / "quota.sqlite3", getattr(account, "id", "") or profile.name, erstellt)
-
-
-
 
 
 _MEDIA_CACHE: OrderedDict[tuple[str, str], tuple[float, bytes, str]] = OrderedDict()
@@ -1048,8 +987,6 @@ def client_ip(direkt: str, forwarded: str = "", real_ip: str = "") -> str:
     return direkt
 
 
-
-
 WORKSHOP_FIELDS: tuple[str, ...] = (
     "vm_size", "vm_image", "vm_idle_minutes", "vm_memory_mb", "vm_disk_gb", "vm_cpus",
     "vm_user_mode", "vm_internet", "vm_lan", "vm_desktop_image", "user_agent", "data_dir",
@@ -1104,7 +1041,6 @@ def _resume(agent: Any, session_id: str, entries: list[Any], untrusted: bool) ->
         if toolbox is not None and untrusted:
             with contextlib.suppress(Exception):
                 toolbox.untrusted_seen = True
-
 
     merken = getattr(agent, "remember_clarified", None)
     if callable(merken):
@@ -1193,20 +1129,15 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         search_keys=dict(base.search_keys),
     )
 
-
     raw = read_env_file(settings.env_path)
-
 
     settings.ha_url = ""
     settings.ha_token = ""
-
-
 
     settings.legal_guard = True
     for key, attr in _STRING_SETTINGS.items():
         if key in raw:
             setattr(settings, attr, raw[key].strip())
-
 
     if settings.google_client_id != base.google_client_id:
         settings.google_client_secret = ""
@@ -1219,10 +1150,7 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
                 setattr(settings, attr, int(raw[key]))
     _apply_vm_size(settings, raw, plan)
     if "AQUATICY_LEGAL_GUARD" in raw:
-
         settings.legal_guard = guard_on(raw["AQUATICY_LEGAL_GUARD"])
-
-
 
     from aquaticy.keyvault import SEARCH_KEY_NAMES
 
@@ -1232,8 +1160,6 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
     for name, wert in eigene.items():
         (settings.search_keys if name in SEARCH_KEY_NAMES else settings.api_keys)[name] = wert
     settings.own_key_names = frozenset(eigene)
-
-
 
     from aquaticy.addons import GITHUB_TOKEN_KEY
 
@@ -1250,7 +1176,6 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
     except Exception:
         settings.github_token = ""
 
-
     for name, attr in (("HA_TOKEN", "ha_token"), ("GOOGLE_CLIENT_SECRET", "google_client_secret")):
         with contextlib.suppress(Exception):
             alt = raw.get(name, "").strip()
@@ -1264,7 +1189,6 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
                 setattr(settings, attr, gespeichert)
     _bind_ha_token(settings, tresor)
 
-
     settings.account_email = str(getattr(account, "email", "") or "")
     settings.operator_search_backends = (
         None if plan == "ultra" else frozenset({(base.search_backend or "").lower()}))
@@ -1275,12 +1199,8 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         and eigene_adresse != (base.api_base or "") else ""
     )
 
-
     settings.api_base_for = base.model
     if plan != "ultra":
-
-
-
         settings.lan_enabled = False
         settings.ha_url = ""
         settings.ha_token = ""
@@ -1293,19 +1213,13 @@ def _profile_settings(profile: Path, plan: str, account: Account | None = None) 
         settings.vm_memory_mb = VM_SIZES["normal"]["memory_mb"]
         settings.vm_disk_gb = VM_SIZES["normal"]["disk_gb"]
 
-
-
         settings.legal_guard = True
         settings.vm_user_mode = False
-
-
 
         settings.vm_internet = False
         settings.vm_lan = False
 
-
         settings.quota = account_quota(profile, account)
-
 
         settings.api_base = base.api_base
         settings.searxng_url = base.searxng_url
@@ -1342,14 +1256,10 @@ Dauerhaft aendern lassen sich Modell, Suche und Ort oben unter **Einstellungen**
 class ChatSession:
     """Haelt einen Chat-Agenten und serialisiert die Anfragen dieses Chats."""
 
-
-
-
     ANSWER_TIMEOUT = 180.0
 
     def __init__(self, account: Account | None = None, profile: Path | None = None) -> None:
         self._lock = threading.Lock()
-
 
         self._agent_lock = threading.RLock()
         self._agent: Any = None
@@ -1358,22 +1268,16 @@ class ChatSession:
         self.profile = profile
         self.runs = RunBook()
 
-
         self._answers: queue.Queue[str] = queue.Queue()
-
-
-
 
         self._frage_offen = False
         self._frage_lock = threading.Lock()
-
 
         self._reload_after = False
 
         self._reload_workshop = False
 
         self._reload_old: Settings | None = None
-
 
         self._carry_over = ""
 
@@ -1431,7 +1335,6 @@ class ChatSession:
                           ) -> ChatSession:
         owner = self._owner
         with owner._chat_lock:
-
             for key, session in list(owner._chat_sessions.items()):
                 if len(owner._chat_sessions) < 16:
                     break
@@ -1458,7 +1361,6 @@ class ChatSession:
             last = book.latest()
             if not owner._chat_sessions and not current.has_running_chat() and not (
                     last is not None and last.resumable):
-
                 if chat_id:
                     data = current.open_chat(chat_id)
                 else:
@@ -1494,7 +1396,6 @@ class ChatSession:
             )
             self._upgrade_gen = -1
         if UPGRADE_DIR is not None:
-
             from aquaticy import upgrading
 
             directory = UPGRADE_DIR
@@ -1510,8 +1411,6 @@ class ChatSession:
                 value = getattr(self._settings, field)
                 if value and (field == "model" or not upgrading.allowed(
                         directory, value, self.ultra)):
-
-
                     with contextlib.suppress(upgrading.UpgradeError):
                         setattr(self._settings, field, upgrading.resolve(
                             directory, value, self.ultra,
@@ -1520,7 +1419,6 @@ class ChatSession:
 
     @property
     def plan(self) -> str:
-
         return self.account.plan if self.account is not None else "ultra"
 
     @property
@@ -1550,7 +1448,6 @@ class ChatSession:
                     werkzeuge.coworker_creator = lambda nutzlast: coworker_action(
                         {**nutzlast, "action": "create"}, getattr(self, "account", None),
                         session=self)[0]
-
 
                 if self._carry_over:
                     weiter, self._carry_over = self._carry_over, ""
@@ -1630,9 +1527,6 @@ class ChatSession:
                 if session is not self:
                     session.reload(workshop, _peers=False)
         if self.busy():
-
-
-
             if self._reload_old is None:
                 self._reload_old = self._settings
             self._reload_workshop = self._reload_workshop or workshop
@@ -1648,7 +1542,6 @@ class ChatSession:
             if self._agent is not None:
                 self._carry_over = str(getattr(self._agent, "session_id", ""))
 
-
                 self._carry_untrusted = bool(getattr(
                     getattr(self._agent, "toolbox", None), "untrusted_seen", False))
                 with contextlib.suppress(Exception):
@@ -1657,9 +1550,6 @@ class ChatSession:
             self._settings = None
             if self.profile is None:
                 reset_settings_cache()
-
-
-
 
             with contextlib.suppress(Exception):
                 from aquaticy.sandbox import forget_shared
@@ -1722,7 +1612,6 @@ class ChatSession:
         zu senden wuerde die Oberflaeche zweimal abschliessen lassen.
         """
 
-
         reload_after = False
         if self.busy():
             emit(
@@ -1760,11 +1649,13 @@ class ChatSession:
                     agent.use_subagents = self.settings().max_subagents > 0
                     agent.learning = Learning(self.settings().data_dir)
                     agent._refresh_system()
+                # 15.5.5: "schreib mir das auf WhatsApp" -- nur in den eigenen Chat.
+                agent.toolbox.messenger_sender = (
+                    (lambda messenger, text: messenger_to_owner(self, messenger, text))
+                    if owner_messenger_ready(self) else None)
                 previous_agent_limit = getattr(agent, "_agent_limit_override", None)
                 try:
                     def melden(name: str, payload: dict[str, Any]) -> None:
-
-
                         if name == "ask":
                             with self._frage_lock:
                                 self._frage_offen = True
@@ -1773,12 +1664,9 @@ class ChatSession:
                     agent.on_event = melden
                     agent.toolbox.on_event = agent.on_event
 
-
-
                     agent.toolbox.on_settings_changed = self._settings_dirty
                     agent.set_ask_handler(self._ask_browser)
                     agent._agent_limit_override = agents
-
 
                     plugin = None
                     plugin_prompt = ""
@@ -1824,13 +1712,11 @@ class ChatSession:
                             )
                         )
 
-
                         if context:
                             from aquaticy.injection import wrap_attachment
 
                             context = wrap_attachment(context)
                         message = f"{context}\n\n{message}" if context else message
-
 
                         if context and getattr(agent, "toolbox", None) is not None:
                             agent.toolbox.untrusted_seen = True
@@ -1839,8 +1725,6 @@ class ChatSession:
                         "recheck": recheck, "effort": effort, "online": online,
                         "sandbox": sandbox,
                     }
-
-
 
                     from aquaticy.agent import Agent as BuiltinAgent
                     if isinstance(agent, BuiltinAgent):
@@ -1865,11 +1749,7 @@ class ChatSession:
                         self._reload_after = False
                         reload_after = True
 
-
         finally:
-
-
-
             if reload_after or self._reload_after:
                 self._reload_after = False
                 self.reload()
@@ -1905,7 +1785,6 @@ class ChatSession:
         except queue.Empty:
             return ""
         finally:
-
             with self._frage_lock:
                 self._frage_offen = False
 
@@ -1969,9 +1848,6 @@ class ChatSession:
             emit("upload", {"name": name, "bytes": len(data)})
             block = self._one_attachment(agent, name, data)
 
-
-
-
             gelegt = self._into_workshop(name, data) if workshop else ""
             if gelegt:
                 block += f"\n[Liegt in der virtual machine unter {gelegt}]"
@@ -1999,7 +1875,6 @@ class ChatSession:
 
         reservation = None
         try:
-
             reservation = metering.reserve_work(self.settings(), "datei")
             antwort = werkstatt.shared(self.settings()).put_bytes(f"eingang/{schlicht}", data)
             if isinstance(antwort, dict) and antwort.get("written"):
@@ -2008,8 +1883,6 @@ class ChatSession:
         except metering.QuotaExceeded:
             return ""
         except Exception:
-
-
             logging.getLogger("aquaticy.web").warning(
                 "Anhang nicht in die virtual machine gelegt", exc_info=True)
         finally:
@@ -2021,15 +1894,12 @@ class ChatSession:
         """Liest eine einzelne Datei aus -- je nach Art auf ihrem eigenen Weg."""
         suffix = Path(name).suffix.lower()
 
-
-
         limit = min(MAX_FILE_CHARS, agent.blob_limit()) if hasattr(agent, "blob_limit") else (
             MAX_FILE_CHARS
         )
 
         if suffix in IMAGE_TYPES:
             if not looks_like_image(data):
-
                 return f"[Bild {name}: keine gültige Bilddatei – nicht angenommen]"
             try:
                 path = self._store(name, data)
@@ -2087,10 +1957,6 @@ class ChatSession:
             raise ValueError("Nutzung: /image pfad/zum/bild.jpg (oder ein Ordner)")
         target = Path(argument)
         if self.account is not None:
-
-
-
-
             uploads = (self.settings().data_dir / "uploads").resolve()
             target = (uploads / target).resolve()
             if not target.is_relative_to(uploads):
@@ -2102,7 +1968,6 @@ class ChatSession:
             target = target.expanduser()
         image = resolve_image(target)
         if image.suffix.lower() not in IMAGE_SUFFIXES:
-
             raise ValueError(
                 f"{image.name} ist kein Bild ({', '.join(IMAGE_SUFFIXES)})."
             )
@@ -2128,7 +1993,6 @@ class ChatSession:
             if command == "help":
                 return {"text": HELP_MARKDOWN + self._plugin_help()}
 
-
             from aquaticy import plugins as plugin_mod
 
             plugin = plugin_mod.match(line, self.settings(), self.ultra)
@@ -2136,9 +2000,6 @@ class ChatSession:
                 return {"text": plugin_mod.usage(plugin.addon)}
 
             if command == "max":
-
-
-
                 return {
                     "text": (
                         "**/max** stellt im **Pro-Modus** die volle Mannschaft auf: "
@@ -2443,7 +2304,6 @@ USER_NATIVE: dict[str, Any] = {}
 NATIVE_HUB: Any = None
 
 
-
 _SCHEDULER_LOCK = threading.Lock()
 
 
@@ -2520,20 +2380,14 @@ def start_user_scheduler(account: Account) -> None:
     from aquaticy import coworker as coworker_mod
 
     with _SCHEDULER_LOCK:
-
-
         konto_id = account.id
 
         def ruht() -> bool:
-
-
             return (AIGUARD is not None
                     and AIGUARD.is_banned(user_id=konto_id) is not None) or (
                 CLUSTER is not None and not CLUSTER.is_home(konto_id))
 
         if account.id not in USER_COWORKERS:
-
-
             kollegen = coworker_mod.Scheduler(
                 SESSIONS.get(account).settings,
                 plan=lambda: _plan_of(konto_id, account),
@@ -2568,9 +2422,6 @@ def _build_bridge_runner(get_session: Callable[[], Any], account: Any) -> Any:
         return get_session().settings()
 
     def ruht() -> bool:
-
-
-
         if account is not None:
             if _plan_of(account.id, account) != "ultra":
                 return True
@@ -2730,8 +2581,7 @@ def secure_messenger_order(session: Any, befehl: str, auftrag: str) -> str:
         if stand.get("score") is not None:
             antwort += f"\nSicherheitswert: {stand['score']}/100 ({stand.get('grade', '')})"
         if stand.get("checked"):
-            antwort += "\nLetzte Prüfung: " + time.strftime(
-                "%d.%m.%Y %H:%M", time.localtime(stand["checked"]))
+            antwort += "\nLetzte Prüfung: " + zeit.text(stand["checked"])
         wichtig = stand.get("important", [])
         antwort += (f"\nWichtig: {len(wichtig)}\n" + "\n".join(f"• {t}" for t in wichtig[:5])
                     if wichtig else "\nNichts Wichtiges.")
@@ -2786,6 +2636,38 @@ def _native_paused(account: Any) -> bool:
     if AIGUARD is not None and AIGUARD.is_banned(user_id=account.id) is not None:
         return True
     return CLUSTER is not None and not CLUSTER.is_home(account.id)
+
+
+def owner_messenger_ready(session: Any) -> bool:
+    """Hat dieses Konto WhatsApp oder Signal direkt gekoppelt (und darf es nutzen)?"""
+    konto = getattr(session, "account", None)
+    if not getattr(session, "ultra", False) or _native_paused(konto):
+        return False
+    try:
+        return bool(_native_hub(session).owner_channels())
+    except Exception:
+        return False
+
+
+def messenger_to_owner(session: Any, messenger: str, text: str) -> dict[str, Any]:
+    """Schickt dem Konto eine Nachricht in den eigenen Messenger-Chat (15.5.5)."""
+    from aquaticy.messenger_native import NAMES
+
+    if not owner_messenger_ready(session):
+        return {"error": "WhatsApp oder Signal ist nicht gekoppelt."}
+    hub = _native_hub(session)
+    wege = hub.owner_channels()
+    ziel = messenger or (wege[0] if wege else "")
+    if ziel not in wege:
+        return {"error": f"{NAMES.get(ziel, ziel) or 'Dieser Messenger'} ist nicht gekoppelt. "
+                         f"Gekoppelt: {', '.join(NAMES.get(w, w) for w in wege) or 'keiner'}."}
+    stand = hub.message_owner(ziel, text)
+    if not stand:
+        return {"error": "Die Nachricht ließ sich gerade nicht senden. Versuch es gleich noch "
+                         "einmal."}
+    return {"sent": stand == "gesendet", "queued": stand == "wartet", "messenger": ziel,
+            "note": ("Gesendet." if stand == "gesendet" else
+                     "Die Verbindung wird aufgebaut, die Nachricht geht gleich raus.")}
 
 
 SECURE_WATCHER: Any = None
@@ -2954,8 +2836,9 @@ def feature_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
                 if state["error"]:
                     answer += "\n" + state["error"]
                 if state["checked"]:
-                    answer += "\nLetzte abgeschlossene Prüfung: " + time.strftime(
-                        "%Y-%m-%d %H:%M:%S UTC", time.gmtime(state["checked"]))
+                    answer += ("\nLetzte abgeschlossene Prüfung: "
+                               + zeit.text(state["checked"], "%d.%m.%Y %H:%M:%S")
+                               + f" ({zeit.kurz(zeit.aus_stempel(state['checked']))})")
                 if state["positives"]:
                     answer += "\n\nPositiv beobachtet:\n- " + "\n- ".join(state["positives"])
                 answer += "\n" + ("\n".join(state["findings"]) or
@@ -3255,7 +3138,6 @@ def forget_account_runtime(account: Account) -> None:
         _stop_native(hub)
     sitzung = SESSIONS.drop(account.id)
 
-
     with contextlib.suppress(Exception):
         from aquaticy import coworker as coworker_mod
 
@@ -3265,8 +3147,6 @@ def forget_account_runtime(account: Account) -> None:
         if ordner is not None:
             coworker_mod.stop_boxes(ordner)
     if sitzung is not None:
-
-
         chats = sitzung.chat_sessions()
         for chat in chats:
             with contextlib.suppress(Exception):
@@ -3290,10 +3170,7 @@ def ui_state() -> Any:
     return UIState(SESSION.settings().db_path)
 
 
-
-
 COWORKER_SCHEDULER: Any = None
-
 
 
 OWN_MODEL_FIELDS = (
@@ -3345,8 +3222,6 @@ def current_values() -> dict[str, str]:
         "AQUATICY_MAX_SUBAGENTS": str(settings.max_subagents),
         "AQUATICY_SUBAGENT_BUDGET": str(settings.subagent_budget),
         "AQUATICY_SUBAGENT_PARALLEL": str(settings.subagent_parallel),
-
-
 
         "AQUATICY_RPM": str(settings.rpm) if settings.rpm else "",
         "AQUATICY_PARALLEL_CALLS": str(settings.parallel_calls) if settings.parallel_calls else "",
@@ -3436,13 +3311,7 @@ def google_state(settings: Settings) -> dict[str, Any]:
     }
 
 
-
-
-
-
-
 _GOOGLE_STATES: dict[str, tuple[str, float, str]] = {}
-
 
 
 GOOGLE_FLOW_COOKIE = "aquaticy_google_flow"
@@ -3510,10 +3379,20 @@ def google_redirect(host: str = "") -> str:
     aufrufenden Geraet ab: sie muss mit der in der Google Cloud Console
     eingetragenen uebereinstimmen, sonst lehnt Google ab.
     """
-    port = host.rsplit(":", 1)[-1] if ":" in host else str(DEFAULT_PORT)
-    if not port.isdigit():
-        port = str(DEFAULT_PORT)
-    return f"http://localhost:{port}/google"
+    # 15.5.5: dieselbe Loopback-Schreibweise wie im Browser. Wer Aquaticy unter
+    # http://127.0.0.1:8765 offen hat, kam bisher auf http://localhost:8765 zurueck -- fuer den
+    # Browser eine andere Adresse, ohne Anmeldung und ohne Ablauf-Cookie. Die Verbindung
+    # scheiterte dann mit "gehört zu keiner Anmeldung". Desktop-App-Clients von Google nehmen
+    # 127.0.0.1, [::1] und localhost mit jedem Port.
+    name, port = "", None
+    with contextlib.suppress(ValueError):
+        teile = urlsplit("//" + host) if host else None
+        name = (teile.hostname or "") if teile else ""
+        port = teile.port if teile else None
+    if port is None:
+        port = int(SERVER.server_address[1]) if SERVER is not None else DEFAULT_PORT
+    loop = "127.0.0.1" if name == "127.0.0.1" else "[::1]" if name == "::1" else "localhost"
+    return f"http://{loop}:{port}/google"
 
 
 def check_values(values: dict[str, str]) -> str:
@@ -3593,7 +3472,6 @@ def save_values(payload: dict[str, Any]) -> Path:
             "Der User mode (virtual machine mit Desktop und Internet) braucht ein Ultra-Konto."
         )
 
-
     netz_on = "AQUATICY_VM_INTERNET" in payload and str(
         payload.get("AQUATICY_VM_INTERNET", "")
     ).strip().lower() in {"1", "true", "yes", "on", "ja"}
@@ -3604,15 +3482,12 @@ def save_values(payload: dict[str, Any]) -> Path:
         payload.get("AQUATICY_VM_LAN", "")
     ).strip().lower() in {"1", "true", "yes", "on", "ja"}
     if lan_on and not session.ultra:
-
         raise ValueError("Das lokale Netz für die virtual machine gibt es nur mit einem "
                          "Ultra-Konto.")
     values = {
         key: str(payload.get(key, "")).strip() for key in SETTING_KEYS if key in payload
     }
     if "AQUATICY_LEGAL_GUARD" in values:
-
-
         values["AQUATICY_LEGAL_GUARD"] = "false" if guard_off else "true"
     beanstandung = check_values(values)
     if beanstandung:
@@ -3632,8 +3507,6 @@ def save_values(payload: dict[str, Any]) -> Path:
             if not model_allowed(values[key], basis):
                 raise ValueError(MODEL_RULE_TEXT)
     if UPGRADE_DIR is not None:
-
-
         from aquaticy import upgrading
 
         for key in ("AQUATICY_MODEL", "AQUATICY_VISION_MODEL",
@@ -3654,7 +3527,6 @@ def save_values(payload: dict[str, Any]) -> Path:
         if ziel:
             geheim["HA_TOKEN_URL"] = ziel
 
-
     google_id = str(payload.get(GOOGLE_ID_FIELD, "")).strip()
     if google_id:
         values["GOOGLE_CLIENT_ID"] = google_id
@@ -3662,7 +3534,6 @@ def save_values(payload: dict[str, Any]) -> Path:
     if google_secret:
         geheim["GOOGLE_CLIENT_SECRET"] = google_secret
     if geheim and session.profile is None:
-
         geheim.pop("HA_TOKEN_URL", None)
         values.update(geheim)
         geheim = {}
@@ -3682,9 +3553,6 @@ def save_values(payload: dict[str, Any]) -> Path:
                 tresor.set_secret(name, wert)
             except VaultError as exc:
                 raise ValueError(str(exc)) from exc
-
-
-
 
     if session.profile is None:
         load_env(written, override=True)
@@ -3715,8 +3583,6 @@ def scrub_payload(wert: Any, geheim: list[str]) -> Any:
     if isinstance(wert, list):
         return [scrub_payload(v, geheim) for v in wert]
     return wert
-
-
 
 
 _SCHLUESSEL_MUSTER = re.compile(
@@ -3864,7 +3730,6 @@ def addons_view(session: Any) -> dict[str, Any]:
 
     settings = session.settings()
 
-
     for provider in linked.linked_providers(settings):
         addons.mark_installed(settings, provider)
     view = addons.public_view(settings, session.ultra)
@@ -3896,12 +3761,10 @@ def _native_bridge_status(bruecke: dict[str, Any], native: dict[str, Any]) -> No
     bruecke["direkt"] = True
 
 
-
 ADDON_ACTIONS = frozenset({
     "install", "uninstall", "enable", "disable", "token", "login", "login_done", "logout",
     "feeds", "rights", "bridge",
 })
-
 
 
 _RESTARTS_WORKSHOP = frozenset({"uninstall", "enable", "disable", "logout"})
@@ -3974,7 +3837,6 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
             if addon.programm:
                 session.reload(workshop=True)
             if addon.id in addons.MODEL_ADDONS:
-
                 _forget_model_key(session, addon.id)
                 forget_strong_models(session.settings().data_dir)
             addons.uninstall(session.settings(), addon.id)
@@ -4015,9 +3877,6 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
                 " Entferne die virtual machine auf dem Handy auch unter „Verknüpfte Geräte“."
                 if addon.login == "qr" else "")
         elif action == "rights":
-
-
-
             neu = addons.set_rights(settings, addon.id, payload.get("rechte"))
             hinweis = "Gespeichert: " + addons.rights_text(addon.id, neu) + "."
         elif action == "bridge":
@@ -4027,7 +3886,6 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
             session.reload()
             hinweis = f"{len(feeds)} Feeds gespeichert."
         if action in ("uninstall", "disable", "logout"):
-
             from aquaticy import bridge as bridge_mod
 
             if addon.id in bridge_mod.MESSENGERS:
@@ -4040,9 +3898,6 @@ def addon_action(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     if action == "login":
         antwort["qr_token"] = qr_token
     return antwort, 200
-
-
-
 
 
 COWORKER_ACTIONS = frozenset({
@@ -4139,8 +3994,6 @@ def coworker_image(payload: dict[str, Any], settings: Settings) -> tuple[str, st
             f"{MAX_UPLOAD_BYTES // 1_000_000} MB)."
         )
     try:
-
-
         return save_snapshot(settings.data_dir, data, image_mime(data), keep=True), ""
     except (OSError, ValueError):
         return "", "Dieses Bildformat wird nicht unterstützt (JPEG, PNG, WebP, GIF)."
@@ -4252,7 +4105,6 @@ def coworker_action(payload: dict[str, Any], konto: Any, *,
                 if entschieden is None:
                     return {"ok": False, "error": "Diese Anfrage ist schon entschieden."}, 409
                 if action == "approve":
-
                     def ausfuehren() -> None:
                         try:
                             banned = AIGUARD is not None and konto is not None and \
@@ -4570,11 +4422,9 @@ def addon_qr(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int
         return {"error": "Die QR-Erkennung fehlt. Aktualisiere Aquaticy und starte den "
                          "Server neu."}, 503
     except Exception:
-
         return {"error": "Der QR-Code lässt sich gerade nicht lesen. Versuch es erneut."}, 502
     finally:
         owner._qr_lock.release()
-
 
 
 INPUT_KEYS = frozenset({
@@ -4601,7 +4451,6 @@ def workshop_input(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
 
     session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
     if not session.ultra:
-
         return {"ok": False, "error": "Der User mode gehört zu Ultra."}, 403
     settings = session.settings()
     if not getattr(settings, "vm_user_mode", False):
@@ -4609,8 +4458,6 @@ def workshop_input(payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
     box = werkstatt.shared(settings)
     art = str(payload.get("art") or "").strip().lower()
     if art == "open":
-
-
         from aquaticy.desktop import URL_RE
 
         adresse = str(payload.get("url") or "").strip()
@@ -4724,7 +4571,6 @@ def _design_style(design: dict[str, Any]) -> str:
     return ";".join(teile)
 
 
-
 _UI_CACHE: dict[str, Any] = {"entry": None}
 _STATIC_CACHE: dict[str, bytes] = {}
 _CACHE_LOCK = threading.Lock()
@@ -4786,9 +4632,6 @@ def with_state(html: str, *, nonce: str = "") -> str:
     from aquaticy.uistate import defaults
 
     if AUTH is not None and getattr(SESSION.current(), "account", None) is None:
-
-
-
         stand = defaults()
     else:
         try:
@@ -4802,19 +4645,15 @@ def with_state(html: str, *, nonce: str = "") -> str:
     if stand.get("palette"):
         attrs += f' data-palette="{stand["palette"]}"'
 
-
     if stand.get("palette") == "custom":
         stil = _design_style(stand.get("design") or {})
         if stil:
             attrs += f' style="{stil}"'
 
-
-
     if stand.get("fontsize") in ("small", "large"):
         attrs += f' data-fontsize="{stand["fontsize"]}"'
     sprache = "en" if stand.get("lang") == "en" else "de"
     html = html.replace('<html lang="de">', f'<html lang="{sprache}"{attrs}>', 1)
-
 
     koerper = ["start"]
     if stand.get("mode") == "code":
@@ -4826,10 +4665,6 @@ def with_state(html: str, *, nonce: str = "") -> str:
     if stand.get("denken"):
         koerper.append("denken")
     html = html.replace('<body class="start">', f'<body class="{" ".join(koerper)}">', 1)
-
-
-
-
 
     roh = json.dumps(stand, ensure_ascii=False).replace("</", "<\\/")
     texte = json.dumps(webview.start_texts(), ensure_ascii=False).replace("</", "<\\/")
@@ -4913,8 +4748,6 @@ class Handler(BaseHTTPRequestHandler):
         return
 
     def send_response(self, code: int, message: str | None = None) -> None:
-
-
         self.responded = True
         super().send_response(code, message)
 
@@ -4933,11 +4766,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
 
-
         self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=()")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         if self._https():
-
             self.send_header("Strict-Transport-Security", "max-age=31536000")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header(
@@ -4959,13 +4790,10 @@ class Handler(BaseHTTPRequestHandler):
         self.responded = False
         self.__dict__.pop("_pending_headers", None)
 
-
         self._retry_after = 0
         route = self._route()
         client = self._client_ip()
         weitergereicht = bool(getattr(self, "_cluster_user", ""))
-
-
 
         gezaehlt = route not in STATIC_FILES and not weitergereicht
         if gezaehlt and not ADDRESS_LIMIT.allow(client):
@@ -4987,7 +4815,6 @@ class Handler(BaseHTTPRequestHandler):
 
             "/api/auth/challenge",
 
-
             "/api/auth/logout",
         }
         if AUTH is not None and route.startswith("/api/") and not public and account is None:
@@ -4995,9 +4822,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if (self.command == "POST" and AIGUARD is not None and account is not None
                 and route not in POST_WHEN_BANNED):
-
-
-
             sperre = AIGUARD.is_banned(user_id=account.id, ip=client)
             if sperre is not None:
                 from aquaticy.aiguard import BANNED_MESSAGE, ban_info
@@ -5035,8 +4859,6 @@ class Handler(BaseHTTPRequestHandler):
                 with contextlib.suppress(OSError):
                     self._json({"error": str(exc)}, 400)
         except Exception as exc:
-
-
             print(f"  [Fehler] {self.command}: {type(exc).__name__}")
             if not self.responded:
                 with contextlib.suppress(OSError):
@@ -5047,7 +4869,6 @@ class Handler(BaseHTTPRequestHandler):
                     del _REQUEST.session
             else:
                 _REQUEST.session = previous
-
 
     def _cluster_dispatch(self, route: str, account: Account, weitergereicht: bool) -> bool:
         """Reicht die Anfrage an den Heimserver des Kontos weiter.
@@ -5072,9 +4893,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return True
         if (route in CLUSTER_LOCAL or route in STATIC_FILES or route in LEGAL_ROUTES
-                or route.startswith("/cluster/")):
+                or route in HOME_CA_ROUTES or route.startswith("/cluster/")):
             return False
-
 
         if not self._authorized():
             self._deny()
@@ -5139,7 +4959,6 @@ class Handler(BaseHTTPRequestHandler):
             elif route == "/cluster/proxy":
                 self._cluster_proxy(verbund, daten, direkt)
             elif route in ("/cluster/hello", "/cluster/hello-status", "/cluster/hello-join"):
-
                 if not CLUSTER_HELLO_LIMIT.allow(direkt):
                     self._json({"error": "Zu viele Anfragen."}, 429)
                     return
@@ -5236,7 +5055,6 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile = roh
             self.close_connection = True
 
-
     def _queue_header(self, name: str, wert: str) -> None:
         """Eine Kopfzeile fuer die naechste Antwort (etwa ein Cookie, 9.6.9 Luna)."""
         if not isinstance(self.__dict__.get("_pending_headers"), list):
@@ -5278,12 +5096,10 @@ class Handler(BaseHTTPRequestHandler):
         mensch_ok = (isinstance(mensch, dict) and botguard.check(mensch, ("human",))
                      and botguard.human_track(mensch.get("track")))
 
-
         beweis_ok = mensch_ok or botguard.check(payload.get("proof"), ("visit",))
         skript = bool(botguard.fingerprint(self.headers, beweis_ok,
                                            payload.get("webdriver") is True,
                                            self._fetch_metadata_expected()))
-
 
         gesperrt = BOT_BANS.remaining(*schluessel[1:])
         if skript:
@@ -5335,10 +5151,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, payload: dict[str, Any], status: int = 200) -> None:
         if isinstance(payload, dict) and isinstance(payload.get("error"), str):
-
-
             payload = {**payload, "error": scrub_error(payload["error"])}
-
 
             payload["error"] = (GENERIC_ERROR if status >= 500
                                 else public_error(payload["error"]))
@@ -5373,8 +5186,6 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
-
-
 
         for extra_name, extra_value, extra_age in extra:
             self._set_cookie(extra_name, extra_value, extra_age)
@@ -5422,8 +5233,6 @@ class Handler(BaseHTTPRequestHandler):
         if AUTH is None:
             return None
         if getattr(self, "_cluster_user", ""):
-
-
             return AUTH.account(self._cluster_user)
         return AUTH.session_account(self._cookie(AUTH_COOKIE), self._device(),
                                     self._client_ip())
@@ -5441,9 +5250,6 @@ class Handler(BaseHTTPRequestHandler):
             return {"banned": False}
 
     def _origin_ok(self) -> bool:
-
-
-
         herkunft = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
         if herkunft in {"cross-site", "same-site"}:
             return False
@@ -5471,8 +5277,6 @@ class Handler(BaseHTTPRequestHandler):
         return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
 
     def _set_cookie(self, name: str, value: str, max_age: int) -> None:
-
-
         secure = "; Secure" if self._https() else ""
         self.send_header(
             "Set-Cookie",
@@ -5542,12 +5346,7 @@ class Handler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, ValueError):
             return {}
 
-
-
-
         return gelesen if isinstance(gelesen, dict) else {}
-
-
 
     def _nur_heimnetz(self) -> bool:
         """Mit eigener Domain (11.1) gilt dieser Eingang nur fuer Heimnetz, Tailscale
@@ -5634,7 +5433,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"forgotten": store.clear()})
                 return
 
-
             try:
                 nummer = int(eintrag)
             except ValueError:
@@ -5667,7 +5465,6 @@ class Handler(BaseHTTPRequestHandler):
         name = safe_name(wanted.rsplit("/", 1)[-1] or "datei")
         self.send_response(200)
 
-
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Disposition", f'attachment; filename="{name}"')
         self.send_header("Content-Length", str(len(data)))
@@ -5687,8 +5484,6 @@ class Handler(BaseHTTPRequestHandler):
         box = werkstatt.shared(SESSION.settings())
         if not box.alive or not box.user_mode:
             if "leise=1" in self.path:
-
-
                 self.send_response(204)
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
@@ -5708,6 +5503,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_home_ca(self, route: str) -> None:
+        from aquaticy import homename
+
+        if route == "/aquaticy-ca.crt":
+            daten = homename.ca_certificate(HOME_TLS.data_dir)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-x509-ca-cert")
+            self.send_header("Content-Disposition", 'attachment; filename="aquaticy-ca.crt"')
+        else:
+            daten = homename.instructions_page().encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(daten)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(daten)
+
     def _send_static(self, route: str) -> None:
         """Eine feste Datei aus aquaticy/static -- mit Zwischenspeicher im Browser."""
         try:
@@ -5724,13 +5537,14 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(daten)
 
     def _get(self) -> None:
-
-
         if self._route() in STATIC_FILES:
             self._send_static(self._route())
             return
-
-
+        if self._route() in HOME_CA_ROUTES and HOME_TLS is not None:
+            # 15.5.5: das oeffentliche CA-Zertifikat fuer https://aquaticy.local -- ohne
+            # Anmeldung (es ist oeffentlich), nie der Schluessel.
+            self._send_home_ca(self._route())
+            return
 
         ruecksprung = self._route() == "/google" and bool(self._cookie(GOOGLE_FLOW_COOKIE))
         if not ruecksprung and not self._authorized():
@@ -5767,8 +5581,6 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/auth/challenge":
-
-
             self._json(botguard.issue("visit"))
         elif route == "/api/learning":
             from aquaticy.learning import Learning
@@ -5802,7 +5614,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "Bitte melde dich an."}, 401)
                 return
 
-
             self._json(
                 {
                     "email": account.email,
@@ -5822,8 +5633,6 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/account/security":
-
-
             account = self._account()
             if account is None or AUTH is None:
                 self._json({"error": "Bitte melde dich an."}, 401)
@@ -5848,7 +5657,6 @@ class Handler(BaseHTTPRequestHandler):
                             "username": SESSION.account.username,
                             "plan": SESSION.plan,
 
-
                             "plan_label": SESSION.account.plan_label,
                             "pro": SESSION.pro,
                             "ultra": SESSION.ultra,
@@ -5867,11 +5675,7 @@ class Handler(BaseHTTPRequestHandler):
                     "ha_connected": bool(settings.ha_url and settings.ha_token),
                     "search_key_set": bool(settings.search_api_key),
 
-
-
-
                     "strong_model": (strong_models(1) or [{}])[0].get("id", ""),
-
 
                     "strong_code_model": (
                         strong_models(1, purpose="code") or [{}]
@@ -5886,7 +5690,6 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/header":
-
             self._json(header_for(SESSION.settings()))
         elif route == "/api/run":
             self._run_stream()
@@ -5895,7 +5698,6 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/chats":
             settings = SESSION.settings()
             cache = Cache(settings.db_path, settings.cache_ttl_hours)
-
 
             frage = parse_qs(urlsplit(self.path).query)
             suche = (frage.get("q") or [""])[0].strip()
@@ -5930,9 +5732,6 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
         elif route == "/api/chatexport":
-
-
-
             settings = SESSION.settings()
             cache = Cache(settings.db_path, settings.cache_ttl_hours)
             wanted = (parse_qs(urlsplit(self.path).query).get("session_id") or [""])[0].strip()
@@ -5945,8 +5744,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"title": title, "markdown": chat_markdown(title, entries),
                         "filename": webview.export_filename(title)})
         elif route == "/api/werkstatt":
-
-
             from aquaticy import sandbox as werkstatt
 
             box = werkstatt.shared(SESSION.settings())
@@ -5968,7 +5765,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(addons_view(SESSION.current() if isinstance(SESSION, SessionProxy)
                                    else SESSION))
         elif route == "/api/context":
-
             einstellungen = SESSION.settings()
             gewuenscht = (parse_qs(urlsplit(self.path).query).get("model") or [""])[0].strip()
             modell = gewuenscht if _MODELL_RE.fullmatch(gewuenscht) else einstellungen.model
@@ -5977,9 +5773,6 @@ class Handler(BaseHTTPRequestHandler):
                           if konto is not None and not SESSION.ultra else 0)
             self._json(context_view(einstellungen, modell, obergrenze))
         elif route == "/api/vm":
-
-
-
             from aquaticy import sandbox as werkstatt
 
             einstellungen = SESSION.settings()
@@ -5993,13 +5786,10 @@ class Handler(BaseHTTPRequestHandler):
                 "runtime": laufzeit is not None,
             })
         elif route == "/api/plugins":
-
             from aquaticy import plugins as plugin_mod
 
             self._json({"commands": plugin_mod.commands(SESSION.settings(), SESSION.ultra)})
         elif route == "/api/coworkers":
-
-
             nur = (parse_qs(urlsplit(self.path).query).get("badge") or [""])[0] == "1"
             sitzung = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
             self._json(coworkers_view(sitzung, badge_only=nur))
@@ -6009,8 +5799,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(ui_state().read())
         elif route == "/api/models":
             from aquaticy.system import available_models
-
-
 
             frage = parse_qs(urlsplit(self.path).query)
             zweck = (frage.get("purpose") or [""])[0].strip()
@@ -6025,14 +5813,11 @@ class Handler(BaseHTTPRequestHandler):
             gesehen = {m.get("id") for m in alle}
             alle = alle + [m for m in verknuepft if m["id"] not in gesehen]
             if SHARDING is not None and SHARDING.ready():
-
                 alle = [{"id": SPLIT_MODEL_ID, "label": SHARDING.label(), "kind": "Verbund",
                          "note": f"Verteilt auf {SHARDING.servers()} Server",
                          "source": "operator", "source_label": ""}] + [
                     m for m in alle if m.get("id") != SPLIT_MODEL_ID]
             if UPGRADE_DIR is not None:
-
-
                 from aquaticy import upgrading
 
                 current = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
@@ -6043,9 +5828,6 @@ class Handler(BaseHTTPRequestHandler):
                 "strong": strong_models(3, purpose=zweck) + verknuepft,
             }
             if modus:
-
-
-
                 antwort["picker"] = webview.picker_view(
                     modus, alle,
                     strong_models(3, purpose="code" if modus == "code" else "") + verknuepft,
@@ -6053,7 +5835,6 @@ class Handler(BaseHTTPRequestHandler):
                 )
             self._json(antwort)
         elif route == "/api/memory":
-
             if not SESSION.settings().memory_enabled:
                 self._json({"enabled": False, "entries": []})
             else:
@@ -6073,8 +5854,6 @@ class Handler(BaseHTTPRequestHandler):
 
             settings = SESSION.settings()
 
-
-
             self._json({
                 "limits": usage_view(settings),
                 "stats": (
@@ -6083,9 +5862,6 @@ class Handler(BaseHTTPRequestHandler):
                 ),
             })
         elif route == "/api/system":
-
-
-
             if not SESSION.ultra:
                 self._json({"error": "Die Auslastungsanzeige gibt es nur mit Ultra."}, 403)
                 return
@@ -6094,12 +5870,10 @@ class Handler(BaseHTTPRequestHandler):
             settings = SESSION.settings()
             payload = snapshot(settings.data_dir)
 
-
             if settings.memory_enabled:
                 payload["storage"] = storage_view(SESSION.memory().usage())
             payload["gauges"] = system_gauges(payload)
             if CLUSTER is not None and CLUSTER.joined:
-
                 with contextlib.suppress(Exception):
                     payload["cluster"] = cluster_gauges(CLUSTER)
             self._json(payload)
@@ -6149,7 +5923,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             payload = self._read_json(limit=AUTH_BODY_BYTES)
 
-
             from aquaticy.devices import (
                 DEVICE_COOKIE,
                 DEVICE_COOKIE_AGE,
@@ -6166,8 +5939,6 @@ class Handler(BaseHTTPRequestHandler):
                 payload.get("device"),
                 user_agent=self.headers.get("User-Agent") or "",
                 accept_language=self.headers.get("Accept-Language") or "",
-
-
 
                 cookie=geraete_kennung,
             )
@@ -6188,11 +5959,8 @@ class Handler(BaseHTTPRequestHandler):
                     )
                     return
 
-
                 if AIGUARD is not None:
                     from aquaticy.aiguard import BANNED_MESSAGE
-
-
 
                     if AIGUARD.is_banned(ip=self._client_ip(),
                                          device=geraet.cookie_hash) is not None:
@@ -6215,8 +5983,6 @@ class Handler(BaseHTTPRequestHandler):
                     self._json({"ok": False, "error": str(exc)}, 400)
                     return
             else:
-
-
                 if not self._bot_gate(payload, geraet, neue_kennung):
                     return
                 konto_schluessel = "login:" + str(payload.get("email", "")).strip().lower()
@@ -6235,8 +6001,6 @@ class Handler(BaseHTTPRequestHandler):
                                 else "E-Mail oder Passwort stimmt nicht."}, 401)
                     return
 
-
-
             if AIGUARD is not None:
                 from aquaticy.aiguard import BANNED_MESSAGE
 
@@ -6254,15 +6018,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             AUTH.note_seen(account.id, self._client_ip())
 
-
-
             if not route.endswith("register"):
                 with contextlib.suppress(Exception):
                     if not AUTH.is_known_device(account.id, geraet):
                         AUTH.add_event(account.id, "neues-geraet",
                                        f"Anmeldung mit {geraet.browser} auf "
                                        f"{geraet.hardware.split(' · ')[0]}")
-
 
             with contextlib.suppress(Exception):
                 AUTH.note_device(account.id, geraet)
@@ -6399,21 +6160,17 @@ class Handler(BaseHTTPRequestHandler):
             antwort, status = coworker_action(self._read_json(), self._account())
             self._json(antwort, status)
         elif route == "/api/prefs":
-
-
             self._json(ui_state().write(self._read_json()))
         elif route == "/api/stop":
             self._json({"ok": SESSION.stop()})
         elif route == "/api/answer":
             text = str(self._read_json().get("text", "")).strip()[:MAX_MESSAGE_CHARS]
 
-
             konto = self._account()
             aktueller = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
             if (AIGUARD is not None and konto is not None
                     and self._aiguard_text(konto, text, aktueller.chat_id(),
                                            previous_user_message(aktueller))):
-
                 with contextlib.suppress(Exception):
                     SESSION.stop()
                 return
@@ -6434,15 +6191,11 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 written = save_values(self._read_json())
             except ValueError as exc:
-
-
                 self._json({"ok": False, "error": str(exc)}, 400)
                 return
             except Exception as exc:
                 self._json({"ok": False, "error": f"{type(exc).__name__}: {exc}"}, 500)
                 return
-
-
 
             forget_strong_models(SESSION.settings().data_dir)
 
@@ -6474,26 +6227,32 @@ class Handler(BaseHTTPRequestHandler):
             self._google_page(False, "Google hat keinen Code mitgeschickt.")
             return
 
-
-
         konto = self._account()
         abgelaufen = ("Diese Rückmeldung von Google gehört zu keiner Anmeldung, die du "
                       "hier begonnen hast (oder sie ist abgelaufen). Bitte in den "
                       "Einstellungen neu verbinden.")
+        # 15.5.5: Kommt die Rueckmeldung in einem Browser(-Fenster) an, in dem die Anmeldung
+        # nicht begonnen wurde (anderes Geraet, andere Adresse), geht es trotzdem: Die Adresse
+        # kopieren und in Aquaticy einfuegen -- dort wird derselbe einmalige state geprueft.
+        ohne_cookie = not self._cookie(GOOGLE_FLOW_COOKIE)
+        kopie = (f"{google_redirect(self.headers.get('Host', ''))}?"
+                 f"{urlencode({'code': code, 'state': state})}")
+        anderswo = ("Die Anmeldung wurde in einem anderen Browser-Fenster oder unter einer "
+                    "anderen Adresse begonnen. Kopiere die Adresse unten und füge sie in "
+                    "Aquaticy unter Einstellungen → Gmail & Kalender ein. Bist du dort nicht "
+                    "angemeldet, melde dich zuerst bei Aquaticy an.")
         if konto is not None or (AUTH is None and self._authorized()):
             if not google_state_take(state, getattr(konto, "id", "") or ""):
                 self._google_page(False, abgelaufen)
                 return
+        elif ohne_cookie and state:
+            self._google_page(False, anderswo, kopieren=kopie)
+            return
         elif AUTH is None:
-
-
             if google_state_take_browser(state, self._cookie(GOOGLE_FLOW_COOKIE)) is None:
                 self._google_page(False, abgelaufen)
                 return
         else:
-
-
-
             kennung = google_state_take_browser(state, self._cookie(GOOGLE_FLOW_COOKIE))
             konto = AUTH.account(kennung) if kennung else None
             if konto is None:
@@ -6527,10 +6286,12 @@ class Handler(BaseHTTPRequestHandler):
         self._google_page(True, f"Verbunden{f' als {account}' if account else ''}."
                           + google_write_gap(settings, tokens))
 
-    def _google_page(self, ok: bool, message: str) -> None:
+    def _google_page(self, ok: bool, message: str, *, kopieren: str = "") -> None:
         """Eine schlichte Seite als Rueckmeldung -- ohne Skript, ohne Ballast."""
         if not ok:
             message = public_error(scrub_error(message))
+        feld = (f'<textarea readonly rows="4" style="width:100%;font:13px monospace">'
+                f"{escape(kopieren)}</textarea>" if kopieren else "")
         colour = "#2f6f4e" if ok else "#a4342b"
         title = "Geschafft" if ok else "Das hat nicht geklappt"
         body = f"""<!doctype html><html lang="de"><head><meta charset="utf-8">
@@ -6541,8 +6302,8 @@ min-height:100vh;background:#faf9f6;color:#26241f}}
 main{{max-width:30em;padding:32px;text-align:center}}
 h1{{color:{colour};font-size:20px;margin:0 0 12px}}
 p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
-<h1>{title}</h1><p>{escape(message)}</p>
-<p>Du kannst dieses Fenster schliessen und zu Aquaticy AI zurueckgehen.</p>
+<h1>{title}</h1><p>{escape(message)}</p>{feld}
+<p>Du kannst dieses Fenster schließen und zu Aquaticy AI zurückgehen.</p>
 </main></body></html>"""
         raw = body.encode("utf-8")
         self.send_response(200)
@@ -6570,13 +6331,10 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             insult_level,
         )
 
-
         grund = AIGUARD.chat_locked(konto.id, chat)
         if grund:
             self._json({"error": chat_locked_message(grund), "code": "chat_locked"}, 403)
             return True
-
-
 
         stufe, eigener_grund, detail = insult_level(text), "", "Beleidigung (erkannt)"
         if not stufe:
@@ -6606,20 +6364,15 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         settings = SESSION.settings()
         cache = Cache(settings.db_path, settings.cache_ttl_hours)
         if action == "rename":
-
-
             titel = payload.get("title")
             return {"ok": True, "title": cache.rename_chat(
                 session_id, titel if isinstance(titel, str) else "")}
         if action == "delete":
             if any(s.chat_id() == session_id and s.has_running_chat()
                     for s in SESSION.chat_sessions()):
-
-
                 return {"ok": False, "error": "Dieser Chat antwortet gerade. "
                         "Bitte erst stoppen, dann löschen.", "code": "busy"}
             removed = cache.delete_chat(session_id)
-
 
             SESSION.forget_chat(session_id)
             return {"ok": True, "removed": removed}
@@ -6680,15 +6433,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         redirect = google_redirect(self.headers.get("Host", ""))
 
         if action == "start":
-
-
-
             darf_aendern = payload.get("write")
             if darf_aendern is None:
                 darf_aendern = settings.google_write
-
-
-
 
             neu: dict[str, Any] = {}
             client_id = str(payload.get("client_id", "")).strip()
@@ -6698,8 +6445,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             if secret:
                 neu[GOOGLE_SECRET_FIELD] = secret
             if neu:
-
-
                 neu["AQUATICY_GOOGLE"] = "true"
                 neu["AQUATICY_GOOGLE_WRITE"] = "true" if darf_aendern else "false"
                 try:
@@ -6733,7 +6478,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
         if action == "finish":
             eingefuegt = str(payload.get("code", ""))
-
 
             state = (parse_qs(urlsplit(eingefuegt.strip()).query).get("state") or [""])[0] \
                 if "state=" in eingefuegt else str(payload.get("state", ""))
@@ -6791,17 +6535,10 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         model = fix_model_id(str(payload.get("AQUATICY_MODEL", "")).strip()) or settings.model
         api_base = str(payload.get("AQUATICY_API_BASE", settings.api_base) or "").strip()
         if not SESSION.ultra:
-
-
             api_base = settings.api_base
         if api_base and not base_fits(api_base, model):
-
-
             api_base = ""
         des_betreibers = get_settings().api_base or ""
-
-
-
 
         vorschau = replace(
             settings, model=model, api_base=api_base,
@@ -6814,14 +6551,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         api_base = str(weg.get("api_base") or "")
         if not konto and api_base and api_base not in {settings.api_base or "",
                                                        des_betreibers}:
-
-
-
-
             api_key = NO_KEY
 
         backend = str(payload.get("AQUATICY_SEARCH_BACKEND", "")).strip() or settings.search_backend
-
 
         search_key = settings.search_key_for(backend)
         engines = str(payload.get("AQUATICY_SEARCH_ENGINES", settings.search_engines) or "").strip()
@@ -6829,17 +6561,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         if not SESSION.ultra:
             instance = settings.searxng_url
 
-
-
         kontingent = settings.quota if quelle != "own" else None
         try:
-
-
             from aquaticy.pace import own_gate
             from aquaticy.probe import PROBE_QUESTION, PROBE_TOKENS
             from aquaticy.usage import tokens
-
-
 
             if kontingent is not None:
                 kontingent.reserve(tokens(PROBE_QUESTION) + PROBE_TOKENS, model)
@@ -6880,9 +6606,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         token = eingetippt or settings.ha_token
         if (not eingetippt and settings.ha_token and settings.ha_url
                 and normalize_url(url) != normalize_url(settings.ha_url)):
-
-
-
             return {"ok": False, "error": (
                 "Für eine neue Adresse bitte den Token dazu eintragen — der "
                 "gespeicherte geht nur an die gespeicherte Adresse."
@@ -6900,9 +6623,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         gespeichert = False
         if payload.get("save") and (eingetippt or normalize_url(url)
                                     != normalize_url(settings.ha_url)):
-
-
-
             neu = {"AQUATICY_HA_URL": client.url}
             if eingetippt:
                 neu[HA_TOKEN_FIELD] = eingetippt
@@ -6931,7 +6651,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         _warm_up_once()
         self._csp_nonce = secrets.token_urlsafe(18)
         body = with_state(ui_template(), nonce=self._csp_nonce).encode("utf-8")
-
 
         gepackt = accepts_gzip(self.headers.get("Accept-Encoding") or "")
         if gepackt:
@@ -7005,7 +6724,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             self._json({"ok": False, "error": "Das Passwort stimmt nicht."}, 403)
             return
 
-
         konto = verified
         if route == "/api/account/delete" and (
                 str(payload.get("confirm") or "").strip().upper() != DELETE_WORD):
@@ -7020,20 +6738,16 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 self._json({"ok": False, "error": str(exc)}, 409)
                 return
 
-
             with contextlib.suppress(Exception):
                 start_user_scheduler(konto)
             self._json({"ok": True})
             return
-
-
 
         if AIGUARD is not None:
             sperre = AIGUARD.is_banned(user_id=konto.id)
             if sperre is not None:
                 for keks in AUTH.device_cookie_hashes(konto.id):
                     AIGUARD.ban_device(keks, reason=sperre.reason, until=sperre.until)
-
 
                 with contextlib.suppress(Exception):
                     adresse = AUTH.last_address(konto.id)
@@ -7055,8 +6769,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             return
         kontingent = SESSION.settings().quota
 
-
-
         eigenes_modell = SESSION.settings().key_source(SESSION.settings().model) == "own"
         if kontingent is not None and not eigenes_modell:
             from aquaticy.quota import QuotaExceeded
@@ -7064,8 +6776,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             try:
                 kontingent.check()
             except QuotaExceeded as exc:
-
-
                 self._json(
                     {"error": str(exc), "code": "quota", "which": exc.which,
                      "usage": usage_view(SESSION.settings())},
@@ -7084,17 +6794,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             self._json({"error": BLOCKED_UPLOAD_MESSAGE, "code": "blocked_upload"}, 400)
             return
 
-
-
-
-
-
-
-
-
-
-
-
         wunsch: dict[str, Any] = {
             name: payload[name]
             for name in (
@@ -7112,9 +6811,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         if payload.get("image_mode") not in (None, False):
             self._json({"error": "Diesen Modus gibt es nicht mehr."}, 400)
             return
-
-
-
 
         from aquaticy.uistate import clean as clean_state
 
@@ -7138,16 +6834,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         visual_sources = bool(stand.get("visual_sources", False))
         agents = max(1, min(50 if mode == "pro" else 12, agents))
 
-
-
-
-
         if mode == "code":
             online = True
             visual_sources = False
-
-
-
 
         vm_switch = False
         if mode == "code" and sandbox:
@@ -7169,11 +6858,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             self._json({"error": "leere Nachricht"}, 400)
             return
         if not message:
-
             message = "Sieh dir das Angehängte an und sag mir, worum es geht."
-
-
-
 
         konto = self._account()
         if konto is not None and AUTH is not None:
@@ -7191,8 +6876,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                                   previous_user_message(aktueller)):
                 return
 
-
-
         session = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
         session.chat_id()
         try:
@@ -7205,30 +6888,20 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             lauf.chat = session.chat_id()
             lauf.add({"type": "chat", "session_id": session.chat_id()})
         if vm_switch:
-
-
             from aquaticy.aiguard import VM_SWITCH_MESSAGE
 
             lauf.add({"type": "mode_switch", "mode": "normal", "text": VM_SWITCH_MESSAGE})
         if kontingent is not None:
-
-
             kontingent.begin()
         seen_done = threading.Event()
-
 
         geheim = session.settings().secrets()
 
         def emit(name: str, payload: dict[str, Any]) -> None:
-
-
-
             kind = "chunk" if name == "answer_chunk" else name
             if geheim and kind not in ("chunk", "thought"):
                 payload = scrub_payload(payload, geheim)
             if kind == "error":
-
-
                 technisch = str(payload.get("message", ""))
                 if payload.get("technisch"):
                     # 15.1.1: klarer Satz fuer den Browser, die genaue Meldung ins Terminal.
@@ -7237,18 +6910,9 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     payload = {k: v for k, v in payload.items() if k != "technisch"}
                 oeffentlich = public_error(technisch)
                 if oeffentlich != " ".join(technisch.split()):
-
-
-
                     print(f"  [Fehler] {scrub_error(technisch, geheim)[:300]}", flush=True)
                 payload = {**payload, "message": oeffentlich}
             if AIGUARD is not None and konto is not None and kind == "abuse":
-
-
-
-
-
-
                 with contextlib.suppress(Exception):
                     massnahme = AIGUARD.record_incident(
                         konto.id, str(payload.get("art") or ""),
@@ -7262,7 +6926,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             if kind == "done":
                 seen_done.set()
 
-
                 payload = {**payload, "visuals": [
                     {**v, "captured_text": webview.iso_moment_text(v.get("captured_at"))}
                     if isinstance(v, dict) and v.get("captured_at") else v
@@ -7274,10 +6937,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             previous = getattr(_REQUEST, "session", None)
             _REQUEST.session = session
             try:
-
-
-
-
                 if (AIGUARD is not None and konto is not None
                         and not session.settings().legal_guard):
                     from aquaticy.aiguard import check_message
@@ -7305,9 +6964,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     visual_sources=visual_sources,
                 )
             except Exception as exc:
-
-
-
                 meldung = user_hint(exc)
                 if meldung != GENERIC_ERROR:
                     meldung = public_error(scrub_error(meldung, geheim))
@@ -7315,8 +6971,6 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     print(f"  [Fehler] Chat: {type(exc).__name__}")
                 lauf.add({"type": "error", "message": meldung})
             finally:
-
-
                 if not seen_done.is_set():
                     lauf.add({"type": "done"})
                 lauf.finish()
@@ -7357,11 +7011,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
         self.send_header("Cache-Control", "no-cache")
         self.send_header("X-Accel-Buffering", "no")
 
-
         self.send_header("Connection", "close")
         self.end_headers()
-
-
 
         self._sse(": los\n\n")
 
@@ -7372,15 +7023,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 if not self._sse(f"data: {json.dumps(event, ensure_ascii=False)}\n\n"):
                     return
             if fertig and stand <= len(lauf.events):
-
-
                 lauf.delivered = True
                 return
-
-
-
-
-
 
             if not neue and not self._sse(": warte\n\n"):
                 return
@@ -7500,7 +7144,6 @@ def urls_for(host: str, port: int, token: str = "") -> list[str]:
     return [url for url, _ in addresses_for(host, port, token)]
 
 
-
 _WARMED = threading.Event()
 
 
@@ -7535,7 +7178,6 @@ def _cluster_load() -> dict[str, Any]:
                 laeufe += sum(1 for lauf in buch._runs.values() if not lauf.done)
     last: dict[str, Any] = {"runs": laeufe, "sessions": len(sitzungen)}
     if SHARDING is not None:
-
         with contextlib.suppress(Exception):
             last["split"] = SHARDING.worker_status()
     return last
@@ -7724,8 +7366,6 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
         elif aktion == "leave":
             CLUSTER.leave()
         elif aktion == "split":
-
-
             if not CLUSTER.is_master:
                 return {"error": "Die Serverlast teilt nur der Master auf."}, 403
             an = payload.get("on") is True
@@ -7752,7 +7392,6 @@ def cluster_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any
     except (OSError, ValueError) as exc:
         return {"error": f"Der andere Server ist nicht erreichbar ({type(exc).__name__})."}, 502
     return _cluster_view_full(), 200
-
 
 
 BACKUP_PORTS = 20
@@ -7795,8 +7434,6 @@ def free_port(host: str, port: int) -> int:
     return port
 
 
-
-
 VERBINDUNG_WEG = (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError)
 
 
@@ -7808,12 +7445,7 @@ class AquaticyServer(ThreadingHTTPServer):
     ein Abbruch durch die Gegenseite still, alles andere steht als eine Zeile da.
     """
 
-
-
-
-
     request_queue_size = 128
-
 
     max_connections = 256
 
@@ -7938,7 +7570,6 @@ class _TLSServer(AquaticyServer):
         super().__init__(address, handler)
 
     def _reject_overload(self, request: Any) -> None:
-
         return
 
     def _serve_connection(self, request: Any, client_address: Any) -> None:
@@ -7953,6 +7584,71 @@ class _TLSServer(AquaticyServer):
                 request.close()
             return
         super()._serve_connection(request, client_address)
+
+
+class _HomeTLSServer(_TLSServer):
+    """HTTPS-Eingang im Heimnetz: derselbe Handler wie der normale -- dieselbe Anmeldung."""
+
+
+def _start_home_https(host: str, data_dir: Path, http_port: int) -> None:
+    """Startet https://aquaticy.local und https://<rechner>.ts.net (15.5.5).
+
+    Nur wenn Aquaticy im Heimnetz erreichbar ist (--lan oder Hintergrund). Nichts davon darf
+    den Start kosten: ohne Zertifikat bleibt es bei der normalen Adresse.
+    """
+    global HOME_TLS, HOME_SERVER, HOME_ANNOUNCER
+    from aquaticy import homename
+
+    if not is_public_host(host) or not homename.enabled():
+        return
+    adressen = [a for a in (lan_address(), tailscale_address()) if a]
+    try:
+        tls = homename.HomeTLS(data_dir, adressen)
+        wunsch = homename.port()
+        kontext = tls.load(wunsch)
+        letzter: OSError | None = None
+        server = None
+        for kandidat in port_candidates(wunsch):
+            try:
+                server = _HomeTLSServer((host, kandidat), Handler, kontext)
+                break
+            except OSError as exc:
+                if exc.errno not in _PORT_BELEGT:
+                    raise
+                letzter = exc
+        if server is None:
+            raise letzter or OSError("Kein freier Port gefunden.")
+        if server.server_address[1] != wunsch:
+            tls.load(server.server_address[1])
+    except Exception as exc:
+        print(f"  [HTTPS] nicht gestartet: {type(exc).__name__}: {exc}", flush=True)
+        return
+    threading.Thread(target=server.serve_forever, name="aquaticy-https", daemon=True).start()
+    HOME_TLS, HOME_SERVER = tls, server
+    ansage = homename.Announcer()
+    if ansage.start(lan_address(), server.server_address[1]):
+        HOME_ANNOUNCER = ansage
+    else:
+        tls.notes.append(ansage.reason)
+    for url, note in tls.urls:
+        print(f"  {url} ({note})", flush=True)
+    for note in tls.notes:
+        print(f"  [HTTPS] {note}", flush=True)
+    print(f"  Zertifikat fürs Heimnetz: http://{lan_address() or '<IP>'}:{http_port}"
+          "/zertifikat – einmal je Gerät vertrauen.", flush=True)
+
+
+def _stop_home_https() -> None:
+    global HOME_TLS, HOME_SERVER, HOME_ANNOUNCER
+    if HOME_ANNOUNCER is not None:
+        HOME_ANNOUNCER.stop()
+        HOME_ANNOUNCER = None
+    if HOME_SERVER is not None:
+        with contextlib.suppress(Exception):
+            HOME_SERVER.shutdown()
+            HOME_SERVER.server_close()
+        HOME_SERVER = None
+    HOME_TLS = None
 
 
 def bind_public(context: Any, port: int) -> ThreadingHTTPServer:
@@ -8066,13 +7762,11 @@ def serve(
     try:
         _serve(host, port, open_browser, token)
     except BaseException:
-
         _stop_schedulers()
         raise
     finally:
         sperre.release()
     if _CLUSTER_RESTART.is_set():
-
         import sys
 
         with contextlib.suppress(Exception):
@@ -8144,14 +7838,12 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     for zeile in auth_banner(AUTH):
         print(zeile)
 
-
     try:
         from aquaticy.sandbox import sweep
 
         threading.Thread(target=sweep, daemon=True).start()
     except Exception:  # pragma: no cover
         pass
-
 
     try:
         global COWORKER_SCHEDULER
@@ -8169,7 +7861,6 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     try:
         server = bind_server(host, port)
     except BaseException:
-
         _stop_schedulers()
         raise
     if server.server_address[1] != port:
@@ -8182,15 +7873,22 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     research_worker: threading.Thread | None = None
     from aquaticy.secure_pro import Watcher
 
-    def security_notice(text: str) -> bool:
+    def security_notice(text: str) -> bool | None:
+        """Warnung an WhatsApp/Signal. None: kein Messenger gekoppelt (dann nur der Chat).
+
+        15.5.5: alert_owner statt notify_owner -- Warnungen gehen auch raus, wenn der Chat
+        ueber den Messenger aus ist. Vorher zaehlten sie still als zugestellt.
+        """
         if AUTH is None or not AUTH.single:
-            return False
+            return None
         owner = AUTH.ensure_owner_ultra()
         if owner is None or _native_paused(owner):
-            return False
+            return None
         hub = _native_hub(SESSIONS.get(owner))
         hub.ensure_running()
-        return bool(hub.notify_owner(text))
+        if not hub.owner_channels():
+            return None
+        return bool(hub.alert_owner(text))
 
     def security_report(text: str) -> bool:
         """Wichtiges aus Secure Pro erscheint im Secure-Pro-Chat (14.1.3 Luna)."""
@@ -8221,16 +7919,12 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
     security_watcher = Watcher(data_dir, security_notice, security_report)
     SECURE_WATCHER = security_watcher
 
-
-
-
     try:
         from aquaticy.learning import Learning
         from aquaticy.research import start_cleanup
 
         research_stop, research_worker = start_cleanup(Learning(data_dir).research)
         SERVER = server
-
 
         from aquaticy import upgrading
         from aquaticy.local_model import installed_models
@@ -8256,7 +7950,6 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
             frage.cluster = CLUSTER
             CLUSTER.start()
 
-
             from aquaticy import sharding
 
             SHARDING = sharding.Manager(
@@ -8271,9 +7964,8 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         global WEBSITE, PUBLIC_SERVER, LAN_ONLY
         WEBSITE, PUBLIC_SERVER = _start_website(data_dir)
         LAN_ONLY = WEBSITE is not None
+        _start_home_https(host, data_dir, port)
         if open_browser:
-
-
             local = urls_for(host, port, token)[-1]
             threading.Timer(0.6, lambda: webbrowser.open(local)).start()
         security_watcher.start()
@@ -8292,6 +7984,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         if WEBSITE is not None:
             WEBSITE.stop()
             WEBSITE = None
+        _stop_home_https()
         LAN_ONLY = False
         if research_stop is not None and research_worker is not None:
             research_stop.set()

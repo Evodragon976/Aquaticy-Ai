@@ -37,9 +37,7 @@ RRF_K = 60
 MAX_VARIANTS = 3
 
 
-
 PER_DOMAIN = 2
-
 
 
 _STOPWORD_TEXT = """
@@ -131,7 +129,6 @@ def mentions_place(query: str, location: str) -> bool:
     if re.search(r"(?<!\w)" + re.escape(ort) + r"(?!\w)", text):
         return True
 
-
     first = ort.split()[0]
     return bool(len(first) > 3 and re.search(r"(?<!\w)" + re.escape(first) + r"(?!\w)", text))
 
@@ -165,7 +162,6 @@ def variants(query: str, extra: int = 2) -> list[str]:
         return []
     out = [query]
     if extra <= 0 or '"' in query:
-
         return out
     candidate = keywords(query).strip()
     if candidate and candidate.lower() != query.lower():

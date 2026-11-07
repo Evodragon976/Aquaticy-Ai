@@ -38,8 +38,6 @@ CLEANUP_AT = 0.9
 CLEANUP_TO = 0.7
 
 
-
-
 MEASURE_SECONDS = 3.0
 
 _messungen: dict[str, tuple[float, int]] = {}
@@ -134,7 +132,6 @@ def _zwischenspeicher_leeren(data_dir: Path, alles: bool) -> None:
                                          (time.time(),)).rowcount
             conn.commit()
 
-
             if geloescht:
                 conn.execute("VACUUM")
         finally:
@@ -177,8 +174,6 @@ def make_room(data_dir: Path | str) -> int:
         _aelteste_zuerst(ordner / "uploads", lambda n: True),
         _aelteste_zuerst(ordner / "media", lambda n: AI_MARK in n),
     )
-
-
 
     entfernbar = 0
     for dateien in stufen:

@@ -93,7 +93,6 @@ def _podman_auf_pfad() -> None:
 def _laufen(befehl: list[str], timeout: float,
             run: Callable[..., Any] = subprocess.run) -> bool:
     try:
-
         return run(befehl, check=False, timeout=timeout).returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
@@ -135,8 +134,6 @@ def start_machine(run: Callable[..., Any] = subprocess.run) -> bool:
 
     if sandbox.find_runtime() is not None:
         return True
-
-
 
     if not _laufen(["podman", "machine", "inspect"], MACHINE_TIMEOUT, run):
         return False

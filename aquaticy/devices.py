@@ -87,9 +87,6 @@ def _zahl(value: Any, hoechstens: float) -> float:
     return min(zahl, hoechstens)
 
 
-
-
-
 _BROWSER = (
     ("Edge", re.compile(r"Edg(?:e|A|iOS)?/(\d+)")),
     ("Opera", re.compile(r"(?:OPR|Opera)/(\d+)")),
@@ -172,9 +169,6 @@ def clean_device(raw: Any, *, user_agent: str = "", accept_language: str = "",
     hardware = " · ".join(teile)
     browser = browser_name(user_agent) + (f", {sprache}" if sprache else "")
 
-
-
-
     hat_hardware = bool(kerne or speicher or bildschirm or gpu)
     hardware_hash = hashlib.sha256(
         "\x1f".join((system, str(kerne), f"{speicher:g}", bildschirm, f"{pixel:g}",
@@ -192,9 +186,6 @@ def clean_device(raw: Any, *, user_agent: str = "", accept_language: str = "",
     )
 
 
-
-
-
 def _kern(email: str) -> str:
     """ "max.muster+test7@gmail.com" -> "maxmuster": ohne Punkte, Zusatz, Ziffern."""
     lokal = str(email or "").strip().lower().split("@", 1)[0]
@@ -210,9 +201,6 @@ def emails_similar(a: str, b: str) -> bool:
     if ka == kb:
         return True
     return difflib.SequenceMatcher(None, ka, kb).ratio() >= 0.88
-
-
-
 
 
 @dataclass(frozen=True, slots=True)
