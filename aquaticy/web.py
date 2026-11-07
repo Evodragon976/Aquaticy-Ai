@@ -2968,6 +2968,16 @@ def _build_native_hub(get_session: Callable[[], Any], account: Any, directory: P
 
     hub = NativeHub(directory, antwort, gewollt, paused=lambda: _native_paused(account))
     hub.answerer = antworter  # type: ignore[attr-defined]
+
+    def empfaenger(messenger: str) -> list[str]:
+        """15.5.6: Meldungen (Secure Pro, Coworker) auch an die eingetragenen Nummern --
+        nur wenn dort "Mein Chat und diese Nummern" (oder mehr) gewaehlt ist."""
+        konfig = bridge_mod.load_config(einstellungen())[messenger]
+        if not konfig["an"] or konfig["wer"] == "selbst":
+            return []
+        return list(konfig["nummern"])
+
+    hub.recipients = empfaenger
     return hub
 
 

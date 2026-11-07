@@ -1,4 +1,4 @@
-# Aquaticy AI 15.5.5
+# Aquaticy AI 15.5.6
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -26,6 +26,16 @@ $ aquaticy
 ---
 
 ## Inhalt
+
+**Neu in 15.5.6:**
+
+- **Meldungen auch an die eingetragenen Nummern.** Meldungen von Secure Pro (Angriffe,
+  Schwachstellen) und von den Coworkern gehen jetzt auch an die Nummern, die du beim
+  Messenger eingetragen hast. Das gilt, wenn dort „Mein Chat und diese Nummern“ (oder mehr)
+  gewählt und der Messenger an ist. Es zählen nur Nummern mit Landesvorwahl
+  (`+49 …` oder `0049 …`); Namen und Nummern wie `0151 …` bekommen nichts. Höchstens zehn
+  Nummern, jede mit eigener Grenze pro Stunde. „Schreib mir das auf WhatsApp“ geht weiter
+  nur an deinen eigenen Chat.
 
 **Neu in 15.5.5:**
 
@@ -731,7 +741,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.5.5
+aquaticy --version            # 15.5.6
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

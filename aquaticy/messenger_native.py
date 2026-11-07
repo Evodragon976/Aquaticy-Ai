@@ -95,6 +95,21 @@ def digits(text: Any) -> str:
     return re.sub(r"\D", "", str(text or ""))
 
 
+MAX_RECIPIENTS = 10
+
+
+def recipient_number(text: Any) -> str:
+    """Eine eingetragene Nummer als "+49..." -- "+49 ..." oder "0049 ...", sonst "" (15.5.6).
+
+    Namen und Nummern ohne Landesvorwahl ("0151 ...") bekommen nie eine Meldung: Wohin sie
+    gingen, waere geraten.
+    """
+    roh = " ".join(str(text or "").split())
+    if re.fullmatch(r"00[1-9][0-9 ()/.-]+", roh):
+        roh = "+" + roh[2:]
+    return clean_number(roh)
+
+
 def clean_number(text: Any) -> str:
     """Eine Telefonnummer als "+49..." -- oder "" (nur geprueft, nie geraten)."""
     roh = str(text or "").strip()
@@ -987,7 +1002,10 @@ class NativeHub:
         self._timers: dict[str, threading.Timer] = {}
         self.dropped = 0
         # Meldungen an den Besitzer (Coworker): was gerade nicht ankommt, wartet kurz.
-        self._pending: dict[str, list[tuple[float, str, bool]]] = {}
+        self._pending: dict[str, list[tuple[float, str, bool, str]]] = {}
+        # 15.5.6: weitere Empfaenger fuer Meldungen (Secure Pro, Coworker): die in den
+        # Messenger-Einstellungen eingetragenen Nummern. Setzt der Server.
+        self.recipients: Callable[[str], list[str]] | None = None
         self._sent_at: dict[str, collections.deque[float]] = {}
         _HUBS[_hub_key(self.directory)] = self
 
@@ -1082,15 +1100,41 @@ class NativeHub:
             eins = self.transport(name)
             if not eins.has_session() or not self._wanted(name) or not eins.own_chat():
                 continue
-            if eins.status().state == CONNECTED:
-                if self._send_owner(name, eins, text):
-                    gesendet.append(name)
-            else:
-                with self._lock:
-                    warte = self._pending.setdefault(name, [])
-                    warte.append((self._clock(), text, False))
-                    del warte[:-NOTIFY_QUEUE]
+            for ziel in ["", *self._extra(name, eins)]:
+                if eins.status().state == CONNECTED:
+                    if self._send_owner(name, eins, text, ziel) and not ziel:
+                        gesendet.append(name)
+                else:
+                    self._queue_notice(name, text, False, ziel)
         return gesendet
+
+    def _queue_notice(self, name: str, text: str, dringend: bool, ziel: str = "") -> None:
+        with self._lock:
+            warte = self._pending.setdefault(name, [])
+            warte.append((self._clock(), text, dringend, ziel))
+            # Hoechstens NOTIFY_QUEUE wartende Meldungen je Empfaenger -- die neuesten bleiben.
+            gleich = [i for i, eintrag in enumerate(warte) if eintrag[3] == ziel]
+            for i in reversed(gleich[:-NOTIFY_QUEUE]):
+                del warte[i]
+
+    def _extra(self, name: str, eins: Transport) -> list[str]:
+        """Weitere Empfaenger fuer Meldungen -- nur echte Nummern mit Landesvorwahl (15.5.6)."""
+        if self.recipients is None or not self._wanted(name):
+            return []
+        try:
+            nummern = list(self.recipients(name))
+        except Exception:
+            return []
+        eigene = digits(eins.store.who(name)) if hasattr(eins, "store") else ""
+        ziele: list[str] = []
+        for eintrag in nummern:
+            nummer = recipient_number(eintrag)
+            if not nummer or digits(nummer) == eigene:
+                continue
+            ziel = (f"{digits(nummer)}@s.whatsapp.net" if name == "whatsapp" else nummer)
+            if ziel not in ziele:
+                ziele.append(ziel)
+        return ziele[:MAX_RECIPIENTS]
 
     def owner_channels(self) -> list[str]:
         """Messenger, die gekoppelt sind und den eigenen Chat des Besitzers kennen."""
@@ -1110,10 +1154,7 @@ class NativeHub:
         eins = self.transport(messenger)
         if eins.status().state == CONNECTED:
             return "gesendet" if self._send_owner(messenger, eins, text) else ""
-        with self._lock:
-            warte = self._pending.setdefault(messenger, [])
-            warte.append((self._clock(), text, True))
-            del warte[:-NOTIFY_QUEUE]
+        self._queue_notice(messenger, text, True)
         with contextlib.suppress(Exception):
             ok, _ = eins.available()
             if ok and not eins.running:
@@ -1132,13 +1173,14 @@ class NativeHub:
         angenommen: list[str] = []
         for name in self.owner_channels():
             eins = self.transport(name)
-            if eins.status().state == CONNECTED and self._send_owner(name, eins, text):
+            verbunden = eins.status().state == CONNECTED
+            for ziel in self._extra(name, eins):
+                if not (verbunden and self._send_owner(name, eins, text, ziel)):
+                    self._queue_notice(name, text, True, ziel)
+            if verbunden and self._send_owner(name, eins, text):
                 angenommen.append(name)
                 continue
-            with self._lock:
-                warte = self._pending.setdefault(name, [])
-                warte.append((self._clock(), text, True))
-                del warte[:-NOTIFY_QUEUE]
+            self._queue_notice(name, text, True)
             angenommen.append(name)
             with contextlib.suppress(Exception):
                 ok, _ = eins.available()
@@ -1146,19 +1188,22 @@ class NativeHub:
                     eins.start()
         return angenommen
 
-    def _send_owner(self, name: str, eins: Transport, text: str) -> bool:
+    def _send_owner(self, name: str, eins: Transport, text: str, ziel: str = "") -> bool:
+        """An den eigenen Chat -- oder an *ziel* (eine eingetragene Nummer, 15.5.6)."""
         jetzt = self._clock()
         with self._lock:
-            zeiten = self._sent_at.setdefault(name, collections.deque())
+            zeiten = self._sent_at.setdefault(f"{name}:{ziel}" if ziel else name,
+                                              collections.deque())
             while zeiten and jetzt - zeiten[0] > 3600:
                 zeiten.popleft()
             if len(zeiten) >= NOTIFY_PER_HOUR:
                 return False
             zeiten.append(jetzt)
         try:
-            eins.send(eins.own_chat(), text)
+            eins.send(ziel or eins.own_chat(), text)
         except Exception:
-            LOG.warning("%s: Meldung an den Besitzer nicht gesendet", NAMES.get(name, name))
+            LOG.warning("%s: Meldung %s nicht gesendet", NAMES.get(name, name),
+                        "an eine eingetragene Nummer" if ziel else "an den Besitzer")
             return False
         return True
 
@@ -1168,11 +1213,12 @@ class NativeHub:
             warte = self._pending.pop(name, [])
         jetzt = self._clock()
         eins = self.transport(name)
-        for zeit, text, dringend in warte:
+        for zeit, text, dringend, ziel in warte:
             if jetzt - zeit <= NOTIFY_KEEP_SECONDS and (
                     self._paused is None or not self._paused()) and (
-                    dringend or self._wanted(name)):
-                self._send_owner(name, eins, text)
+                    dringend or self._wanted(name)) and (
+                    not ziel or ziel in self._extra(name, eins)):
+                self._send_owner(name, eins, text, ziel)
 
     # -- nach dem Koppeln --------------------------------------------------------
     def _settle(self, messenger: str) -> None:
