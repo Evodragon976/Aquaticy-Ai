@@ -68,6 +68,14 @@ def parse(text: str) -> dict[str, Any]:
     roh = " ".join(str(text or "").split())
     if not roh or len(roh) > 300 or not all(c.isprintable() for c in roh):
         raise ValueError("Beschreib die Aufgabe in einem Satz mit höchstens 300 Zeichen.")
+    prefix = re.split(r"\b(?:wenn|when)\b", roh, maxsplit=1, flags=re.I)[0]
+    if (re.search(r"(?:melde|benachrichtig|sag).{0,35}\bnicht\b|"
+                  r"\b(?:do not|don't|never)\s+(?:notify|tell|alert)", prefix, re.I)
+            or re.search(r"\b(?:wenn|when)\s+(?:kein|keine|keinen|no)\b", roh, re.I)):
+        raise ValueError("Verneinte Benachrichtigungen sind keine Aufgabe. "
+                         "Lösche die alte Aufgabe.")
+    if re.search(r"[0-9a-f]*:[0-9a-f:]*:[0-9a-f:]+", roh, re.I):
+        raise ValueError("Aufgaben unterstützen derzeit nur IPv4-Adressen im Heimnetz.")
     trigger = next((name for name, muster in _REGELN if muster.search(roh)), "")
     if not trigger:
         raise ValueError("Das verstehe ich nicht. Beispiele: „Melde dich, wenn ein neues "
@@ -132,5 +140,5 @@ def matches(task: dict[str, Any], event: dict[str, Any]) -> bool:
     if trigger == "malware":
         return art == "malware"
     if trigger == "new_port":
-        return art in ("new_port", "risk_port")
+        return art == "new_port"
     return bool(trigger == art)

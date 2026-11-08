@@ -10,7 +10,7 @@ gilt, wie bei Claude:
 * **Woche: 2.000.000 Token** (seit 9.5.23, ein Drittel mehr; vorher 1.500.000).
   Die Woche beginnt zur Uhrzeit der Kontoerstellung: wer sein Konto an einem
   Dienstag um 14:32 angelegt hat, bekommt jeden Dienstag um 14:32 eine frische
-  Woche -- in der Ortszeit des Servers, also auch ueber die Zeitumstellung
+  Woche -- in der deutschen Ortszeit, also auch ueber die Zeitumstellung
   hinweg um 14:32.
 
 Wo es liegt: in der Kontendatenbank (``accounts.sqlite3``), an der Kennung des
@@ -32,6 +32,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from aquaticy import zeit as deutsche_zeit
 
 SESSION_TOKENS = 300_000
 
@@ -71,17 +73,18 @@ def week_window(created_at: float, now: float) -> tuple[float, float]:
     """Beginn und Ende der laufenden Woche.
 
     Die Woche beginnt am Wochentag und zur Uhrzeit der Kontoerstellung --
-    gerechnet in der Ortszeit, damit "Dienstag 14:32" auch nach der
+    gerechnet in deutscher Ortszeit, damit "Dienstag 14:32" auch nach der
     Zeitumstellung Dienstag 14:32 bleibt.
     """
     created_at = float(created_at or 0.0)
     if now <= created_at:
-        anfang = datetime.fromtimestamp(created_at)
+        anfang = deutsche_zeit.aus_stempel(created_at)
         return created_at, (anfang + timedelta(days=7)).timestamp()
-    erstellt = datetime.fromtimestamp(created_at)
-    jetzt = datetime.fromtimestamp(now)
+    erstellt = deutsche_zeit.aus_stempel(created_at)
+    jetzt = deutsche_zeit.aus_stempel(now)
     zurueck = (jetzt.weekday() - erstellt.weekday()) % 7
-    anfang = datetime.combine(jetzt.date() - timedelta(days=zurueck), erstellt.time())
+    anfang = datetime.combine(jetzt.date() - timedelta(days=zurueck), erstellt.time(),
+                               tzinfo=deutsche_zeit.BERLIN)
     if anfang > jetzt:
         anfang -= timedelta(days=7)
     return max(anfang.timestamp(), created_at), (anfang + timedelta(days=7)).timestamp()
@@ -95,11 +98,11 @@ def _prozent(used: int, limit: int) -> int:
 
 
 def _wochentag(ts: float) -> str:
-    return WOCHENTAGE[datetime.fromtimestamp(ts).weekday()]
+    return WOCHENTAGE[deutsche_zeit.aus_stempel(ts).weekday()]
 
 
 def _uhrzeit(ts: float) -> str:
-    return datetime.fromtimestamp(ts).strftime("%H:%M")
+    return deutsche_zeit.aus_stempel(ts).strftime("%H:%M")
 
 
 def _dauer(sekunden: float) -> str:
@@ -119,8 +122,8 @@ def _dauer(sekunden: float) -> str:
 
 def reset_text(ts: float, now: float) -> str:
     """Wann es zurueckgesetzt wird -- so, wie man es sagen wuerde."""
-    dann = datetime.fromtimestamp(ts)
-    jetzt = datetime.fromtimestamp(now)
+    dann = deutsche_zeit.aus_stempel(ts)
+    jetzt = deutsche_zeit.aus_stempel(now)
     if ts - now <= SESSION_SECONDS or (ts - now < 86400 and dann.date() == jetzt.date()):
         return f"in {_dauer(ts - now)} (um {_uhrzeit(ts)})"
     if dann.date() == (jetzt + timedelta(days=1)).date():

@@ -2918,7 +2918,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.5.7";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.7.7";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -4121,7 +4121,9 @@ const scroll = (immer = false) => {
 
 
 const CLOSE_MS = 140;
+let overlayOrder = 0;
 function openOverlay(box){
+  box._openedAt = ++overlayOrder;
   clearTimeout(box._closing);
   box.classList.remove("closing");
   box.classList.add("open");
@@ -7601,8 +7603,8 @@ async function openPicker(){
 
 function fokusFalle(behaelter, e){
   const ziele = [...behaelter.querySelectorAll(
-    'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"])')]
-    .filter(el => el.offsetParent !== null);
+    'button, input, select, textarea, a[href], summary, [tabindex]')]
+    .filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
   if (!ziele.length) return;
   const i = ziele.indexOf(document.activeElement);
   if (e.key === "Tab"){
@@ -7618,6 +7620,9 @@ function fokusFalle(behaelter, e){
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   if (minwinOffen) { fokusFalle(minwinOffen, e); return; }
+  const modal = [...document.querySelectorAll(".overlay.open:not(.closing)")]
+    .sort((a, b) => (b._openedAt || 0) - (a._openedAt || 0))[0];
+  if (modal) { fokusFalle(modal, e); return; }
   if (pickerOpen() && (modelBox.contains(document.activeElement)
                        || document.activeElement === $("#btn-model"))) fokusFalle(modelBox, e);
 });

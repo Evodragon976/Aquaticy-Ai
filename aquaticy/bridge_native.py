@@ -179,8 +179,6 @@ class NativeResponder:
             return "eigene", None, ""  # der Besitzer schreibt anderen vom Handy aus
         if msg.ts and self._clock() - msg.ts > MAX_AGE_SECONDS:
             return "zu alt", None, ""  # nach einer Pause kommt Aelteres nach
-        if dedupe is not None and not dedupe():
-            return "doppelt", None, ""
         decision = decide_native(config, group=msg.group, self_chat=msg.self_chat,
                                  number=msg.sender)
         if not decision.allow:
@@ -193,6 +191,8 @@ class NativeResponder:
         auftrag = strip_trigger(text, decision.group)
         if not auftrag:
             return "keine Aufgabe", None, ""
+        if dedupe is not None and not dedupe():
+            return "doppelt", None, ""
         return "", decision, auftrag
 
     def acknowledge(self, msg: Incoming, transport: Any) -> str:
@@ -218,8 +218,11 @@ class NativeResponder:
             self._acked[fp] = None
             while len(self._acked) > ACKED_KEEP:
                 self._acked.popitem(last=False)
-        with contextlib.suppress(Exception):
+        try:
             transport.mark_read(msg)
+        except Exception:
+            with self._acked_lock:
+                self._acked.pop(fp, None)
 
     def __call__(self, msg: Incoming, transport: Any) -> str:
         from aquaticy import voice

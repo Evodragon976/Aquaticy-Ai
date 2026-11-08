@@ -1498,6 +1498,8 @@ class Runner:
         thread = self._thread
         if thread is not None and thread is not threading.current_thread():
             thread.join(timeout=timeout)
+            if thread.is_alive():
+                raise TimeoutError("Die Messenger-Brücke läuft noch. Versuche es erneut.")
 
     def wake(self) -> None:
         self._wake.set()

@@ -9,7 +9,6 @@ import re
 import subprocess
 import sys
 import threading
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +19,7 @@ from rich.table import Table
 from rich.text import Text
 
 from aquaticy import VERSION_LABEL
+from aquaticy import zeit as deutsche_zeit
 from aquaticy.cache import Cache
 from aquaticy.config import (
     DEFAULT_ENV_PATH,
@@ -1024,7 +1024,7 @@ def notes_command(
         console.print('[dim]Der Merkzettel ist leer. Im Chat: "merk dir ..."[/dim]')
         return
     for note in notes:
-        when = datetime.fromtimestamp(note.created_at).strftime("%d.%m.%Y")
+        when = deutsche_zeit.aus_stempel(note.created_at).strftime("%d.%m.%Y")
         console.print(f"  [cyan]{note.id:>3}[/cyan]  [dim]{when}[/dim]  {note.text}")
 
 
@@ -1039,7 +1039,7 @@ def history_command(
         console.print("[dim]Noch keine Recherchen gespeichert.[/dim]")
         return
     for entry in entries:
-        when = datetime.fromtimestamp(entry.created_at).strftime("%d.%m.%Y %H:%M")
+        when = deutsche_zeit.aus_stempel(entry.created_at).strftime("%d.%m.%Y %H:%M")
         console.print(f"[dim]{when}[/dim]  [bold]{entry.question}[/bold]")
         first_line = entry.answer.strip().splitlines()[0] if entry.answer.strip() else ""
         console.print(f"    [dim]{first_line[:110]}[/dim]")
@@ -2728,7 +2728,7 @@ def _resolve_image(path: Path) -> Path | None:
         table.add_column()
         table.add_column(style="dim", justify="right")
         for index, image in enumerate(images[:15], start=1):
-            when = datetime.fromtimestamp(image.stat().st_mtime).strftime("%d.%m.%Y %H:%M")
+            when = deutsche_zeit.aus_stempel(image.stat().st_mtime).strftime("%d.%m.%Y %H:%M")
             table.add_row(str(index), image.name, when)
         console.print(table)
         answer = typer.prompt("  Welches Bild?", default="1").strip()

@@ -229,9 +229,15 @@ class UIState:
     def write(self, raw: Any) -> dict[str, Any]:
         """Uebernimmt einen Vorschlag und gibt zurueck, was wirklich gilt."""
         with self._lock:
-            neu = clean(raw, base=self.read())
             try:
                 with self._connect() as conn:
+                    conn.execute("BEGIN IMMEDIATE")
+                    row = conn.execute("SELECT state FROM uistate WHERE id = 1").fetchone()
+                    try:
+                        base = clean(json.loads(row["state"])) if row else defaults()
+                    except (TypeError, ValueError):
+                        base = defaults()
+                    neu = clean(raw, base=base)
                     conn.execute(
                         "INSERT INTO uistate (id, state) VALUES (1, ?) "
                         "ON CONFLICT(id) DO UPDATE SET state = excluded.state",

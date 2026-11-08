@@ -205,14 +205,25 @@ def _initializing(path: Path) -> Iterator[None]:
         yield
 
 
+class _FillingState:
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.fills: dict[str, tuple[threading.Lock, int]] = {}
+
+
+_FILL_STATES: weakref.WeakValueDictionary[str, _FillingState] = weakref.WeakValueDictionary()
+
+
 class Cache:
     """Schmaler Wrapper um eine SQLite-Datei."""
 
     def __init__(self, db_path: Path | str, ttl_hours: int = 24) -> None:
         self.db_path = Path(db_path)
         self.ttl_seconds = max(0, int(ttl_hours)) * 3600
-        self._fill_lock = threading.Lock()
-        self._fills: dict[str, tuple[threading.Lock, int]] = {}
+        with _INIT_LOCK:
+            self._fill_state = _FILL_STATES.setdefault(str(self.db_path.resolve()), _FillingState())
+        self._fill_lock = self._fill_state.lock
+        self._fills = self._fill_state.fills
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         from aquaticy.privacy import profile_sealer
 
@@ -405,24 +416,26 @@ class Cache:
         payload = self._seal(json.dumps(value, ensure_ascii=False), "cache.payload")
         label = self._seal(label, "cache.label")
 
-        from aquaticy.budget import fits, note_written
+        from aquaticy.budget import fits, note_written, writing
 
         self._maybe_purge()
         groesse = len(payload.encode("utf-8")) + len(label.encode("utf-8"))
 
-        with self._connect() as conn:
-            row = conn.execute(
-                "SELECT length(CAST(payload AS BLOB)) + length(CAST(label AS BLOB)) "
-                "FROM cache WHERE key = ?", (key,)).fetchone()
-            incoming = max(0, groesse - (int(row[0]) if row is not None else 0))
-            if not fits(self.db_path.parent, incoming):
-                return
-            conn.execute(
-                "INSERT OR REPLACE INTO cache (key, kind, label, payload, created_at, expires_at)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (key, kind or key.split(":", 1)[0], label, payload, now, now + ttl_seconds),
-            )
-        note_written(self.db_path.parent, incoming)
+        with writing(self.db_path.parent):
+            with self._connect() as conn:
+                row = conn.execute(
+                    "SELECT length(CAST(payload AS BLOB)) + length(CAST(label AS BLOB)) "
+                    "FROM cache WHERE key = ?", (key,)).fetchone()
+                incoming = max(0, groesse - (int(row[0]) if row is not None else 0))
+                if not fits(self.db_path.parent, incoming):
+                    return
+                conn.execute(
+                    "INSERT OR REPLACE INTO cache "
+                    "(key, kind, label, payload, created_at, expires_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (key, kind or key.split(":", 1)[0], label, payload, now, now + ttl_seconds),
+                )
+            note_written(self.db_path.parent, incoming)
 
     def purge_expired(self) -> int:
         """Loescht abgelaufene Eintraege, gibt deren Anzahl zurueck."""

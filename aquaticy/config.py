@@ -340,8 +340,11 @@ def is_ollama_base(url: str) -> bool:
 
     if not url:
         return False
-    parsed = urlparse(url if "://" in url else f"http://{url}")
-    return parsed.port == OLLAMA_PORT
+    try:
+        parsed = urlparse(url if "://" in url else f"http://{url}")
+        return parsed.port == OLLAMA_PORT
+    except ValueError:
+        return False
 
 
 def base_fits(url: str, model: str) -> bool:
@@ -554,7 +557,7 @@ class Settings:
             return max(1, min(self.subagent_parallel, limit))
         local = provider_of(self.effective_subagent_model) in ("ollama", "ollama_chat")
         if local:
-            return 2
+            return min(2, limit)
 
         return limit
 
@@ -684,6 +687,8 @@ class Settings:
         werte = {self.api_keys.get(n, "") for n in namen} | {self.search_keys.get(n, "")
                                                              for n in namen}
         werte |= {_env_str(n) for n in namen if n}
+        werte.update((self.ha_token, self.github_token, self.google_client_secret,
+                      self.memory_key))
         return sorted(w for w in werte if w and len(w) >= 8)
 
     @property

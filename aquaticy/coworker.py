@@ -44,9 +44,10 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from aquaticy import zeit as deutsche_zeit
 
 LOG = logging.getLogger("aquaticy.coworker")
 
@@ -243,7 +244,8 @@ def _clean_text(text: Any, grenze: int) -> str:
 
 
 def _today(stempel: float | None = None) -> str:
-    return datetime.fromtimestamp(stempel or time.time()).strftime("%Y-%m-%d")
+    datum = deutsche_zeit.aus_stempel(time.time() if stempel is None else stempel)
+    return datum.strftime("%Y-%m-%d")
 
 
 class CoworkerStore:
@@ -1295,10 +1297,22 @@ def coworker_agent_class() -> type:
         def _compose_system(self) -> str:
             return super()._compose_system() + SYSTEM_PROMPT
 
+        def _personal_context_allowed(self) -> bool:
+            try:
+                current = self._coworker.store.get(self._coworker.cw.id)
+                return bool(current and current.enabled and current.sharing_chats)
+            except Exception:
+                return False
+
         def _person_prompt(self) -> str:
-            if not self._coworker.cw.sharing_chats:
+            if not self._personal_context_allowed():
                 return ""
             return super()._person_prompt()
+
+        def _memory_answer(self, question: str) -> str:
+            if not self._personal_context_allowed():
+                return ""
+            return super()._memory_answer(question)
 
         def _automatic_memory_allowed(self) -> bool:
             return False
@@ -1334,14 +1348,14 @@ def connections(settings: Any, ultra: bool) -> list[str]:
 
 
 def _when(stempel: float) -> str:
-    return datetime.fromtimestamp(stempel).strftime("%d.%m. %H:%M")
+    return deutsche_zeit.aus_stempel(stempel).strftime("%d.%m. %H:%M")
 
 
 def build_prompt(cw: Coworker, *, messages: list[dict[str, Any]],
                  decisions: list[dict[str, Any]], verbindungen: list[str], vm: bool,
                  now: float | None = None) -> str:
     """Die Nachricht, mit der ein Arbeitsschritt beginnt."""
-    jetzt = datetime.fromtimestamp(now or time.time())
+    jetzt = deutsche_zeit.aus_stempel(now or time.time())
     tage = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
     teile = [
         f"Du bist {cw.name}. Arbeitsschritt {cw.runs + 1}. Jetzt ist {tage[jetzt.weekday()]}, "
@@ -1504,7 +1518,7 @@ def run_session(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStore,
     if vm is None:
         vm = vm_possible(settings, ultra) and cw.rule("werkstatt") != "sperren"
     if store.runs_today(cw) >= DAILY_RUNS.get(plan, 0):
-        bis_morgen = (datetime.fromtimestamp(time.time()).replace(hour=23, minute=59)
+        bis_morgen = (deutsche_zeit.aus_stempel(time.time()).replace(hour=23, minute=59)
                       .timestamp() - time.time()) / 60 + 2
         store.postpone(cw.id, max(5.0, bis_morgen), "Tagespensum erreicht — morgen geht es "
                        "weiter")
@@ -1644,7 +1658,7 @@ def run_scheduled(cw: Coworker, settings: Any, plan: str, *, store: CoworkerStor
     cw = current
     if cw.interval_seconds and cw.schedule.get("kind") == "research" and \
             store.runs_today(cw) >= DAILY_RUNS.get(plan, 48):
-        bis_morgen = (datetime.fromtimestamp(time.time()).replace(hour=23, minute=59)
+        bis_morgen = (deutsche_zeit.aus_stempel(time.time()).replace(hour=23, minute=59)
                       .timestamp() - time.time()) / 60 + 2
         store.postpone(cw.id, max(5.0, bis_morgen), "Tagespensum erreicht — morgen geht es weiter")
         return "Tagespensum erreicht"
@@ -1875,6 +1889,8 @@ class Scheduler:
         """Vor dem Loeschen eines Kontos den laufenden Schritt enden lassen."""
         if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join(timeout=timeout)
+            if self._thread.is_alive():
+                raise TimeoutError("Eine Hintergrundaufgabe läuft noch. Versuche es erneut.")
 
     def wake(self) -> None:
         """Gleich nachsehen -- etwa nach einer Nachricht an einen Coworker."""

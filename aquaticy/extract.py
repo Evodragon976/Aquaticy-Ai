@@ -240,6 +240,8 @@ def product_from_jsonld(tree: HTMLParser, base_url: str) -> Product | None:
         if isinstance(eigenschaften, dict):
             eigenschaften = [eigenschaften]
         for prop in eigenschaften if isinstance(eigenschaften, list) else []:
+            if len(specs) >= MAX_SPECS:
+                break
             if isinstance(prop, dict) and _text_or_none(prop.get("name")):
                 specs[str(_text_or_none(prop["name"]))[:80]] = (
                     _text_or_none(prop.get("value")) or "")
@@ -397,7 +399,10 @@ def _merge(base: Product, extra: Product | None) -> Product:
     """Fuellt leere Felder von *base* aus *extra* auf."""
     if extra is None:
         return base
+    currency_matches = (not base.price or not extra.price or base.price == extra.price)
     for field in ("image_url", "price", "currency", "rating", "availability"):
+        if field == "currency" and not currency_matches:
+            continue
         if getattr(base, field) is None:
             setattr(base, field, getattr(extra, field))
     for key, value in extra.specs.items():

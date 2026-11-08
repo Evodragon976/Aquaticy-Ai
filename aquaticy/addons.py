@@ -55,6 +55,7 @@ import hashlib
 import json
 import math
 import re
+import secrets
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -452,7 +453,7 @@ FRANKFURTER = "https://api.frankfurter.dev/v1/latest"
 NAGER = "https://date.nager.at/api/v3/PublicHolidays/{jahr}/{land}"
 
 STATE_FILE = "addons.json"
-_locks: dict[str, threading.Lock] = {}
+_locks: dict[str, Any] = {}
 _locks_lock = threading.Lock()
 
 _jobs: dict[tuple[str, str], threading.Thread] = {}
@@ -472,10 +473,10 @@ def _data_dir(settings: Any) -> Path:
     return Path(getattr(settings, "data_dir", "") or ".").expanduser()
 
 
-def _lock(settings: Any) -> threading.Lock:
+def _lock(settings: Any) -> Any:
     key = str(_data_dir(settings).resolve())
     with _locks_lock:
-        return _locks.setdefault(key, threading.Lock())
+        return _locks.setdefault(key, threading.RLock())
 
 
 def _state_path(settings: Any) -> Path:
@@ -501,12 +502,10 @@ def load_state(settings: Any) -> dict[str, dict[str, Any]]:
 def _save_state(settings: Any, state: dict[str, dict[str, Any]]) -> None:
     ziel = _state_path(settings)
     ziel.parent.mkdir(parents=True, exist_ok=True)
-    tmp = ziel.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"version": 1, "addons": state}, ensure_ascii=False, indent=1),
-                   encoding="utf-8")
-    with contextlib.suppress(OSError):
-        tmp.chmod(0o600)
-    tmp.replace(ziel)
+    from aquaticy.tlsfiles import write_private
+
+    write_private(ziel, json.dumps({"version": 1, "addons": state},
+                                   ensure_ascii=False, indent=1).encode("utf-8"))
 
 
 def _update(settings: Any, addon_id: str, **felder: Any) -> dict[str, Any]:
@@ -940,10 +939,13 @@ def _write_secret(settings: Any, key: str, value: str) -> None:
 
 
 def forget_github_token(settings: Any) -> None:
-    if (github_token(settings) or getattr(settings, "secret_vault", None) is not None
-            or _env_target(settings).is_file()):
-        with contextlib.suppress(OSError, ValueError):
-            _write_secret(settings, GITHUB_TOKEN_KEY, "")
+    with _lock(settings):
+        if "github" in load_state(settings):
+            _update(settings, "github", login_attempt="")
+        if (github_token(settings) or getattr(settings, "secret_vault", None) is not None
+                or _env_target(settings).is_file()):
+            with contextlib.suppress(OSError, ValueError):
+                _write_secret(settings, GITHUB_TOKEN_KEY, "")
 
 
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_]{20,255}$")
@@ -959,6 +961,11 @@ def github_login(
     token = (token or "").strip()
     if not TOKEN_RE.fullmatch(token):
         raise AddOnError("Das sieht nicht nach einem GitHub-Token aus (ghp_…, github_pat_…).")
+    attempt = secrets.token_hex(16)
+    with _lock(settings):
+        if not (load_state(settings).get("github") or {}).get("installed"):
+            raise AddOnError("GitHub wurde inzwischen deinstalliert.")
+        _update(settings, "github", login_attempt=attempt)
     eigener = client is None
     client = client or httpx.Client(timeout=15)
     try:
@@ -982,9 +989,13 @@ def github_login(
         raise AddOnError("GitHub hat keine gültigen Kontodaten geliefert.") from exc
     rechte = [teil.strip() for teil in antwort.headers.get("x-oauth-scopes", "").split(",")
               if teil.strip()]
-    _write_secret(settings, GITHUB_TOKEN_KEY, token)
-    _update(settings, "github", login={"state": "angemeldet", "who": login,
-                                       "at": int(time.time())})
+    with _lock(settings):
+        current = load_state(settings).get("github") or {}
+        if not current.get("installed") or current.get("login_attempt") != attempt:
+            raise AddOnError("Diese Anmeldung wurde inzwischen abgebrochen.")
+        _write_secret(settings, GITHUB_TOKEN_KEY, token)
+        _update(settings, "github", login_attempt="", login={"state": "angemeldet", "who": login,
+                                                            "at": int(time.time())})
     warnung = ""
     if any(recht in {"repo", "delete_repo", "admin:org", "workflow", "write:packages"}
            for recht in rechte):
@@ -1065,10 +1076,16 @@ def set_feeds(settings: Any, feeds: Any) -> list[str]:
         adresse = str(roh or "").strip()
         if not adresse:
             continue
-        teile = urlparse(adresse)
-        if teile.scheme not in ("http", "https") or not teile.hostname or len(adresse) > 500:
-            raise AddOnError(f"Keine gültige Feed-Adresse: {adresse[:80]}")
-        if _private_host(teile.hostname):
+        try:
+            teile = urlparse(adresse)
+            valid = (teile.scheme in ("http", "https") and teile.hostname
+                     and not teile.username and not teile.password and len(adresse) <= 500
+                     and (teile.port is None or 1 <= teile.port <= 65535))
+        except ValueError:
+            valid = False
+        if not valid:
+            raise AddOnError("Keine gültige Feed-Adresse. Nutze HTTP oder HTTPS ohne Zugangsdaten.")
+        if _private_host(teile.hostname or ""):
             raise AddOnError(f"Feeds nur aus dem Internet, nicht aus dem Heimnetz: {adresse[:80]}")
         if adresse not in sauber:
             sauber.append(adresse)
@@ -1740,6 +1757,8 @@ def currency(amount: Any = 1, base: str = "EUR", to: str = "",
     finally:
         if eigener:
             client.close()
+    if str(daten.get("base", von)).upper() != von or daten.get("amount", 1) != 1:
+        return {"error": "Die Kursquelle hat eine andere Basis geliefert. Erneut versuchen."}
     kurse = {code: rate for code, rate in _objekt(daten.get("rates")).items()
              if isinstance(rate, (int, float)) and not isinstance(rate, bool)
              and math.isfinite(rate) and rate > 0 and math.isfinite(betrag * rate)}
@@ -1790,7 +1809,10 @@ def holidays(country: str = "DE", year: Any = None, region: str = "",
         gebiete = [str(g) for g in roh_gebiete] if isinstance(roh_gebiete, list) else []
         if bundesland and not tag.get("global") and bundesland not in gebiete:
             continue
+        types = tag.get("types")
+        types = [str(value) for value in types] if isinstance(types, list) else []
         tage.append({
+            "arten": types, "gesetzlich": "Public" in types if types else None,
             "datum": tag.get("date"), "name": tag.get("localName") or tag.get("name"),
             "ueberall": bool(tag.get("global")),
             "nur_in": [] if tag.get("global") else list(gebiete),
@@ -1856,7 +1878,10 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
         art = _local(element.tag)
         if art not in ("item", "entry"):
             continue
+        namespace = element.tag.rpartition("}")[0]
+        primary = [kind for kind in element if kind.tag.rpartition("}")[0] == namespace]
         felder = {_local(kind.tag): kind for kind in element}
+        felder.update({_local(kind.tag): kind for kind in primary})
 
         def erstes(*namen: str, felder: dict[str, ET.Element] = felder) -> ET.Element | None:
             for name in namen:
@@ -1864,7 +1889,7 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
                     return felder[name]
             return None
 
-        links = [child for child in element if _local(child.tag) == "link"]
+        links = [child for child in primary if _local(child.tag) == "link"]
         link_node = next((child for child in links if child.get("rel", "alternate") == "alternate"
                           and child.get("type", "text/html") in
                           ("text/html", "application/xhtml+xml")),
@@ -1896,10 +1921,18 @@ def parse_feed(data: bytes, quelle: str) -> list[dict[str, Any]]:
                 from datetime import datetime
 
                 zeit = datetime.fromisoformat(datum.replace("Z", "+00:00")).timestamp()
+        resolved_link = urljoin(bases[link_node] if link_node is not None else bases[element],
+                                link) if link else ""
+        try:
+            parsed_link = urlparse(resolved_link)
+            if (parsed_link.scheme not in ("http", "https") or not parsed_link.hostname
+                    or parsed_link.username is not None or parsed_link.password is not None):
+                resolved_link = ""
+        except ValueError:
+            resolved_link = ""
         eintraege.append({
             "titel": _kurz(readable(felder.get("title")), 300),
-            "link": urljoin(bases[link_node] if link_node is not None else bases[element], link)
-            if link else "",
+            "link": resolved_link,
             "datum": datum,
             "zusammenfassung": _kurz(readable(
                 erstes("description", "summary", "content", "encoded"),

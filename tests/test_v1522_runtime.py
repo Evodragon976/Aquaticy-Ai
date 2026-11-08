@@ -123,9 +123,19 @@ def test_f46_a_failed_nvidia_model_probe_is_not_a_successful_connection():
 @pytest.mark.parametrize("payload", [{}, {"access_token": "", "expires_in": 3600},
                                       {"access_token": "new", "expires_in": float("nan")}])
 def test_f47_invalid_token_responses_do_not_overwrite_a_working_connection(monkeypatch, payload):
-    monkeypatch.setattr(google.httpx, "post", lambda *a, **kw: httpx.Response(200, json=payload)
-                        if payload.get("expires_in") == payload.get("expires_in") else
-                        httpx.Response(200, text='{"access_token":"new","expires_in":NaN}'))
+    from contextlib import contextmanager
+
+    @contextmanager
+    def stream(*args, **kwargs):
+        response = (httpx.Response(200, json=payload)
+                    if payload.get("expires_in") == payload.get("expires_in") else
+                    httpx.Response(200, text='{"access_token":"new","expires_in":NaN}'))
+        try:
+            yield response
+        finally:
+            response.close()
+
+    monkeypatch.setattr(google.httpx, "stream", stream)
     tokens = google.Tokens(access_token="old", refresh_token="refresh", expires_at=1)
     with pytest.raises(google.GoogleError):
         google.refresh_tokens("client", "secret", tokens)

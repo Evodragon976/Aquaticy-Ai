@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import threading
 import time
+import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -171,31 +172,33 @@ def native_base(base_url: str) -> str:
     return str(base_url).strip().rstrip("/").removesuffix("/v1")
 
 
-def server_running(base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> bool:
-    """Antwortet unter *base_url* ein Ollama-Server?"""
+MAX_MODEL_LIST_BYTES = 2 * 1024 * 1024
+
+
+def _model_list(base_url: str, path: str, timeout: float = 5.0) -> list[dict[str, Any]] | None:
+    from aquaticy.jsonutil import loads
+    from aquaticy.netguard import read_response
+
     try:
-        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=timeout, trust_env=False)
-        payload = response.json() if response.status_code == 200 else None
+        deadline = time.monotonic() + timeout
+        with httpx.stream("GET", f"{native_base(base_url)}{path}", timeout=timeout,
+                          trust_env=False) as response:
+            if response.status_code != 200:
+                return None
+            payload = loads(read_response(response, MAX_MODEL_LIST_BYTES, deadline))
+        rows = payload.get("models") if isinstance(payload, dict) else None
+        return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else None
     except (httpx.HTTPError, ValueError):
-        return False
-    return isinstance(payload, dict) and isinstance(payload.get("models"), list)
+        return None
+
+
+def server_running(base_url: str = DEFAULT_OLLAMA_URL, timeout: float = 3.0) -> bool:
+    """Antwortet ein Ollama-Server mit einer begrenzten, gueltigen Modellliste?"""
+    return _model_list(base_url, "/api/tags", timeout) is not None
 
 
 def _tag_list(base_url: str) -> list[dict[str, Any]]:
-    """Die Modellliste von ``/api/tags`` -- leer bei allem, was keine ist.
-
-    Seit 9.5.16 auch bei einer Antwort, die kein Ollama-JSON ist (eine Liste,
-    Text): bis dahin warf das einen AttributeError bis in ``/api/models``.
-    """
-    try:
-        response = httpx.get(f"{native_base(base_url)}/api/tags", timeout=5, trust_env=False)
-        if response.status_code != 200:
-            return []
-        payload = response.json()
-    except (httpx.HTTPError, ValueError):
-        return []
-    modelle = payload.get("models") if isinstance(payload, dict) else None
-    return [item for item in modelle if isinstance(item, dict)] if isinstance(modelle, list) else []
+    return _model_list(base_url, "/api/tags") or []
 
 
 def installed_models(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
@@ -413,18 +416,8 @@ def model_is_loaded(model_id: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool |
 
 def loaded_models(base_url: str = DEFAULT_OLLAMA_URL) -> list[str]:
     """Modelle, die gerade im Speicher liegen (`ollama ps`)."""
-    try:
-        response = httpx.get(f"{native_base(base_url)}/api/ps", timeout=5, trust_env=False)
-        if response.status_code != 200:
-            return []
-        payload = response.json()
-    except (httpx.HTTPError, ValueError):
-        return []
-
-    modelle = payload.get("models") if isinstance(payload, dict) else None
-    if not isinstance(modelle, list):
-        return []
-    return [str(item["name"]) for item in modelle if isinstance(item, dict) and item.get("name")]
+    return [str(item["name"]) for item in _model_list(base_url, "/api/ps") or []
+            if item.get("name")]
 
 
 def unload_model(name: str, base_url: str = DEFAULT_OLLAMA_URL) -> bool:
@@ -518,6 +511,7 @@ MAX_MODEL_INFO_BYTES = 8 * 1024 * 1024
 
 _FEHLT: dict[tuple[str, str, str], tuple[float, set[str]]] = {}
 _CAPS_LOCK = threading.Lock()
+_SHOW_FILLS: weakref.WeakValueDictionary[tuple[str, str], Any] = weakref.WeakValueDictionary()
 
 
 _FEHLT_RE = re.compile(r"does not support (thinking|tools)", re.IGNORECASE)
@@ -525,6 +519,15 @@ _FEHLT_RE = re.compile(r"does not support (thinking|tools)", re.IGNORECASE)
 
 def _show(name: str, base_url: str = DEFAULT_OLLAMA_URL,
           timeout: float = 3.0) -> dict[str, Any] | None:
+    key = (native_base(base_url), _ohne_latest(name))
+    with _CAPS_LOCK:
+        lock = _SHOW_FILLS.setdefault(key, threading.RLock())
+    with lock:
+        return _show_once(name, base_url, timeout)
+
+
+def _show_once(name: str, base_url: str = DEFAULT_OLLAMA_URL,
+               timeout: float = 3.0) -> dict[str, Any] | None:
     """Die Antwort von ``/api/show`` zu *name* -- zehn Minuten gemerkt, None ohne Antwort.
 
     Seit 11.3.0 Luna eine Abfrage fuer beides: die Faehigkeiten und den Aufbau
@@ -807,7 +810,11 @@ def total_memory_gb() -> float | None:
         try:
             for line in meminfo.read_text(encoding="utf-8").splitlines():
                 if line.startswith("MemTotal:"):
-                    return round(int(line.split()[1]) / 1_048_576, 1)
+                    from aquaticy.resources import memory_limit
+
+                    total = int(line.split()[1]) * 1024
+                    limit = memory_limit()
+                    return round(min(total, limit or total) / 1_073_741_824, 1)
         except (OSError, ValueError, IndexError):
             return None
     if platform.system() == "Darwin":

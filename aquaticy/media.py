@@ -51,7 +51,7 @@ def save_snapshot(
         ValueError: kein unterstuetztes Bild, oder zu viele festgehaltene.
         StorageFull: der gemeinsame 400-MB-Deckel ist erreicht (aquaticy/budget.py).
     """
-    from aquaticy.budget import ensure_room, forget
+    from aquaticy.budget import forget
 
     mime = str(content_type or "").split(";", 1)[0].lower()
     extension = MIME_EXTENSIONS.get(mime)
@@ -62,7 +62,6 @@ def save_snapshot(
         raise ValueError(
             f"Es sind schon {MAX_KEPT} Bilder für Aufträge abgelegt -- lösche erst alte Aufträge."
         )
-    ensure_room(data_dir, len(content))
     digest = hashlib.sha256(content).hexdigest()[:16]
     marke = KEEP_MARK if keep else AI_MARK if ai else ""
     media_id = f"{int(time.time() * 1000):013d}-{digest}{marke}{extension}"

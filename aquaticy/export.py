@@ -155,9 +155,14 @@ def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -
                         continue
                     name = f"{_slug(product.name, 30)}-{counter}{suffix}"
                     counter += 1
-                    with _atomic_output(directory / name) as temporary:
-                        temporary.write_bytes(response.content)
-                    mapping[url] = name
+                    target = _unique_path(directory / name)
+                    try:
+                        with _atomic_output(target) as temporary:
+                            temporary.write_bytes(response.content)
+                    except BaseException:
+                        target.unlink(missing_ok=True)
+                        raise
+                    mapping[url] = target.name
                 except httpx.HTTPError:
                     continue
     return mapping

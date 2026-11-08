@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from aquaticy import local_model as lm
+from tests.stream_helpers import get_stream
 
 TAGS = {
     "models": [
@@ -22,7 +23,7 @@ def _patch_tags(monkeypatch: pytest.MonkeyPatch, payload: Any = TAGS, status: in
         assert url.endswith("/api/tags")
         return httpx.Response(status, json=payload, request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "stream", get_stream(fake_get))
 
 
 
@@ -85,7 +86,7 @@ def test_server_not_running(monkeypatch: pytest.MonkeyPatch) -> None:
     def failing(url, **kwargs):
         raise httpx.ConnectError("nichts da", request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(httpx, "get", failing)
+    monkeypatch.setattr(httpx, "stream", get_stream(failing))
     assert lm.server_running() is False
     assert lm.installed_models() == []
 
@@ -519,7 +520,7 @@ def test_loaded_models(monkeypatch: pytest.MonkeyPatch) -> None:
             request=httpx.Request("GET", url),
         )
 
-    monkeypatch.setattr(httpx, "get", fake_get)
+    monkeypatch.setattr(httpx, "stream", get_stream(fake_get))
     assert lm.loaded_models() == ["llama3.1:8b", "llava:7b"]
 
 
@@ -549,7 +550,7 @@ def test_free_memory_survives_a_dead_server(monkeypatch: pytest.MonkeyPatch) -> 
     def failing(url, **kwargs):
         raise httpx.ConnectError("weg", request=httpx.Request("GET", url))
 
-    monkeypatch.setattr(httpx, "get", failing)
+    monkeypatch.setattr(httpx, "stream", get_stream(failing))
     assert lm.free_memory() == []
 
 

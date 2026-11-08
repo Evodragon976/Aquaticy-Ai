@@ -238,7 +238,9 @@ def provider_limits(provider: str) -> tuple[int, int]:
 
 def cpu_load() -> dict[str, Any]:
     """Prozessorlast als Anteil der verfuegbaren Kerne."""
-    cores = os.cpu_count() or 1
+    from aquaticy.resources import cpu_count
+
+    cores = cpu_count()
     try:
         one_minute = os.getloadavg()[0]
     except (OSError, AttributeError):
@@ -263,7 +265,14 @@ def memory_use() -> dict[str, Any]:
         total = values.get("MemTotal", 0) * 1024
         free = values.get("MemAvailable", values.get("MemFree", 0)) * 1024
         if total:
-            return _memory_dict(total, total - free)
+            from aquaticy.resources import memory_current, memory_limit
+
+            used = total - free
+            limit = memory_limit()
+            if limit is not None and limit < total:
+                total = limit
+                used = min(total, memory_current() or used)
+            return _memory_dict(total, used)
 
     try:
         total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")

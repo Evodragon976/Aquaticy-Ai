@@ -73,6 +73,8 @@ _PLACEHOLDER = re.compile(
 
 
 SECRET_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("Zugangsdaten in einer Adresse", _r(
+        r"[a-z][a-z0-9+.-]*://[^\s/:@\"']+:[^\s/@\"']+@", _I)),
     ("AWS-Zugangsschlüssel", _r(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
     ("GitHub-Token", _r(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b")),
     ("API-Schlüssel (sk-…)", _r(r"\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}")),

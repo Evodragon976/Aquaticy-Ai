@@ -197,6 +197,9 @@ def own_message(text: str) -> str:
     text = re.sub(r'"[^"\n]*"|„[^“\n]*“|“[^”\n]*”', " ", text)
     lines = []
     for line in text.splitlines():
+        if re.match(r"(?i)\s*(?:er|sie|mein\w*\s+\w+|das\s+beispiel)\b[^:]*"
+                    r"\b(?:sagt|sagte|schreibt|schrieb|lautet|erzählt|erzählte)\s*:", line):
+            continue
         if re.match(r"\s*>", line) or re.match(
                 r"(?i)\s*(?:beispiel|zitiere|übersetz\w*|uebersetz\w*|translate|quote)\b", line):
             continue
@@ -431,7 +434,8 @@ def extract(text: str) -> list[Fact]:
 
 
 _VERGISS = re.compile(r"(?i)\b(?:vergiss|lösch\w*|loesch\w*|forget)\s*,?\s*(?:bitte\s*,?\s*)?"
-                      r"(?:dass|das\s+mit|was\s+ich\s+über|that)\s+(?P<w>[^.!?\n]{2,80})")
+                      r"(?:dass|das\s+mit|was\s+ich\s+über|that)\s+"
+                      r"(?P<w>(?:(?<=\d)\.(?=\s*\d)|[^.!?\n]){2,80})")
 
 
 def forget_request(text: str) -> str:
@@ -440,12 +444,15 @@ def forget_request(text: str) -> str:
     field = re.fullmatch(
         r"(?i)\s*(?:bitte\s+|please\s+)?(?:vergiss|lösche|loesche|forget|erase)\s+"
         r"(?:bitte\s+)?(?:mein(?:e[nrms]?)?|my)\s+"
-        r"(namen?|wohnort|ort|adresse|address|location|geburtstag|birthday|alter|age|"
+        r"(namen?|wohnort|ort|adresse|address|location|geburtsdatum|birthdate|dob|"
+        r"date\s+of\s+birth|geburtstag|birthday|alter|age|"
         r"beruf|job|herkunft|origin)\s*[.!?]*\s*", text)
     if field:
         aliases = {"namen": "name", "ort": "wohnort", "adresse": "wohnort",
                    "address": "wohnort", "location": "wohnort", "birthday": "geburtstag",
-                   "age": "alter", "job": "beruf", "origin": "herkunft"}
+                   "age": "alter", "job": "beruf", "origin": "herkunft",
+                   "birthdate": "geburtsdatum", "dob": "geburtsdatum",
+                   "date of birth": "geburtsdatum"}
         name = field[1].casefold()
         return "@field:" + aliases.get(name, name)
     treffer = _VERGISS.search(text)
@@ -524,13 +531,23 @@ def _store_facts(store: Any, facts: list[Fact],
             if any(thema == f"{PERSON}:{alt}" for alt in REPLACED_BY.get(fakt.slot, ())):
                 ersetzen.add(eintrag.id)
                 continue
+            if fakt.slot == "alter" and thema == PERSON + ":geburtsdatum":
+                age = re.search(r"\b(\d{1,3})\s+Jahre", fakt.text, re.I)
+                birth = birth_date(eintrag.text)
+                if age is not None and birth is not None and int(age[1]) != age_on(birth):
+                    ersetzen.add(eintrag.id)
+                    continue
             if (thema == fakt.topic.casefold() and einzel) or (
                     thema == PERSON and fakt.slot in _ALTER_PLATZ
                     and _ALTER_PLATZ[fakt.slot].search(str(eintrag.text or ""))) or (
                     gegenteil and thema == f"{PERSON}:{gegenteil}"):
                 ersetzen.add(eintrag.id)
         if gleich:
-            continue
+            if not ersetzen:
+                continue
+            ersetzen.update(entry.id for entry in vorhanden
+                            if str(entry.topic or "").casefold() == fakt.topic.casefold()
+                            and _norm(entry.text) == _norm(fakt.text))
         try:
             eintrag = store.remember(fakt.text, fakt.topic, replace_ids=ersetzen,
                                      expected_revision=version)
@@ -546,20 +563,28 @@ def _store_facts(store: Any, facts: list[Fact],
 def forget_matching(store: Any, wunsch: str) -> list[str]:
     """Loescht Eintraege ueber den Nutzer, die zu *wunsch* passen. Returns: geloeschte Texte."""
     field = wunsch.removeprefix("@field:") if wunsch.startswith("@field:") else ""
-    if field not in {"name", "wohnort", "geburtstag", "alter", "beruf", "herkunft"}:
+    if field not in {"name", "wohnort", "geburtstag", "geburtsdatum",
+                     "alter", "beruf", "herkunft"}:
         field = ""
     forms = {"heisse": "heisst", "wohne": "wohnt", "arbeite": "arbeitet", "komme": "kommt"}
-    woerter = [forms.get(w, w) for w in _norm(wunsch).split() if w not in (
-        "mag", "ich", "bin", "habe", "nicht", "dass", "the", "like", "and")]
+
+    def words(text: str) -> set[str]:
+        normalized = re.sub(r"\b(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\b",
+                            lambda m: f"{int(m[1])}.{int(m[2])}.{int(m[3])}", text)
+        return {forms.get(word, word) for word in _norm(normalized).split()}
+
+    woerter = words(wunsch) - {
+        "mag", "ich", "bin", "habe", "nicht", "dass", "the", "like", "and"}
     if store is None or not woerter:
         return []
     weg = []
     store.invalidate_pending()
     for eintrag in person_entries(store, limit=None):
-        text = _norm(f"{eintrag.text} {eintrag.topic}")
+        text = words(f"{eintrag.text} {eintrag.topic}")
         topic = str(eintrag.topic or "").strip().casefold()
-        matches = (topic == PERSON + ":" + field if field
-                   else set(woerter) <= set(text.split()))
+        targets = {field, "geburtsdatum"} if field in {"alter", "geburtstag"} else {field}
+        matches = (topic in {PERSON + ":" + item for item in targets} if field
+                   else woerter <= text)
         if matches and store.forget(eintrag.id):
             weg.append(str(eintrag.text))
     return weg
@@ -653,6 +678,11 @@ def parse_llm(raw: str) -> list[Fact]:
         if suspicious(text):
             continue
         if art == "geburtsdatum":
+            if not re.fullmatch(
+                    r"(?i)(?:geboren\s+am\s+|geburtsdatum\s*:\s*|"
+                    r"(?:der\s+nutzer|die\s+nutzerin)\s+(?:ist|wurde)\s+am\s+)?"
+                    r"\d{1,2}\.\s*\d{1,2}\.\s*\d{4}\s*(?:geboren)?[.!]?", text):
+                continue
             datum = birth_date(text)
             if datum is None:
                 continue
@@ -794,7 +824,9 @@ def self_answer(text: str, store: Any, language: str = "de") -> str:
               if str(e.topic or "").casefold().startswith(f"{PERSON}:")}
     en = language == "en"
     if art == "name":
-        treffer = re.match(r"^Der Nutzer heißt (.+?)\.?$", fakten.get("name", ""))
+        treffer = re.fullmatch(
+            r"(?i)(?:(?:(?:der nutzer|die nutzerin|er|sie)\s+)?hei(?:ß|ss)t\s+|name:\s*)"
+            r"(.+?)[.!]?", fakten.get("name", ""))
         if not treffer:
             return ""
         name = treffer[1]
@@ -813,6 +845,13 @@ def self_answer(text: str, store: Any, language: str = "de") -> str:
             alter = age_on(datum)
             return (f"You are {alter} years old (born on {datum:%d.%m.%Y})." if en else
                     f"Du bist {alter} Jahre alt. Du bist am {datum:%d.%m.%Y} geboren.")
+        age = re.fullmatch(r"(?i)(?:der nutzer\s+)?ist\s+(\d{1,3})\s+jahre alt"
+                           r"(?:\s+\(Stand\s+(\d{2}/\d{4})\))?[.!]?",
+                           fakten.get("alter", ""))
+        if age is not None and 0 <= int(age[1]) <= 120:
+            stamp = (f" (as of {age[2]})" if en else f" (Stand {age[2]})") if age[2] else ""
+            return (f"You last told me you were {age[1]} years old{stamp}." if en else
+                    f"Du hast zuletzt angegeben: {age[1]} Jahre{stamp}.")
         return ""
     if art == "geburtstag":
         if datum is not None:

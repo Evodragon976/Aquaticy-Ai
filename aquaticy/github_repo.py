@@ -285,9 +285,17 @@ def read_file(hole: Callable[..., Any], repo: str, path: str, ref: str, *,
             or len(encoded) > (MAX_FILE + 2) // 3 * 4):
         return {**result, "hinweis": "Zu groß oder keine Textdatei."}
     raw = base64.b64decode(encoded, validate=True)
-    if len(raw) > MAX_FILE or b"\x00" in raw:
+    if len(raw) > MAX_FILE:
         return {**result, "hinweis": "Binärdatei oder zu groß; nicht als Code geprüft."}
-    source = raw.decode("utf-8-sig", "replace").splitlines(keepends=True)
+    encoding = ("utf-32" if raw.startswith((b"\xff\xfe\x00\x00", b"\x00\x00\xfe\xff")) else
+                "utf-16" if raw.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig")
+    try:
+        decoded = raw.decode(encoding, "strict" if encoding != "utf-8-sig" else "replace")
+    except UnicodeError:
+        return {**result, "hinweis": "Die Zeichenkodierung der Textdatei ist beschädigt."}
+    if "\x00" in decoded:
+        return {**result, "hinweis": "Binärdatei; nicht als Code geprüft."}
+    source = decoded.splitlines(keepends=True)
     safe_source = redact("".join(source)).splitlines(keepends=True)
     chosen = safe_source[start - 1:start - 1 + lines]
     text = ""
@@ -379,6 +387,7 @@ def review(hole: Callable[..., Any], repo: str, ref: str, path: str, page: int,
     if number:
         pull = hole(f"/repos/{repo}/pulls/{number}")
         commit = str((pull.get("head") or {}).get("sha") or "")
+        base_commit = str((pull.get("base") or {}).get("sha") or "")
         if not SHA.fullmatch(commit):
             raise GitHubError("Dem Pull Request fehlt ein eindeutiger Kopf-Commit.")
         source_repo = str(((pull.get("head") or {}).get("repo") or {}).get("full_name") or repo)
@@ -389,7 +398,7 @@ def review(hole: Callable[..., Any], repo: str, ref: str, path: str, page: int,
                 raise GitHubError("Der Quell-Fork ist nicht als öffentlich freigegeben.")
             result["privat"] = result["privat"] or source_info.get("private") is not False
         data = hole(f"/repos/{repo}/pulls/{number}/files", per_page=REVIEW_FILES, page=page)
-        result.update(commit=commit, pull=number, next_page=page + 1
+        result.update(commit=commit, base_commit=base_commit, pull=number, next_page=page + 1
                       if len(data) == REVIEW_FILES else None)
         entries = [{"path": e.get("filename", ""), "patch": e.get("patch"),
                     "status": e.get("status")} for e in data]
@@ -431,7 +440,8 @@ def review(hole: Callable[..., Any], repo: str, ref: str, path: str, page: int,
         files.append(file)
     if number:
         current = hole(f"/repos/{repo}/pulls/{number}", _fresh=True)
-        if str((current.get("head") or {}).get("sha") or "") != commit:
+        if (str((current.get("head") or {}).get("sha") or "") != commit
+                or str((current.get("base") or {}).get("sha") or "") != base_commit):
             raise GitHubError("Der Pull Request hat sich während des Abrufs geändert. "
                               "Starte die Prüfung erneut.")
         result["source_repo"] = source_repo

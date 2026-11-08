@@ -13,6 +13,7 @@ import contextlib
 import logging
 import os
 import re
+import select
 import shlex
 import shutil
 import signal
@@ -145,10 +146,9 @@ def stop(pid: int, wait: float = 10.0) -> bool:
     if os.name == "nt":
         return False
     pidfd = -1
-    with contextlib.suppress(AttributeError, OSError):
-        # 15.5.7: Erst festhalten, dann pruefen, dann ueber genau diesen Griff beenden. So
-        # trifft das Signal nie einen anderen Prozess, der die Nummer inzwischen bekam.
-        pidfd = os.pidfd_open(int(pid))
+    if callable(getattr(signal, "pidfd_send_signal", None)):
+        with contextlib.suppress(AttributeError, OSError):
+            pidfd = os.pidfd_open(int(pid))
     try:
         if not is_aquaticy(pid):
             return False
@@ -156,19 +156,21 @@ def stop(pid: int, wait: float = 10.0) -> bool:
         try:
             if pidfd >= 0:
                 signal.pidfd_send_signal(pidfd, signal.SIGTERM)
-            else:
-                os.kill(int(pid), signal.SIGTERM)
-        except (OSError, ProcessLookupError):
+                poller = select.poll()
+                poller.register(pidfd, select.POLLIN)
+                return bool(poller.poll(max(0, int(wait * 1000))))
+            os.kill(int(pid), signal.SIGTERM)
+        except OSError:
             return False
+        ende = time.monotonic() + wait
+        while time.monotonic() < ende:
+            if _exited(pid):
+                return True
+            time.sleep(min(0.2, max(0, ende - time.monotonic())))
+        return _exited(pid)
     finally:
         if pidfd >= 0:
             os.close(pidfd)
-    ende = time.monotonic() + wait
-    while time.monotonic() < ende:
-        if _exited(pid):
-            return True
-        time.sleep(0.2)
-    return _exited(pid)
 
 
 def aquaticy_servers() -> list[int]:
@@ -199,12 +201,7 @@ def aquaticy_servers() -> list[int]:
 
 
 def _ist_server(befehl: list[str]) -> bool:
-    """`aquaticy web ...`, `python -m aquaticy.cli web ...` -- oder ohne Befehl (15.5.7).
-
-    Ein schlichtes `aquaticy` startet den Server ebenfalls (im Hintergrund als
-    `python -m aquaticy.cli` ohne weitere Angaben). Bis 15.5.6 zaehlte das nicht: Der alte
-    Server blieb stehen, die neue Version wich auf den naechsten Port aus.
-    """
+    """Nur ein ausdruecklicher Web-Aufruf ist ein Server; ohne Befehl startet der Terminalchat."""
     if not befehl:
         return False
     program = Path(befehl[0]).name.lower()
@@ -213,8 +210,8 @@ def _ist_server(befehl: list[str]) -> bool:
         while args and args[0] in ("-u", "-B", "-E", "-s", "-S", "-I", "-O", "-OO", "-q"):
             args = args[1:]
         if args[:2] == ["-m", "aquaticy.cli"]:
-            return len(args) == 2 or args[2] == "web"
+            return len(args) > 2 and args[2] == "web"
         if not args:
             return False
         program, args = Path(args[0]).name.lower(), args[1:]
-    return program in ("aquaticy", "aquaticy.exe") and (not args or args[0] == "web")
+    return program in ("aquaticy", "aquaticy.exe") and bool(args) and args[0] == "web"

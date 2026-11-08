@@ -48,6 +48,7 @@ SETTLE_SECONDS = 15.0
 NOTIFY_PER_HOUR = 30
 NOTIFY_QUEUE = 10
 NOTIFY_KEEP_SECONDS = 3600.0
+NOTIFY_RETRY_SECONDS = 30.0
 
 NUMBER_RE = re.compile(r"\+[0-9]{6,15}")
 GROUP_ID_RE = re.compile(r"[A-Za-z0-9+/=_-]{8,120}")
@@ -1007,6 +1008,11 @@ class NativeHub:
         # Messenger-Einstellungen eingetragenen Nummern. Setzt der Server.
         self.recipients: Callable[[str], list[str]] | None = None
         self._sent_at: dict[str, collections.deque[float]] = {}
+        self._closed = False
+        self._pending_owner: dict[str, str] = {}
+        self._notice_timers: dict[str, threading.Timer] = {}
+        self._notice_delay: dict[str, float] = {}
+        self._notice_busy: set[str] = set()
         _HUBS[_hub_key(self.directory)] = self
 
     # -- Verbindungen --------------------------------------------------------
@@ -1046,6 +1052,12 @@ class NativeHub:
     def unlink(self, messenger: str) -> None:
         eins = self.transport(messenger)
         self._cancel_timer(messenger)
+        with self._lock:
+            self._pending.pop(messenger, None)
+            self._pending_owner.pop(messenger, None)
+            timer = self._notice_timers.pop(messenger, None)
+            if timer is not None:
+                timer.cancel()
         eins.unlink()
 
     def cancel(self, messenger: str) -> None:
@@ -1058,6 +1070,8 @@ class NativeHub:
     def ensure_running(self) -> list[str]:
         """Startet, was gekoppelt ist und gebraucht wird; haelt an, was nicht gebraucht wird."""
         laufen: list[str] = []
+        if self._closed:
+            return laufen
         for name in MESSENGERS:
             eins = self.transport(name)
             if not eins.has_session():
@@ -1071,51 +1085,143 @@ class NativeHub:
                 eins.stop()
         return laufen
 
+    def close(self) -> None:
+        """Endgueltig schliessen; anders als stop() ist danach kein Neustart erlaubt."""
+        with self._lock:
+            self._closed = True
+        self.stop()
+
     def stop(self) -> None:
+        with self._lock:
+            if self._closed:
+                self._pending.clear()
+                self._pending_owner.clear()
+            timers = list(self._notice_timers.values())
+            self._notice_timers.clear()
+            eins_liste = list(self._transports.values())
+        for timer in timers:
+            timer.cancel()
         if _HUBS.get(_hub_key(self.directory)) is self:
             del _HUBS[_hub_key(self.directory)]
         for name in list(self._timers):
             self._cancel_timer(name)
-        with self._lock:
-            eins_liste = list(self._transports.values())
         for eins in eins_liste:
             with contextlib.suppress(Exception):
                 eins.stop()
         for warteschlange in (self._queue, self._ack_queue):
+            if self._closed:
+                while True:
+                    try:
+                        warteschlange.get_nowait()
+                    except queue.Empty:
+                        break
             with contextlib.suppress(queue.Full):
                 warteschlange.put_nowait(None)
 
+    def wait_stopped(self, timeout: float = 60.0) -> None:
+        """Vor dem Loeschen auch bereits laufende Antworten abwarten."""
+        deadline = time.monotonic() + timeout
+        for worker in (self._worker, self._ack_worker):
+            if worker is not None and worker is not threading.current_thread():
+                worker.join(max(0, deadline - time.monotonic()))
+                if worker.is_alive():
+                    raise TimeoutError("Eine Messenger-Antwort läuft noch. Versuche es erneut.")
+
     # -- Meldungen an den Besitzer (Coworker) -----------------------------------------------
     def notify_owner(self, text: str) -> list[str]:
-        """Schickt dem Besitzer eine Nachricht in seinen eigenen Chat. Returns: wohin sie ging.
-
-        Nur ueber Messenger, die gekoppelt sind und die der Besitzer eingeschaltet hat (Bruecke
-        an). Steht die Verbindung gerade nicht, wartet die Nachricht bis zu NOTIFY_KEEP_SECONDS
-        auf die naechste. Hoechstens NOTIFY_PER_HOUR je Messenger und Stunde.
-        """
-        if self._paused is not None and self._paused():
-            return []
         gesendet: list[str] = []
-        for name in MESSENGERS:
-            eins = self.transport(name)
-            if not eins.has_session() or not self._wanted(name) or not eins.own_chat():
-                continue
-            for ziel in ["", *self._extra(name, eins)]:
-                if eins.status().state == CONNECTED:
-                    if self._send_owner(name, eins, text, ziel) and not ziel:
-                        gesendet.append(name)
-                else:
-                    self._queue_notice(name, text, False, ziel)
+        bindings = {name: self._owner_binding(self.transport(name))
+                    for name in self.owner_channels()}
+        for name, binding in bindings.items():
+            try:
+                eins = self.transport(name)
+                for ziel in ["", *self._extra(name, eins)]:
+                    if not self._notice_allowed(name, eins, ziel, False, binding):
+                        continue
+                    if eins.status().state == CONNECTED and self._send_owner(
+                            name, eins, text, ziel, urgent=False, binding=binding):
+                        if not ziel:
+                            gesendet.append(name)
+                    else:
+                        self._queue_notice(name, text, False, ziel, binding=binding)
+            except Exception:
+                LOG.warning("%s: Meldung derzeit nicht zustellbar", NAMES.get(name, name))
         return gesendet
 
-    def _queue_notice(self, name: str, text: str, dringend: bool, ziel: str = "") -> None:
+    def _queue_notice(self, name: str, text: str, dringend: bool, ziel: str = "", *,
+                      binding: str | None = None, queued_at: float | None = None) -> None:
+        eins = self.transport(name)
+        owner = self._owner_binding(eins) if binding is None else binding
+        if not self._notice_allowed(name, eins, ziel, dringend, owner):
+            return
+        now = self._clock()
+        stamp = now if queued_at is None else queued_at
+        if now - stamp > NOTIFY_KEEP_SECONDS:
+            return
         with self._lock:
+            if self._closed:
+                return
+            if self._pending_owner.get(name) != owner:
+                self._pending[name] = []
+            self._pending_owner[name] = owner
             warte = self._pending.setdefault(name, [])
-            warte.append((self._clock(), text, dringend, ziel))
-            # Hoechstens NOTIFY_QUEUE wartende Meldungen je Empfaenger -- die neuesten bleiben.
+            warte[:] = [row for row in warte if now - row[0] <= NOTIFY_KEEP_SECONDS]
+            if not any(row[1:] == (text, dringend, ziel) for row in warte):
+                warte.append((stamp, text, dringend, ziel))
             gleich = [i for i, eintrag in enumerate(warte) if eintrag[3] == ziel]
             for i in reversed(gleich[:-NOTIFY_QUEUE]):
                 del warte[i]
+        self._schedule_notice(name)
+
+    @staticmethod
+    def _owner_binding(transport: Transport) -> str:
+        try:
+            store = getattr(transport, "store", None)
+            who = store.who(transport.messenger) if store is not None and hasattr(
+                transport, "messenger") else ""
+            if not who and store is not None and callable(getattr(store, "who", None)):
+                who = store.who("")
+            return str(who or transport.own_chat())
+        except Exception:
+            return ""
+
+    def _notice_allowed(self, name: str, transport: Transport, target: str, urgent: bool,
+                        binding: str | None = None) -> bool:
+        try:
+            return bool(not self._closed and (self._paused is None or not self._paused())
+                        and transport.has_session() and transport.own_chat()
+                        and (urgent or self._wanted(name))
+                        and (binding is None or binding == self._owner_binding(transport))
+                        and (not target or target in self._extra(name, transport)))
+        except Exception:
+            return False
+
+    def _schedule_notice(self, name: str) -> None:
+        with self._lock:
+            if self._closed or not self._pending.get(name) or name in self._notice_timers:
+                return
+
+            def retry() -> None:
+                with self._lock:
+                    if self._notice_timers.get(name) is not timer:
+                        return
+                    self._notice_timers.pop(name, None)
+                if self._closed:
+                    return
+                try:
+                    transport = self.transport(name)
+                    if transport.status().state != CONNECTED and transport.has_session():
+                        ok, _ = transport.available()
+                        if ok and not transport.running:
+                            transport.start()
+                    self._flush(name)
+                except Exception:
+                    self._schedule_notice(name)
+
+            timer = threading.Timer(self._notice_delay.get(name, NOTIFY_RETRY_SECONDS), retry)
+            timer.daemon = True
+            self._notice_timers[name] = timer
+            timer.start()
 
     def _extra(self, name: str, eins: Transport) -> list[str]:
         """Weitere Empfaenger fuer Meldungen -- nur echte Nummern mit Landesvorwahl (15.5.6)."""
@@ -1137,9 +1243,17 @@ class NativeHub:
         return ziele[:MAX_RECIPIENTS]
 
     def owner_channels(self) -> list[str]:
-        """Messenger, die gekoppelt sind und den eigenen Chat des Besitzers kennen."""
-        return [name for name in MESSENGERS
-                if self.transport(name).has_session() and self.transport(name).own_chat()]
+        if self._closed:
+            return []
+        channels = []
+        for name in MESSENGERS:
+            try:
+                transport = self.transport(name)
+                if transport.has_session() and transport.own_chat():
+                    channels.append(name)
+            except Exception:
+                LOG.warning("%s: Kopplung derzeit nicht lesbar", NAMES.get(name, name))
+        return channels
 
     def message_owner(self, messenger: str, text: str) -> str:
         """Auf Wunsch im Chat ("schreib mir das auf WhatsApp"), 15.5.5.
@@ -1162,34 +1276,33 @@ class NativeHub:
         return "wartet"
 
     def alert_owner(self, text: str) -> list[str]:
-        """Eine Warnung an den Besitzer (Secure Pro, 15.5.5). Returns: gesendet oder wartend.
-
-        Anders als notify_owner auch dann, wenn der Chat ueber diesen Messenger aus ist: Wer
-        WhatsApp oder Signal gekoppelt hat, will von einem Angriff erfahren. Die Verbindung
-        wird dafuer kurz aufgebaut und danach wieder getrennt (siehe _settle).
-        """
-        if self._paused is not None and self._paused():
-            return []
         angenommen: list[str] = []
-        for name in self.owner_channels():
-            eins = self.transport(name)
-            verbunden = eins.status().state == CONNECTED
-            for ziel in self._extra(name, eins):
-                if not (verbunden and self._send_owner(name, eins, text, ziel)):
-                    self._queue_notice(name, text, True, ziel)
-            if verbunden and self._send_owner(name, eins, text):
-                angenommen.append(name)
-                continue
-            self._queue_notice(name, text, True)
-            angenommen.append(name)
-            with contextlib.suppress(Exception):
-                ok, _ = eins.available()
-                if ok and not eins.running:
-                    eins.start()
+        bindings = {name: self._owner_binding(self.transport(name))
+                    for name in self.owner_channels()}
+        for name, binding in bindings.items():
+            try:
+                eins = self.transport(name)
+                for ziel in ["", *self._extra(name, eins)]:
+                    if not self._notice_allowed(name, eins, ziel, True, binding):
+                        continue
+                    sent = eins.status().state == CONNECTED and self._send_owner(
+                        name, eins, text, ziel, binding=binding)
+                    if not sent:
+                        self._queue_notice(name, text, True, ziel, binding=binding)
+                    if not ziel:
+                        angenommen.append(name)
+                if self._pending.get(name):
+                    ok, _ = eins.available()
+                    if ok and not eins.running:
+                        eins.start()
+            except Exception:
+                LOG.warning("%s: Warnung derzeit nicht zustellbar", NAMES.get(name, name))
         return angenommen
 
-    def _send_owner(self, name: str, eins: Transport, text: str, ziel: str = "") -> bool:
-        """An den eigenen Chat -- oder an *ziel* (eine eingetragene Nummer, 15.5.6)."""
+    def _send_owner(self, name: str, eins: Transport, text: str, ziel: str = "", *,
+                    urgent: bool = True, binding: str | None = None) -> bool:
+        if not self._notice_allowed(name, eins, ziel, urgent, binding):
+            return False
         jetzt = self._clock()
         with self._lock:
             zeiten = self._sent_at.setdefault(f"{name}:{ziel}" if ziel else name,
@@ -1200,6 +1313,8 @@ class NativeHub:
                 return False
             zeiten.append(jetzt)
         try:
+            if not self._notice_allowed(name, eins, ziel, urgent, binding):
+                return False
             eins.send(ziel or eins.own_chat(), text)
         except Exception:
             LOG.warning("%s: Meldung %s nicht gesendet", NAMES.get(name, name),
@@ -1208,20 +1323,39 @@ class NativeHub:
         return True
 
     def _flush(self, name: str) -> None:
-        """Nach dem Verbinden: was gewartet hat, geht jetzt raus (wenn es nicht zu alt ist)."""
         with self._lock:
+            if self._closed or name in self._notice_busy:
+                return
+            self._notice_busy.add(name)
+            timer = self._notice_timers.pop(name, None)
+            if timer is not None:
+                timer.cancel()
             warte = self._pending.pop(name, [])
-        jetzt = self._clock()
-        eins = self.transport(name)
-        for zeit, text, dringend, ziel in warte:
-            if jetzt - zeit <= NOTIFY_KEEP_SECONDS and (
-                    self._paused is None or not self._paused()) and (
-                    dringend or self._wanted(name)) and (
-                    not ziel or ziel in self._extra(name, eins)):
-                self._send_owner(name, eins, text, ziel)
+            binding = self._pending_owner.get(name, "")
+        try:
+            jetzt = self._clock()
+            eins = self.transport(name)
+            retrying = False
+            for stamp, text, dringend, ziel in warte:
+                if (jetzt - stamp > NOTIFY_KEEP_SECONDS
+                        or not self._notice_allowed(name, eins, ziel, dringend, binding)):
+                    continue
+                if (retrying or eins.status().state != CONNECTED or not self._send_owner(
+                        name, eins, text, ziel, urgent=dringend, binding=binding)):
+                    retrying = True
+                    self._queue_notice(name, text, dringend, ziel, binding=binding,
+                                       queued_at=stamp)
+            self._notice_delay[name] = min(300.0, self._notice_delay.get(
+                name, NOTIFY_RETRY_SECONDS) * 2) if retrying else NOTIFY_RETRY_SECONDS
+        finally:
+            with self._lock:
+                self._notice_busy.discard(name)
+            self._schedule_notice(name)
 
     # -- nach dem Koppeln --------------------------------------------------------
     def _settle(self, messenger: str) -> None:
+        if self._closed:
+            return
         """Ist die Bruecke aus, trennt sich die frisch gekoppelte Verbindung nach kurzer Zeit."""
         if self._pending.get(messenger):
             # Nicht im Rueckruf von neonize senden: ein eigener Faden.
@@ -1233,8 +1367,13 @@ class NativeHub:
 
         def pruefen() -> None:
             eins = self.transport(messenger)
+            if self._closed:
+                return
             if not self._wanted(messenger):
-                eins.stop()
+                if self._pending.get(messenger) or messenger in self._notice_busy:
+                    self._settle(messenger)
+                else:
+                    eins.stop()
 
         zeitgeber = threading.Timer(SETTLE_SECONDS, pruefen)
         zeitgeber.daemon = True
@@ -1250,18 +1389,21 @@ class NativeHub:
 
     # -- Nachrichten ------------------------------------------------------------------
     def _enqueue(self, messenger: str, nachricht: Incoming) -> None:
-        eins = self.transport(messenger)
-        try:
-            self._queue.put_nowait((nachricht, eins))
-        except queue.Full:
-            self.dropped += 1
-            return
-        self._start_worker("_worker", self._work, "aquaticy-nachrichten")
-        quittung = getattr(self._responder, "acknowledge", None)
-        if quittung is not None:
-            with contextlib.suppress(queue.Full):
-                self._ack_queue.put_nowait((quittung, nachricht, eins))
-                self._start_worker("_ack_worker", self._ack_work, "aquaticy-gelesen")
+        with self._lock:
+            if self._closed:
+                return
+            eins = self.transport(messenger)
+            try:
+                self._queue.put_nowait((nachricht, eins))
+            except queue.Full:
+                self.dropped += 1
+                return
+            self._start_worker("_worker", self._work, "aquaticy-nachrichten")
+            quittung = getattr(self._responder, "acknowledge", None)
+            if quittung is not None:
+                with contextlib.suppress(queue.Full):
+                    self._ack_queue.put_nowait((quittung, nachricht, eins))
+                    self._start_worker("_ack_worker", self._ack_work, "aquaticy-gelesen")
 
     def _start_worker(self, attribut: str, ziel: Callable[[], None], name: str) -> None:
         with self._lock:
@@ -1280,13 +1422,15 @@ class NativeHub:
         return False
 
     def _work(self) -> None:
-        while True:
+        while not self._closed:
             try:
                 eintrag = self._queue.get(timeout=60)
             except queue.Empty:
                 if self._idle("_worker", self._queue):
                     return
                 continue
+            if self._closed:
+                return
             if eintrag is None:  # "Anhalten" -- aber nie vor einer Nachricht, die schon wartet
                 if self._idle("_worker", self._queue):
                     return
@@ -1299,13 +1443,15 @@ class NativeHub:
                               nachricht.messenger)
 
     def _ack_work(self) -> None:
-        while True:
+        while not self._closed:
             try:
                 eintrag = self._ack_queue.get(timeout=60)
             except queue.Empty:
                 if self._idle("_ack_worker", self._ack_queue):
                     return
                 continue
+            if self._closed:
+                return
             if eintrag is None:
                 if self._idle("_ack_worker", self._ack_queue):
                     return

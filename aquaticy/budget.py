@@ -27,7 +27,11 @@ import contextlib
 import sqlite3
 import threading
 import time
+import weakref
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 MAX_BYTES = 400_000_000
 
@@ -42,6 +46,21 @@ MEASURE_SECONDS = 3.0
 
 _messungen: dict[str, tuple[float, int]] = {}
 _lock = threading.Lock()
+
+
+_WRITE_LOCKS: weakref.WeakValueDictionary[str, Any] = weakref.WeakValueDictionary()
+
+
+@contextmanager
+def writing(data_dir: Path | str) -> Iterator[None]:
+    key = str(Path(data_dir).resolve())
+    with _lock:
+        lock = _WRITE_LOCKS.setdefault(key, threading.RLock())
+    with lock:
+        try:
+            yield
+        finally:
+            forget(data_dir)
 
 
 class StorageFull(OSError):

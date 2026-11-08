@@ -26,6 +26,7 @@ from aquaticy import (
 )
 from aquaticy.agent import Agent
 from aquaticy.tools import Toolbox
+from tests.stream_helpers import get_stream
 
 
 def test_f081_ollama_discovery_and_management_bypass_environment_proxies(monkeypatch):
@@ -36,7 +37,7 @@ def test_f081_ollama_discovery_and_management_bypass_environment_proxies(monkeyp
     def post(*a, **kw):
         calls.append(kw)
         return httpx.Response(200, json={})
-    monkeypatch.setattr(local_model.httpx, 'get', get)
+    monkeypatch.setattr(local_model.httpx, "stream", get_stream(get))
     monkeypatch.setattr(local_model.httpx, 'post', post)
     assert local_model.server_running('http://ollama.local:11434')
     assert local_model.installed_models('http://ollama.local:11434')
@@ -245,13 +246,13 @@ def test_f099_brave_receives_lowercase_language_codes(monkeypatch):
     def get(*a, **kw):
         sent.append(kw['params'])
         return httpx.Response(200, json={'web': {'results': []}})
-    monkeypatch.setattr(search.httpx, 'get', get)
+    monkeypatch.setattr(search.httpx, "get", get)
     search._search_brave('Question', search.SearchOptions(lang='DE', api_key='synthetic'))
     assert sent[0]['search_lang'] == 'de'
 
 
 def test_f100_search_result_text_does_not_expose_provider_highlight_markup(monkeypatch):
-    monkeypatch.setattr(search.httpx, 'get', lambda *a, **kw: httpx.Response(200, json={
+    monkeypatch.setattr(search.httpx, "get", lambda *a, **kw: httpx.Response(200, json={
         'web': {'results': [{'title': 'Clean &amp; <strong>safe</strong>',
                              'url': 'https://example.org',
                              'description': 'A <strong>useful</strong> page.'}]}}))

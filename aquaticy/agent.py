@@ -2743,8 +2743,13 @@ class Agent:
 
         try:
             store = self.toolbox._memory()
-            return memory_auto.self_answer(question, store,
-                                           getattr(self, "answer_language", "de"))
+            answer = memory_auto.self_answer(question, store,
+                                             getattr(self, "answer_language", "de"))
+            from aquaticy.keyvault import scrub
+
+            if memory_auto.credentials(answer) or scrub(answer, self.settings.secrets()) != answer:
+                return ""
+            return answer
         except Exception:
             return ""
 

@@ -21,7 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from aquaticy import private_json
+from aquaticy import dns_lookup, private_json
 
 LOG = logging.getLogger(__name__)
 _CONFIG_LOCK = threading.RLock()
@@ -185,6 +185,7 @@ def disable(directory: Path) -> None:
     with _CONFIG_LOCK:
         (directory / "secure-pro.json").unlink(missing_ok=True)
         history_path(directory).unlink(missing_ok=True)
+        (directory / "secure-pro-report.json").unlink(missing_ok=True)
 
 
 def set_options(directory: Path, payload: dict[str, Any]) -> dict[str, Any]:
@@ -253,7 +254,7 @@ def own_addresses(router: str = "") -> frozenset[str]:
     """Adressen dieses Rechners -- seine eigenen Pruefungen sind kein Angriff."""
     adressen: set[str] = set()
     with contextlib.suppress(OSError):
-        adressen.update(socket.gethostbyname_ex(socket.gethostname())[2])
+        adressen.update(dns_lookup.call(socket.gethostbyname_ex, socket.gethostname())[2])
     if router:
         with contextlib.suppress(OSError), socket.socket(socket.AF_INET,
                                                          socket.SOCK_DGRAM) as probe:
@@ -274,6 +275,7 @@ class Watcher:
         self.announced: set[str] = set()
         # 15.5.5: getrennt -- was im Chat steht, kann am Messenger noch fehlen.
         self.messaged: set[str] = set()
+        self._delivery_progress: dict[str, tuple[str, set[int]]] = {}
         self.wake = threading.Event()
         self.last_findings: list[str] = []
         self.important: list[str] = []
@@ -290,6 +292,7 @@ class Watcher:
         self.devices: list[dict[str, Any]] = []
         self._inventory: dict[str, dict[str, Any]] | None = None
         self._offline: set[str] = set()
+        self._history_inventory: dict[str, dict[str, Any]] = {}
         self._requested = 0.0
         self._fehler_gemeldet = False
         self._logged: set[str] = set()
@@ -440,6 +443,7 @@ class Watcher:
                 self._configuration = token
                 self.announced.clear()
                 self.messaged.clear()
+                self._delivery_progress.clear()
                 self.last_findings = []
                 self.important = []
                 self.events = []
@@ -449,6 +453,7 @@ class Watcher:
                 self.devices = []
                 self._inventory = None
                 self._offline = set()
+                self._history_inventory.clear()
                 self._nmap_seen = {}
                 self._nmap_services = {}
                 self._nmap_hosts = {}
@@ -527,7 +532,7 @@ class Watcher:
         router = str(config.get("router") or "")
         if self._inventory is not None:
             for address, item in inventory.items():
-                old = self._inventory.get(address)
+                old = self._history_inventory.get(address)
                 if old is None and bekanntes(address):
                     pass
                 elif old is None:
@@ -555,7 +560,7 @@ class Watcher:
                                            "host": address, "port": port} for port in added)
         current = {d.address for d in devices}
         if self.known is not None:
-            for ip in sorted(current - self.known):
+            for ip in sorted(current - self._history_inventory.keys() - self.known):
                 if not bekanntes(ip):
                     befund(f"Neues Gerät: {ip}{merkmal(ip)}", "new_device", HINWEIS, ip)
             for ip in sorted(self.known - current):
@@ -646,9 +651,12 @@ class Watcher:
                  "--max-filesize=20M", "--max-scansize=100M", "--max-files=10000",
                  str(target)], capture_output=True, text=True,
                 timeout=120, check=False)
-            private_json.write(self.directory / "secure-pro-report.json", {
-                "status": result.returncode, "scanned_at": int(time.time()),
-                "truncated": len(result.stdout) > 50000, "findings": result.stdout[:50000]})
+            with _CONFIG_LOCK:
+                if self.stop_event.is_set() or config_token(read(self.directory)) != token:
+                    return []
+                private_json.write(self.directory / "secure-pro-report.json", {
+                    "status": result.returncode, "scanned_at": int(time.time()),
+                    "truncated": len(result.stdout) > 50000, "findings": result.stdout[:50000]})
             if result.returncode == 1:
                 befund("ClamAV meldet mindestens einen Malwarefund im freigegebenen "
                        "lokalen Ordner. Öffne das lokale Secure-Pro-Protokoll.",
@@ -679,6 +687,10 @@ class Watcher:
                 aufgaben.append(f"Aufgabe „{task['text']}“: {was}")
         self.known = current
         self._inventory = inventory
+        for address, item in inventory.items():
+            old = self._history_inventory.get(address, {})
+            if not old.get("active") or item.get("active"):
+                self._history_inventory[address] = dict(item)
         wichtig = sorted(text for text, item in befunde.items() if item["level"] == WICHTIG)
         self.announced.intersection_update(findings | set(aufgaben))
         self.messaged.intersection_update(findings | set(aufgaben))
@@ -704,10 +716,10 @@ class Watcher:
                     "malware", "arp_spoof", "port_scan", "brute_force", "risk_port",
                     "vulnerability") for text in texte)
 
-            if new and self._deliver(new, abwehr(new), self.report, "Chat"):
+            if new and self._deliver(new, abwehr(new), self.report, "Chat", config=config):
                 self.announced.update(new)
             if fehlt_messenger and self._deliver(fehlt_messenger, abwehr(fehlt_messenger),
-                                                 self.notify, "Messenger"):
+                                                 self.notify, "Messenger", config=config):
                 self.messaged.update(fehlt_messenger)
         return new
 
@@ -728,7 +740,6 @@ class Watcher:
                 self.trend = wert - int(vorher[1]) if vorher else 0
                 self.score, self.grade = wert, note
             neu = [item for text, item in befunde.items() if text not in self._logged]
-            self._logged = set(befunde)
             if not neu and vorher and vorher[1] == wert and jetzt - float(vorher[0]) < 3600:
                 return
             verlauf["events"].extend({"t": int(jetzt), "level": item["level"],
@@ -740,6 +751,7 @@ class Watcher:
             try:
                 private_json.write(history_path(self.directory), {
                     "events": verlauf["events"][-300:], "scores": verlauf["scores"][-60:]})
+                self._logged = set(befunde)
             except OSError:
                 LOG.warning("Der Secure-Pro-Verlauf ließ sich nicht speichern.")
 
@@ -756,7 +768,8 @@ class Watcher:
                     item.pop("name", None)
 
     def _deliver(self, lines: list[str], abwehr: bool,
-                 weg: Callable[[str], bool | None] | None, name: str) -> bool:
+                 weg: Callable[[str], bool | None] | None, name: str, *,
+                 config: dict[str, Any] | None = None) -> bool:
         """Meldet Wichtiges auf einem Weg (Messenger oder Chat). True, wenn es dort ankam.
 
         Gibt der Weg None zurueck (kein Messenger gekoppelt), gilt das als erledigt. Scheitert
@@ -771,8 +784,17 @@ class Watcher:
         size = 2900 - len(prefix) - len(suffix)
         if weg is None or not body:
             return False  # kein Weg: nichts zugestellt (bleibt offen, falls er dazukommt)
-        delivered = True
+        digest = hashlib.sha256((body + suffix).encode()).hexdigest()
+        previous = self._delivery_progress.get(name)
+        done = previous[1] if previous is not None and previous[0] == digest else set()
+        self._delivery_progress[name] = (digest, done)
         for offset in range(0, len(body), size):
+            if self.stop_event.is_set() or (config is not None
+                                            and not grant_active(self.directory, config)):
+                self._delivery_progress.pop(name, None)
+                return False
+            if offset in done:
+                continue
             message = prefix + body[offset:offset + size] + suffix
             try:
                 ergebnis = weg(message)
@@ -782,12 +804,15 @@ class Watcher:
                 if name == "Messenger":
                     LOG.info("Secure Pro: kein Messenger gekoppelt -- die Meldung steht im "
                              "Secure-Pro-Chat.")
+                self._delivery_progress.pop(name, None)
                 return True
             if not ergebnis:
                 LOG.warning("Secure-Pro-Hinweis (%s) konnte nicht zugestellt werden; "
                             "nächster Versuch bei der nächsten Prüfung.", name)
-                delivered = False
-        return delivered
+                return False
+            done.add(offset)
+        self._delivery_progress.pop(name, None)
+        return True
 
     def _wait_seconds(self) -> float | None:
         """Wie lange bis zur naechsten Pruefung -- None: nur auf Anfrage."""
@@ -822,11 +847,11 @@ class Watcher:
                 # "die ganze Zeit" alle paar Sekunden dieselbe Warnung.
                 if (not self.stop_event.is_set() and not self._fehler_gemeldet
                         and read(self.directory).get("enabled") is True):
-                    self._fehler_gemeldet = True
                     try:
-                        self.notify(f"{SIGNATURE} Die Prüfung ist fehlgeschlagen. "
+                        result = self.notify(f"{SIGNATURE} Die Prüfung ist fehlgeschlagen. "
                                     "Es liegt kein sauberes Ergebnis vor. "
                                     "Prüfe das lokale Protokoll.")
+                        self._fehler_gemeldet = result is not False
                     except Exception:
                         LOG.warning("Secure-Pro-Warnung konnte nicht versendet werden.")
             finally:

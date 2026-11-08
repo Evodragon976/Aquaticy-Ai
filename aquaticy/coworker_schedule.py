@@ -268,8 +268,8 @@ def next_time(rhythm: str, hour: int, minute: int, weekday: int, now: float = 0.
 
     wunsch = max(0, min(6, int(weekday)))
     vorlauf = (wunsch - ziel.weekday()) % 7
-    ziel += timedelta(days=vorlauf)
-    if ziel <= jetzt:
+    ziel = (ziel + timedelta(days=vorlauf)).replace(fold=jetzt.fold)
+    if ziel.timestamp() <= stempel:
         ziel += timedelta(days=7)
     return ziel.timestamp()
 

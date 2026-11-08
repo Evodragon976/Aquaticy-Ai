@@ -45,6 +45,8 @@ from urllib.parse import urljoin
 import httpcore
 import httpx
 
+from aquaticy import dns_lookup
+
 __all__ = [
     "BlockedTarget",
     "TooLarge",
@@ -102,7 +104,7 @@ def resolve(host: str, port: int | None) -> list[str]:
     Server ohne IPv6 scheiterte damit jede Seite, deren IPv6-Adresse vorne
     stand (golem.de) -- obwohl eine IPv4-Adresse da war.
     """
-    infos = socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+    infos = dns_lookup.call(socket.getaddrinfo, host, port or 443, type=socket.SOCK_STREAM)
     return list(dict.fromkeys(str(info[4][0]) for info in infos))
 
 

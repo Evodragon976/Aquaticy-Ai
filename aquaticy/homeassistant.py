@@ -19,11 +19,14 @@ import hashlib
 import re
 import threading
 import time
+import weakref
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from aquaticy import dns_lookup
 
 COMMON_URLS: tuple[str, ...] = (
     "http://homeassistant.local:8123",
@@ -134,6 +137,7 @@ STATES_TTL = 10.0
 _states_cache: dict[tuple[str, str, str], tuple[float, list[Entity]]] = {}
 _states_lock = threading.Lock()
 _states_generation = 0
+_state_fills: weakref.WeakValueDictionary[tuple[str, str, str], Any] = weakref.WeakValueDictionary()
 MAX_STATE_CACHES = 128
 
 
@@ -273,6 +277,12 @@ class HomeAssistant:
         return f"{name} {version}".strip()
 
     def states(self, *, fresh: bool = False) -> list[Entity]:
+        with _states_lock:
+            lock = _state_fills.setdefault(self._cache_key(), threading.RLock())
+        with lock:
+            return self._states(fresh=fresh)
+
+    def _states(self, *, fresh: bool = False) -> list[Entity]:
         """Alle Entitaeten mit ihrem aktuellen Zustand.
 
         Kurz zwischengespeichert -- siehe :data:`STATES_TTL`.
@@ -410,11 +420,16 @@ def discover(subnet: str = "", timeout: float = 1.0) -> list[str]:
         try:
             import socket
 
-            address = socket.gethostbyname(host)
+            address = dns_lookup.call(socket.gethostbyname, host)
         except OSError:
             continue
-        from aquaticy.lan import port_open
+        import ipaddress
 
+        from aquaticy.lan import HOME_NETWORKS, port_open
+
+        ip = ipaddress.ip_address(address)
+        if not ip.is_loopback and not any(ip in net for net in HOME_NETWORKS):
+            continue
         if port_open(address, HA_PORT, timeout=timeout):
             found.append(url)
 

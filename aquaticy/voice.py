@@ -97,6 +97,8 @@ def transcribe(data: bytes) -> str:
     if not enabled() or not 0 < len(data) <= MAX_BYTES:
         raise ValueError("Sprachnachricht deaktiviert oder zu groß.")
     with _processing(), tempfile.TemporaryDirectory(prefix="aquaticy-voice-") as temp:
+        if not enabled():
+            raise ValueError("Sprachnachrichten sind aus.")
         source = Path(temp) / "input"
         source.write_bytes(data)
         result = subprocess.run(
@@ -113,6 +115,8 @@ def synthesize(text: str) -> bytes:
     if not enabled():
         raise ValueError("Sprachnachrichten sind aus.")
     with _processing(), tempfile.TemporaryDirectory(prefix="aquaticy-voice-") as temp:
+        if not enabled():
+            raise ValueError("Sprachnachrichten sind aus.")
         wav, opus = Path(temp) / "speech.wav", Path(temp) / "speech.ogg"
         spoken = subprocess.run(["espeak-ng", "-v", "de", "--stdin", "--stdout"],
                                 input=text[:1800].encode(), capture_output=True,

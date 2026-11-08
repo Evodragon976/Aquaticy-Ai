@@ -44,6 +44,9 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 
+from aquaticy import zeit
+from aquaticy.jsonutil import loads
+
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me"
@@ -91,6 +94,7 @@ MAX_BODY_CHARS = 6000
 
 REQUEST_TIMEOUT = 20
 MAX_TOKEN_BYTES = 64 * 1024
+MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
 _STORE_LOCKS: weakref.WeakValueDictionary[str, Any] = weakref.WeakValueDictionary()
 _STORE_LOCKS_LOCK = threading.Lock()
@@ -298,15 +302,31 @@ def refresh_tokens(client_id: str, client_secret: str, tokens: Tokens) -> Tokens
     return tokens
 
 
+def _bounded_request(client: httpx.Client | None, method: str, url: str, *,
+                     limit: int | None = None, **kwargs: Any) -> httpx.Response:
+    from aquaticy.netguard import read_response
+
+    stream = client.stream if client is not None else httpx.stream
+    deadline = time.monotonic() + REQUEST_TIMEOUT
+    with stream(method, url, timeout=REQUEST_TIMEOUT, follow_redirects=False, **kwargs) as response:
+        body = read_response(response, MAX_RESPONSE_BYTES if limit is None else limit,
+                             deadline)
+        headers = {key: value for key, value in response.headers.items()
+                   if key.lower() not in {
+                       "content-encoding", "content-length", "transfer-encoding"}}
+        return httpx.Response(response.status_code, headers=headers, content=body)
+
+
 def _token_request(payload: dict[str, str]) -> dict[str, Any]:
     try:
-        response = httpx.post(TOKEN_URL, data=payload, timeout=REQUEST_TIMEOUT)
+        response = _bounded_request(None, "POST", TOKEN_URL, data=payload,
+                                    limit=MAX_TOKEN_BYTES)
     except httpx.HTTPError as exc:
         raise GoogleError(f"Google nicht erreichbar: {exc}") from exc
     if response.status_code >= 400:
         raise GoogleError(_explain(response))
     try:
-        data = response.json()
+        data = loads(response.content)
         if not isinstance(data, dict) or not isinstance(data.get("access_token"), str) \
                 or not re.fullmatch(r"[!-~]{1,65536}", data["access_token"]):
             raise ValueError
@@ -329,7 +349,7 @@ def _explain(response: httpx.Response) -> str:
     """Aus einer Google-Fehlerantwort einen Satz machen, der weiterhilft."""
     detail = ""
     with contextlib.suppress(ValueError):
-        body = response.json()
+        body = loads(response.content)
         if isinstance(body, dict):
             fehler = body.get("error")
             detail = str(
@@ -422,13 +442,13 @@ class Google:
     def _get(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._access()}"}
         try:
-            response = self._http.get(url, params=params, headers=headers)
+            response = _bounded_request(self._http, "GET", url, params=params, headers=headers)
         except httpx.HTTPError as exc:
             raise GoogleError(f"Google nicht erreichbar: {exc}") from exc
         if response.status_code >= 400:
             raise GoogleError(_explain(response))
         try:
-            result = response.json()
+            result = loads(response.content)
             if not isinstance(result, dict):
                 raise ValueError
             return result
@@ -524,9 +544,8 @@ class Google:
     ) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {self._access()}"}
         try:
-            response = self._http.request(
-                method, url, json=payload, params=params or {}, headers=headers
-            )
+            response = _bounded_request(self._http, method, url, json=payload,
+                                        params=params or {}, headers=headers)
         except httpx.HTTPError as exc:
             raise GoogleError(f"Google nicht erreichbar: {exc}") from exc
         if response.status_code == 403:
@@ -538,7 +557,7 @@ class Google:
         if response.status_code >= 400:
             raise GoogleError(_explain(response))
         try:
-            data = response.json()
+            data = loads(response.content)
             if not isinstance(data, dict):
                 raise ValueError("Ungültiges JSON-Objekt")
             if data.get("error") or not isinstance(data.get("id"), str) or not data["id"]:
@@ -734,7 +753,7 @@ def _times(start: str, end: str, whole_day: bool) -> tuple[dict[str, str], dict[
 
 def _calendar_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
-    return parsed if parsed.tzinfo is not None else parsed.astimezone()
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=zeit.BERLIN)
 
 
 def _end_time(end: str, whole_day: bool) -> dict[str, str]:
@@ -804,7 +823,7 @@ def _find_part(part: dict[str, Any], wanted: str) -> str:
         return ""
     headers = {str(h.get("name", "")).lower(): str(h.get("value", ""))
                for h in part.get("headers", []) if isinstance(h, dict)}
-    if headers.get("content-disposition", "").lower().startswith("attachment"):
+    if headers.get("content-disposition", "").strip().lower().startswith("attachment"):
         return ""
     mime = str(part.get("mimeType", "")).split(";", 1)[0].strip().lower()
     if mime == wanted:
@@ -852,6 +871,7 @@ def _strip_tags(html: str) -> str:
     text = re.sub(r"(?is)<(script|style).*?</\1>", " ", html)
     text = re.sub(r"(?i)<br\b[^>]*>", "\n", text)
     text = re.sub(r"(?i)</(?:p|div|h[1-6]|li|tr)\s*>", "\n\n", text)
+    text = re.sub(r"(?i)</(?:td|th)\s*>", "\t", text)
     text = _TAG.sub("", text)
     text = _unescape(text)
     return _SPACE.sub("\n\n", text).strip()

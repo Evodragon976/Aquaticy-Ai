@@ -40,6 +40,8 @@ class _EURegel(tzinfo):
         winter = not self._sommer_utc(als_winter)
         if sommer and winter:
             return _MEZ if dt.fold else _MESZ
+        if not sommer and not winter:
+            return _MESZ if dt.fold else _MEZ
         return _MESZ if sommer else _MEZ
 
     def dst(self, dt: datetime | None) -> timedelta:

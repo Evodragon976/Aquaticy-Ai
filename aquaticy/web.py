@@ -42,6 +42,7 @@ from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 from aquaticy import INTERNAL, VERSION_LABEL, __version__, botguard, cluster, webview, zeit
+from aquaticy import zeit as deutsche_zeit
 from aquaticy.auth import Account, AuthStore, RateLimiter, pro_code_for
 from aquaticy.cache import CHAT_KINDS, Cache, chat_kind_of
 from aquaticy.config import (
@@ -814,12 +815,11 @@ def usage_view(settings: Settings) -> dict[str, Any]:
 
     Alles hier rechnet der Server -- die Oberflaeche zeichnet nur die Balken.
     """
-    from datetime import datetime
 
     from aquaticy.quota import public
 
     jetzt = time.time()
-    stand_um = "Stand: " + datetime.fromtimestamp(jetzt).strftime("%H:%M")
+    stand_um = "Stand: " + deutsche_zeit.aus_stempel(jetzt).strftime("%H:%M")
     kontingent = getattr(settings, "quota", None)
     if kontingent is None:
         return {"limited": False, "text": "Kein Limit", "summary": "Kein Limit",
@@ -1903,7 +1903,7 @@ class ChatSession:
                 return f"[Bild {name}: keine gültige Bilddatei – nicht angenommen]"
             try:
                 path = self._store(name, data)
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
                 return f"[Bild {name}: nicht abgelegt – {exc}]"
             try:
                 description = agent.describe_image(path)
@@ -1933,12 +1933,11 @@ class ChatSession:
 
     def _store(self, name: str, data: bytes) -> Path:
         """Legt eine hochgeladene Datei ab -- das Vision-Modell braucht einen Pfad."""
-        from aquaticy.budget import ensure_room, forget
+        from aquaticy.budget import forget
 
         folder = self.settings().data_dir / "uploads"
         folder.mkdir(parents=True, exist_ok=True)
 
-        ensure_room(self.settings().data_dir, len(data))
         target = folder / f"{int(time.time() * 1000)}-{secrets.token_hex(8)}-{name}"
 
         from aquaticy.privacy import write_private
@@ -3005,9 +3004,13 @@ def _native_hub(session: Any) -> Any:
 
 def _stop_native(hub: Any) -> None:
     with contextlib.suppress(Exception):
-        hub.stop()
+        close = getattr(hub, "close", hub.stop)
+        close()
     with contextlib.suppress(Exception):
         hub.answerer.close()
+    wait = getattr(hub, "wait_stopped", None)
+    if wait is not None:
+        wait()
 
 
 def start_user_bridge(account: Account) -> None:
@@ -3063,9 +3066,8 @@ def _bridge_runner(session: Any) -> Any:
 
 
 def _stop_bridge(runner: Any) -> None:
-    with contextlib.suppress(Exception):
-        runner.stop()
-        runner.wait_stopped()
+    runner.stop()
+    runner.wait_stopped()
     with contextlib.suppress(Exception):
         runner.answerer.close()
 
@@ -3116,10 +3118,13 @@ def _stop_schedulers() -> None:
     for eins in planer:
         with contextlib.suppress(Exception):
             eins.stop()
-    for bruecke in bruecken:
-        _stop_bridge(bruecke)
-    for hub in direkte:
-        _stop_native(hub)
+    for component, stop in [(item, _stop_bridge) for item in bruecken] + [
+            (item, _stop_native) for item in direkte]:
+        try:
+            stop(component)
+        except Exception:
+            logging.getLogger("aquaticy.web").exception(
+                "Hintergrunddienst blieb beim Beenden aktiv")
     with contextlib.suppress(Exception):
         from aquaticy import coworker as coworker_mod
 
@@ -3133,20 +3138,24 @@ def forget_account_runtime(account: Account) -> None:
     laufender Auftrag gleich wieder in den frisch geleerten Ordner.
     """
     with _SCHEDULER_LOCK:
-        planer = [USER_COWORKERS.pop(account.id, None)]
-        bruecke = USER_BRIDGES.pop(account.id, None)
-        hub = USER_NATIVE.pop(account.id, None)
+        planer = [USER_COWORKERS.get(account.id)]
+        bruecke = USER_BRIDGES.get(account.id)
+        hub = USER_NATIVE.get(account.id)
     for eins in planer:
         if eins is not None:
-            with contextlib.suppress(Exception):
-                eins.stop()
-                if hasattr(eins, "wait_stopped"):
-                    eins.wait_stopped()
+            eins.stop()
+            if hasattr(eins, "wait_stopped"):
+                eins.wait_stopped()
     if bruecke is not None:
         _stop_bridge(bruecke)
     if hub is not None:
         _stop_native(hub)
-    sitzung = SESSIONS.drop(account.id)
+    with _SCHEDULER_LOCK:
+        USER_COWORKERS.pop(account.id, None)
+        USER_BRIDGES.pop(account.id, None)
+        USER_NATIVE.pop(account.id, None)
+    with SESSIONS._lock:
+        sitzung = SESSIONS._sessions.get(account.id)
 
     with contextlib.suppress(Exception):
         from aquaticy import coworker as coworker_mod
@@ -3162,8 +3171,9 @@ def forget_account_runtime(account: Account) -> None:
             with contextlib.suppress(Exception):
                 chat.stop()
         for chat in chats:
-            if chat._lock.acquire(timeout=60):
-                chat._lock.release()
+            if not chat._lock.acquire(timeout=60):
+                raise TimeoutError("Eine Chat-Antwort läuft noch. Versuche es erneut.")
+            chat._lock.release()
             with contextlib.suppress(Exception):
                 if chat._agent is not None:
                     chat._agent.close()
@@ -3171,6 +3181,7 @@ def forget_account_runtime(account: Account) -> None:
             from aquaticy import sandbox as werkstatt
 
             werkstatt.forget_shared(sitzung.settings())
+    SESSIONS.drop(account.id)
 
 
 def ui_state() -> Any:
@@ -3321,7 +3332,7 @@ def google_state(settings: Settings) -> dict[str, Any]:
     }
 
 
-_GOOGLE_STATES: dict[str, tuple[str, float, str]] = {}
+_GOOGLE_STATES: dict[str, tuple[str, float, str, str]] = {}
 
 
 GOOGLE_FLOW_COOKIE = "aquaticy_google_flow"
@@ -3333,17 +3344,18 @@ def _flow_hash(browser: str) -> str:
     return hashlib.sha256(browser.encode("utf-8")).hexdigest() if browser else ""
 
 
-def google_state_new(account_id: str, browser: str = "") -> str:
+def google_state_new(account_id: str, browser: str = "", redirect: str = "") -> str:
     """Ein neuer, einmaliger state fuer genau dieses Konto (und diesen Browser)."""
     import secrets as _secrets
 
     state = _secrets.token_urlsafe(32)
     jetzt = time.time()
     with _GOOGLE_STATES_LOCK:
-        for alt, (_, bis, _b) in list(_GOOGLE_STATES.items()):
+        for alt, (_, bis, _b, _r) in list(_GOOGLE_STATES.items()):
             if bis < jetzt:
                 _GOOGLE_STATES.pop(alt, None)
-        _GOOGLE_STATES[state] = (account_id, jetzt + GOOGLE_STATE_SECONDS, _flow_hash(browser))
+        _GOOGLE_STATES[state] = (account_id, jetzt + GOOGLE_STATE_SECONDS,
+                                 _flow_hash(browser), redirect)
     return state
 
 
@@ -3355,7 +3367,7 @@ def google_state_take(state: str, account_id: str) -> bool:
         eintrag = _GOOGLE_STATES.pop(state, None)
     if eintrag is None:
         return False
-    konto, bis, _ = eintrag
+    konto, bis, _, _redirect = eintrag
     return bis >= time.time() and hmac.compare_digest(konto, account_id)
 
 
@@ -3371,7 +3383,7 @@ def google_state_take_browser(state: str, browser: str) -> str | None:
         eintrag = _GOOGLE_STATES.pop(state, None)
     if eintrag is None:
         return None
-    konto, bis, erwartet = eintrag
+    konto, bis, erwartet, _redirect = eintrag
     if bis < time.time() or not erwartet:
         return None
     if not hmac.compare_digest(erwartet, _flow_hash(browser)):
@@ -3379,7 +3391,13 @@ def google_state_take_browser(state: str, browser: str) -> str | None:
     return konto
 
 
-def google_redirect(host: str = "") -> str:
+def google_state_redirect(state: str) -> str:
+    with _GOOGLE_STATES_LOCK:
+        entry = _GOOGLE_STATES.get(state)
+        return entry[3] if entry is not None and entry[1] >= time.time() else ""
+
+
+def google_redirect(host: str = "", *, https: bool = False) -> str:
     """Wohin Google nach der Zustimmung zurueckschickt.
 
     Google erlaubt fuer Desktop-Anwendungen nur `localhost` und `127.0.0.1`.
@@ -3399,7 +3417,7 @@ def google_redirect(host: str = "") -> str:
         teile = urlsplit("//" + host) if host else None
         name = (teile.hostname or "") if teile else ""
         port = teile.port if teile else None
-    if port is None:
+    if port is None or https:
         port = int(SERVER.server_address[1]) if SERVER is not None else DEFAULT_PORT
     loop = "127.0.0.1" if name == "127.0.0.1" else "[::1]" if name == "::1" else "localhost"
     return f"http://{loop}:{port}/google"
@@ -4518,7 +4536,8 @@ def _prune_uploads(folder: Path) -> None:
     """Laesst nur die juengsten Dateien liegen."""
     with contextlib.suppress(OSError):
         files = sorted(
-            (item for item in folder.iterdir() if item.is_file()),
+            (item for item in folder.iterdir() if item.is_file()
+             and not item.name.startswith(".aquaticy-private-")),
             key=lambda item: item.stat().st_mtime,
             reverse=True,
         )
@@ -4541,13 +4560,12 @@ def chat_markdown(title: str, entries: list[Any]) -> str:
     Markdown, weil die Antworten schon in Markdown geschrieben sind: jedes
     andere Format muesste sie umbauen und dabei etwas verlieren.
     """
-    from datetime import datetime
 
     zeilen = [f"# {title or 'Chat'}", ""]
     for entry in entries:
         when = ""
         with contextlib.suppress(Exception):
-            when = datetime.fromtimestamp(entry.created_at).strftime("%d.%m.%Y %H:%M")
+            when = deutsche_zeit.aus_stempel(entry.created_at).strftime("%d.%m.%Y %H:%M")
         frage = " ".join(str(entry.question or "").split())
         zeilen += [f"## {frage or '(ohne Frage)'}", ""]
         if when:
@@ -6245,7 +6263,9 @@ class Handler(BaseHTTPRequestHandler):
         # nicht begonnen wurde (anderes Geraet, andere Adresse), geht es trotzdem: Die Adresse
         # kopieren und in Aquaticy einfuegen -- dort wird derselbe einmalige state geprueft.
         ohne_cookie = not self._cookie(GOOGLE_FLOW_COOKIE)
-        kopie = (f"{google_redirect(self.headers.get('Host', ''))}?"
+        redirect = google_state_redirect(state) or google_redirect(
+            self.headers.get("Host", ""), https=self._https())
+        kopie = (f"{redirect}?"
                  f"{urlencode({'code': code, 'state': state})}")
         anderswo = ("Die Anmeldung wurde in einem anderen Browser-Fenster oder unter einer "
                     "anderen Adresse begonnen. Kopiere die Adresse unten und füge sie in "
@@ -6284,7 +6304,7 @@ class Handler(BaseHTTPRequestHandler):
                 settings.google_client_id,
                 settings.google_client_secret,
                 code,
-                google_redirect(self.headers.get("Host", "")),
+                redirect,
             )
             client.remember(tokens)
             account = client.account()
@@ -6440,7 +6460,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
         action = str(payload.get("action", "state")).strip()
         settings = SESSION.settings()
-        redirect = google_redirect(self.headers.get("Host", ""))
+        redirect = google_redirect(self.headers.get("Host", ""), https=self._https())
 
         if action == "start":
             darf_aendern = payload.get("write")
@@ -6469,7 +6489,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             client_id = settings.google_client_id
             try:
                 browser = secrets.token_urlsafe(32)
-                state = google_state_new(getattr(SESSION.account, "id", "") or "", browser)
+                state = google_state_new(getattr(SESSION.account, "id", "") or "",
+                                         browser, redirect)
                 self._queue_header(
                     "Set-Cookie",
                     f"{GOOGLE_FLOW_COOKIE}={browser}; Path=/google; "
@@ -6491,6 +6512,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
 
             state = (parse_qs(urlsplit(eingefuegt.strip()).query).get("state") or [""])[0] \
                 if "state=" in eingefuegt else str(payload.get("state", ""))
+            redirect = google_state_redirect(state) or redirect
             if not google_state_take(state, getattr(SESSION.account, "id", "") or ""):
                 return {"ok": False, "error": (
                     "Dieser Code gehört zu keiner Anmeldung, die du hier begonnen hast (oder "
@@ -7612,6 +7634,7 @@ def _start_home_https(host: str, data_dir: Path, http_port: int) -> None:
     if not is_public_host(host) or not homename.enabled():
         return
     adressen = [a for a in (lan_address(), tailscale_address()) if a]
+    server = None
     try:
         tls = homename.HomeTLS(data_dir, adressen)
         wunsch = homename.port()
@@ -7631,6 +7654,8 @@ def _start_home_https(host: str, data_dir: Path, http_port: int) -> None:
         if server.server_address[1] != wunsch:
             tls.load(server.server_address[1])
     except Exception as exc:
+        if server is not None:
+            server.server_close()
         print(f"  [HTTPS] nicht gestartet: {type(exc).__name__}: {exc}", flush=True)
         return
     threading.Thread(target=server.serve_forever, name="aquaticy-https", daemon=True).start()

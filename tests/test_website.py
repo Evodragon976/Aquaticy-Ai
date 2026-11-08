@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import secrets
 import ssl
@@ -251,6 +252,7 @@ class FakeAcme:
                    .public_key(self.ca_key.public_key()).serial_number(1)
                    .not_valid_before(jetzt - timedelta(days=1))
                    .not_valid_after(jetzt + timedelta(days=3650))
+                   .add_extension(x509.BasicConstraints(ca=True, path_length=None), True)
                    .sign(self.ca_key, hashes.SHA256()))
 
     def _nonce(self) -> str:
@@ -474,6 +476,7 @@ class FakeProzess:
     def __init__(self, aufrufe: list[Any], args: list[str], **kwargs: Any) -> None:
         aufrufe.append((args, kwargs))
         self.code = 1
+        self.stdout = io.BytesIO()
 
     def wait(self, timeout: float | None = None) -> int:
         return self.code

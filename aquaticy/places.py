@@ -333,7 +333,10 @@ def find_places(
                         else mitte.get("lat") or 0.0)
             lon = float(eintrag["lon"] if eintrag.get("lon") is not None
                         else mitte.get("lon") or 0.0)
-        except (TypeError, ValueError):
+            if not math.isfinite(lat) or not math.isfinite(lon) \
+                    or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+                raise ValueError("Ungültige Koordinaten")
+        except (KeyError, TypeError, ValueError):
             lat, lon = 0.0, 0.0
         orte.append(
             Place(

@@ -28,11 +28,43 @@ import shutil
 import socket
 import ssl
 import subprocess
+import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from aquaticy.tlsfiles import (
+    folder_lock as _folder_lock,
+)
+from aquaticy.tlsfiles import (
+    replace_pair as _replace_pair,
+)
+from aquaticy.tlsfiles import (
+    write_private as _write_private,
+)
+
+
+def _valid_pair(cert: Path, key: Path, *, name: str = "") -> bool:
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+
+    try:
+        certificate = x509.load_pem_x509_certificate(cert.read_bytes())
+        private = serialization.load_pem_private_key(key.read_bytes(), password=None)
+        now = datetime.now(UTC)
+        return bool(
+            certificate.not_valid_before_utc <= now < certificate.not_valid_after_utc
+            and certificate.public_key().public_bytes(
+                serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+            == private.public_key().public_bytes(
+                serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+            and (not name or name in _names_of(cert)))
+    except Exception:
+        return False
+
 
 LOCAL_NAME = "aquaticy.local"
 DEFAULT_PORT = 8443
@@ -51,13 +83,6 @@ def folder(data_dir: Path) -> Path:
     return ziel
 
 
-def _write_private(path: Path, data: bytes) -> None:
-    """Schreibt eine Schluesseldatei so, dass nur der eigene Benutzer sie lesen kann."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as datei:
-        datei.write(data)
-    os.replace(tmp, path)
 
 
 # -- Tailscale ------------------------------------------------------------------------------------
@@ -80,7 +105,7 @@ def _tailscale(*args: str, timeout: float = 30.0) -> subprocess.CompletedProcess
 
 
 def tailscale_state() -> TailscaleState:
-    """Wie heisst dieser Rechner im Tailnet, und ist HTTPS dort eingeschaltet?"""
+    """Liest nur vollstaendig geformte Statusantworten des lokalen Tailscale-Dienstes."""
     lauf = _tailscale("status", "--json", timeout=10.0)
     if lauf is None:
         return TailscaleState(reason="Tailscale ist nicht installiert.")
@@ -88,11 +113,17 @@ def tailscale_state() -> TailscaleState:
         return TailscaleState(reason="Tailscale läuft nicht.")
     try:
         daten = json.loads(lauf.stdout or "{}")
-    except ValueError:
+    except (ValueError, TypeError):
         return TailscaleState(reason="Tailscale antwortet unerwartet.")
-    selbst = daten.get("Self") if isinstance(daten, dict) else None
-    name = str((selbst or {}).get("DNSName") or "").rstrip(".").lower()
-    domains = [str(d).rstrip(".").lower() for d in daten.get("CertDomains") or []]
+    if (not isinstance(daten, dict) or not isinstance(daten.get("Self"), dict)
+            or not isinstance(daten.get("CertDomains", []), list)):
+        return TailscaleState(reason="Tailscale antwortet unerwartet.")
+    name = daten["Self"].get("DNSName")
+    domains = daten.get("CertDomains", [])
+    if not isinstance(name, str) or not all(isinstance(d, str) for d in domains):
+        return TailscaleState(reason="Tailscale antwortet unerwartet.")
+    name = name.rstrip(".").lower()
+    domains = [d.rstrip(".").lower() for d in domains]
     if not name.endswith(".ts.net"):
         return TailscaleState(reason="MagicDNS ist im Tailnet aus.")
     if name not in domains:
@@ -103,20 +134,27 @@ def tailscale_state() -> TailscaleState:
 
 
 def tailscale_certificate(data_dir: Path, state: TailscaleState) -> tuple[Path, Path] | None:
-    """Holt (oder erneuert) das Zertifikat fuer den ts.net-Namen. None: geht gerade nicht."""
-    if not state.https:
+    """Erneuert zuerst abseits der laufenden Dateien und uebernimmt nur gueltige Paare."""
+    if not state.https or not state.name.endswith(".ts.net"):
         return None
     ziel = folder(data_dir)
     zert, schluessel = ziel / "tailscale.crt", ziel / "tailscale.key"
-    if zert.exists() and schluessel.exists() and not _expires_soon(zert):
-        return zert, schluessel
-    lauf = _tailscale("cert", "--cert-file", str(zert), "--key-file", str(schluessel),
-                      state.name, timeout=90.0)
-    if lauf is None or lauf.returncode != 0 or not zert.exists():
-        return (zert, schluessel) if zert.exists() and schluessel.exists() else None
-    with contextlib.suppress(OSError):
-        os.chmod(schluessel, 0o600)
-    return zert, schluessel
+    with _folder_lock(ziel):
+        valid = _valid_pair(zert, schluessel, name=state.name)
+        if valid and not _expires_soon(zert):
+            return zert, schluessel
+        with tempfile.TemporaryDirectory(prefix=".tailscale-", dir=ziel) as directory:
+            temporary = Path(directory)
+            cert, key = temporary / "certificate.crt", temporary / "private.key"
+            for path in (cert, key):
+                _write_private(path, b"")
+            lauf = _tailscale("cert", "--cert-file", str(cert), "--key-file", str(key),
+                              state.name, timeout=90.0)
+            if (lauf is not None and lauf.returncode == 0
+                    and _valid_pair(cert, key, name=state.name)):
+                _replace_pair(zert, schluessel, cert.read_bytes(), key.read_bytes())
+                return zert, schluessel
+        return (zert, schluessel) if _valid_pair(zert, schluessel, name=state.name) else None
 
 
 # -- Eigene CA fuer das Heimnetz ------------------------------------------------------------------
@@ -142,7 +180,7 @@ def _names_of(path: Path) -> set[str]:
         str(n) for n in san.get_values_for_type(x509.IPAddress)}
 
 
-def ensure_ca(data_dir: Path) -> tuple[Path, Path]:
+def _ensure_ca(data_dir: Path) -> tuple[Path, Path]:
     """Die eigene CA -- einmal erzeugt, danach wiederverwendet."""
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
@@ -151,7 +189,7 @@ def ensure_ca(data_dir: Path) -> tuple[Path, Path]:
 
     ziel = folder(data_dir)
     zert, schluessel = ziel / "ca.crt", ziel / "ca.key"
-    if zert.exists() and schluessel.exists() and not _expires_soon(zert):
+    if _valid_pair(zert, schluessel) and not _expires_soon(zert):
         return zert, schluessel
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Aquaticy Heimnetz-CA"),
@@ -174,10 +212,9 @@ def ensure_ca(data_dir: Path) -> tuple[Path, Path]:
           .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
                          critical=False)
           .sign(key, hashes.SHA256()))
-    _write_private(schluessel, key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption()))
-    zert.write_bytes(ca.public_bytes(serialization.Encoding.PEM))
+    _replace_pair(zert, schluessel, ca.public_bytes(serialization.Encoding.PEM),
+                  key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                    serialization.NoEncryption()))
     with contextlib.suppress(OSError):
         (ziel / "server.crt").unlink()
     return zert, schluessel
@@ -198,9 +235,10 @@ def local_names(addresses: list[str]) -> tuple[list[str], list[str]]:
     return namen, sorted(set(ips))
 
 
-def ensure_server_certificate(data_dir: Path, addresses: list[str]) -> tuple[Path, Path]:
+def _ensure_server_certificate(data_dir: Path, addresses: list[str]) -> tuple[Path, Path]:
     """Serverzertifikat fuer aquaticy.local und die eigenen Heimnetz-Adressen."""
     from cryptography import x509
+    from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
@@ -209,10 +247,14 @@ def ensure_server_certificate(data_dir: Path, addresses: list[str]) -> tuple[Pat
     ziel = folder(data_dir)
     zert, schluessel = ziel / "server.crt", ziel / "server.key"
     namen, ips = local_names(addresses)
-    if (zert.exists() and schluessel.exists() and not _expires_soon(zert)
-            and _names_of(zert) == set(namen) | set(ips)):
-        return zert, schluessel
     ca = x509.load_pem_x509_certificate(ca_zert.read_bytes())
+    if (_valid_pair(zert, schluessel) and not _expires_soon(zert)
+            and _names_of(zert) == set(namen) | set(ips)):
+        try:
+            x509.load_pem_x509_certificate(zert.read_bytes()).verify_directly_issued_by(ca)
+            return zert, schluessel
+        except (ValueError, TypeError, InvalidSignature):
+            pass
     ca_key = serialization.load_pem_private_key(ca_schluessel.read_bytes(), password=None)
     if not isinstance(ca_key, ec.EllipticCurvePrivateKey):
         raise ValueError("Unerwarteter CA-Schlüssel.")
@@ -225,7 +267,7 @@ def ensure_server_certificate(data_dir: Path, addresses: list[str]) -> tuple[Pat
               .issuer_name(ca.subject).public_key(key.public_key())
               .serial_number(x509.random_serial_number())
               .not_valid_before(jetzt - timedelta(minutes=5))
-              .not_valid_after(jetzt + timedelta(days=SERVER_DAYS))
+              .not_valid_after(min(jetzt + timedelta(days=SERVER_DAYS), ca.not_valid_after_utc))
               .add_extension(x509.SubjectAlternativeName(alt), critical=False)
               .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
               .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]),
@@ -233,10 +275,9 @@ def ensure_server_certificate(data_dir: Path, addresses: list[str]) -> tuple[Pat
               .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(
                   ca_key.public_key()), critical=False)
               .sign(ca_key, hashes.SHA256()))
-    _write_private(schluessel, key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption()))
-    zert.write_bytes(server.public_bytes(serialization.Encoding.PEM))
+    _replace_pair(zert, schluessel, server.public_bytes(serialization.Encoding.PEM),
+                  key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                    serialization.NoEncryption()))
     return zert, schluessel
 
 
@@ -255,21 +296,22 @@ class Announcer:
         self.reason = ""
 
     def start(self, address: str, port: int = DEFAULT_PORT) -> bool:
+        self.stop()
         if not address:
             self.reason = "Keine Heimnetz-Adresse gefunden."
             return False
-        with contextlib.suppress(Exception):
-            from zeroconf import (  # type: ignore[import-not-found]  # optional, erst hier
-                ServiceInfo,
-                Zeroconf,
-            )
+        try:
+            from importlib import import_module
 
-            self._zeroconf = Zeroconf()
-            info = ServiceInfo("_https._tcp.local.", "Aquaticy._https._tcp.local.",
+            module = import_module("zeroconf")
+            self._zeroconf = module.Zeroconf()
+            info = module.ServiceInfo("_https._tcp.local.", "Aquaticy._https._tcp.local.",
                                addresses=[socket.inet_aton(address)], port=port,
                                server=LOCAL_NAME + ".")
             self._zeroconf.register_service(info)
             return True
+        except Exception:
+            self.stop()
         for befehl in (["avahi-publish-address", "-R", LOCAL_NAME, address],
                        ["dns-sd", "-P", "Aquaticy", "_https._tcp", "local",
                         str(port), LOCAL_NAME, address]):
@@ -289,12 +331,20 @@ class Announcer:
         if self._zeroconf is not None:
             with contextlib.suppress(Exception):
                 self._zeroconf.unregister_all_services()
+            with contextlib.suppress(Exception):
                 self._zeroconf.close()
             self._zeroconf = None
-        if self._process is not None:
-            with contextlib.suppress(Exception):
-                self._process.terminate()
-            self._process = None
+        process, self._process = self._process, None
+        if process is not None:
+            with contextlib.suppress(OSError):
+                process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(OSError):
+                    process.kill()
+                with contextlib.suppress(OSError, subprocess.TimeoutExpired):
+                    process.wait(timeout=2)
 
 
 # -- Alles zusammen -------------------------------------------------------------------------------
@@ -310,52 +360,59 @@ class HomeTLS:
     _local: ssl.SSLContext | None = None
     _ts: ssl.SSLContext | None = None
     _checked: float = 0.0
+    _port: int = DEFAULT_PORT
+    _refresh_lock: Any = field(default_factory=threading.Lock, repr=False)
+    _refreshing: bool = False
 
     @staticmethod
     def _context(zert: Path, schluessel: Path) -> ssl.SSLContext:
-        kontext = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        kontext.minimum_version = ssl.TLSVersion.TLSv1_2
-        kontext.load_cert_chain(str(zert), str(schluessel))
-        return kontext
+        with _folder_lock(zert.parent):
+            kontext = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            kontext.minimum_version = ssl.TLSVersion.TLSv1_2
+            kontext.load_cert_chain(str(zert), str(schluessel))
+            return kontext
 
     def load(self, port: int) -> ssl.SSLContext:
-        """Baut oder erneuert die Zertifikate und gibt den Kontext fuer den Server zurueck."""
-        self._checked = time.time()
-        self.urls, self.notes = [], []
-        zert, schluessel = ensure_server_certificate(self.data_dir, self.addresses)
-        self._local = self._context(zert, schluessel)
-        self.urls.append((f"https://{LOCAL_NAME}:{port}/", "im Heimnetz (HTTPS)"))
-        self.tailscale = tailscale_state()
-        paar = tailscale_certificate(self.data_dir, self.tailscale)
-        if paar is not None:
-            with contextlib.suppress(ssl.SSLError, OSError):
-                self._ts = self._context(*paar)
-                self.urls.append((f"https://{self.tailscale.name}:{port}/",
-                                  "über Tailscale (HTTPS)"))
-        elif self.tailscale.reason and self.tailscale.name:
-            self.notes.append(self.tailscale.reason)
-        haupt = self._local
-        haupt.sni_callback = self._choose
-        return haupt
+        self._port = port
+        self.refresh()
+        assert self._local is not None
+        return self._local
 
     def _choose(self, sock: ssl.SSLObject, name: str | None, _: ssl.SSLContext) -> None:
         if time.time() - self._checked > RECHECK_SECONDS:
-            # Einmal am Tag beim Handschlag nachsehen -- ohne eigenen Hintergrund-Faden.
-            with contextlib.suppress(Exception):
-                self.refresh()
-        if name and name.lower().endswith(".ts.net") and self._ts is not None:
+            with self._refresh_lock:
+                if not self._refreshing:
+                    self._refreshing = True
+                    threading.Thread(target=self._renew, name="aquaticy-cert-renew",
+                                     daemon=True).start()
+        if name and name.lower() == self.tailscale.name and self._ts is not None:
             sock.context = self._ts
         elif self._local is not None:
             sock.context = self._local
 
     def refresh(self) -> None:
-        self._checked = time.time()
         zert, schluessel = ensure_server_certificate(self.data_dir, self.addresses)
-        self._local = self._context(zert, schluessel)
-        self._local.sni_callback = self._choose
-        paar = tailscale_certificate(self.data_dir, tailscale_state())
-        if paar is not None:
-            self._ts = self._context(*paar)
+        local = self._context(zert, schluessel)
+        local.sni_callback = self._choose
+        state = tailscale_state()
+        paar = tailscale_certificate(self.data_dir, state)
+        tail = self._context(*paar) if paar is not None else None
+        urls = [(f"https://{LOCAL_NAME}:{self._port}/", "im Heimnetz (HTTPS)")]
+        if tail is not None:
+            urls.append((f"https://{state.name}:{self._port}/", "über Tailscale (HTTPS)"))
+        self._local, self._ts, self.tailscale = local, tail, state
+        self.urls = urls
+        self.notes = [state.reason] if state.reason and state.name else []
+        self._checked = time.time()
+
+    def _renew(self) -> None:
+        try:
+            self.refresh()
+        except Exception:
+            self._checked = time.time() - RECHECK_SECONDS + 300
+        finally:
+            with self._refresh_lock:
+                self._refreshing = False
 
 
 def enabled() -> bool:
@@ -411,3 +468,13 @@ CA-Zertifikat.</li></ol>
 Aquaticy certificate once on each device (download above). It only works for addresses in
 your home network, never for websites on the internet.</p>
 </main></html>"""
+
+
+def ensure_ca(data_dir: Path) -> tuple[Path, Path]:
+    with _folder_lock(folder(data_dir)):
+        return _ensure_ca(data_dir)
+
+
+def ensure_server_certificate(data_dir: Path, addresses: list[str]) -> tuple[Path, Path]:
+    with _folder_lock(folder(data_dir)):
+        return _ensure_server_certificate(data_dir, addresses)

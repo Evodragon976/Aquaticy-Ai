@@ -1,4 +1,4 @@
-# Aquaticy AI 15.5.7
+# Aquaticy AI 15.7.7
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -27,17 +27,29 @@ $ aquaticy
 
 ## Inhalt
 
-**Neu in 15.5.7:**
+**Neu in 15.7.7:**
 
-- **Alte Server werden sicher erkannt.** Ein schlicht mit `aquaticy` gestarteter Server
-  (im Hintergrund `python -m aquaticy.cli` ohne weitere Angaben) zählte bisher nicht als
-  Server. Er blieb beim Start der neuen Version und bei `aquaticy stop` stehen. Jetzt wird
-  er erkannt.
-- **Beenden ohne Verwechslung.** Unter Linux hält Aquaticy den Prozess zuerst fest (pidfd),
-  prüft ihn dann und beendet genau diesen. Jede Beendigung steht als `[Sicherheit]` im
-  Protokoll. Weiter gilt: nur eigene Prozesse, nur echte Aquaticy-Server, und der Start
-  wird nie blockiert. Lässt sich ein alter Server nicht beenden, nimmt Aquaticy den
-  nächsten freien Port und sagt das.
+- **100 bestätigte Fehlerursachen behoben.** Gegenproben decken HTTPS, Messenger,
+  Gedächtnis, GitHub, Google, Secure Pro, Speicher, Datenquellen und die Oberfläche ab.
+  Mehrere Testfälle für dieselbe Ursache zählen dabei nur einmal.
+- **Verbindungen und Freigaben bleiben unter Kontrolle.** Verspätete GitHub-Anmeldungen
+  heben ein Abmelden nicht auf. Messenger prüfen Empfänger und Freigaben vor weiteren
+  Nachrichten erneut. Fehlgeschlagene Zustellungen und Sicherheitswarnungen werden wiederholt.
+- **HTTPS bleibt konsistent.** Zertifikate werden zusammen mit ihren Schlüsseln ersetzt.
+  Beschädigte Paare, falsche Aussteller und abgelaufene Zwischenzertifikate werden erkannt.
+  Gleichzeitiges Einrichten erzeugt keine widersprüchlichen Identitäten.
+- **Weniger unnötige Arbeit.** Gleichzeitige Cache-, Home-Assistant- und Ollama-Abfragen
+  teilen ihre laufende Arbeit. DNS-Abfragen und Netzwerkantworten haben feste Grenzen.
+  Modellvorschläge berücksichtigen Speicher- und CPU-Grenzen des Containers.
+- **Zuverlässigere Daten.** Deutsche Uhrzeiten, Gedächtniskorrekturen, PR-Basisänderungen,
+  UTF-16/32-Quelldateien, Feed-Namensräume, Währungskurse und Mailtabellen sind korrigiert.
+  Secure Pro unterscheidet zurückkehrende Geräte und neue Dienste von bestehenden.
+- **Private Dateien und Bedienung.** Gleichzeitige Schreibvorgänge beachten den Speicherdeckel.
+  Unterbrochene Schreibvorgänge erhalten die vorige Datei. Im geöffneten Dialog bleibt der
+  Tastaturfokus im Dialog, auch auf dem Handy. Tunnel-Protokolle wachsen nicht unbegrenzt.
+- **Server-Erkennung berichtigt.** `aquaticy` ohne Unterbefehl startet den Terminalchat.
+  Nur ein ausdrücklicher `web`-Aufruf zählt als Webserver. Unter Linux bleibt der pidfd
+  bis zum bestätigten Prozessende offen, damit eine wiederverwendete PID nichts verwechselt.
 
 **Neu in 15.5.6:**
 
@@ -757,7 +769,7 @@ Beide Funktionen sind standardmäßig ausgeschaltet.
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.5.7
+aquaticy --version            # 15.7.7
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

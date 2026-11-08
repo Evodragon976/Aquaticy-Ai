@@ -291,6 +291,19 @@ def needs_browser(html: str, text: str, rules: SiteRules | None = None) -> bool:
     return reason in {"consent_required", "empty"}
 
 
+def _robots_path(value: str) -> str:
+    unreserved = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
+
+    def escape(match: re.Match[str]) -> str:
+        byte = int(match[0][1:], 16)
+        char = chr(byte)
+        return char if char in unreserved else f"%{byte:02X}"
+
+    value = re.sub(r"%[0-9A-Fa-f]{2}", escape, value)
+    return "".join(char if ord(char) < 128 else "".join(f"%{byte:02X}" for byte in char.encode())
+                   for char in value)
+
+
 class RobotsRules:
     """Die Regeln einer robots.txt -- nach RFC 9309 (seit 9.5.34).
 
@@ -307,54 +320,53 @@ class RobotsRules:
     def _regex(muster: str) -> re.Pattern[str]:
         ende = muster.endswith("$")
         rumpf = muster[:-1] if ende else muster
-        teile = [re.escape(unquote(stueck)) for stueck in rumpf.split("*")]
-        return re.compile(".*".join(teile) + ("$" if ende else ""), re.DOTALL)
+        teile = [re.escape(_robots_path(stueck)) for stueck in rumpf.split("*")]
+        pattern = teile[0]
+        for index, part in enumerate(teile[1:], start=1):
+            pattern += (".*" + part if ende and index == len(teile) - 1
+                        else "(?>.*?" + part + ")")
+        return re.compile(pattern + (r"\Z" if ende else ""), re.DOTALL)
 
     @classmethod
     def parse(cls, text: str, user_agent: str) -> RobotsRules:
-        """Die Gruppe fuer *user_agent* -- sonst die fuer ``*``."""
+        """Nur die am genauesten passende Gruppe; gleich genaue Gruppen zusammen."""
         name = user_agent.split("/")[0].strip().lower()
-        eigene: list[tuple[bool, str]] = []
-        allgemeine: list[tuple[bool, str]] = []
-        eigene_gefunden = False
-        agenten: list[str] = []
-        in_regeln = False
-        ziel: list[list[tuple[bool, str]]] = []
-        for zeile in text.splitlines():
-            zeile = zeile.split("#", 1)[0].strip()
-            if ":" not in zeile:
+        groups: list[tuple[list[str], list[tuple[bool, str]]]] = []
+        agents: list[str] = []
+        rules: list[tuple[bool, str]] = []
+        in_rules = False
+        for line in text.removeprefix("\ufeff").splitlines():
+            field, separator, value = line.split("#", 1)[0].strip().partition(":")
+            if not separator:
                 continue
-            feld, _, wert = zeile.partition(":")
-            feld, wert = feld.strip().lower(), wert.strip()
-            if feld in ("user-agent", "useragent"):
-                if in_regeln:
-                    agenten, in_regeln = [], False
-                agenten.append(wert.lower())
-                ziel = []
-                if any(a and a != "*" and a in name for a in agenten):
-                    ziel.append(eigene)
-                    eigene_gefunden = True
-                if "*" in agenten:
-                    ziel.append(allgemeine)
-                continue
-            if feld not in ("allow", "disallow"):
-                continue
-            in_regeln = True
-            if not wert:
-                continue
-            for liste in ziel:
-                liste.append((feld == "allow", wert))
-        return cls(eigene if eigene_gefunden else allgemeine)
+            field, value = field.strip().lower(), value.strip()
+            if field in ("user-agent", "useragent"):
+                if in_rules:
+                    groups.append((agents, rules))
+                    agents, rules, in_rules = [], [], False
+                agents.append(value.lower())
+            elif field in ("allow", "disallow"):
+                in_rules = True
+                if value:
+                    rules.append((field == "allow", value))
+        groups.append((agents, rules))
+        ranked = [(max((len(a) for a in names if a and a != "*" and a in name), default=0),
+                   "*" in names, rows) for names, rows in groups]
+        longest = max((score for score, _, _ in ranked), default=0)
+        return cls([rule for score, wildcard, rows in ranked
+                    if (score == longest if longest else wildcard) for rule in rows])
 
     def allows(self, url: str) -> bool:
         teile = urlparse(url)
-        pfad = unquote(teile.path or "/") + (("?" + unquote(teile.query)) if teile.query else "")
+        pfad = _robots_path(teile.path or "/") + (
+            "?" + _robots_path(teile.query) if teile.query else "")
         if pfad == "/robots.txt":
             return True
         bester: tuple[int, bool] | None = None
         for erlaubt, muster, regex in self._regeln:
             if regex.match(pfad):
-                kandidat = (len(muster), erlaubt)
+                length = len(unquote(muster.removesuffix("$").replace("*", "")).encode("utf-8"))
+                kandidat = (length, erlaubt)
 
                 if bester is None or kandidat > bester:
                     bester = kandidat
@@ -426,7 +438,7 @@ class RobotsPolicy:
             return None, ROBOTS_ERROR_TTL
         except httpx.HTTPError:
             return self._GESPERRT, ROBOTS_ERROR_TTL
-        if response.status_code >= 500:
+        if response.status_code >= 500 or 300 <= response.status_code < 400:
             return self._GESPERRT, ROBOTS_ERROR_TTL
         if response.status_code >= 400:
             return None, ROBOTS_TTL

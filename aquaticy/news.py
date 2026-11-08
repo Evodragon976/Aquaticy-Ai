@@ -26,6 +26,7 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
+from aquaticy import zeit as deutsche_zeit
 from aquaticy.models import SearchResult
 
 HEADLINE_FEEDS: dict[str, tuple[str, ...]] = {
@@ -170,7 +171,7 @@ def _wann(stempel: float) -> str:
     if not stempel:
         return ""
     try:
-        return datetime.fromtimestamp(stempel).strftime("%d.%m. %H:%M")
+        return deutsche_zeit.aus_stempel(stempel).strftime("%d.%m. %H:%M")
     except (ValueError, OSError, OverflowError):
         return ""
 

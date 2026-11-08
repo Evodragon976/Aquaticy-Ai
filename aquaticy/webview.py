@@ -26,6 +26,8 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from aquaticy import zeit as deutsche_zeit
+
 WOCHENTAGE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
 WOCHENTAGE_KURZ = ("Mo.", "Di.", "Mi.", "Do.", "Fr.", "Sa.", "So.")
 MONATE_KURZ = ("Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.",
@@ -104,7 +106,7 @@ def moment_text(stempel: Any) -> str:
     if wert <= 0 or not math.isfinite(wert):
         return ""
     try:
-        zeit = datetime.fromtimestamp(wert)
+        zeit = deutsche_zeit.aus_stempel(wert)
     except (OSError, OverflowError, ValueError):
         return ""
     return (f"{WOCHENTAGE_KURZ[zeit.weekday()]} {zeit.day:02d}. "
@@ -129,12 +131,12 @@ def chat_group(touched: Any, now: float | None = None) -> str:
         wann = float(touched or 0)
     except (TypeError, ValueError):
         wann = 0.0
-    mitternacht = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0,
+    mitternacht = deutsche_zeit.aus_stempel(now).replace(hour=0, minute=0, second=0,
                                                       microsecond=0).timestamp()
     tag = 86400
     if wann >= mitternacht:
         return "Heute"
-    gestern = (datetime.fromtimestamp(mitternacht) - timedelta(days=1)).timestamp()
+    gestern = (deutsche_zeit.aus_stempel(mitternacht) - timedelta(days=1)).timestamp()
     if wann >= gestern:
         return "Gestern"
     if wann >= now - 7 * tag:

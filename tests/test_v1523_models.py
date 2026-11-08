@@ -7,6 +7,7 @@ import pytest
 
 from aquaticy import local_model, system, web, webview
 from aquaticy.config import Settings
+from tests.stream_helpers import get_stream
 from tests.test_rundgang import _browser_da
 from tests.test_v1300_luna import _anlegen, _zustimmung, server  # noqa: F401
 from tests.test_web import client, session, web_settings  # noqa: F401
@@ -21,7 +22,7 @@ def test_ollama_native_discovery_accepts_an_openai_compatible_base(monkeypatch, 
         return httpx.Response(200 if url.endswith('/api/tags') and '/v1/' not in url else 404,
                               json={"models": [{"name": "qwen3:8b"}]})
 
-    monkeypatch.setattr(local_model.httpx, "get", get)
+    monkeypatch.setattr(local_model.httpx, "stream", get_stream(get))
     settings = Settings(model="ollama_chat/qwen3:8b", api_base=base)
     assert "ollama_chat/qwen3:8b" in [m["id"] for m in system.available_models(settings)]
     assert local_model.server_running(base)
@@ -40,9 +41,9 @@ def test_installed_local_models_remain_selectable_beside_cloud_recommendations(m
 def test_web_model_selection_returns_ollama_from_a_v1_base(client, session, monkeypatch):  # noqa: F811
     session._settings.model = "ollama_chat/qwen3:8b"
     session._settings.api_base = "http://localhost:11434/v1"
-    monkeypatch.setattr(local_model.httpx, "get", lambda url, **kw: httpx.Response(
+    monkeypatch.setattr(local_model.httpx, "stream", get_stream(lambda url, **kw: httpx.Response(
         200 if url == "http://localhost:11434/api/tags" else 404,
-        json={"models": [{"name": "qwen3:8b"}]}))
+        json={"models": [{"name": "qwen3:8b"}]})))
     monkeypatch.setattr(web, "strong_models", lambda *a, **kw: [])
     status, body = client("GET", "/api/models?mode=normal")
     assert status == 200

@@ -24,6 +24,10 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aquaticy import dns_lookup
+
+DNS_TIMEOUT = dns_lookup.TIMEOUT
+
 KNOWN_PORTS: dict[int, str] = {
     21: "FTP",
     22: "SSH",
@@ -222,7 +226,7 @@ def port_open(address: str, port: int, timeout: float = CONNECT_TIMEOUT) -> bool
 def hostname_of(address: str) -> str:
     """Rueckwaerts-Aufloesung, wenn der Router sie anbietet."""
     try:
-        name = socket.gethostbyaddr(address)[0]
+        name = dns_lookup.call(socket.gethostbyaddr, address, timeout=DNS_TIMEOUT)[0]
     except (OSError, socket.herror):
         return ""
     return "" if name == address else name

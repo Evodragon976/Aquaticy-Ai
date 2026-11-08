@@ -38,10 +38,13 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from aquaticy.tlsfiles import folder_lock, replace_pair
 
 DOMAIN_ENV = "AQUATICY_DOMAIN"
 TOKEN_ENV = "AQUATICY_CLOUDFLARE_TOKEN"
@@ -669,6 +672,7 @@ def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str,
                  *, now: datetime | None = None) -> None:
     """Passt das Zertifikat zu Schluessel und Domain? Sonst wird nichts gespeichert."""
     from cryptography import x509
+    from cryptography.exceptions import InvalidSignature, UnsupportedAlgorithm
     from cryptography.hazmat.primitives import serialization
 
     try:
@@ -676,6 +680,8 @@ def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str,
         schluessel = serialization.load_pem_private_key(schluessel_pem, password=None)
     except ValueError as exc:
         raise WebsiteError("Das Zertifikat von Let's Encrypt ist unlesbar.") from exc
+    if not zertifikate:
+        raise WebsiteError("Die Zertifikatskette ist leer.")
     erstes = zertifikate[0]
     format_ = (serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
     if erstes.public_key().public_bytes(*format_) != schluessel.public_key().public_bytes(
@@ -684,8 +690,17 @@ def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str,
     if domain not in _domains_of(erstes):
         raise WebsiteError("Das Zertifikat gilt nicht für diese Domain.")
     current = now or datetime.now(UTC)
-    if not erstes.not_valid_before_utc <= current < erstes.not_valid_after_utc:
-        raise WebsiteError("Das Zertifikat ist noch nicht gültig oder bereits abgelaufen.")
+    for cert in zertifikate:
+        if not cert.not_valid_before_utc <= current < cert.not_valid_after_utc:
+            raise WebsiteError("Die Zertifikatskette ist noch nicht gültig oder abgelaufen.")
+    for child, issuer in pairwise(zertifikate):
+        try:
+            child.verify_directly_issued_by(issuer)
+            if not issuer.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
+                raise ValueError("issuer is not a CA")
+        except (ValueError, TypeError, InvalidSignature, UnsupportedAlgorithm,
+                x509.ExtensionNotFound) as exc:
+            raise WebsiteError("Die Zertifikatskette passt nicht zusammen.") from exc
 
 
 def _domains_of(zertifikat: Any) -> list[str]:
@@ -698,14 +713,15 @@ def _domains_of(zertifikat: Any) -> list[str]:
     return [str(name) for name in san.value.get_values_for_type(x509.DNSName)]
 
 
-def _account_key(data_dir: Path) -> Any:
+def _account_key_unlocked(data_dir: Path) -> Any:
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import ec
 
     pfad = site_dir(data_dir) / "acme-account.key"
     with contextlib.suppress(OSError, ValueError, TypeError):
         schluessel = serialization.load_pem_private_key(pfad.read_bytes(), password=None)
-        if isinstance(schluessel, ec.EllipticCurvePrivateKey):
+        if (isinstance(schluessel, ec.EllipticCurvePrivateKey)
+                and isinstance(schluessel.curve, ec.SECP256R1)):
             return schluessel
     schluessel = ec.generate_private_key(ec.SECP256R1())
     _privat_schreiben(pfad, schluessel.private_bytes(
@@ -763,12 +779,13 @@ def certificate_expiry(data_dir: Path, domain: str) -> datetime | None:
 
     zert, _ = cert_paths(data_dir)
     try:
-        erstes = x509.load_pem_x509_certificates(zert.read_bytes())[0]
+        chain = x509.load_pem_x509_certificates(zert.read_bytes())
+        erstes = chain[0]
     except (OSError, ValueError, IndexError):
         return None
     if domain not in _domains_of(erstes):
         return None
-    return erstes.not_valid_after_utc
+    return min(cert.not_valid_after_utc for cert in chain)
 
 
 def certificate_valid(data_dir: Path, domain: str, *, now: datetime | None = None) -> bool:
@@ -820,15 +837,16 @@ def obtain_certificate(config: SiteConfig, data_dir: Path, zone: str, *,
         if cloudflare is None:
             cf.close()
     zert, key = cert_paths(data_dir)
-    _privat_schreiben(key, schluessel)
-    _privat_schreiben(zert, kette)
+    with folder_lock(zert.parent):
+        _check_chain(kette, schluessel, config.domain)
+        replace_pair(zert, key, kette, schluessel)
     ablauf = certificate_expiry(data_dir, config.domain)
     if ablauf is None:
         raise WebsiteError("Das neue Zertifikat ließ sich nicht lesen.")
     return ablauf
 
 
-def self_signed(data_dir: Path, domain: str) -> tuple[Path, Path]:
+def _self_signed_unlocked(data_dir: Path, domain: str) -> tuple[Path, Path]:
     """Ein selbst ausgestelltes Zertifikat fuer den Weg cloudflared -> Aquaticy,
     solange das echte noch fehlt. Es verlaesst den Rechner nie."""
     from cryptography import x509
@@ -854,10 +872,10 @@ def self_signed(data_dir: Path, domain: str) -> tuple[Path, Path]:
                   .add_extension(x509.SubjectAlternativeName(
                       [x509.DNSName(domain), x509.DNSName("localhost")]), critical=False)
                   .sign(schluessel, hashes.SHA256()))
-    _privat_schreiben(key, schluessel.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption()))
-    _privat_schreiben(zert, zertifikat.public_bytes(serialization.Encoding.PEM))
+    ordner.mkdir(parents=True, exist_ok=True)
+    replace_pair(zert, key, zertifikat.public_bytes(serialization.Encoding.PEM),
+                 schluessel.private_bytes(serialization.Encoding.PEM,
+                    serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
     return zert, key
 
 
@@ -1080,21 +1098,45 @@ class Tunnel:
                 self._set("startet", "Verbinde mit Cloudflare …")
                 log = site_dir(self.data_dir) / "cloudflared.log"
                 log.parent.mkdir(parents=True, exist_ok=True)
-                with contextlib.suppress(OSError):
-                    if log.stat().st_size > MAX_LOG_BYTES:
-                        log.unlink()
                 umgebung = tunnel_env(token)
-                fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-                with os.fdopen(fd, "ab") as ausgabe:
+                flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+                if log.is_symlink():
+                    raise WebsiteError("Das Tunnel-Protokoll darf kein Link sein.")
+                fd = os.open(log, flags, 0o600)
+                with os.fdopen(fd, "r+b") as ausgabe:
+                    with contextlib.suppress(OSError):
+                        os.chmod(log, 0o600)
+                    if ausgabe.seek(0, os.SEEK_END) > MAX_LOG_BYTES:
+                        ausgabe.seek(-MAX_LOG_BYTES, os.SEEK_END)
+                        tail = ausgabe.read()
+                        ausgabe.seek(0)
+                        ausgabe.truncate()
+                        ausgabe.write(tail)
                     with self._lock:
                         if self._stop.is_set():
                             return
                         self._proc = self._popen(
                             [str(programm), "tunnel", "--no-autoupdate", "run"],
-                            env=umgebung, stdin=subprocess.DEVNULL, stdout=ausgabe,
+                            env=umgebung, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT)
                     self._set("laeuft", "Mit Cloudflare verbunden.")
                     gestartet = time.monotonic()
+                    stream = self._proc.stdout
+                    if stream is not None:
+                        try:
+                            read = getattr(stream, "read1", stream.read)
+                            while chunk := read(16_384):
+                                if ausgabe.tell() + len(chunk) > MAX_LOG_BYTES:
+                                    ausgabe.seek(0)
+                                    tail = (ausgabe.read() + chunk)[-MAX_LOG_BYTES:]
+                                    ausgabe.seek(0)
+                                    ausgabe.truncate()
+                                    ausgabe.write(tail)
+                                else:
+                                    ausgabe.write(chunk)
+                                ausgabe.flush()
+                        finally:
+                            stream.close()
                     code = self._proc.wait()
                 if self._stop.is_set():
                     return
@@ -1266,3 +1308,13 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
+
+
+def _account_key(data_dir: Path) -> Any:
+    with folder_lock(site_dir(data_dir)):
+        return _account_key_unlocked(data_dir)
+
+
+def self_signed(data_dir: Path, domain: str) -> tuple[Path, Path]:
+    with folder_lock(site_dir(data_dir)):
+        return _self_signed_unlocked(data_dir, domain)

@@ -33,8 +33,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import re
 import secrets
+import tempfile
 import threading
 from pathlib import Path
 
@@ -143,8 +145,28 @@ def is_sealed_file(data: bytes) -> bool:
 
 def write_private(path: Path | str, data: bytes, profile: Path | str) -> None:
     """Schreibt eine Datei eines Profils verschluesselt (Name als Zusatzdaten)."""
+    from aquaticy import budget
+    from aquaticy.memory import secure_file
+
     ziel = Path(path)
-    ziel.write_bytes(profile_sealer(profile).seal_bytes(data, "datei:" + ziel.name))
+    root = Path(profile).resolve()
+    if not ziel.parent.resolve().is_relative_to(root) or ziel.is_symlink():
+        raise ValueError("Die private Datei liegt außerhalb deines Profils.")
+    encrypted = profile_sealer(profile).seal_bytes(data, "datei:" + ziel.name)
+    with budget.writing(profile):
+        previous = ziel.stat().st_size if ziel.exists() else 0
+        growth = max(0, len(encrypted) - previous)
+        if growth:
+            budget.ensure_room(profile, growth)
+        descriptor, name = tempfile.mkstemp(prefix=".aquaticy-private-", dir=ziel.parent)
+        os.close(descriptor)
+        temporary = Path(name)
+        try:
+            secure_file(temporary)
+            temporary.write_bytes(encrypted)
+            os.replace(temporary, ziel)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 def read_private(path: Path | str, profile: Path | str | None = None) -> bytes:

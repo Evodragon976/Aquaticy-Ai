@@ -15,8 +15,8 @@ from aquaticy import old_server
 
 
 @pytest.mark.parametrize(("befehl", "server"), [
-    (["aquaticy"], True),
-    (["/usr/bin/python3", "-m", "aquaticy.cli"], True),
+    (["aquaticy"], False),
+    (["/usr/bin/python3", "-m", "aquaticy.cli"], False),
     (["/usr/bin/python3", "-m", "aquaticy.cli", "web", "--lan"], True),
     (["/home/u/.local/bin/aquaticy", "web"], True),
     (["aquaticy", "stop"], False),
