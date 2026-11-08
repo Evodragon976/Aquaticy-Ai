@@ -611,7 +611,8 @@ def github_token(settings: Any) -> str:
 
 def feeds_of(settings: Any) -> list[str]:
     feeds = (load_state(settings).get("feeds") or {}).get("feeds") or []
-    return [str(feed) for feed in feeds if isinstance(feed, str)][:MAX_FEEDS]
+    return [str(feed) for feed in feeds
+            if isinstance(feed, str) and feed_address_ok(feed)][:MAX_FEEDS]
 
 
 def retire_removed(settings: Any) -> list[str]:
@@ -1063,6 +1064,29 @@ def _reset_profile(settings: Any, addon: AddOn) -> None:
         )
 
 
+FEED_HOST_RE = re.compile(
+    r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+    r"|\d{1,3}(?:\.\d{1,3}){3}|[0-9a-f:.]{2,45}", re.IGNORECASE)
+
+
+def feed_address_ok(adresse: str) -> bool:
+    """Eine Feed-Adresse, die sich laden laesst: http(s), Host, ohne Zugangsdaten (15.7.8).
+
+    Auch "https://@host" (leere Zugangsdaten), Leer- und Steuerzeichen und Hostnamen mit
+    fremden Zeichen gelten nicht -- solche Eintraege liessen sich spaeter nicht laden.
+    """
+    try:
+        teile = urlparse(adresse)
+        return bool(teile.scheme in ("http", "https") and teile.hostname
+                    and "@" not in teile.netloc and "\\" not in adresse
+                    and adresse.isprintable() and not any(z.isspace() for z in adresse)
+                    and FEED_HOST_RE.fullmatch(teile.hostname or "")
+                    and len(adresse) <= 500
+                    and (teile.port is None or 1 <= teile.port <= 65535))
+    except ValueError:
+        return False
+
+
 def set_feeds(settings: Any, feeds: Any) -> list[str]:
     """Speichert die Feed-Liste. Nur oeffentliche http(s)-Adressen."""
     if not (load_state(settings).get("feeds") or {}).get("installed"):
@@ -1076,14 +1100,9 @@ def set_feeds(settings: Any, feeds: Any) -> list[str]:
         adresse = str(roh or "").strip()
         if not adresse:
             continue
-        try:
-            teile = urlparse(adresse)
-            valid = (teile.scheme in ("http", "https") and teile.hostname
-                     and not teile.username and not teile.password and len(adresse) <= 500
-                     and (teile.port is None or 1 <= teile.port <= 65535))
-        except ValueError:
-            valid = False
-        if not valid:
+        valid = feed_address_ok(adresse)
+        teile = urlparse(adresse) if valid else None
+        if not valid or teile is None:
             raise AddOnError("Keine gültige Feed-Adresse. Nutze HTTP oder HTTPS ohne Zugangsdaten.")
         if _private_host(teile.hostname or ""):
             raise AddOnError(f"Feeds nur aus dem Internet, nicht aus dem Heimnetz: {adresse[:80]}")

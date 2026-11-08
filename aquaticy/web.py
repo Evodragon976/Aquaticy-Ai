@@ -3368,7 +3368,10 @@ def google_state_take(state: str, account_id: str) -> bool:
     if eintrag is None:
         return False
     konto, bis, _, _redirect = eintrag
-    return bis >= time.time() and hmac.compare_digest(konto, account_id)
+    gueltig = bis >= time.time() and hmac.compare_digest(konto, account_id)
+    if gueltig:
+        _merke_anmeldung(konto, bis)
+    return gueltig
 
 
 def google_state_take_browser(state: str, browser: str) -> str | None:
@@ -3388,7 +3391,55 @@ def google_state_take_browser(state: str, browser: str) -> str | None:
         return None
     if not hmac.compare_digest(erwartet, _flow_hash(browser)):
         return None
+    _merke_anmeldung(konto, bis)
     return konto
+
+
+# 15.7.8: Reihenfolge der Google-Anmeldungen. Eine verspaetete Anmeldung durfte vorher das
+# Trennen rueckgaengig machen, und eine aeltere eine neuere Verbindung ueberschreiben.
+_GOOGLE_FLOW = threading.local()
+_GOOGLE_CUT: dict[str, float] = {}       # Trennen: alles davor Begonnene gilt nicht mehr
+_GOOGLE_NEWEST: dict[str, float] = {}    # Beginn der zuletzt gespeicherten Anmeldung
+
+
+def _merke_anmeldung(konto: str, bis: float) -> None:
+    """Merkt sich fuer diese Anfrage, wann die eingeloeste Anmeldung begonnen wurde."""
+    _GOOGLE_FLOW.konto = konto
+    _GOOGLE_FLOW.start = bis - GOOGLE_STATE_SECONDS
+
+
+def google_commit(account_id: str, tokens: Any, client: Any) -> bool:
+    """Speichert die Zugangsdaten -- nur wenn die Anmeldung noch die neueste ist.
+
+    Nicht, wenn das Konto seit Beginn dieser Anmeldung getrennt wurde, und nicht, wenn
+    inzwischen eine spaeter begonnene Anmeldung gespeichert ist. Geprueft wird nach dem
+    Tausch mit Google, unmittelbar vor dem Speichern.
+    """
+    start = getattr(_GOOGLE_FLOW, "start", None)
+    konto = getattr(_GOOGLE_FLOW, "konto", None)
+    _GOOGLE_FLOW.start = None
+    if start is None or konto is None or not hmac.compare_digest(konto, account_id):
+        return False
+    with _GOOGLE_STATES_LOCK:
+        if start <= _GOOGLE_CUT.get(account_id, 0.0) or start < _GOOGLE_NEWEST.get(
+                account_id, 0.0):
+            return False
+        _GOOGLE_NEWEST[account_id] = start
+        client.remember(tokens)
+    return True
+
+
+def google_cut(account_id: str) -> None:
+    """Trennen: offene und spaeter eintreffende aeltere Anmeldungen gelten nicht mehr."""
+    with _GOOGLE_STATES_LOCK:
+        _GOOGLE_CUT[account_id] = time.time()
+        for state, eintrag in list(_GOOGLE_STATES.items()):
+            if eintrag[0] == account_id:
+                _GOOGLE_STATES.pop(state, None)
+
+
+GOOGLE_STALE = ("Diese Google-Anmeldung ist überholt: Du hast inzwischen getrennt oder neu "
+                "verbunden. Verbinde in den Einstellungen neu, wenn du Google nutzen willst.")
 
 
 def google_state_redirect(state: str) -> str:
@@ -6306,7 +6357,8 @@ class Handler(BaseHTTPRequestHandler):
                 code,
                 redirect,
             )
-            client.remember(tokens)
+            if not google_commit(getattr(konto, "id", "") or "", tokens, client):
+                raise GoogleError(GOOGLE_STALE)
             account = client.account()
         except GoogleError as exc:
             self._google_page(False, str(exc))
@@ -6534,7 +6586,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                     str(payload.get("code", "")),
                     redirect,
                 )
-                client.remember(tokens)
+                if not google_commit(getattr(SESSION.account, "id", "") or "", tokens, client):
+                    return {"ok": False, "error": GOOGLE_STALE}
                 return {"ok": True, **google_state(SESSION.settings())}
             except GoogleError as exc:
                 return {"ok": False, "error": str(exc)}
@@ -6542,6 +6595,7 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
                 client.close()
 
         if action == "disconnect":
+            google_cut(getattr(SESSION.account, "id", "") or "")
             client = google_client(settings)
             try:
                 client.disconnect()
@@ -7652,7 +7706,7 @@ def _start_home_https(host: str, data_dir: Path, http_port: int) -> None:
         if server is None:
             raise letzter or OSError("Kein freier Port gefunden.")
         if server.server_address[1] != wunsch:
-            tls.load(server.server_address[1])
+            server.context = tls.load(server.server_address[1])
     except Exception as exc:
         if server is not None:
             server.server_close()

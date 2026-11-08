@@ -79,6 +79,11 @@ MAX_API_BYTES = 4 * 1024 * 1024
 
 MAX_LOG_BYTES = 5 * 1024 * 1024
 
+
+def log_keep_bytes() -> int:
+    """So viel bleibt nach dem Kuerzen: vier Fuenftel -- danach ist eine Weile Ruhe."""
+    return MAX_LOG_BYTES * 4 // 5
+
 DOMAIN_RE = re.compile(
     r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$")
 TOKEN_RE = re.compile(r"^[A-Za-z0-9_.\-]{20,400}$")
@@ -693,14 +698,75 @@ def _check_chain(kette: bytes, schluessel_pem: bytes, domain: str,
     for cert in zertifikate:
         if not cert.not_valid_before_utc <= current < cert.not_valid_after_utc:
             raise WebsiteError("Die Zertifikatskette ist noch nicht gültig oder abgelaufen.")
-    for child, issuer in pairwise(zertifikate):
+    _check_leaf(erstes)
+    for stufe, (child, issuer) in enumerate(pairwise(zertifikate)):
         try:
             child.verify_directly_issued_by(issuer)
-            if not issuer.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
-                raise ValueError("issuer is not a CA")
+            _check_issuer(issuer, stufe)
         except (ValueError, TypeError, InvalidSignature, UnsupportedAlgorithm,
                 x509.ExtensionNotFound) as exc:
             raise WebsiteError("Die Zertifikatskette passt nicht zusammen.") from exc
+    namen = _domains_of(erstes)
+    for issuer in zertifikate[1:]:
+        if not _names_allowed(issuer, namen):
+            raise WebsiteError("Die Zertifikatskette passt nicht zusammen.")
+
+
+def _check_leaf(zertifikat: Any) -> None:
+    """Das Serverzertifikat selbst ist keine Zertifizierungsstelle und taugt fuer TLS-Server."""
+    from cryptography import x509
+    from cryptography.x509.oid import ExtendedKeyUsageOID
+
+    with contextlib.suppress(x509.ExtensionNotFound):
+        if zertifikat.extensions.get_extension_for_class(x509.BasicConstraints).value.ca:
+            raise WebsiteError("Das Zertifikat ist eine Zertifizierungsstelle, kein Server.")
+    with contextlib.suppress(x509.ExtensionNotFound):
+        zwecke = zertifikat.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
+        if ExtendedKeyUsageOID.SERVER_AUTH not in zwecke:
+            raise WebsiteError("Das Zertifikat ist nicht für Webserver gedacht.")
+
+
+def _check_issuer(issuer: Any, darunter: int) -> None:
+    """15.7.8: eine echte Zertifizierungsstelle, die signieren darf und tief genug reicht.
+
+    *darunter*: wie viele Zwischenstellen zwischen ihr und dem Serverzertifikat liegen.
+    Vorher genuegte "ist eine CA" -- Pfadlaenge und Signierrecht wurden uebergangen.
+    """
+    from cryptography import x509
+
+    grenzen = issuer.extensions.get_extension_for_class(x509.BasicConstraints).value
+    if not grenzen.ca:
+        raise ValueError("issuer is not a CA")
+    if grenzen.path_length is not None and darunter > grenzen.path_length:
+        raise ValueError("path length exceeded")
+    with contextlib.suppress(x509.ExtensionNotFound):
+        if not issuer.extensions.get_extension_for_class(x509.KeyUsage).value.key_cert_sign:
+            raise ValueError("issuer may not sign certificates")
+
+
+def _names_allowed(issuer: Any, namen: list[str]) -> bool:
+    """Haelt das Serverzertifikat die Namensbeschraenkungen dieser Stelle ein?"""
+    from cryptography import x509
+
+    try:
+        regel = issuer.extensions.get_extension_for_class(x509.NameConstraints).value
+    except x509.ExtensionNotFound:
+        return True
+
+    def passt(name: str, muster: str) -> bool:
+        name, muster = name.lower().rstrip("."), muster.lower().lstrip(".").rstrip(".")
+        return name == muster or name.endswith("." + muster)
+
+    erlaubt = [str(n.value) for n in regel.permitted_subtrees or []
+               if isinstance(n, x509.DNSName)]
+    verboten = [str(n.value) for n in regel.excluded_subtrees or []
+                if isinstance(n, x509.DNSName)]
+    for name in namen:
+        if any(passt(name, m) for m in verboten):
+            return False
+        if regel.permitted_subtrees is not None and not any(passt(name, m) for m in erlaubt):
+            return False
+    return True
 
 
 def _domains_of(zertifikat: Any) -> list[str]:
@@ -1127,8 +1193,10 @@ class Tunnel:
                             read = getattr(stream, "read1", stream.read)
                             while chunk := read(16_384):
                                 if ausgabe.tell() + len(chunk) > MAX_LOG_BYTES:
+                                    # 15.7.8: auf 4 MB kuerzen, nicht auf 5 -- sonst schrieb
+                                    # jede neue Zeile die ganzen 5 MB neu (Dauerlast).
                                     ausgabe.seek(0)
-                                    tail = (ausgabe.read() + chunk)[-MAX_LOG_BYTES:]
+                                    tail = (ausgabe.read() + chunk)[-log_keep_bytes():]
                                     ausgabe.seek(0)
                                     ausgabe.truncate()
                                     ausgabe.write(tail)

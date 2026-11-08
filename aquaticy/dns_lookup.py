@@ -39,4 +39,6 @@ def call(function: Callable[..., _T], *args: object, timeout: float = TIMEOUT,
         raise TimeoutError("Die DNS-Auflösung hat zu lange gedauert.")
     if errors:
         raise errors[0]
+    if not values:
+        raise TimeoutError("Keine DNS-Antwort erhalten.")
     return values[0]

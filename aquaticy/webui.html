@@ -2190,9 +2190,11 @@ html.vv,html.vv body{height:var(--app-h)}
           <label><span class="lbl">Vision-Modell
             <span class="why">Für Fotos und Bilder. Leer lassen: Das Hauptmodell macht es, wenn es Bilder versteht</span></span>
             <input type="text" name="AQUATICY_VISION_MODEL"></label>
-          <label><span class="lbl">Helfer-Modell
-            <span class="why">Für die Helfer, die nebenbei suchen. Leer lassen: ein kleines, schnelles Modell</span></span>
-            <input type="text" name="AQUATICY_SUBAGENT_MODEL"></label>
+          <label><span class="lbl">Modell für die Agenten
+            <span class="why">Wähle eines deiner lokalen Modelle. Automatisch: wie bisher, mit einem Cloud-Modell ein schnelles Modell desselben Anbieters</span></span>
+            <select name="AQUATICY_SUBAGENT_MODEL" id="agent-model">
+              <option value="">Automatisch (wie bisher)</option>
+            </select></label>
         </div>
         <div class="row">
           <label><span class="lbl">Code-Modell
@@ -2918,7 +2920,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.7.7";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.7.8";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -6142,8 +6144,9 @@ const EN = {
 "Welche KI dir antwortet. So schreibst du es: Anbieter/Name, z. B. mistral/mistral-large-latest": "Which AI answers you. Write it like this: provider/name, e.g. mistral/mistral-large-latest",
 "Vision-Modell": "Vision model",
 "Für Fotos und Bilder. Leer lassen: Das Hauptmodell macht es, wenn es Bilder versteht": "For photos and images. Leave empty: the main model does it if it understands images",
-"Helfer-Modell": "Helper model",
-"Für die Helfer, die nebenbei suchen. Leer lassen: ein kleines, schnelles Modell": "For the helpers that search on the side. Leave empty: a small, fast model",
+"Modell für die Agenten": "Model for the agents",
+"Wähle eines deiner lokalen Modelle. Automatisch: wie bisher, mit einem Cloud-Modell ein schnelles Modell desselben Anbieters": "Pick one of your local models. Automatic: as before, with a cloud model a fast model from the same provider",
+"Automatisch (wie bisher)": "Automatic (as before)",
 "Code-Modell": "Code model",
 "Für den Code-Modus. Leer lassen: Aquaticy nimmt das beste Modell, das es hat": "For code mode. Leave empty: Aquaticy takes the best model it has",
 "Eigene Adresse": "Own address",
@@ -7778,6 +7781,21 @@ document.addEventListener("keydown", (e) => {
 
 const overlay = $("#overlay"), form = $("#settings");
 const modelOverlay = $("#modelbox"), modelForm = $("#model-settings");
+const LOKALE_ANBIETER = ["ollama_chat/", "ollama/", "lm_studio/", "llamafile/",
+  "hosted_vllm/", "openai/", "text-completion-openai/"];
+async function agentenModelleLaden(){
+  // 15.7.8: das Modell für die Agenten aus den lokalen Modellen wählen
+  const auswahl = $("#agent-model");
+  if (!auswahl) return;
+  let modelle = [];
+  try {
+    const daten = await (await api("/api/models?purpose=agents")).json();
+    modelle = (daten.models || []).filter(m => typeof m.id === "string"
+      && LOKALE_ANBIETER.some(p => m.id.startsWith(p)) && !/[:-]cloud$/i.test(m.id));
+  } catch {}
+  auswahl.length = 1;
+  for (const m of modelle) auswahl.add(new Option(m.label || m.id, m.id));
+}
 function closeModelSettings(){
   closeOverlay(modelOverlay, () => $("#btn-model").focus({preventScroll:true}));
 }
@@ -7786,6 +7804,7 @@ async function openModelSettings(){
   try {
     const res = await api("/api/config"), cfg = await res.json();
     if (!res.ok || !cfg?.values) throw new Error(cfg?.error || "");
+    await agentenModelleLaden();
     fill(cfg.values, modelForm);
     fillProviders(cfg.providers);
     eigeneModelle = Array.isArray(cfg.own_models) ? cfg.own_models : [];
@@ -7861,7 +7880,12 @@ function fill(values, target = form){
     const field = target.elements[k] || (target === form ? modelForm.elements[k] : null);
     if (!field) continue;
     if (field.type === "checkbox") field.checked = (v === "true" || v === true);
-    else field.value = v ?? "";
+    else {
+      if (field.tagName === "SELECT" && v && ![...field.options].some(o => o.value === v)){
+        field.add(new Option(String(v), String(v)));  // gespeicherter Wert bleibt sichtbar
+      }
+      field.value = v ?? "";
+    }
   }
 }
 async function showSettings(){

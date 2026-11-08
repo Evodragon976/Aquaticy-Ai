@@ -78,7 +78,8 @@ _LOCKS_LOCK = threading.Lock()
 
 def _lock_for(path: Path) -> threading.Lock:
     with _LOCKS_LOCK:
-        return _LOCKS.setdefault(str(path), threading.Lock())
+        # 15.7.8: aufgeloest -- relativer und absoluter Pfad sind dieselbe Datei.
+        return _LOCKS.setdefault(str(Path(path).resolve()), threading.Lock())
 
 
 class VaultError(ValueError):

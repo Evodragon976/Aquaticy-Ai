@@ -307,7 +307,7 @@ def lan_ip_ok(address: str) -> bool:
 def tailscale_ip_ok(address: str) -> bool:
     """Die von Tailscale verwendeten IPv4- und IPv6-Bereiche."""
     try:
-        ip = ipaddress.ip_address(address)
+        ip = ipaddress.ip_address(str(address).split("%", 1)[0])
     except ValueError:
         return False
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
