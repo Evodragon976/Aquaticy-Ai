@@ -1,4 +1,4 @@
-# Aquaticy AI 15.7.8
+# Aquaticy AI 15.8.8
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,26 +25,11 @@ $ aquaticy
 
 ---
 
-## Neu in 15.7.8
+## Neu in 15.8.8
 
-- **Modell für die Agenten selbst wählen.** In *Modelle und Verbindungen* gibt es eine Auswahl
-  „Modell für die Agenten“ mit deinen lokalen Modellen (zum Beispiel aus Ollama). Die Agenten
-  sind die Helfer, die parallel suchen und lesen. Steht sie auf „Automatisch“, bleibt alles wie
-  bisher: Mit einem Cloud-Modell (Mistral, NVIDIA) nimmt Aquaticy ein schnelles Modell
-  desselben Anbieters.
-- **Aufgeräumte README.** Die Änderungen der früheren Fassungen stehen jetzt in
-  [CHANGELOG.md](CHANGELOG.md).
-- **Korrekturen:** Das Protokoll des Website-Tunnels wird mit Abstand gekürzt (vorher schrieb
-  ab 5 MB jede neue Zeile die ganze Datei neu). Schlüsseldatenbank: relative und absolute
-  Pfade teilen sich eine Sperre. HTTPS im Heimnetz nutzt nach einem Portwechsel den neuen
-  Kontext. Tailscale-IPv6-Adressen mit Schnittstellenangabe werden erkannt.
-- **Google:** Nach dem Trennen kann eine verspätete Anmeldung die Verbindung nicht mehr
-  zurückholen, und eine ältere Anmeldung überschreibt keine neuere mehr.
-- **Feeds:** Ungültige Adressen (zum Beispiel `https://@example.org/feed` oder mit Leer- und
-  Steuerzeichen) werden abgelehnt; schon gespeicherte werden nicht mehr geladen.
-- **Zertifikate der eigenen Domain:** Die Kette wird vollständig geprüft – Signierrecht,
-  Pfadlänge und Namensbeschränkungen der Zwischenstellen, und das Serverzertifikat selbst
-  darf keine Zertifizierungsstelle sein.
+- **Vercel baut wieder.** Der Build brach mit `PYTHON_ENTRYPOINT_NOT_FOUND` ab. Jetzt steht in
+  `pyproject.toml` ein Einstieg für Vercel: eine schlichte Startseite mit Anleitung. Aquaticy
+  selbst läuft dort nicht, siehe [Vercel](#vercel).
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -143,7 +128,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.7.8
+aquaticy --version            # 15.8.8
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -277,6 +262,15 @@ aquaticy install-model --yes                                  # ohne Rückfragen
 Wird der Grafikspeicher knapp (`model runner has unexpectedly stopped`), bietet Aquaticy ein
 kleineres Modell an. Von Hand: `ollama ps`, `ollama stop <modell>`. Ist ein Modell für einen
 Rechner zu groß, verteilt es ein [Server-Verbund](#serverlast-aufteilen) auf mehrere.
+
+### Vercel
+
+Auf Vercel läuft nur eine schlichte Startseite mit Anleitung (`aquaticy/vercel.py`, eingetragen
+in `pyproject.toml` unter `[tool.vercel]`). Aquaticy selbst braucht einen Rechner, der
+dauerhaft läuft: für deine Daten, die Coworker, Secure Pro, WhatsApp und Signal und die
+virtual machine. Vercel startet Funktionen dagegen nur kurz und ohne bleibende Daten. Für den
+Zugriff von unterwegs nimmst du Tailscale oder die eigene Domain (siehe
+[Eigene Website mit Domain](#eigene-website-mit-domain)).
 
 ### Seiten mit echtem Browser laden
 

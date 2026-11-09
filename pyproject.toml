@@ -1,6 +1,6 @@
 [project]
 name = "aquaticy"
-version = "15.7.8"
+version = "15.8.8"
 description = "Ein KI-Agent fuer Kommandozeile und Browser, der eigenstaendig das Web durchsucht, Seiten liest und die Ergebnisse ausgewertet zurueckgibt."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -68,6 +68,11 @@ Homepage = "https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.vercel]
+# 15.8.8: Vercel baut nur eine schlichte Startseite (aquaticy/vercel.py). Aquaticy selbst
+# braucht einen dauerhaft laufenden Server -- siehe README, Abschnitt "Vercel".
+entrypoint = "aquaticy.vercel:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["aquaticy"]

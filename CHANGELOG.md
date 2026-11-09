@@ -3,6 +3,27 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 15.7.8:**
+
+- **Modell für die Agenten selbst wählen.** In *Modelle und Verbindungen* gibt es eine Auswahl
+  „Modell für die Agenten“ mit deinen lokalen Modellen (zum Beispiel aus Ollama). Die Agenten
+  sind die Helfer, die parallel suchen und lesen. Steht sie auf „Automatisch“, bleibt alles wie
+  bisher: Mit einem Cloud-Modell (Mistral, NVIDIA) nimmt Aquaticy ein schnelles Modell
+  desselben Anbieters.
+- **Aufgeräumte README.** Die Änderungen der früheren Fassungen stehen jetzt in
+  [CHANGELOG.md](CHANGELOG.md).
+- **Korrekturen:** Das Protokoll des Website-Tunnels wird mit Abstand gekürzt (vorher schrieb
+  ab 5 MB jede neue Zeile die ganze Datei neu). Schlüsseldatenbank: relative und absolute
+  Pfade teilen sich eine Sperre. HTTPS im Heimnetz nutzt nach einem Portwechsel den neuen
+  Kontext. Tailscale-IPv6-Adressen mit Schnittstellenangabe werden erkannt.
+- **Google:** Nach dem Trennen kann eine verspätete Anmeldung die Verbindung nicht mehr
+  zurückholen, und eine ältere Anmeldung überschreibt keine neuere mehr.
+- **Feeds:** Ungültige Adressen (zum Beispiel `https://@example.org/feed` oder mit Leer- und
+  Steuerzeichen) werden abgelehnt; schon gespeicherte werden nicht mehr geladen.
+- **Zertifikate der eigenen Domain:** Die Kette wird vollständig geprüft – Signierrecht,
+  Pfadlänge und Namensbeschränkungen der Zwischenstellen, und das Serverzertifikat selbst
+  darf keine Zertifizierungsstelle sein.
+
 **Neu in 15.7.7:**
 
 - **100 bestätigte Fehlerursachen behoben.** Gegenproben decken HTTPS, Messenger,

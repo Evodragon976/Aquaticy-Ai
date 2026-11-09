@@ -1,0 +1,12 @@
+# 15.8.8: Fuer die Startseite auf Vercel braucht es nur das Paket -- der Rest bleibt draussen.
+tests/
+tools/
+docker/
+exports/
+aquaticy-box
+aquaticy-sandbox
+compose*.yaml
+Dockerfile
+.github/
+*.md
+!README.md
