@@ -1,7 +1,9 @@
 # 15.8.8: Fuer die Startseite auf Vercel braucht es nur das Paket -- der Rest bleibt draussen.
 tests/
 tools/
-docker/
+# docker/: nur, was das Wheel nicht braucht (pyproject: force-include)
+docker/searxng/
+docker/workshop-blender.Dockerfile
 exports/
 aquaticy-box
 aquaticy-sandbox

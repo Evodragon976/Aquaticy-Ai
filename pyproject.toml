@@ -48,7 +48,9 @@ voice = ["faster-whisper>=1.2,<2", "numpy>=1.24,<2.4", "av>=18,<19"]
 browser = ["playwright>=1.62.0,<2"]
 # Seit 12.7.8 Terra v2 ist neonize eine feste Abhaengigkeit; der Name bleibt fuer alte Befehle.
 messenger = []
-images = ["term-image>=0.7,<0.8"]
+# 15.8.8: Kein Extra "images" mehr. term-image braucht Pillow < 11, Aquaticy Pillow >= 13 --
+# das Extra liess sich nie installieren, und "uv lock" (Vercel) brach daran ab. Bilder im
+# Terminal zeigt Aquaticy mit chafa; ein von Hand installiertes term-image nutzt es weiter.
 dev = [
     "pytest>=8.2,<10",
     "pytest-asyncio>=0.23,<2",
