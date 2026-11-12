@@ -1682,6 +1682,25 @@ def test_the_model_list_offers_what_actually_works(
     assert "mistral/mistral-large-latest" in [m["id"] for m in json.loads(body)["models"]]
 
 
+def test_the_model_list_always_offers_aquaticy_standard(
+    client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """15.8.9: Aquaticy Standard steht in der Modell-Auswahl -- am Ende, mit Erklaerung, und
+    laesst sich als Modell speichern."""
+    monkeypatch.setattr("aquaticy.local_model.installed_models", lambda base: ["qwen3:8b"])
+    _, body = client("GET", "/api/models?mode=normal")
+    daten = json.loads(body)
+    letztes = daten["models"][-1]
+    assert letztes["id"] == "aquaticy/standard" and letztes["label"] == "Aquaticy Standard"
+    assert letztes["kind"] == "Standard" and letztes["note"]
+    assert [m["id"] for m in daten["models"]].count("aquaticy/standard") == 1
+    assert "aquaticy/standard" in [m["id"] for m in daten["picker"]["models"]]
+    code = json.loads(client("GET", "/api/models?mode=code")[1])["picker"]["models"]
+    assert "aquaticy/standard" not in [m["id"] for m in code], "Code nimmt ein starkes Modell"
+    status, data = client("POST", "/api/config", {"AQUATICY_MODEL": "aquaticy/standard"})
+    assert status == 200, data
+
+
 def test_every_model_says_where_it_runs(
     client, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1816,10 +1835,15 @@ def test_the_ui_offers_the_model_picker_and_load_button() -> None:
     assert 'name="AQUATICY_MEMORY"' in html
 
 
-def test_the_ui_offers_reading_along() -> None:
+def test_reading_along_is_gone_but_the_events_are_still_handled() -> None:
+    """15.8.9: Das Mitlesen ist entfernt -- Schalter, Klasse und gemerkter Zustand. Die
+    Ereignisse selbst verarbeitet die Seite weiter (Phasen, Denken)."""
+    from aquaticy import uistate
+
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert 'id="showtrace"' in html, "der Schalter in den Einstellungen"
-    assert "body.tracing .trace" in html, "eingeblendet wird per Klasse"
+    assert 'id="showtrace"' not in html and "body.tracing" not in html
+    assert "setTracing" not in html and "<legend>Mitlesen</legend>" not in html
+    assert "tracing" not in uistate.FIELDS
     for kind in ('case "thought"', 'case "action"', 'case "action_done"'):
         assert kind in html, kind
 
@@ -3530,17 +3554,16 @@ def test_saving_settings_keeps_the_chat(client, session: web.ChatSession) -> Non
 def test_reading_along_does_not_show_the_thoughts() -> None:
     """Sonst stünde der Block da, obwohl „Denken" aus ist."""
     html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "body.tracing .trace.think{display:none}" in html
+    # 15.8.9: Das Mitlesen ist entfernt. Die Gedanken zeigt weiter nur "Denken".
+    assert ".trace{display:none}" in html
     assert "body.denken .trace.think{display:flex}" in html
-
-    assert html.index("body.tracing .trace.think{display:none}") < html.index(
+    assert html.index(".trace{display:none}") < html.index(
         "body.denken .trace.think{display:flex}"
     )
 
 
-def test_the_reading_along_text_says_where_the_thoughts_are() -> None:
-    html = web.UI_FILE.read_text(encoding="utf-8")
-    assert "Gedanken selbst siehst du mit" in html
+# 15.8.9: test_the_reading_along_text_says_where_the_thoughts_are entfaellt -- den Erklaertext
+# gab es nur am Schalter "Aktionen mitlesen", und der ist entfernt.
 
 
 

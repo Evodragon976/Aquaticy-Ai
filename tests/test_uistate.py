@@ -51,7 +51,9 @@ def test_the_default_state_is_complete() -> None:
     assert stand["online"] is True
     assert stand["agents"] == 12
 
-    for aus in ("structured", "recheck", "sandbox", "denken", "tracing", "load"):
+    # 15.8.9: "tracing" (Mitlesen) gibt es nicht mehr.
+    assert "tracing" not in stand
+    for aus in ("structured", "recheck", "sandbox", "denken", "load"):
         assert stand[aus] is False
 
 

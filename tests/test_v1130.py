@@ -263,7 +263,10 @@ def test_the_picker_in_every_mode_shows_only_usable_models(client, session,  # n
     for modus in ("normal", "pro", "code"):
         _, body = client("GET", f"/api/models?mode={modus}")
         auswahl = json.loads(body)["picker"]
-        assert auswahl["models"] == [], modus
+        # 15.8.9: Im normalen Modus geht Aquaticy Standard ohne Schluessel. Pro und Code
+        # brauchen ein echtes Sprachmodell.
+        erwartet = ["aquaticy/standard"] if modus == "normal" else []
+        assert [m["id"] for m in auswahl["models"]] == erwartet, modus
         assert "Schlüssel" in auswahl["empty"]
     web._strong_cache.clear()
 

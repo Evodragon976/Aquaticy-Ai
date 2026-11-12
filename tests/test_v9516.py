@@ -830,7 +830,7 @@ def test_the_login_page_does_not_show_the_server_profile_state(
     from aquaticy import web
     from aquaticy.uistate import UIState
 
-    UIState(settings.db_path).write({"theme": "dark", "mode": "pro", "tracing": True})
+    UIState(settings.db_path).write({"theme": "dark", "mode": "pro"})
     monkeypatch.setattr(web.DEFAULT_SESSION, "settings", lambda: settings)
     monkeypatch.setattr(web, "AUTH", object())
     html = web.with_state('<html lang="de"><body class="start"></body></html>')

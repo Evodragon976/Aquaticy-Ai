@@ -138,7 +138,7 @@ def model_allowed(model: str, api_base: str = "") -> bool:
     modell = str(model or "").strip()
     if not modell:
         return True
-    if modell == SPLIT_MODEL_ID:
+    if modell in (SPLIT_MODEL_ID, STANDARD_MODEL_ID):
         return True
     if "/" not in modell:
         return False
@@ -252,6 +252,9 @@ NO_KEY = "kein-schluessel"
 
 SPLIT_MODEL_ID = "hosted_vllm/aquaticy-verbund"
 
+#: 15.8.9: antwortet ohne Sprachmodell (aquaticy/standard.py) -- waehlbar in der Modell-Auswahl.
+STANDARD_MODEL_ID = "aquaticy/standard"
+
 
 GENERIC_KEY_NAME = "AQUATICY_API_KEY"
 
@@ -291,6 +294,8 @@ def resolve_model(model: str) -> str:
     model = model.strip()
     if not model:
         return ""
+    if model == STANDARD_MODEL_ID:
+        return "aquaticy"
     prefix, _, rest = model.partition("/")
     if prefix in KNOWN_PREFIXES and rest.strip():
         return prefix
@@ -513,7 +518,7 @@ class Settings:
 
     user_agent: str = field(
         default_factory=lambda: (
-            f"aquaticy/{__version__} (+https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai; "
+            f"aquaticy/{__version__} (+https://github.com/Evodragon976/Aquaticy-Ai; "
             "research agent; contact via repository issues)"
         )
     )

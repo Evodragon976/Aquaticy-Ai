@@ -1,6 +1,6 @@
 [project]
 name = "aquaticy"
-version = "15.8.8"
+version = "15.8.9"
 description = "Ein KI-Agent fuer Kommandozeile und Browser, der eigenstaendig das Web durchsucht, Seiten liest und die Ergebnisse ausgewertet zurueckgibt."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -65,7 +65,7 @@ dev = [
 aquaticy = "aquaticy.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai"
+Homepage = "https://github.com/Evodragon976/Aquaticy-Ai"
 
 [build-system]
 requires = ["hatchling"]

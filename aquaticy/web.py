@@ -49,6 +49,7 @@ from aquaticy.config import (
     DEFAULT_ENV_PATH,
     SEARCH_BACKEND_KEYS,
     SPLIT_MODEL_ID,
+    STANDARD_MODEL_ID,
     Settings,
     api_key_name_for,
     base_fits,
@@ -725,6 +726,10 @@ def header_for(settings: Settings) -> dict[str, Any]:
         if modell and not local_name(modell) and not model_usable(settings, modell):
             auto = str(kopf.get("model_label") or "").startswith("Auto · ")
             kopf["model_label"] = ("Auto · " if auto else "") + "Modell wählen"
+    if kopf.get("model") == STANDARD_MODEL_ID:
+        from aquaticy import standard
+
+        kopf["model_label"] = standard.LABEL  # 15.8.9: antwortet ohne Sprachmodell
     if UPGRADE_DIR is not None:
         from aquaticy import upgrading
 
@@ -4739,8 +4744,6 @@ def with_state(html: str, *, nonce: str = "") -> str:
         koerper.append("code-mode")
     if stand.get("mode") == "pro":
         koerper.append("pro-mode")
-    if stand.get("tracing"):
-        koerper.append("tracing")
     if stand.get("denken"):
         koerper.append("denken")
     html = html.replace('<body class="start">', f'<body class="{" ".join(koerper)}">', 1)
@@ -5901,6 +5904,13 @@ class Handler(BaseHTTPRequestHandler):
 
                 current = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
                 alle = upgrading.picker_entries(UPGRADE_DIR, alle, bool(current.ultra))
+            # 15.8.9: Aquaticy Standard antwortet ohne Sprachmodell -- immer waehlbar.
+            from aquaticy import standard as standard_mod
+
+            alle = [m for m in alle if m.get("id") != STANDARD_MODEL_ID] + [
+                {"id": STANDARD_MODEL_ID, "label": standard_mod.LABEL, "kind": "Standard",
+                 "note": "Ohne Sprachmodell und ohne Schlüssel", "source": "operator",
+                 "source_label": ""}]
             antwort: dict[str, Any] = {
                 "models": alle,
 

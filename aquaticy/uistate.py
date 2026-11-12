@@ -94,7 +94,6 @@ FIELDS: dict[str, tuple[Any, Any]] = {
     "online": (True, bool),
     "sandbox": (False, bool),
     "denken": (False, bool),
-    "tracing": (False, bool),
     "load": (False, bool),
     "agents": (12, AGENT_COUNTS),
     "visual_sources": (False, bool),

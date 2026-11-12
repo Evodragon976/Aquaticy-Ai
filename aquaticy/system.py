@@ -434,10 +434,12 @@ def model_usable(settings: Any, model_id: str, installed: list[str] | None = Non
         installed: die Liste von Ollama, wenn sie schon da ist. Sonst wird
             jetzt gefragt -- ein eben installiertes Modell zaehlt sofort.
     """
-    from aquaticy.config import SPLIT_MODEL_ID, model_allowed, provider_of
+    from aquaticy.config import SPLIT_MODEL_ID, STANDARD_MODEL_ID, model_allowed, provider_of
     from aquaticy.local_model import is_installed, local_name
 
     model_id = str(model_id or "").strip()
+    if model_id == STANDARD_MODEL_ID:
+        return True  # 15.8.9: antwortet ohne Sprachmodell, braucht nichts
     if not model_id or model_id == SPLIT_MODEL_ID:
         return False
     name = local_name(model_id)

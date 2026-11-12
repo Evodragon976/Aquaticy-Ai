@@ -836,6 +836,24 @@ def zweite_seite(browser: Any, quelle: Any, **optionen: Any) -> Any:
     return kontext.new_page()
 
 
+def laden(pg: Any, adresse: str) -> None:
+    """Laedt die Seite und haelt sich an die Anfragegrenze des Servers (240 je Minute).
+
+    Die weiteren Fenster laden die ganze Oberflaeche noch mehrmals. Sagt der Server 429,
+    wartet der Rundgang so lange, wie ``Retry-After`` sagt -- wie die Oberflaeche selbst --
+    und laedt noch einmal. Die Grenze bleibt, wie sie ist.
+    """
+    for _ in range(3):
+        antwort = pg.goto(adresse, wait_until="networkidle")
+        if antwort is None or antwort.status != 429:
+            return
+        try:
+            warten = int(antwort.headers.get("retry-after", "") or 5)
+        except ValueError:
+            warten = 5
+        pg.wait_for_timeout((min(max(warten, 1), 60) + 1) * 1000)
+
+
 def konto_einstellungen() -> Any:
     """Die Einstellungen des angemeldeten Kontos -- nicht die des Servers.
 
@@ -1728,13 +1746,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         pg.check("#showload")
         pg.wait_for_timeout(1600)
         log.pruefe(bool(pg.inner_text("#usage-note").strip()), "die Auslastung zeigt Zahlen")
-        pg.check("#showtrace")
-        pg.wait_for_timeout(200)
-        log.pruefe(
-            pg.eval_on_selector("body", "e => e.classList.contains('tracing')"),
-            "Mitlesen schaltet sich ein",
-        )
-        pg.uncheck("#showtrace")
+        log.pruefe(pg.locator("#showtrace").count() == 0, "das Mitlesen ist weg (15.8.9)")
 
         log.pruefe(
             pg.locator('#workshop-settings [name="AQUATICY_VM_USER_MODE"]').count() == 1,
@@ -2067,7 +2079,7 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         )
         log.pruefe(
             pg.locator(".trace:not(.think):visible").count() == 0,
-            "die uebrigen Mitlese-Zeilen bleiben weg -- die gehoeren zum Mitlesen",
+            "die uebrigen Zeilen bleiben weg -- gezeigt werden nur die Gedanken",
         )
         menue(pg, "weitere")
         pg.wait_for_timeout(400)
@@ -2081,18 +2093,6 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         )
 
 
-        pg.evaluate("document.body.classList.add('tracing')")
-        pg.wait_for_timeout(300)
-        log.pruefe(
-            pg.locator(".trace.think:visible").count() == 0,
-            "auch das Mitlesen zeigt die Gedanken nicht -- dafuer gibt es Denken",
-        )
-        log.pruefe(
-            pg.locator(".trace:not(.think):visible").count() > 0,
-            "die uebrigen Mitlese-Zeilen zeigt es sehr wohl",
-        )
-        pg.evaluate("document.body.classList.remove('tracing')")
-        pg.wait_for_timeout(200)
         foto("10a-denken")
 
     if dran("ablauf"):
@@ -2744,7 +2744,7 @@ def main() -> int:
                     "pageerror",
                     lambda e, n=name: fehler.append(f"Skriptfehler ({n}): {e}"),
                 )
-                seite2.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
+                laden(seite2, f"http://127.0.0.1:{port}/")
                 geraet(seite2, log, name, nummer, bilder)
                 seite2.context.close()
 
@@ -2754,7 +2754,7 @@ def main() -> int:
                 viewport={"width": 390, "height": 780}, is_mobile=True, has_touch=True
             )
             klein.on("pageerror", lambda e: fehler.append(f"Skriptfehler (Handy): {e}"))
-            klein.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
+            laden(klein, f"http://127.0.0.1:{port}/")
             handy(klein, log, bilder)
             klein.context.close()
 
@@ -2764,7 +2764,7 @@ def main() -> int:
                 viewport={"width": 1200, "height": 800}, reduced_motion="reduce"
             )
             ruhig.on("pageerror", lambda e: fehler.append(f"Skriptfehler (ruhig): {e}"))
-            ruhig.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle")
+            laden(ruhig, f"http://127.0.0.1:{port}/")
             ohne_bewegung(ruhig, log)
             ruhig.context.close()
 

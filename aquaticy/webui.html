@@ -401,10 +401,8 @@ body:not(.start) .hint{display:none}
 .phase-detail .step.phase-leer .txt{font-style:italic}
 
 .phase-detail.zu{display:none}
-body.denken .phase.think > .phase-detail.zu,
-body.tracing .phase:not(.think) > .phase-detail.zu{display:flex}
-body.denken .phase.think .phase-pfeil,
-body.tracing .phase:not(.think) .phase-pfeil{transform:rotate(90deg)}
+body.denken .phase.think > .phase-detail.zu{display:flex}
+body.denken .phase.think .phase-pfeil{transform:rotate(90deg)}
 .interim{color:var(--text-2);font-style:italic;font-size:calc(14px * var(--fs));
   padding:2px 0 4px 30px;transition:opacity .25s,transform .25s}
 .interim p{margin:0}
@@ -429,11 +427,7 @@ body.tracing .phase:not(.think) .phase-pfeil{transform:rotate(90deg)}
 .step .sub{padding-left:71px;opacity:.8;font-size:calc(12.5px * var(--fs))}
 
 .trace{display:none}
-body.tracing .trace{display:flex}
-
-body.tracing .trace.think{display:none}
 body.denken .trace.think{display:flex}
-body.tracing .trace .txt,
 body.denken .trace.think .txt{white-space:pre-wrap;word-break:break-word;
   font:calc(12px * var(--fs))/1.6 var(--mono);color:var(--text-3);opacity:.85;
   border-left:2px solid var(--line);padding-left:9px;max-height:15em;overflow-y:auto}
@@ -2341,15 +2335,6 @@ html.vv,html.vv body{height:var(--app-h)}
         <p class="note" id="learning-status" role="status" aria-live="polite"></p>
       </fieldset>
 
-      <fieldset><legend>Mitlesen</legend>
-        <div class="check">
-          <input type="checkbox" role="switch" class="schalter" id="showtrace">
-          <label for="showtrace" style="margin:0">Aktionen mitlesen
-            <span class="why">Zeigt dir, wonach Aquaticy sucht und welche Seiten es öffnet. Gilt
-              sofort, auch für die Antwort, die schon da ist. Die Gedanken selbst siehst du mit <b>Denken</b> in der Modellauswahl.</span></label>
-        </div>
-      </fieldset>
-
       <fieldset id="pro-system" hidden><legend>Auslastung · Ultra</legend>
         <div class="pro-lock" id="system-lock" hidden>Die Auslastungsanzeige
           gehört zu Ultra.</div>
@@ -2920,7 +2905,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.8.8";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.8.9";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -4103,7 +4088,7 @@ function ablaufAnhaengen(box, el){
 
 function trace(box, tag, text, kind){
   const el = step(box, tag, text, "trace" + (kind ? " " + kind : ""));
-  if (!document.body.classList.contains("tracing")) scrollLock = true;
+  scrollLock = true;
   return el;
 }
 
@@ -4583,7 +4568,7 @@ async function verfolge(hole, steps, bubble, text){
     thoughtLine.querySelector(".txt").textContent += text;
 
 
-    if (denken || document.body.classList.contains("tracing")) scroll();
+    if (denken) scroll();
   }
 
   function handle(ev){
@@ -5643,6 +5628,7 @@ try {
 
 
 const EN = {
+"Ohne Sprachmodell und ohne Schlüssel": "Without a language model and without a key",
 "Dateien und Änderungen": "Files and changes",
 "Lesen und ändern: eigene Branches, Commits, Pull Requests": "Read and change: own branches, commits, pull requests",
 "Router oder Repeater": "Router or repeater",
@@ -6173,9 +6159,6 @@ const EN = {
 "Zum Beispiel, wo du wohnst, was du magst oder woran du arbeitest. Nur Text, verschlüsselt, höchstens 400 MB.": "For example where you live, what you like or what you're working on. Text only, encrypted, at most 400 MB.",
 "Nachsehen, was Aquaticy weiß, und einzelne Dinge löschen.": "See what Aquaticy knows and delete single things.",
 "Was weißt du über mich?": "What do you know about me?",
-"Mitlesen": "Read along",
-"Aktionen mitlesen": "Show actions",
-"Zeigt dir, wonach Aquaticy sucht und welche Seiten es öffnet. Gilt sofort, auch für die Antwort, die schon da ist. Die Gedanken selbst siehst du mit": "Shows you what Aquaticy searches for and which pages it opens. Applies right away, also to the answer that's already there. You see the thoughts themselves with",
 "in der Modellauswahl.": "in the model picker.",
 "Auslastung · Ultra": "Load · Ultra",
 "Die Auslastungsanzeige gehört zu Ultra.": "The load display is part of Ultra.",
@@ -7910,7 +7893,6 @@ async function showSettings(){
   loadUsage();
   loadAccount(cfg.account);
   loadLearning();
-  $("#showtrace").checked = document.body.classList.contains("tracing");
   const wanted = START.load === true && kontoUltra;
   $("#showload").checked = wanted;
   if (wanted) $("#showload").dispatchEvent(new Event("change"));
@@ -11162,14 +11144,6 @@ $("#save-model").addEventListener("click", async () => {
 
 
 
-function setTracing(on, { merken = true } = {}){
-  document.body.classList.toggle("tracing", on);
-  if (merken) merkeZustand({ tracing: !!on });
-}
-
-
-setTracing(START.tracing === true, { merken: false });
-$("#showtrace").addEventListener("change", (e) => setTracing(e.target.checked));
 
 
 function gauge(name, value, sub, percent){

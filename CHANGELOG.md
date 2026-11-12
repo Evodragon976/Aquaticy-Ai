@@ -3,6 +3,12 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 15.8.8:**
+
+- **Vercel baut wieder.** Der Build brach mit `PYTHON_ENTRYPOINT_NOT_FOUND` ab. Jetzt steht in
+  `pyproject.toml` ein Einstieg für Vercel: eine schlichte Startseite mit Anleitung. Aquaticy
+  selbst läuft dort nicht, siehe README, Abschnitt Vercel.
+
 **Neu in 15.7.8:**
 
 - **Modell für die Agenten selbst wählen.** In *Modelle und Verbindungen* gibt es eine Auswahl

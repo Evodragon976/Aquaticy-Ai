@@ -38,6 +38,9 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
 ## Aufbau
 
 - `aquaticy/` – das Paket. Jedes Modul sagt in seiner ersten Zeile, wofür es da ist.
+  - `standard.py` Aquaticy Standard: ein Modell in der Auswahl, das ohne Sprachmodell antwortet
+    (feste Regeln, nur feste öffentliche HTTPS-Ziele). `smalltalk.py` beantwortet Hallo, Danke
+    und Co. weiter vor jedem Modell.
   - `agent.py` Schleife mit Werkzeugaufrufen, `tools.py` die Werkzeuge,
     `subagents.py`/`master.py` parallele Recherche, `ownservices.py` erkennt Fragen an
     Mails, Kalender, Home Assistant und Lager (dann ohne Websuche).

@@ -2730,6 +2730,37 @@ class Agent:
 
         return zeit.text(muster="%Y-%m-%d %H:%M")
 
+    def _standard_model(self) -> bool:
+        """Antwortet gerade Aquaticy Standard -- ohne Sprachmodell (15.8.9)?"""
+        from aquaticy.config import STANDARD_MODEL_ID
+
+        if str(getattr(self.settings, "model", "") or "").strip() != STANDARD_MODEL_ID:
+            return False
+        if clean_mode(self.mode) in ("code", "pro"):
+            # Pro und Code nehmen das staerkste erreichbare Modell. Nur wenn es keines gibt,
+            # antwortet auch dort Aquaticy Standard -- statt eines Fehlers.
+            staerkstes = self._strongest_model()
+            return not staerkstes or staerkstes == STANDARD_MODEL_ID
+        return True
+
+    def _standard_answer(self, question: str) -> str:
+        """Die Antwort von Aquaticy Standard -- mit dem, was das Gedaechtnis weiss."""
+        from aquaticy import standard
+
+        wohnort = str(getattr(self.settings, "location", "") or "")
+        if self._memory_allowed():
+            with contextlib.suppress(Exception):
+                from aquaticy import memory_auto
+
+                for eintrag in memory_auto.person_entries(self.toolbox._memory(), limit=None):
+                    if str(eintrag.topic or "").casefold().endswith(":wohnort"):
+                        treffer = re.match(r"^Wohnt in (.+?)\.?$", str(eintrag.text or ""))
+                        if treffer:
+                            wohnort = treffer[1]
+        gemerkt = list(getattr(self, "_gemerkt", []) or [])
+        return standard.antwort(question, self.messages, secure=self.secure_pro,
+                                wohnort=wohnort, gemerkt=gemerkt)
+
     def _memory_answer(self, question: str) -> str:
         """"Wie heisse ich?" -> "Du heißt Louis." -- sofort aus dem Gedaechtnis (15.5.5).
 
@@ -2766,6 +2797,7 @@ class Agent:
         """Feste Muster sofort ablegen ("ich heisse Louis") -- vor der Antwort (15.3.4)."""
         from aquaticy import memory_auto
 
+        self._gemerkt: list[str] = []
         self.toolbox.memory_blocked = not self._memory_allowed(mode)
         self.toolbox.memory_request = question
         self.toolbox.memory_optout = memory_auto.opted_out(question)
@@ -2783,6 +2815,7 @@ class Agent:
                 return
             for fakt in memory_auto.store_facts(store, memory_auto.extract(question)):
                 self._emit("memory_save", text=fakt.text, topic=fakt.topic, auto=True)
+                self._gemerkt.append(fakt.text)
         except Exception:
             return
 
@@ -3567,6 +3600,8 @@ class Agent:
             question, frage_offen=self._last_reply_asks())
         if not standard and not self._plugin_turn:
             standard = self._memory_answer(question)
+        if not standard and not self._plugin_turn and self._standard_model():
+            standard = self._standard_answer(question)
         if standard:
             self._system_dirty = True
             self.max_run = False

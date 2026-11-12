@@ -529,7 +529,8 @@ def test_settings_are_grouped() -> None:
     html = _ui()
     formular = html[html.index('<form id="settings">'):html.index('id="savenote"')]
     legenden = re.findall(r"<legend>(.*?)</legend>", formular)
-    assert legenden == ["Konto", "Nutzung", "Speicher", "Gemeinsames Lernen", "Mitlesen",
+    # 15.8.9: ohne Mitlesen.
+    assert legenden == ["Konto", "Nutzung", "Speicher", "Gemeinsames Lernen",
                         "Auslastung · Ultra", "Ort &amp; Sprache", "Suche",
                         "Helfer &amp; Grenzen", "Gmail &amp; Kalender", "Zuhause &amp; Netz",
                         "virtual machine", "Messenger", "Dev settings"]

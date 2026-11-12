@@ -73,6 +73,9 @@ LAN-Suche, Lager und die virtual machine laufen nur, wenn der Betreiber oder Nut
 Installierte Add-ons ohne Anmeldung (Wetter, Tagesschau, Wikipedia, Währungsrechner, Feiertage)
 schicken nur das Nötige an den jeweiligen Dienst: den Ort, den Suchbegriff, die Währung oder
 Land und Jahr.
+Das Modell Aquaticy Standard (ohne Sprachmodell) fragt nur feste öffentliche Dienste:
+Open-Meteo (Ort für Wetter und Uhrzeit), Frankfurter (Währungen), Tagesschau und Wikipedia
+(Suchbegriff).
 Die Einstellungsseite zeigt die aktive Auswahl. Für externe Anbieter gelten zusätzlich deren
 eigene Datenschutzhinweise.</p>
 <p><strong>Spracheingabe:</strong> Tippst du auf das Mikrofon, erkennt dein Browser das

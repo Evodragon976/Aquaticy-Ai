@@ -157,7 +157,7 @@ def _headers() -> dict[str, str]:
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": f"aquaticy/{__version__} "
-                      "(+https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai)",
+                      "(+https://github.com/Evodragon976/Aquaticy-Ai)",
     }
 
 

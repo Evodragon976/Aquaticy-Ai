@@ -1,4 +1,4 @@
-# Aquaticy AI 15.8.8
+# Aquaticy AI 15.8.9
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,11 +25,19 @@ $ aquaticy
 
 ---
 
-## Neu in 15.8.8
+## Neu in 15.8.9
 
-- **Vercel baut wieder.** Der Build brach mit `PYTHON_ENTRYPOINT_NOT_FOUND` ab. Jetzt steht in
-  `pyproject.toml` ein Einstieg für Vercel: eine schlichte Startseite mit Anleitung. Aquaticy
-  selbst läuft dort nicht, siehe [Vercel](#vercel).
+- **Aquaticy Standard:** ein neues Modell in der Modell-Auswahl. Es antwortet ohne Sprachmodell
+  und ohne Schlüssel. Es rechnet (auch Prozente, Wurzeln, Einheiten), kennt Datum, Uhrzeit,
+  Feiertage und besondere Tage und holt Wetter, Wechselkurse, Nachrichten und Wissen aus
+  Wikipedia, jeweils mit Quelle. Es merkt sich im Gespräch den Ort: Nach „Für welchen Ort?“
+  reicht „Erkelenz“, danach gehen „und morgen?“ und „was soll ich anziehen?“. Mehr dazu unter
+  [Ganz ohne Modell: Aquaticy Standard](#ganz-ohne-modell-aquaticy-standard).
+- **Hallo, Danke und Co.** beantwortet Aquaticy wie bisher sofort selbst, mit jedem Modell.
+- **Mitlesen entfernt:** Den Schalter „Aktionen mitlesen“ gibt es nicht mehr. Die Gedanken
+  zeigt weiter „Denken“ in der Modell-Auswahl.
+- **Links:** README, Paket und Kennung bei Abrufen zeigen jetzt einheitlich auf
+  `Evodragon976/Aquaticy-Ai`.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -125,10 +133,10 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
 ```bash
 # 1. Installieren
-git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
+git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.8.8
+aquaticy --version            # 15.8.9
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -188,7 +196,7 @@ aquaticy --version
 ```
 
 `git pull` allein reicht nicht. Erst der `uv`-Befehl installiert die neue Fassung. Mit dem
-[ZIP-Download](https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai/archive/refs/heads/Aquaticy-ai.zip)
+[ZIP-Download](https://github.com/Evodragon976/Aquaticy-Ai/archive/refs/heads/Aquaticy-ai.zip)
 lädst du das ZIP neu und führst `uv tool install --force --reinstall .` im entpackten Ordner aus.
 
 ---
@@ -211,7 +219,7 @@ uv run aquaticy
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
 git clone --branch Aquaticy-ai `
-  https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
+  https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
 uv tool update-shell        # danach PowerShell neu öffnen
@@ -223,6 +231,22 @@ aquaticy install-model      # holt Ollama per winget und lädt die Modelle
   `aquaticy install-model` erneut starten.
 - Pfade in Anführungszeichen: `aquaticy --image "C:\Users\du\Bilder\foto.jpg"`
 - Pfeiltasten-Verlauf im Chat: `pip install pyreadline3`
+
+### Ganz ohne Modell: Aquaticy Standard
+
+In der Modell-Auswahl steht immer **Aquaticy Standard**. Es braucht kein Sprachmodell, keinen
+Schlüssel und kein Ollama. Es antwortet aus festen Regeln und aus freien, öffentlichen Quellen
+(Open-Meteo, Frankfurter, Tagesschau, Wikipedia):
+
+- **Wetter:** heute, morgen, am Wochenende, mehrere Orte, was du anziehen sollst, Schirm, Sonne.
+- **Rechnen:** Aufgaben, Wurzeln, Prozente, Mehrwertsteuer, Trinkgeld, BMI, Einheiten.
+- **Zeit:** Uhrzeit (auch in anderen Städten), Datum, Feiertage, Muttertag, Advent,
+  Zeitumstellung, Mondphase, Countdowns.
+- **Wissen:** Nachrichten, Wechselkurse, kurze Antworten aus Wikipedia.
+- **Kleinigkeiten:** Würfel, Münze, Witze, Rätsel, sichere Passwörter.
+
+Was es nicht kann, sagt es ehrlich. Für freie Antworten wählst du ein anderes Modell. In Pro und
+Code nimmt Aquaticy weiter das stärkste erreichbare Modell.
 
 ### Ganz ohne Schlüssel: lokales Modell
 
@@ -436,7 +460,7 @@ die Frage noch einmal.
 Ultra darf, trägt ein 🔒.
 - **Konto:** Name, E-Mail, Kontotyp, Nutzung, Abmelden. **Sicherheit** mit deinen Geräten,
   Passwort ändern, überall sonst abmelden. **Daten und Konto löschen**.
-- Dazu: Gemeinsames Lernen, virtual machine, Speicher, Mitlesen,
+- Dazu: Gemeinsames Lernen, virtual machine, Speicher,
   Auslastung (Ultra), Nutzung, Gmail & Kalender, Zuhause & Netz (Ultra), Suche,
   Ort & Sprache, Helfer & Grenzen, **Dev settings** (Ultra).
 
@@ -1465,7 +1489,7 @@ aquaticy remove "name"         # Konto samt Daten löschen
 ## Entwicklung
 
 ```bash
-git clone --branch Aquaticy-ai --single-branch https://github.com/jonasenriklaumen-a11y/Aquaticy-Ai.git
+git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv venv && uv pip install -c constraints.txt -e ".[browser,dev]"
 
