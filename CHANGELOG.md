@@ -3,6 +3,20 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 15.8.9:**
+
+- **Aquaticy Standard:** ein neues Modell in der Modell-Auswahl. Es antwortet ohne Sprachmodell
+  und ohne Schlüssel. Es rechnet (auch Prozente, Wurzeln, Einheiten), kennt Datum, Uhrzeit,
+  Feiertage und besondere Tage und holt Wetter, Wechselkurse, Nachrichten und Wissen aus
+  Wikipedia, jeweils mit Quelle. Es merkt sich im Gespräch den Ort: Nach „Für welchen Ort?“
+  reicht „Erkelenz“, danach gehen „und morgen?“ und „was soll ich anziehen?“. Mehr dazu unter
+  [Ganz ohne Modell: Aquaticy Standard](README.md#ganz-ohne-modell-aquaticy-standard).
+- **Hallo, Danke und Co.** beantwortet Aquaticy wie bisher sofort selbst, mit jedem Modell.
+- **Mitlesen entfernt:** Den Schalter „Aktionen mitlesen“ gibt es nicht mehr. Die Gedanken
+  zeigt weiter „Denken“ in der Modell-Auswahl.
+- **Links:** README, Paket und Kennung bei Abrufen zeigen jetzt einheitlich auf
+  `Evodragon976/Aquaticy-Ai`.
+
 **Neu in 15.8.8:**
 
 - **Vercel baut wieder.** Der Build brach mit `PYTHON_ENTRYPOINT_NOT_FOUND` ab. Jetzt steht in

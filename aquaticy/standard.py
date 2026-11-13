@@ -137,6 +137,9 @@ def rechnen(text: str) -> str:
         kern = re.sub(rf"(?<=[\d\s)]){re.escape(wort)}(?=[\s\d(])", f" {zeichen} ", kern)
     kern = re.sub(r"(?:quadrat)?wurzel\s+(?:aus|von)\s+(\d[\d.,]*|\([^()]*\))",
                   r"(\1 ** 0.5)", kern)
+    # 1.000.000 oder 1.234,5: Die Punkte trennen Tausender.
+    kern = re.sub(r"(?<![\d.,])\d{1,3}(?:\.\d{3}){2,}(?![\d.])|(?<![\d.,])\d{1,3}\.\d{3}(?=,\d)",
+                  lambda t: t.group(0).replace(".", ""), kern)
     if not re.fullmatch(r"[\d\s.,+\-*/()%]+", kern) or not re.search(r"\d", kern):
         return ""
     if not re.search(r"[+\-*/%]", kern):
@@ -270,19 +273,40 @@ def ostern(jahr: int) -> date:
 
 def datum_aus(text: str, heute: date) -> date | None:
     """'24.12.', '24.12.2026', '3. Oktober', '3 oktober 2027'."""
-    treffer = re.search(r"\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})?", text)
-    try:
-        if treffer:
-            jahr = int(treffer.group(3)) if treffer.group(3) else heute.year
-            jahr += 2000 if jahr < 100 else 0
-            return date(jahr, int(treffer.group(2)), int(treffer.group(1)))
+    # Am Satzende fehlt der letzte Punkt oft ("bis zum 24.12?").
+    treffer = re.search(r"\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4})?|(?=\s*$))", text)
+    if treffer:
+        tag, monat, jahr_text = int(treffer.group(1)), int(treffer.group(2)), treffer.group(3)
+    else:
         treffer = re.search(r"\b(\d{1,2})\.?\s+(" + "|".join(MONATE) + r")\s*(\d{4})?", text)
-        if treffer:
-            jahr = int(treffer.group(3)) if treffer.group(3) else heute.year
-            return date(jahr, MONATE.index(treffer.group(2)) + 1, int(treffer.group(1)))
-    except ValueError:
-        return None
+        if not treffer:
+            return None
+        tag, monat = int(treffer.group(1)), MONATE.index(treffer.group(2)) + 1
+        jahr_text = treffer.group(3)
+    if jahr_text:
+        jahr = int(jahr_text)
+        jahr += 2000 if jahr < 100 else 0
+        jahre: tuple[int, ...] = (jahr,)
+    else:
+        # Ohne Jahr: dieses -- den 29. Februar gibt es aber nur im naechsten Schaltjahr.
+        jahre = tuple(range(heute.year, heute.year + 9))
+    for jahr in jahre:
+        try:
+            return date(jahr, monat, tag)
+        except ValueError:
+            continue
     return None
+
+
+def im_jahr(tag: date, jahr: int) -> date:
+    """Derselbe Tag in einem anderen Jahr. Den 29. Februar gibt es nicht jedes Jahr: dann
+
+    gilt der 1. Maerz (so rechnet auch das Gesetz beim Geburtstag).
+    """
+    try:
+        return tag.replace(year=jahr)
+    except ValueError:
+        return date(jahr, 3, 1)
 
 
 def tage_text(tage: int, was: str, wann: str = "") -> str:
@@ -303,7 +327,7 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
     if re.search(r"\b(wie\s*spaet|uhrzeit|wieviel\s+uhr|wie\s+viel\s+uhr)\b", kern):
         return f"Es ist **{jetzt:%H:%M} Uhr** ({zeit_mod.kurz(jetzt)})."
     if re.search(r"\b(welche[rs]?\s+(tag|datum)|den\s+wievielten|welches\s+datum|"
-                 r"was\s+fuer\s+ein\s+tag)\b", kern):
+                 r"was\s+fuer\s+ein\s+tag)\b", kern) and not datum_aus(kern, heute):
         return (f"Heute ist **{WOCHENTAGE[heute.weekday()]}, der {heute:%d.%m.%Y}** "
                 f"(KW {heute.isocalendar()[1]}).")
     if re.search(r"\b(kalenderwoche|kw)\b", kern):
@@ -323,7 +347,7 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
         gesucht = datum_aus(kern, heute)
         if gesucht:
             if gesucht < heute and not re.search(r"\d{4}", kern):
-                gesucht = gesucht.replace(year=gesucht.year + 1)
+                gesucht = im_jahr(gesucht, gesucht.year + 1)
             if gesucht >= heute:
                 return tage_text((gesucht - heute).days, f"zum {gesucht:%d.%m.%Y}")
     treffer = re.search(r"\b(welche[rs]?\s+(?:wochen)?tag\s+(?:ist|war|wird|faellt)|"
@@ -1081,9 +1105,9 @@ def alter(text: str, heute: date) -> str:
     if geburt > heute:
         return ""
     jahre = heute.year - geburt.year - ((heute.month, heute.day) < (geburt.month, geburt.day))
-    naechster = geburt.replace(year=heute.year)
+    naechster = im_jahr(geburt, heute.year)
     if naechster < heute:
-        naechster = naechster.replace(year=heute.year + 1)
+        naechster = im_jahr(geburt, heute.year + 1)
     bis = (naechster - heute).days
     zusatz = ("Heute ist dein Geburtstag – herzlichen Glückwunsch! 🎉" if bis == 0 else
               f"Bis zum nächsten Geburtstag sind es noch {bis} Tage.")
@@ -1147,7 +1171,9 @@ def passwort(text: str) -> str:
 
     kern = falten(text)
     if not re.search(r"\b(passwort|password|kennwort)\b", kern) or not re.search(
-            r"\b(generier|erstell|erzeug|mach|gib|vorschlag|neues|zufaellig|sicheres)", kern):
+            r"\b(generier|erstell|erzeug|mach|gib|vorschlag|neues|zufaellig|sicheres)|"
+            r"^(?:ein\s+)?(?:passwort|password|kennwort)\s+mit\s+\d{1,3}\s*(?:zeichen|stellen)$",
+            kern):
         return ""
     laenge = re.search(r"\b(\d{1,3})\s*(?:zeichen|stellen|stellig|characters)", kern)
     n = max(12, min(64, int(laenge.group(1)))) if laenge else 20
@@ -1205,7 +1231,7 @@ def zahlenkram(text: str, heute: date) -> str:
         if ist:
             return f"Ja, **{jahr}** ist ein Schaltjahr – der Februar hat 29 Tage."
         return f"Nein, {jahr} ist kein Schaltjahr. Das nächste ist **{naechstes}**."
-    treffer = re.search(r"\b(\d{1,4})\s+(?:in|als)\s+roemisch\w*", kern)
+    treffer = re.search(r"(?<![-\d.,])\b(\d{1,4})\s+(?:in|als)\s+roemisch\w*", kern)
     if treffer:
         n = int(treffer.group(1))
         if 1 <= n <= 3999:
@@ -1362,6 +1388,29 @@ SCHLECHT = re.compile(
     r"(?:schlecht|einsam|allein|leer|mies|traurig|ueberfordert)|mir\s+ist\s+zum\s+heulen|"
     r"hab\w?\s+(?:so\s+|grosse\s+|viel\s+)?(?:angst|sorgen|stress|kummer|liebeskummer)|"
     r"alles\s+(?:ist\s+)?(?:zu\s+viel|sinnlos|doof|bloed)|kann\s+nicht\s+mehr)\b")
+
+
+#: Wer so schreibt, braucht einen Menschen -- und zwar sofort die richtigen Nummern.
+KRISE = re.compile(
+    r"\b(nicht\s+mehr\s+(?:weiter)?leben|(?:will|moechte|wuerde\s+(?:gern|gerne|am\s+liebsten))"
+    r"\s+(?:nur\s+noch\s+|einfach\s+|lieber\s+)?(?:sterben|tot\s+sein)|mich\s+(?:selbst\s+)?"
+    r"umbringen|bringe?\s+mich\s+(?:selbst\s+)?um|mir\s+das\s+leben\s+(?:zu\s+)?nehmen|"
+    r"nehme\s+mir\s+das\s+leben|(?:suizid|selbstmord)gedanken|(?:denke|gedanken|gedacht)\s+"
+    r"(?:\w+\s+){0,3}?(?:suizid|selbstmord)|mich\s+(?:selbst\s+)?(?:verletzen|ritzen)|"
+    r"(?:ritze|verletze)\s+mich|will\s+nicht\s+mehr\s+da\s+sein|waere\s+(?:lieber|besser)\s+tot|"
+    r"(?:mein\s+)?leben\s+hat\s+keinen\s+sinn(?:\s+mehr)?)\b")
+KRISE_TEXT = (
+    "Das klingt sehr schwer. Gut, dass du es schreibst.\n\n"
+    "Ich bin ein Programm mit festen Antworten. Dabei können dir Menschen besser helfen:\n\n"
+    "- **Telefonseelsorge:** 0800 111 0 111 oder 0800 111 0 222. Kostenlos, anonym, Tag und "
+    "Nacht. Auch als Chat: [online.telefonseelsorge.de](https://online.telefonseelsorge.de)\n"
+    "- **Nummer gegen Kummer** für Kinder und Jugendliche: 116 111 (kostenlos)\n"
+    "- **Bist du in akuter Gefahr?** Ruf sofort den Notruf **112** an.\n\n"
+    "Du musst da nicht allein durch. Sag am besten auch jemandem Bescheid, dem du vertraust.")
+
+
+def krise(text: str) -> str:
+    return KRISE_TEXT if KRISE.search(falten(text)) else ""
 
 
 def gespraech(text: str, rnd: random.Random) -> str:
@@ -1614,6 +1663,8 @@ def antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure: 
     if not kern:
         return ("Frag mich ruhig etwas – zum Beispiel nach dem Wetter, einer Rechnung oder dem "
                 "Datum.")
+    if krise(frage):
+        return KRISE_TEXT
     if secure:
         text = sicherheit(frage)
         if text:

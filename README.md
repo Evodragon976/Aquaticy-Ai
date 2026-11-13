@@ -1,4 +1,4 @@
-# Aquaticy AI 15.8.9
+# Aquaticy AI 15.8.10
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,19 +25,17 @@ $ aquaticy
 
 ---
 
-## Neu in 15.8.9
+## Neu in 15.8.10
 
-- **Aquaticy Standard:** ein neues Modell in der Modell-Auswahl. Es antwortet ohne Sprachmodell
-  und ohne Schlüssel. Es rechnet (auch Prozente, Wurzeln, Einheiten), kennt Datum, Uhrzeit,
-  Feiertage und besondere Tage und holt Wetter, Wechselkurse, Nachrichten und Wissen aus
-  Wikipedia, jeweils mit Quelle. Es merkt sich im Gespräch den Ort: Nach „Für welchen Ort?“
-  reicht „Erkelenz“, danach gehen „und morgen?“ und „was soll ich anziehen?“. Mehr dazu unter
-  [Ganz ohne Modell: Aquaticy Standard](#ganz-ohne-modell-aquaticy-standard).
-- **Hallo, Danke und Co.** beantwortet Aquaticy wie bisher sofort selbst, mit jedem Modell.
-- **Mitlesen entfernt:** Den Schalter „Aktionen mitlesen“ gibt es nicht mehr. Die Gedanken
-  zeigt weiter „Denken“ in der Modell-Auswahl.
-- **Links:** README, Paket und Kennung bei Abrufen zeigen jetzt einheitlich auf
-  `Evodragon976/Aquaticy-Ai`.
+Diese Fassung behebt Fehler in Aquaticy Standard.
+
+- **Aquaticy Standard stürzt nicht mehr ab**, wenn du am 29. Februar Geburtstag hast.
+- **Hilfe zuerst:** Schreibt jemand „Ich will nicht mehr leben“, nennt Aquaticy Standard sofort
+  die Telefonseelsorge (0800 111 0 111), die Nummer gegen Kummer (116 111) und den Notruf 112.
+- **Datum am Satzende:** „Wie viele Tage bis zum 24.12.?“ und „Welcher Tag ist der
+  29.02.2028?“ bekommen jetzt die richtige Antwort.
+- **Rechnen mit Tausenderpunkten:** „1.000.000 * 3“ ergibt 3.000.000. „Passwort mit 16
+  Zeichen“ reicht für ein neues Passwort.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -136,7 +134,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.8.9
+aquaticy --version            # 15.8.10
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
