@@ -530,3 +530,19 @@ def test_a_crisis_in_english_gets_help_in_english(frage: str) -> None:
 ])
 def test_everyday_injuries_are_not_a_crisis(frage: str) -> None:
     assert standard.krise(frage) == ""
+
+
+@pytest.mark.parametrize("frage", [
+    "Ich will mich verletzen", "Ich möchte mich verletzen", "ich werde mich verletzen",
+    "Ich verletze mich.", "Ich will mich selbst verletzen", "Ich ritze mich",
+])
+def test_self_harm_in_german_is_still_a_crisis(frage: str) -> None:
+    """Die engeren Muster duerfen nichts verlieren, was 16.1.5 schon erkannt hat."""
+    assert "0800 111 0 111" in frag(frage)
+
+
+@pytest.mark.parametrize("frage", [
+    "Ich will mich beim Training nicht verletzen", "Ich habe mich verletzt",
+])
+def test_talking_about_injuries_is_not_a_crisis(frage: str) -> None:
+    assert standard.krise(frage) == ""

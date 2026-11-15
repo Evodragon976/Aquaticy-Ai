@@ -1409,6 +1409,7 @@ KRISE = re.compile(
     r"nehme\s+mir\s+das\s+leben|(?:suizid|selbstmord)gedanken|(?:denke|gedanken|gedacht)\s+"
     r"(?:\w+\s+){0,3}?(?:suizid|selbstmord)|mich\s+(?:selbst\s+)?ritzen|ritze\s+mich|"
     r"mich\s+(?:selbst|absichtlich)\s+verletzen|verletze\s+mich\s+(?:selbst|absichtlich)|"
+    r"(?:will|moechte|werde|muss)\s+mich\s+(?:selbst\s+)?verletzen|verletze\s+mich$|"
     r"will\s+nicht\s+mehr\s+da\s+sein|waere\s+(?:lieber|besser)\s+tot|"
     r"(?:mein\s+)?leben\s+hat\s+keinen\s+sinn(?:\s+mehr)?)\b")
 KRISE_TEXT = (
