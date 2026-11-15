@@ -3,6 +3,16 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 15.8.10:**
+
+- **Aquaticy Standard stürzt nicht mehr ab**, wenn du am 29. Februar Geburtstag hast.
+- **Hilfe zuerst:** Schreibt jemand „Ich will nicht mehr leben“, nennt Aquaticy Standard sofort
+  die Telefonseelsorge (0800 111 0 111), die Nummer gegen Kummer (116 111) und den Notruf 112.
+- **Datum am Satzende:** „Wie viele Tage bis zum 24.12.?“ und „Welcher Tag ist der
+  29.02.2028?“ bekommen jetzt die richtige Antwort.
+- **Rechnen mit Tausenderpunkten:** „1.000.000 * 3“ ergibt 3.000.000. „Passwort mit 16
+  Zeichen“ reicht für ein neues Passwort.
+
 **Neu in 15.8.9:**
 
 - **Aquaticy Standard:** ein neues Modell in der Modell-Auswahl. Es antwortet ohne Sprachmodell

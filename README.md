@@ -1,4 +1,4 @@
-# Aquaticy AI 15.8.10
+# Aquaticy AI 15.8.11
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,17 +25,18 @@ $ aquaticy
 
 ---
 
-## Neu in 15.8.10
+## Neu in 15.8.11
 
 Diese Fassung behebt Fehler in Aquaticy Standard.
 
-- **Aquaticy Standard stürzt nicht mehr ab**, wenn du am 29. Februar Geburtstag hast.
-- **Hilfe zuerst:** Schreibt jemand „Ich will nicht mehr leben“, nennt Aquaticy Standard sofort
-  die Telefonseelsorge (0800 111 0 111), die Nummer gegen Kummer (116 111) und den Notruf 112.
-- **Datum am Satzende:** „Wie viele Tage bis zum 24.12.?“ und „Welcher Tag ist der
-  29.02.2028?“ bekommen jetzt die richtige Antwort.
-- **Rechnen mit Tausenderpunkten:** „1.000.000 * 3“ ergibt 3.000.000. „Passwort mit 16
-  Zeichen“ reicht für ein neues Passwort.
+- **Aquaticy Standard stürzt nicht mehr ab**, wenn der Dienst für Wechselkurse oder
+  Nachrichten etwas Unerwartetes schickt. Geht doch einmal etwas schief, kommt eine freundliche
+  Meldung statt eines Fehlers.
+- **Hilfe auch auf Englisch:** Auf „I want to kill myself“ und ähnliche Sätze nennt Aquaticy
+  Standard sofort Hilfe-Nummern. Normale Sätze wie „I hurt myself playing football“ zählen nicht
+  dazu.
+- **Zweistellige Jahre:** „geboren am 05.05.90“ heißt jetzt 1990, nicht 2090.
+- **Große Zahlen:** „1.000.000 plus 0,5 %“ wird richtig gerechnet.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -134,7 +135,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.8.10
+aquaticy --version            # 15.8.11
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

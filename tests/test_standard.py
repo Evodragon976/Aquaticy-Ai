@@ -478,3 +478,55 @@ def test_a_crisis_gets_the_help_numbers_first(frage: str) -> None:
 ])
 def test_everyday_phrases_are_not_a_crisis(frage: str) -> None:
     assert standard.krise(frage) == ""
+
+# -- 15.8.11: Fehler, die eine Pruefung mit vielen Zufallsfragen gefunden hat ------------------
+
+@pytest.mark.parametrize("antwort", [
+    ["x"], {"rates": {"USD": "x"}}, {"rates": None}, {"rates": {"USD": -1}}, "Fehler", 5, None,
+])
+def test_an_odd_exchange_rate_answer_is_no_crash(antwort: Any) -> None:
+    text = frag("100 Euro in Dollar", holen=lambda url: antwort)
+    assert "lassen sich gerade nicht abrufen" in text
+
+
+@pytest.mark.parametrize("antwort", [
+    "Fehler", ["x"], {"news": "x"}, {"news": [None, {"title": 5}]},
+])
+def test_odd_news_are_no_crash(antwort: Any) -> None:
+    text = frag("Nachrichten", holen=lambda url: antwort)
+    assert "Nachrichten" in text and standard.FEHLER_TEXT not in text
+
+
+def test_numbers_with_thousands_dots_are_read() -> None:
+    assert standard.zahl("1.000.000") == 1_000_000
+    assert "**1.005.000**" in frag("1.000.000 plus 0,5 %")
+
+
+def test_a_two_digit_year_is_not_in_the_future() -> None:
+    assert "**36 Jahre**" in frag("Wie alt bin ich, geboren am 05.05.90?")
+    assert "24.12.2027" in frag("Wie viele Tage bis zum 24.12.27?")
+
+
+def test_an_error_inside_one_answer_never_breaks_the_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    def kaputt(*args: Any, **kwargs: Any) -> str:
+        raise KeyError("x")
+
+    monkeypatch.setattr(standard, "zahlenkram", kaputt)
+    assert frag("Ist 97 eine Primzahl?") == standard.FEHLER_TEXT
+
+
+@pytest.mark.parametrize("frage", [
+    "I want to kill myself", "I don't want to live anymore", "I'm suicidal",
+    "I keep cutting myself", "I hurt myself on purpose",
+])
+def test_a_crisis_in_english_gets_help_in_english(frage: str) -> None:
+    text = frag(frage)
+    assert "findahelpline.com" in text and "112" in text and "0800 111 0 111" in text
+
+
+@pytest.mark.parametrize("frage", [
+    "I hurt myself playing football", "I cut myself shaving", "This game is killing me",
+    "Ich verletze mich ständig beim Fußball",
+])
+def test_everyday_injuries_are_not_a_crisis(frage: str) -> None:
+    assert standard.krise(frage) == ""

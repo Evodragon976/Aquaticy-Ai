@@ -100,6 +100,9 @@ def zahl(text: str) -> float:
     text = text.strip().replace(" ", "")
     if "," in text and "." in text:
         text = text.replace(".", "").replace(",", ".")
+    elif text.count(".") > 1:
+        # 1.000.000: mehrere Punkte trennen Tausender (16.1.6).
+        text = text.replace(".", "")
     elif "," in text:
         text = text.replace(",", ".")
     return float(text)
@@ -285,7 +288,9 @@ def datum_aus(text: str, heute: date) -> date | None:
         jahr_text = treffer.group(3)
     if jahr_text:
         jahr = int(jahr_text)
-        jahr += 2000 if jahr < 100 else 0
+        if jahr < 100:
+            # 16.1.6: "05.05.90" ist 1990, nicht 2090 -- mehr als 20 Jahre voraus gilt als 19xx.
+            jahr += 2000 if 2000 + jahr <= heute.year + 20 else 1900
         jahre: tuple[int, ...] = (jahr,)
     else:
         # Ohne Jahr: dieses -- den 29. Februar gibt es aber nur im naechsten Schaltjahr.
@@ -897,10 +902,15 @@ def waehrung(text: str, holen: Holen) -> str:
         return ""
     betrag = zahl(treffer.group(1)) if treffer.group(1) else 1.0
     daten = holen(f"https://api.frankfurter.app/latest?from={von}&to={nach}")
-    kurs = ((daten or {}).get("rates") or {}).get(nach)
-    if not kurs:
+    # 16.1.6: Antwortet der Dienst anders als erwartet, kein Absturz.
+    kurse = daten.get("rates") if isinstance(daten, dict) else None
+    try:
+        kurs = float(kurse.get(nach) or 0) if isinstance(kurse, dict) else 0.0
+    except (TypeError, ValueError):
+        kurs = 0.0
+    if not math.isfinite(kurs) or kurs <= 0:
         return "Die Wechselkurse lassen sich gerade nicht abrufen."
-    stand = (daten or {}).get("date", "")
+    stand = str(daten.get("date", "") or "")[:20] if isinstance(daten, dict) else ""
     return (f"{schoen(betrag)} {von} sind **{schoen(betrag * float(kurs))} {nach}** "
             f"(Kurs {schoen(float(kurs), 4)}, Stand {stand}).\n\nQuelle: Europäische Zentralbank "
             "über [Frankfurter](https://www.frankfurter.app)")
@@ -910,13 +920,14 @@ def waehrung(text: str, holen: Holen) -> str:
 
 def nachrichten(holen: Holen) -> str:
     daten = holen("https://www.tagesschau.de/api2u/homepage/")
-    meldungen = [m for m in (daten or {}).get("news") or []
+    alle = daten.get("news") if isinstance(daten, dict) else None
+    meldungen = [m for m in (alle if isinstance(alle, list) else [])
                  if isinstance(m, dict) and m.get("title")][:5]
     if not meldungen:
         return "Die Nachrichten lassen sich gerade nicht abrufen."
     zeilen = ["**Die wichtigsten Nachrichten:**"]
     for m in meldungen:
-        link = m.get("shareURL") or m.get("detailsweb") or ""
+        link = str(m.get("shareURL") or m.get("detailsweb") or "")
         titel = str(m["title"]).replace("[", "(").replace("]", ")")
         zeilen.append(f"- [{titel}]({link})" if link.startswith("https://") else f"- {titel}")
     return "\n".join(zeilen) + "\n\nQuelle: [tagesschau.de](https://www.tagesschau.de)"
@@ -1396,8 +1407,9 @@ KRISE = re.compile(
     r"\s+(?:nur\s+noch\s+|einfach\s+|lieber\s+)?(?:sterben|tot\s+sein)|mich\s+(?:selbst\s+)?"
     r"umbringen|bringe?\s+mich\s+(?:selbst\s+)?um|mir\s+das\s+leben\s+(?:zu\s+)?nehmen|"
     r"nehme\s+mir\s+das\s+leben|(?:suizid|selbstmord)gedanken|(?:denke|gedanken|gedacht)\s+"
-    r"(?:\w+\s+){0,3}?(?:suizid|selbstmord)|mich\s+(?:selbst\s+)?(?:verletzen|ritzen)|"
-    r"(?:ritze|verletze)\s+mich|will\s+nicht\s+mehr\s+da\s+sein|waere\s+(?:lieber|besser)\s+tot|"
+    r"(?:\w+\s+){0,3}?(?:suizid|selbstmord)|mich\s+(?:selbst\s+)?ritzen|ritze\s+mich|"
+    r"mich\s+(?:selbst|absichtlich)\s+verletzen|verletze\s+mich\s+(?:selbst|absichtlich)|"
+    r"will\s+nicht\s+mehr\s+da\s+sein|waere\s+(?:lieber|besser)\s+tot|"
     r"(?:mein\s+)?leben\s+hat\s+keinen\s+sinn(?:\s+mehr)?)\b")
 KRISE_TEXT = (
     "Das klingt sehr schwer. Gut, dass du es schreibst.\n\n"
@@ -1409,8 +1421,30 @@ KRISE_TEXT = (
     "Du musst da nicht allein durch. Sag am besten auch jemandem Bescheid, dem du vertraust.")
 
 
+KRISE_EN = re.compile(
+    r"\b(want(?:s)?\s+to\s+die|wanna\s+die|kill(?:ing)?\s+myself|end(?:ing)?\s+my\s+(?:own\s+)?"
+    r"life|take\s+my\s+(?:own\s+)?life|suicidal|suicide\s+thoughts|thoughts\s+of\s+suicide|"
+    r"(?:do\s*n.?t|do\s+not)\s+want\s+to\s+(?:live|be\s+alive|be\s+here)\s*(?:anymore)?|"
+    r"harm(?:ing)?\s+myself|cutting\s+myself|(?:hurt(?:ing)?|cut(?:ting)?)\s+myself\s+on\s+purpose|"
+    r"self[\s-]?harm(?:ing)?|"
+    r"better\s+off\s+dead)\b")
+KRISE_TEXT_EN = (
+    "That sounds really hard. I'm glad you wrote it down.\n\n"
+    "I'm a program with fixed answers. People can help you much better:\n\n"
+    "- **In Germany:** Telefonseelsorge 0800 111 0 111 or 0800 111 0 222. Free, anonymous, "
+    "day and night.\n"
+    "- **In other countries:** [findahelpline.com](https://findahelpline.com) lists free "
+    "helplines.\n"
+    "- **In immediate danger?** Call the emergency number now: **112** in Europe, **911** in "
+    "the US.\n\n"
+    "You don't have to go through this alone. Tell someone you trust, too.")
+
+
 def krise(text: str) -> str:
-    return KRISE_TEXT if KRISE.search(falten(text)) else ""
+    kern = falten(text)
+    if KRISE.search(kern):
+        return KRISE_TEXT
+    return KRISE_TEXT_EN if KRISE_EN.search(kern) else ""
 
 
 def gespraech(text: str, rnd: random.Random) -> str:
@@ -1639,10 +1673,32 @@ def ort_fragen(art: str) -> str:
 
 # -- Zusammen -----------------------------------------------------------------------------------
 
+FEHLER_TEXT = ("Da ist bei mir gerade etwas schiefgegangen. Frag mich gern noch einmal, "
+              "vielleicht etwas anders formuliert.")
+
+
 def antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure: bool = False,
             holen: Holen | None = None, jetzt: datetime | None = None,
             wuerfel: random.Random | None = None, wohnort: str = "",
             gemerkt: list[str] | None = None) -> str:
+    """Die Antwort von Aquaticy Standard -- nie leer und nie eine Ausnahme (16.1.6).
+
+    Ein Fehler in einer einzelnen Antwort (etwa ein Dienst, der anders antwortet als erwartet)
+    brach vorher den ganzen Zug ab. Jetzt gibt es eine freundliche Meldung; der Fehler steht im
+    Protokoll.
+    """
+    try:
+        return _antwort(frage, verlauf, secure=secure, holen=holen, jetzt=jetzt,
+                        wuerfel=wuerfel, wohnort=wohnort, gemerkt=gemerkt)
+    except Exception as fehler:
+        print(f"  [Aquaticy Standard] {type(fehler).__name__} bei einer Antwort", flush=True)
+        return FEHLER_TEXT
+
+
+def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure: bool = False,
+             holen: Holen | None = None, jetzt: datetime | None = None,
+             wuerfel: random.Random | None = None, wohnort: str = "",
+             gemerkt: list[str] | None = None) -> str:
     """Die Antwort von Aquaticy Standard -- nie leer.
 
     Args:
@@ -1663,8 +1719,9 @@ def antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure: 
     if not kern:
         return ("Frag mich ruhig etwas – zum Beispiel nach dem Wetter, einer Rechnung oder dem "
                 "Datum.")
-    if krise(frage):
-        return KRISE_TEXT
+    hilfe = krise(frage)
+    if hilfe:
+        return hilfe
     if secure:
         text = sicherheit(frage)
         if text:
