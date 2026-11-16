@@ -1137,7 +1137,8 @@ def test_a_bad_value_is_reported_not_stored(
     target.write_text("", encoding="utf-8")
     monkeypatch.setattr("aquaticy.config.find_env_file", lambda: target)
     box = Toolbox(settings, cache=None, fetcher=_mock_fetcher(_html_handler("<html></html>")))
-    assert "zwischen 1 und 60" in box.change_setting("werkzeug_budget", "9999")["error"]
+    # 16.0.0: das Werkzeug-Budget ist keine Einstellung mehr -- geprueft wird an den Formulierungen.
+    assert "zwischen 1 und 3" in box.change_setting("formulierungen", "9999")["error"]
     assert target.read_text(encoding="utf-8") == "", "nichts geschrieben"
 
 

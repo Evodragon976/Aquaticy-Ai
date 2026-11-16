@@ -786,7 +786,7 @@ body.dragging::after{animation:fade-in var(--t-fast) var(--ease-out)}
 
 
 
-#membox,#vmbox{z-index:90}
+#membox,#vmbox,#securebox,#ortbox{z-index:90}
 .merk-sheet{max-width:38rem}
 .merkliste{display:flex;flex-direction:column;gap:8px;margin-top:14px;
   max-height:52vh;overflow-y:auto;padding-right:2px}
@@ -1441,28 +1441,8 @@ html.vv,html.vv body{height:var(--app-h)}
 .picker-ctx .ctx-wert{color:var(--text-3);font-variant-numeric:tabular-nums}
 .picker-ctx input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0}
 .picker-ctx .why{font-size:calc(11.5px * var(--fs));color:var(--text-3);line-height:1.5}
-
-.launch-top{display:flex;align-items:center;gap:10px}
-.launch-badge{margin-left:auto;font:600 calc(11px * var(--fs))/1 var(--mono);letter-spacing:.06em;
-  text-transform:uppercase;color:var(--accent-text);background:var(--accent-soft);
-  border-radius:999px;padding:5px 10px}
-.launch-gain{font:600 calc(28px * var(--fs))/1.1 var(--sans);color:var(--accent);margin:-6px 0 8px}
-.upgrade-box{margin-top:16px}
-.upgrade-list li{display:flex;flex-direction:column;gap:8px;padding:10px 0;
-  border-bottom:1px solid var(--line)}
-.upgrade-list .zeile{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.upgrade-list .zeile .wer{flex:1 1 180px;min-width:0}
-.upgrade-list .zeile .wer small{display:block;color:var(--text-3);overflow-wrap:anywhere}
-.upgrade-list .versionen{display:flex;gap:6px;flex-wrap:wrap}
-.upgrade-list .versionen button{font-size:calc(12px * var(--fs));padding:4px 10px}
-
-.btn.upgrade-go{background:var(--surface-2);color:var(--text-3);border-color:var(--line)}
 :root{--go:#2f8f4e;--go-hover:#27794a;--on-go:#fff}
 :root[data-theme="dark"]{--go:#3aa35f;--go-hover:#45b56b}
-.btn.upgrade-go.bereit{background:var(--go);border-color:var(--go);color:var(--on-go);font-weight:600}
-@media (hover:hover){.btn.upgrade-go.bereit:hover{background:var(--go-hover)}}
-.pick .neu{font:600 calc(10px * var(--fs))/1 var(--mono);color:var(--accent-text);
-  background:var(--accent-soft);border-radius:999px;padding:3px 7px;margin-left:6px}
 
 #chat-details{display:none}
 @media (max-width:599px){
@@ -1500,10 +1480,6 @@ html.vv,html.vv body{height:var(--app-h)}
     <p class="note">Nur kurze Stellen aus Sachtexten, nie private Chats. Das hilft später allen
       Konten hier. Du kannst es jederzeit zurücknehmen: Einstellungen → Gemeinsames Lernen. Aquaticy
       geht auch ohne diesen Haken.</p>
-    <p class="note">Wenn Auto-Upgrading an ist, können mehrfach bestätigte Auszüge auch in lokale
-      Ollama-Modelltexte kommen. Dort liegen öffentliche Auszüge unverschlüsselt. Laufen sie ab oder
-      fehlt die Bestätigung, werden die betroffenen Fassungen zurückgezogen und gelöscht.
-      Einzelheiten stehen im Datenschutz.</p>
     <p class="note">Dein Konto merkt sich auch kurze Stichpunkte aus öffentlichen Seiten, auch zu
       Personen. Das bleibt höchstens 48 Stunden. Andere Konten sehen es nicht. Ausschalten löscht
       diese Stichpunkte.</p>
@@ -1846,21 +1822,6 @@ html.vv,html.vv body{height:var(--app-h)}
   Aquaticy macht von selbst weiter, sobald das Netz wieder da ist.</div>
 
 
-<div class="overlay ask" id="launchbox">
-  <div class="sheet ask-sheet launch-sheet" role="dialog" aria-modal="true"
-       aria-labelledby="launch-title" aria-describedby="launch-text">
-    <div class="launch-top">
-      <button type="button" class="sheet-back" id="launch-back" aria-label="Zurück">‹ Zurück</button>
-      <span class="launch-badge">Neues Modell</span>
-    </div>
-    <div class="ask-q" id="launch-title"></div>
-    <div class="launch-gain" id="launch-gain"></div>
-    <div class="note" id="launch-text"></div>
-    <div class="actions">
-      <button type="button" class="btn primary" id="launch-try">Ausprobieren</button>
-    </div>
-  </div>
-</div>
 
 <div class="overlay ask" id="errorbox">
   <div class="sheet ask-sheet" role="alertdialog" aria-modal="true"
@@ -2265,6 +2226,12 @@ html.vv,html.vv body{height:var(--app-h)}
           <span class="note">Deine Chats und Einstellungen gehören nur zu diesem Konto.</span>
           <button type="button" class="btn" id="account-logout">Abmelden</button>
         </div>
+        <div class="group">Ort &amp; Sprache</div>
+        <div class="actions section">
+          <span class="note" id="ort-stand">Für Wetter, Suche und Antworten. Aquaticy lernt beides
+            auch aus dem Chat.</span>
+          <button type="button" class="btn" id="ort-open">Ort &amp; Sprache einstellen</button>
+        </div>
         <div class="group">Sicherheit</div>
         <p class="note">Deine Geräte und deine Adresse sind verschlüsselt. Nur du siehst sie hier,
           der Betreiber nicht.</p>
@@ -2314,11 +2281,6 @@ html.vv,html.vv body{height:var(--app-h)}
       </fieldset>
 
       <fieldset><legend>Gemeinsames Lernen</legend>
-        <p class="note">Ist Auto-Upgrading an, können mehrfach bestätigte Auszüge auch in lokale
-          Ollama-Modelltexte kommen (dort unverschlüsselt). Ist Wissen abgelaufen oder nicht mehr
-          bestätigt, werden die betroffenen Fassungen zurückgezogen. Aquaticy versucht das Löschen
-          so lange, bis der Ollama-Dienst erreichbar ist. Einzelheiten: <a href="/privacy" target="_blank"
-          rel="noopener">Datenschutz</a>.</p>
         <label class="check"><input type="checkbox" role="switch" class="schalter"
             id="learning-enabled" disabled>
           Ich bin einverstanden mit dem gemeinsamen Lernen und meinen Stichpunkten aus öffentlichen Seiten.</label>
@@ -2332,6 +2294,7 @@ html.vv,html.vv body{height:var(--app-h)}
         <p class="note">Damit wir deine Beiträge löschen können, speichern wir eine Kennung ohne
           deinen Namen. Ausschalten nimmt deine Zustimmung zurück und löscht deine Beiträge. Gleiche
           Stellen von anderen Konten bleiben.</p>
+        <p class="note"><a href="/privacy" target="_blank" rel="noopener">Mehr im Datenschutz</a></p>
         <p class="note" id="learning-status" role="status" aria-live="polite"></p>
       </fieldset>
 
@@ -2345,18 +2308,6 @@ html.vv,html.vv body{height:var(--app-h)}
               arbeiten. Läuft, solange das Fenster offen ist.</span></label>
         </div>
         <div class="note" id="usage-note"></div>
-      </fieldset>
-
-      <fieldset><legend>Ort &amp; Sprache</legend>
-        <div class="row">
-          <label><span class="lbl">Standard-Ort</span>
-            <input type="text" name="AQUATICY_LOCATION" placeholder="Mönchengladbach"></label>
-          <label><span class="lbl">Sprache / Land</span>
-            <div class="row">
-              <input type="text" name="AQUATICY_LANG" placeholder="de">
-              <input type="text" name="AQUATICY_COUNTRY" placeholder="de">
-            </div></label>
-        </div>
       </fieldset>
 
       <fieldset><legend>Suche</legend>
@@ -2390,38 +2341,6 @@ html.vv,html.vv body{height:var(--app-h)}
           <label for="pw" style="margin:0">Seiten mit echtem Browser laden
             <span class="why">Für Seiten, die ihren Inhalt erst später nachladen. Dafür
               muss einmal <code>aquaticy install-browser</code> ausgeführt werden.</span></label>
-        </div>
-      </fieldset>
-
-      <fieldset><legend>Helfer &amp; Grenzen</legend>
-        <div class="check">
-          <input type="checkbox" role="switch" class="schalter" id="auto" name="AQUATICY_SUBAGENTS_AUTO">
-          <label for="auto" style="margin:0">Fragen automatisch aufteilen
-            <span class="why">Große Fragen teilt Aquaticy auf und lässt Helfer die Teile
-              gleichzeitig suchen. Das ist schneller, braucht aber mehr von deiner Grenze. Ab
-              Werk an.</span></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Suchen je Helfer <span class="why">Wie oft ein Helfer suchen oder eine Seite lesen darf</span></span>
-            <input type="text" name="AQUATICY_SUBAGENT_BUDGET"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Suchen je Anfrage <span class="why">Höchstzahl für Suchen und gelesene Seiten zusammen</span></span>
-            <input type="text" name="AQUATICY_MAX_TOOL_CALLS"></label>
-          <label><span class="lbl">Gedächtnis im Gespräch <span class="why">Wie viel vom Gespräch das Modell im Blick behält. Nur für lokale Modelle</span></span>
-            <input type="text" name="AQUATICY_CONTEXT_TOKENS"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Zeit fürs Planen <span class="why">Wie lange das Aufteilen einer Frage dauern darf (Sekunden)</span></span>
-            <input type="text" name="AQUATICY_PLANNER_TIMEOUT"></label>
-          <label><span class="lbl">Gleichzeitig <span class="why">Wie viele Helfer gleichzeitig arbeiten. 0 = Aquaticy entscheidet</span></span>
-            <input type="text" name="AQUATICY_SUBAGENT_PARALLEL"></label>
-        </div>
-        <div class="row">
-          <label><span class="lbl">Anfragen pro Minute <span class="why">Wie viele Anfragen pro Minute dein KI-Anbieter erlaubt. Gilt für deine eigenen Schlüssel. Leer lassen = kostenloser Tarif (NVIDIA 40, Mistral 240)</span></span>
-            <input type="text" name="AQUATICY_RPM" placeholder="leer lassen = kostenloser Tarif"></label>
-          <label><span class="lbl">Gleichzeitige Anfragen <span class="why">Mehr auf einmal macht jede Antwort langsamer. Leer lassen = NVIDIA 4, Mistral 8</span></span>
-            <input type="text" name="AQUATICY_PARALLEL_CALLS" placeholder="leer lassen = kostenloser Tarif"></label>
         </div>
       </fieldset>
 
@@ -2563,123 +2482,11 @@ html.vv,html.vv body{height:var(--app-h)}
               und riskante Dienste. Es meldet sich im eigenen Chat, wenn etwas Wichtiges
               passiert.</span></label>
         </div>
-        <div id="secure-controls" class="cluster-box" hidden>
-          <p class="note">Cloud-Modelle bekommen deine Nachrichten und ausgewählte Netzbefunde.
-            Für lokale Verarbeitung wähle ein lokales Modell.</p>
-          <div class="sub-title">Netz freigeben</div>
-          <label for="secure-router">Router-IP</label>
-          <input type="text" id="secure-router" placeholder="192.168.1.1" maxlength="15"
-                 inputmode="decimal">
-          <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
-          <p id="secure-router-hint" class="note" role="status"></p>
-          <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
-          <input type="text" id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
-          <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf
-            es prüfen.</label>
-          <div class="actions">
-            <button id="secure-test" type="button" class="btn">Router testen und starten</button>
-            <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
-            <button id="secure-check" type="button" class="btn">Prüfen</button>
-            <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
-          </div>
-          <p class="note">Neue Werte gelten erst nach deiner bestätigten Netzfreigabe. Lokale
-            Dateiordner gibst du mit aquaticy secure-pro im Terminal frei.</p>
-          <div id="secure-more" hidden>
-            <div class="sub-title">Überwachung</div>
-            <div class="check">
-              <input type="checkbox" role="switch" class="schalter" id="secure-watch">
-              <label for="secure-watch" style="margin:0">Immer überwachen
-                <span class="why">Wie ein Coworker: Secure Pro prüft im gewählten Abstand. Aus:
-                  nur wenn du „Prüfen“ drückst.</span></label>
-            </div>
-            <label><span class="lbl">Wie oft</span>
-              <select id="secure-interval">
-                <option value="0">die ganze Zeit</option>
-                <option value="30">alle 30 Sekunden</option>
-                <option value="60">jede Minute</option>
-                <option value="120">alle 2 Minuten</option>
-                <option value="300">alle 5 Minuten</option>
-                <option value="900">alle 15 Minuten</option>
-                <option value="1800">alle 30 Minuten</option>
-                <option value="3600">stündlich</option>
-                <option value="10800">alle 3 Stunden</option>
-                <option value="21600">alle 6 Stunden</option>
-                <option value="43200">alle 12 Stunden</option>
-                <option value="86400">täglich</option>
-              </select></label>
-            <p class="note">Die ganze Zeit und kurze Abstände belasten Heimnetz und Geräte
-              stärker. Eine Prüfung dauert oft länger als 30 Sekunden.</p>
-            <p id="secure-next" class="note" role="status"></p>
-            <div class="check">
-              <input type="checkbox" role="switch" class="schalter" id="secure-packets">
-              <label for="secure-packets" style="margin:0">Pakete prüfen
-                <span class="why">Liest 15 Sekunden lang Adressen, Ports und DNS-Namen für dein
-                  freigegebenes Netz. Nachrichteninhalte werden nicht ausgewertet. Keine
-                  gespeicherten Paketmitschnitte.</span>
-                <span class="why">Befunde können Adressen und auffällige
-                  DNS-Namen enthalten. Sie erscheinen im Chat, im lokalen Protokoll und
-                  gegebenenfalls im Messenger. Cloud-Modelle erhalten ausgewählte Befunde.</span>
-                <span class="why">Braucht Linux und Root-Rechte oder CAP_NET_RAW. Mit Switch sieht dieser
-                  Rechner nur eigenen Verkehr und Rundrufe.</span></label>
-            </div>
-            <p id="secure-packet-note" class="note" role="status"></p>
-            <div class="check">
-              <input type="checkbox" role="switch" class="schalter" id="secure-nmap">
-              <label for="secure-nmap" style="margin:0">nmap für Schwachstellen nutzen
-                <span class="why">nmap liest Dienste und Versionen und führt nur sichere
-                  Prüfskripte aus. Nichts davon geht ins Internet. Secure Pro prüft neue oder
-                  geänderte Geräte, sonst jedes Gerät einmal am Tag. Im Chat kannst du gezielt
-                  prüfen lassen.</span></label>
-            </div>
-            <p id="secure-nmap-note" class="note" role="status"></p>
-            <div class="check">
-              <input type="checkbox" role="switch" class="schalter" id="secure-messenger">
-              <label for="secure-messenger" style="margin:0">Aufträge per WhatsApp/Signal
-                <span class="why">Schreib in deinem eigenen Chat zum Beispiel „Secure Pro
-                  prüfen“, „Secure Pro Status“ oder „Secure Pro Tipps“. Antworten beginnen mit
-                  [Aquaticy Secure Pro]. Fremde Nummern und Gruppen können das nicht.</span></label>
-            </div>
-            <div class="check">
-              <input type="checkbox" role="switch" class="schalter" id="secure-vm">
-              <label for="secure-vm" style="margin:0">VM für Abwehr nutzen
-                <span class="why">Secure Pro darf über SSH aus der VM Ports schließen, Geräte
-                  sperren und Dienste stoppen. Jeder Befehl braucht dein Ja im
-                  Secure-Pro-Chat. Den Router, Aquaticy und SSH sperrt es nie.</span></label>
-            </div>
-            <p id="secure-vm-note" class="note" role="status"></p>
-            <div class="sub-title">Aufgaben</div>
-            <p class="note">Sag Secure Pro, wann es sich melden soll. Zum Beispiel: „Melde dich,
-              wenn ein neues Gerät ins Netz kommt.“ oder „Sag Bescheid, wenn 192.168.1.20
-              offline geht.“</p>
-            <ul class="device-list" id="secure-tasks"></ul>
-            <div class="inline">
-              <label style="flex:1"><input type="text" id="secure-task-text" maxlength="300"
-                     placeholder="Melde dich, wenn ein neues Gerät ins Netz kommt"
-                     aria-label="Neue Aufgabe für Secure Pro"></label>
-              <button type="button" class="btn" id="secure-task-add">Hinzufügen</button>
-            </div>
-            <p id="secure-task-note" class="note" role="status"></p>
-          </div>
-          <p id="secure-scope-note" role="status"></p>
-          <p id="secure-note" role="status"></p>
-          <p id="secure-checked"></p>
-          <p id="secure-score" class="note" role="status"></p>
-          <h3>Wichtig</h3>
-          <ul id="secure-important"></ul>
-          <h3>Tipps für dein Heimnetz</h3>
-          <ul id="secure-tips"></ul>
-          <h3>Prüfhinweise</h3>
-          <ul id="secure-findings"></ul>
-          <h3>Positiv beobachtet</h3>
-          <ul id="secure-positive"></ul>
-          <h3>Geräte im freigegebenen Netz</h3>
-          <ul id="secure-devices"></ul>
-          <h3>Verlauf</h3>
-          <ul id="secure-history"></ul>
-          <p class="note">Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.
-            Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige
-            Sicherheitsprüfung.</p>
-          <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
+        <div class="actions section">
+          <span class="note" id="secure-window-note">Schalte Secure Pro ein. Dann stellst du es
+            hier ein.</span>
+          <button type="button" class="btn" id="secure-window-open" disabled>Secure Pro
+            einstellen</button>
         </div>
         <p id="feature-note" class="note" role="status"></p>
         </div>
@@ -2785,24 +2592,6 @@ html.vv,html.vv body{height:var(--app-h)}
         </div>
         <div class="note" id="council-note"></div>
 
-        <div class="upgrade-box" id="upgrade-box">
-          <div class="check">
-            <input type="checkbox" role="switch" class="schalter" id="upgrade-on">
-            <label for="upgrade-on" style="margin:0">Auto-Upgrading
-              <span class="why">Aquaticy verbessert lokale Modelle mit Wissen, das mehrere Konten
-                unabhängig bestätigt haben. Das Wissen kommt aus öffentlichen Quellen;
-                Kontokennungen stehen nicht im Modelltext. Ein Lückentext-Test misst den Gewinn. Ab
-                5 % wird „Upgraden“ grün (gemma3:4b → 1.1), ab 30 % gibt es eine ganze neue Version
-                (→ 2). Gilt für jedes Konto.</span></label>
-          </div>
-          <p class="note" id="upgrade-lock" hidden>Auto-Upgrading gehört zu Ultra.</p>
-          <div class="note" id="upgrade-status" role="status"></div>
-          <div id="upgrade-panel" hidden>
-            <ul class="device-list upgrade-list" id="upgrade-tracks"></ul>
-            <button type="button" class="btn" id="upgrade-train">Jetzt trainieren</button>
-          </div>
-        </div>
-
         <div class="cluster-box" id="cluster-box">
           <div class="check">
             <input type="checkbox" role="switch" class="schalter" id="cluster-on">
@@ -2860,6 +2649,159 @@ html.vv,html.vv body{height:var(--app-h)}
   </div>
 </div>
 
+<div class="overlay" id="securebox">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="securebox-title">
+    <div class="sheet-head">
+      <div class="sheet-titel">
+        <button type="button" class="sheet-back" id="securebox-close" aria-label="Zurück">‹ Zurück</button>
+        <h2 id="securebox-title">Secure Pro</h2>
+      </div>
+      <p class="lead">Hier stellst du ein, was Secure Pro in deinem Heimnetz prüft.</p>
+    </div>
+    <div id="secure-controls">
+      <p class="note">Cloud-Modelle bekommen deine Nachrichten und ausgewählte Netzbefunde.
+        Für lokale Verarbeitung wähle ein lokales Modell.</p>
+      <div class="sub-title">Netz freigeben</div>
+      <label for="secure-router">Router-IP</label>
+      <input type="text" id="secure-router" placeholder="192.168.1.1" maxlength="15"
+             inputmode="decimal">
+      <button id="secure-detect" type="button" class="btn">Router automatisch erkennen</button>
+      <p id="secure-router-hint" class="note" role="status"></p>
+      <label for="secure-subnet">Eigenes Netz (CIDR, höchstens 256 Adressen)</label>
+      <input type="text" id="secure-subnet" placeholder="192.168.1.0/24" maxlength="32">
+      <label><input id="secure-consent" type="checkbox"> Dieses Netz gehört mir oder ich darf
+        es prüfen.</label>
+      <div class="actions">
+        <button id="secure-test" type="button" class="btn">Router testen und starten</button>
+        <button id="secure-apply" type="button" class="btn">Netz freigeben</button>
+        <button id="secure-check" type="button" class="btn">Prüfen</button>
+        <button id="secure-disable" type="button" class="btn">Secure Pro ausschalten</button>
+      </div>
+      <p class="note">Neue Werte gelten erst nach deiner bestätigten Netzfreigabe. Lokale
+        Dateiordner gibst du mit aquaticy secure-pro im Terminal frei.</p>
+      <div id="secure-more" hidden>
+        <div class="sub-title">Überwachung</div>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="secure-watch">
+          <label for="secure-watch" style="margin:0">Immer überwachen
+            <span class="why">Wie ein Coworker: Secure Pro prüft im gewählten Abstand. Aus:
+              nur wenn du „Prüfen“ drückst.</span></label>
+        </div>
+        <label><span class="lbl">Wie oft</span>
+          <select id="secure-interval">
+            <option value="0">die ganze Zeit</option>
+            <option value="30">alle 30 Sekunden</option>
+            <option value="60">jede Minute</option>
+            <option value="120">alle 2 Minuten</option>
+            <option value="300">alle 5 Minuten</option>
+            <option value="900">alle 15 Minuten</option>
+            <option value="1800">alle 30 Minuten</option>
+            <option value="3600">stündlich</option>
+            <option value="10800">alle 3 Stunden</option>
+            <option value="21600">alle 6 Stunden</option>
+            <option value="43200">alle 12 Stunden</option>
+            <option value="86400">täglich</option>
+          </select></label>
+        <p class="note">Die ganze Zeit und kurze Abstände belasten Heimnetz und Geräte
+          stärker. Eine Prüfung dauert oft länger als 30 Sekunden.</p>
+        <p id="secure-next" class="note" role="status"></p>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="secure-packets">
+          <label for="secure-packets" style="margin:0">Pakete prüfen
+            <span class="why">Liest 15 Sekunden lang Adressen, Ports und DNS-Namen für dein
+              freigegebenes Netz. Nachrichteninhalte werden nicht ausgewertet. Keine
+              gespeicherten Paketmitschnitte.</span>
+            <span class="why">Befunde können Adressen und auffällige
+              DNS-Namen enthalten. Sie erscheinen im Chat, im lokalen Protokoll und
+              gegebenenfalls im Messenger. Cloud-Modelle erhalten ausgewählte Befunde.</span>
+            <span class="why">Braucht Linux und Root-Rechte oder CAP_NET_RAW. Mit Switch sieht dieser
+              Rechner nur eigenen Verkehr und Rundrufe.</span></label>
+        </div>
+        <p id="secure-packet-note" class="note" role="status"></p>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="secure-nmap">
+          <label for="secure-nmap" style="margin:0">nmap für Schwachstellen nutzen
+            <span class="why">nmap liest Dienste und Versionen und führt nur sichere
+              Prüfskripte aus. Nichts davon geht ins Internet. Secure Pro prüft neue oder
+              geänderte Geräte, sonst jedes Gerät einmal am Tag. Im Chat kannst du gezielt
+              prüfen lassen.</span></label>
+        </div>
+        <p id="secure-nmap-note" class="note" role="status"></p>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="secure-messenger">
+          <label for="secure-messenger" style="margin:0">Aufträge per WhatsApp/Signal
+            <span class="why">Schreib in deinem eigenen Chat zum Beispiel „Secure Pro
+              prüfen“, „Secure Pro Status“ oder „Secure Pro Tipps“. Antworten beginnen mit
+              [Aquaticy Secure Pro]. Fremde Nummern und Gruppen können das nicht.</span></label>
+        </div>
+        <div class="check">
+          <input type="checkbox" role="switch" class="schalter" id="secure-vm">
+          <label for="secure-vm" style="margin:0">VM für Abwehr nutzen
+            <span class="why">Secure Pro darf über SSH aus der VM Ports schließen, Geräte
+              sperren und Dienste stoppen. Jeder Befehl braucht dein Ja im
+              Secure-Pro-Chat. Den Router, Aquaticy und SSH sperrt es nie.</span></label>
+        </div>
+        <p id="secure-vm-note" class="note" role="status"></p>
+        <div class="sub-title">Aufgaben</div>
+        <p class="note">Sag Secure Pro, wann es sich melden soll. Zum Beispiel: „Melde dich,
+          wenn ein neues Gerät ins Netz kommt.“ oder „Sag Bescheid, wenn 192.168.1.20
+          offline geht.“</p>
+        <ul class="device-list" id="secure-tasks"></ul>
+        <div class="inline">
+          <label style="flex:1"><input type="text" id="secure-task-text" maxlength="300"
+                 placeholder="Melde dich, wenn ein neues Gerät ins Netz kommt"
+                 aria-label="Neue Aufgabe für Secure Pro"></label>
+          <button type="button" class="btn" id="secure-task-add">Hinzufügen</button>
+        </div>
+        <p id="secure-task-note" class="note" role="status"></p>
+      </div>
+      <p id="secure-scope-note" role="status"></p>
+      <p id="secure-note" role="status"></p>
+      <p id="secure-checked"></p>
+      <p id="secure-score" class="note" role="status"></p>
+      <h3>Wichtig</h3>
+      <ul id="secure-important"></ul>
+      <h3>Tipps für dein Heimnetz</h3>
+      <ul id="secure-tips"></ul>
+      <h3>Prüfhinweise</h3>
+      <ul id="secure-findings"></ul>
+      <h3>Positiv beobachtet</h3>
+      <ul id="secure-positive"></ul>
+      <h3>Geräte im freigegebenen Netz</h3>
+      <ul id="secure-devices"></ul>
+      <h3>Verlauf</h3>
+      <ul id="secure-history"></ul>
+      <p class="note">Offene Dienste sind Prüfhinweise, keine nachgewiesenen Infektionen.
+        Die Ergebnisse gelten für das Netz des Aquaticy-Servers. Sie sind keine vollständige
+        Sicherheitsprüfung.</p>
+      <button type="button" class="btn" id="secure-open">Secure-Pro-Chat öffnen</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ortbox">
+  <div class="sheet merk-sheet" role="dialog" aria-modal="true" aria-labelledby="ortbox-title">
+    <h2 id="ortbox-title">Ort &amp; Sprache</h2>
+    <p class="lead">Aquaticy nutzt das für Wetter, Suche und Antworten. Es lernt beides auch aus
+      dem Chat: Schreibst du auf Japanisch, wird Japanisch deine Sprache. Nennst du oft denselben
+      Ort, wird er dein Standard-Ort. Was du hier einträgst, gilt immer.</p>
+    <label><span class="lbl">Standard-Ort</span>
+      <input type="text" name="AQUATICY_LOCATION" form="settings" placeholder="Mönchengladbach"></label>
+    <div class="row">
+      <label><span class="lbl">Sprache <span class="why">Kurz, zum Beispiel de, en oder
+        ja</span></span>
+        <input type="text" name="AQUATICY_LANG" form="settings" placeholder="de"></label>
+      <label><span class="lbl">Land <span class="why">Das Land stellst nur du ein. Oder du sagst
+        es Aquaticy, zum Beispiel „Ich wohne in den USA“.</span></span>
+        <input type="text" name="AQUATICY_COUNTRY" form="settings" placeholder="de"></label>
+    </div>
+    <div class="actions">
+      <span class="note" id="ort-note"></span>
+      <button type="button" class="btn primary" id="ort-close">Fertig</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = (s) => document.querySelector(s);
 
@@ -2905,7 +2847,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "15.8.11";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "16.0.0";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -4820,6 +4762,14 @@ async function verfolge(hole, steps, bubble, text){
       case "lan_check": step(steps, "[Netz]", ev.host); break;
       case "setting": step(steps, "[Stelle um]", `${ev.label}: ${ev.value}`); break;
       case "setting_done": break;
+      case "autosetting": {
+        const wort = {location: sp("Standard-Ort", "Default place"), lang: sp("Sprache", "Language"),
+                      country: sp("Land", "Country")}[ev.field] || ev.label;
+        step(steps, sp("[Gemerkt]", "[Remembered]"), `${wort}: ${ev.value} · ` + sp(
+          "aus deinem Chat. Ändern unter Konto → Ort & Sprache.",
+          "from your chat. Change it under Account → Place & language."));
+        break;
+      }
       case "appearance":
 
         if (ev.theme) setTheme(ev.theme);
@@ -5628,6 +5578,17 @@ try {
 
 
 const EN = {
+"[Gemerkt]": "[Remembered]",
+"Mehr im Datenschutz": "More in the privacy notice",
+"Schalte Secure Pro ein. Dann stellst du es hier ein.": "Switch Secure Pro on. Then you set it up here.",
+"Secure Pro einstellen": "Set up Secure Pro",
+"Hier stellst du ein, was Secure Pro in deinem Heimnetz prüft.": "Here you set what Secure Pro checks in your home network.",
+"Für Wetter, Suche und Antworten. Aquaticy lernt beides auch aus dem Chat.": "For weather, search and answers. Aquaticy also learns both from the chat.",
+"Ort & Sprache einstellen": "Set place & language",
+"Aquaticy nutzt das für Wetter, Suche und Antworten. Es lernt beides auch aus dem Chat: Schreibst du auf Japanisch, wird Japanisch deine Sprache. Nennst du oft denselben Ort, wird er dein Standard-Ort. Was du hier einträgst, gilt immer.": "Aquaticy uses this for weather, search and answers. It also learns both from the chat: write in Japanese and Japanese becomes your language. Name the same place often and it becomes your default place. What you enter here always applies.",
+"Kurz, zum Beispiel de, en oder ja": "Short, for example de, en or ja",
+"Land": "Country",
+"Das Land stellst nur du ein. Oder du sagst es Aquaticy, zum Beispiel „Ich wohne in den USA“.": "Only you set the country. Or you tell Aquaticy, for example “I live in the USA”.",
 "Ohne Sprachmodell und ohne Schlüssel": "Without a language model and without a key",
 "Dateien und Änderungen": "Files and changes",
 "Lesen und ändern: eigene Branches, Commits, Pull Requests": "Read and change: own branches, commits, pull requests",
@@ -6272,23 +6233,9 @@ const EN = {
 "Standard-Ort": "Default place",
 "Sprache / Land": "Language / country",
 "Helfer & Grenzen": "Helpers & limits",
-"Fragen automatisch aufteilen": "Split questions automatically",
-"Große Fragen teilt Aquaticy auf und lässt Helfer die Teile gleichzeitig suchen. Das ist schneller, braucht aber mehr von deiner Grenze. Ab Werk an.": "Aquaticy splits big questions and lets helpers search the parts at the same time. That's faster, but uses more of your limit. On by default.",
-"Suchen je Helfer": "Searches per helper",
-"Wie oft ein Helfer suchen oder eine Seite lesen darf": "How often a helper may search or read a page",
-"Suchen je Anfrage": "Searches per request",
-"Höchstzahl für Suchen und gelesene Seiten zusammen": "Maximum for searches and pages read, combined",
-"Gedächtnis im Gespräch": "Memory in the conversation",
-"Wie viel vom Gespräch das Modell im Blick behält. Nur für lokale Modelle": "How much of the chat the model keeps in mind. Local models only",
-"Zeit fürs Planen": "Time for planning",
-"Wie lange das Aufteilen einer Frage dauern darf (Sekunden)": "How long splitting a question may take (seconds)",
 "Gleichzeitig": "At the same time",
-"Wie viele Helfer gleichzeitig arbeiten. 0 = Aquaticy entscheidet": "How many helpers work at the same time. 0 = Aquaticy decides",
 "Anfragen pro Minute": "Requests per minute",
-"Wie viele Anfragen pro Minute dein KI-Anbieter erlaubt. Gilt für deine eigenen Schlüssel. Leer lassen = kostenloser Tarif (NVIDIA 40, Mistral 240)": "How many requests per minute your AI provider allows. Applies to your own keys. Leave empty = free tier (NVIDIA 40, Mistral 240)",
-"leer lassen = kostenloser Tarif": "leave empty = free tier",
 "Gleichzeitige Anfragen": "Simultaneous requests",
-"Mehr auf einmal macht jede Antwort langsamer. Leer lassen = NVIDIA 4, Mistral 8": "More at once makes each answer slower. Leave empty = NVIDIA 4, Mistral 8",
 "Seiten mit echtem Browser laden": "Load pages with a real browser",
 "Für Seiten, die ihren Inhalt erst später nachladen. Dafür muss einmal": "For pages that only load their content later. For this, run once",
 "ausgeführt werden.": ".",
@@ -6439,7 +6386,6 @@ const EN = {
 "Da ist etwas schiefgelaufen. Versuch es gleich noch einmal.": "Something went wrong. Try again in a moment.",
 "Bei Aquaticy ist etwas schiefgelaufen. Versuch es gleich noch einmal.": "Something went wrong at Aquaticy. Try again in a moment.",
 "Keine Verbindung zu Aquaticy. Prüf deine Verbindung und versuch es gleich noch einmal.": "No connection to Aquaticy. Check your connection and try again in a moment.",
-"Wenn Auto-Upgrading an ist, können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte kommen. Dort liegen öffentliche Auszüge unverschlüsselt. Laufen sie ab oder fehlt die Bestätigung, werden die betroffenen Fassungen zurückgezogen und gelöscht. Einzelheiten stehen im Datenschutz.": "When Auto-Upgrading is on, excerpts confirmed several times can also go into local Ollama model texts. Public excerpts are stored there unencrypted. If they expire or are no longer confirmed, the affected versions are withdrawn and deleted. Details are in the privacy policy.",
 
 
 
@@ -6449,20 +6395,14 @@ const EN = {
 "virtual machine, Suche, Strukturieren und mehr": "virtual machine, search, structuring and more",
 "Dateien anhängen": "Attach files",
 "Keine Verbindung — Aquaticy macht von selbst weiter, sobald das Netz wieder da ist.": "No connection — Aquaticy carries on by itself as soon as the network is back.",
-"Neues Modell": "New model",
-"Ausprobieren": "Try it",
 "Fehler": "Error",
 "Da ist etwas schiefgelaufen.": "Something went wrong.",
 "Versuch es gleich noch einmal. Bleibt es so, lade die Seite neu.": "Try again in a moment. If it keeps happening, reload the page.",
 "Seite neu laden": "Reload page",
 "Bild des Coworkers": "Coworker picture",
-"Ist Auto-Upgrading an, können mehrfach bestätigte Auszüge auch in lokale Ollama-Modelltexte kommen (dort unverschlüsselt). Ist Wissen abgelaufen oder nicht mehr bestätigt, werden die betroffenen Fassungen zurückgezogen. Aquaticy versucht das Löschen so lange, bis der Ollama-Dienst erreichbar ist. Einzelheiten:": "If Auto-Upgrading is on, excerpts confirmed several times can also go into local Ollama model texts (unencrypted there). If knowledge expires or is no longer confirmed, the affected versions are withdrawn. Aquaticy keeps trying to delete them until the Ollama service is reachable. Details:",
 "Im Code-Modus darf die virtual machine dann ins Internet, etwa für pip install oder um eine Seite zu laden. Dein Heimnetz bleibt gesperrt. Bei Normal- und Pro-Konten hat sie gar kein Netz.": "In Code mode the virtual machine may then go online, for example for pip install or to load a page. Your home network stays blocked. With Normal and Pro accounts it has no network at all.",
 "Auch ins lokale Netz": "Also into the local network",
 "Nur mit Ultra: Die virtual machine erreicht dann auch Geräte in deinem Heimnetz (Router, Lager, Home Assistant …), nicht nur das Internet. Die Sperre fällt weg. Schalte das nur ein, wenn du es brauchst.": "Ultra only: the virtual machine then also reaches devices in your home network (router, storage, Home Assistant …), not just the internet. The block is lifted. Only turn this on if you need it.",
-"Aquaticy verbessert lokale Modelle mit Wissen, das mehrere Konten unabhängig bestätigt haben. Das Wissen kommt aus öffentlichen Quellen; Kontokennungen stehen nicht im Modelltext. Ein Lückentext-Test misst den Gewinn. Ab 5 % wird „Upgraden“ grün (gemma3:4b → 1.1), ab 30 % gibt es eine ganze neue Version (→ 2). Gilt für jedes Konto.": "Aquaticy improves local models with knowledge that several accounts confirmed independently. The knowledge comes from public sources; account IDs are not in the model text. A fill-in-the-gap test measures the gain. From 5 % “Upgrade” turns green (gemma3:4b → 1.1), from 30 % there is a whole new version (→ 2). Applies to every account.",
-"Auto-Upgrading gehört zu Ultra.": "Auto-Upgrading is part of Ultra.",
-"Jetzt trainieren": "Train now",
 "Modell, das verteilt laufen soll": "Model to run distributed",
 "IP-Adresse": "IP address",
 "kein Ortsfilter": "no location filter",
@@ -6587,15 +6527,6 @@ const EN = {
 "Suche im Netz …": "Searching the network …",
 "Frage nach …": "Asking …",
 "Nicht gespeichert": "Not saved",
-"Auto-Upgrading läuft nur mit der Weboberfläche.": "Auto-Upgrading only runs with the web interface.",
-"Trainiert gerade …": "Training …",
-"An — trainiert von selbst, sobald es neues bestätigtes Wissen gibt.": "On — trains by itself as soon as there's new confirmed knowledge.",
-"Kein lokales Modell gefunden — Auto-Upgrading braucht Ollama.": "No local model found — Auto-Upgrading needs Ollama.",
-"Neueste Version — noch keine bessere": "Newest version — no better one yet",
-"Version überspringen?": "Skip version?",
-"Zurückziehen: diese Version wird wieder die neueste": "Withdraw: this version becomes the newest again",
-"Version zurückziehen?": "Withdraw version?",
-"Zurückziehen": "Withdraw",
 "Stärkstes Code-Modell wählen": "Choose the strongest code model",
 "Stärkstes Modell wählen": "Choose the strongest model",
 "Kein Modell gefunden. Trag unter Chat → Modelle und Verbindungen einen eigenen Schlüssel ein oder installiere ein Modell mit aquaticy install-model.": "No model found. Add your own key under Chat → Models and connections, or install a model with aquaticy install-model.",
@@ -6720,8 +6651,6 @@ const EN = {
 "Offene Modelle bei NVIDIA, großzügiges Freikontingent (40 Anfragen/Minute)": "Open models at NVIDIA, generous free tier (40 requests/minute)",
 "Europäischer Anbieter, antwortet schnell, Server in der EU": "European provider, answers fast, servers in the EU",
 "von dir eingetragen": "entered by you",
-"Neueste Version": "Latest version",
-"Ältere Version · nur Ultra": "Older version · Ultra only",
 "eigenes": "own",
 "Nur Website": "Website only",
 "Modelle und etwas Website": "Models and some website",
@@ -6857,7 +6786,6 @@ const EN_MUSTER = [
   [/^Höchstens (\d+) Dateien\.$/, "At most $1 files."],
   [/^(\d+) GB auf deinem Rechner$/, "$1 GB on your computer"],
   [/^Verteilt auf (\d+) Server$/, "Spread across $1 servers"],
-  [/^Neueste Version · (.+) stärker$/, "Latest version · $1 stronger"],
   [/^Auto · Modell wählen$/, "Auto · Choose model"],
   [/^(\d+) Kerne · Last (.+)$/, "$1 cores · load $2"],
   [/^(\d+) Kerne$/, "$1 cores"],
@@ -6961,12 +6889,6 @@ const EN_MUSTER = [
      + "Click “Connect” and tick all boxes at Google."],
   [/^(.+) unter (.+) — (\d+) (?:Raum|Räume), (\d+) Artikel\. Zum Übernehmen unten speichern\.$/,
    "$1 at $2 — $3 room(s), $4 item(s). Save below to apply."],
-  [/^(.+) stärker$/, "$1 stronger"],
-  [/^Neu: (.+)$/, "New: $1"], [/^Upgraden ab (\d+) %$/, "Upgrade from $1 %"],
-  [/^(.+) wird verworfen\.$/, "$1 will be discarded."],
-  [/^(.+) als neueste$/, "$1 as newest"],
-  [/^(.+) wird wieder die neueste Version für alle\.$/,
-   "$1 becomes the newest version for everyone again."],
   [/^(.+) löschen\?$/, "Delete $1?"],
 ];
 
@@ -7546,11 +7468,6 @@ async function openPicker(){
     item.querySelector(".nm").textContent = model.label;
     item.querySelector(".kind").textContent = model.kind;
     item.querySelector(".note").textContent = model.note || "";
-    if (model.upgrade === "current" && /stärker/.test(model.note || "")){
-      const neu = document.createElement("span");
-      neu.className = "neu"; neu.textContent = "Neu";
-      item.querySelector(".top").appendChild(neu);
-    }
     if (model.source === "own"){
       const src = document.createElement("span");
       src.className = "src"; src.textContent = model.source_label || "Dein Schlüssel";
@@ -7757,6 +7674,8 @@ document.addEventListener("keydown", (e) => {
   if (vmBox.classList.contains("open")) { closeOverlay(vmBox); return; }
   if (memBox.classList.contains("open")) { closeOverlay(memBox); return; }
   if (themeBox.classList.contains("open")) { closeTheme(); return; }
+  if (secureBox.classList.contains("open")) { secureFensterSchliessen(); return; }
+  if (ortBox.classList.contains("open")) { ortSchliessen(); return; }
   if (modelOverlay.classList.contains("open")) { closeModelSettings(); return; }
   if (overlay.classList.contains("open")) closeSettings();
 });
@@ -7847,15 +7766,10 @@ let devGeladen = false;
 let devSichtbar = false;
 new IntersectionObserver((eintraege) => {
   devSichtbar = eintraege.some(e => e.isIntersecting);
-  if (!devSichtbar || !overlay.classList.contains("open")){
-    clearTimeout(upgradeTakt);
-    return;
-  }
-  if (devGeladen){ upgradeLaden(); return; }
+  if (!devSichtbar || !overlay.classList.contains("open") || devGeladen) return;
   devGeladen = true;
 
   if (kontoUltra) verbundLaden(); else verbundZeigen({});
-  upgradeLaden();
   kontenLaden();
 }, { root: form.closest(".sheet") }).observe($("#dev-settings"));
 function fill(values, target = form){
@@ -7882,6 +7796,7 @@ async function showSettings(){
     return;
   }
   fill(cfg.values);
+  ortStandZeigen();
   fillProviders(cfg.providers);
   eigeneModelle = Array.isArray(cfg.own_models) ? cfg.own_models : [];
   modellStart = (modelForm.elements["AQUATICY_MODEL"]?.value || "").trim();
@@ -9984,21 +9899,50 @@ async function feldSpeichern(feld){
     zeigeGespeichert(nutzerFehler(fehler.message, "Das ließ sich nicht speichern."), true);
   }
 }
-form.addEventListener("change", (e) => {
+function feldGeaendert(e){
   const feld = e.target;
   if (!(feld instanceof HTMLInputElement || feld instanceof HTMLSelectElement
         || feld instanceof HTMLTextAreaElement) || !feld.name || feld.disabled) return;
   if (feld.matches("input.schalter[name]")) sofortSpeichern(feld);
   else if (feld.type !== "checkbox" && !feld.closest("[data-no-autosave]")
            && feld.name.startsWith("AQUATICY_")) feldSpeichern(feld);
+}
+form.addEventListener("change", feldGeaendert);
+// 16.0.0: Ort & Sprache steht in einem eigenen Fenster. Die Felder gehören weiter zum
+// Formular (form="settings"), ihre Änderungen kommen aber nicht mehr dort vorbei.
+const ortBox = $("#ortbox");
+ortBox.addEventListener("change", feldGeaendert);
+function ortStandZeigen(){
+  const ort = (form.elements["AQUATICY_LOCATION"]?.value || "").trim();
+  const sprache = (form.elements["AQUATICY_LANG"]?.value || "").trim();
+  const land = (form.elements["AQUATICY_COUNTRY"]?.value || "").trim();
+  const teile = [ort, sprache && sp("Sprache ", "Language ") + sprache,
+                 land && sp("Land ", "Country ") + land].filter(Boolean);
+  $("#ort-stand").textContent = teile.length ? teile.join(" · ")
+    : sp("Für Wetter, Suche und Antworten. Aquaticy lernt beides auch aus dem Chat.",
+         "For weather, search and answers. Aquaticy also learns both from the chat.");
+}
+function ortSchliessen(){
+  closeOverlay(ortBox, () => $("#ort-open").focus({preventScroll:true}));
+  ortStandZeigen();
+}
+$("#ort-open").addEventListener("click", () => {
+  $("#ort-note").textContent = "";
+  openOverlay(ortBox);
+  requestAnimationFrame(() => form.elements["AQUATICY_LOCATION"].focus({preventScroll:true}));
+});
+$("#ort-close").addEventListener("click", ortSchliessen);
+ortBox.addEventListener("click", (e) => { if (e.target === ortBox) ortSchliessen(); });
+ortBox.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target instanceof HTMLInputElement){ e.preventDefault(); e.target.blur(); }
 });
 function closeSettings(){
+  closeOverlay(secureBox);
+  closeOverlay(ortBox);
   closeOverlay(overlay);
   stopLoad();
   clearTimeout(verbundTakt);
   verbundAnfrage++;
-  clearTimeout(upgradeTakt);
-  upgradeAnfrage++;
 }
 
 async function featureRequest(payload){
@@ -10181,14 +10125,14 @@ async function featureLoad(){
     }
     $("#voice-setting").checked = !!data.voice;
     $("#secure-setting").checked = !!data.secure || secureSetup;
-    $("#secure-controls").hidden = !allowed || !$("#secure-setting").checked;
-    $("#secure-setting").setAttribute("aria-expanded", String(!$("#secure-controls").hidden));
+    secureFensterErlauben(allowed && $("#secure-setting").checked);
     $("#feature-note").textContent = allowed ? ""
       : "Diese Funktionen verwaltet nur der Besitzer im Einzelkonto-Modus.";
     $("#voice-note").textContent = $("#feature-note").textContent;
     if (allowed){
       secureRender(data, true);
-      if (!$("#secure-controls").hidden && (!data.router || (data.subnet || "").endsWith("/32")))
+      if (!$("#secure-window-open").disabled
+          && (!data.router || (data.subnet || "").endsWith("/32")))
         await secureDetect();
       secureSchedule();
     }
@@ -10252,18 +10196,38 @@ async function openSecureChat(){
     await openChat(data.session_id, {force:true});
   } catch (error){ $("#feature-note").textContent = error.message; }
 }
+// 16.0.0: Secure Pro hat ein eigenes Fenster. In den Einstellungen stehen nur noch der
+// Schalter und der Knopf, der das Fenster öffnet.
+const secureBox = $("#securebox");
 function secureSettingsVisible(){
-  return overlay.classList.contains("open") && !$("#secure-controls").hidden;
+  return secureBox.classList.contains("open") && !secureBox.classList.contains("closing");
 }
+function secureFensterErlauben(an){
+  $("#secure-window-open").disabled = !an;
+  $("#secure-window-note").hidden = an;
+  if (!an && secureBox.classList.contains("open")) closeOverlay(secureBox);
+}
+function secureFensterOeffnen(){
+  if ($("#secure-window-open").disabled) return false;
+  openOverlay(secureBox);
+  requestAnimationFrame(() => $("#securebox-close").focus({preventScroll:true}));
+  secureSchedule();
+  return true;
+}
+function secureFensterSchliessen(){ closeOverlay(secureBox); }
+$("#secure-window-open").addEventListener("click", secureFensterOeffnen);
+$("#securebox-close").addEventListener("click", secureFensterSchliessen);
+secureBox.addEventListener("click", (e) => { if (e.target === secureBox) secureFensterSchliessen(); });
 $("#secure-settings-open").addEventListener("click", async () => {
+  await featureLoad();
+  if (secureFensterOeffnen()) return;
   await showSettings();
   $("#secure-section").scrollIntoView({behavior:"smooth", block:"start"});
 });
 $("#secure-open").addEventListener("click", openSecureChat);
 $("#secure-setting").addEventListener("change", async event => {
   secureSetup = event.target.checked;
-  $("#secure-controls").hidden = !secureSetup;
-  event.target.setAttribute("aria-expanded", String(secureSetup));
+  secureFensterErlauben(secureSetup);
   if (secureSetup){
     await secureDetect(true);
     secureSchedule();
@@ -11592,176 +11556,6 @@ async function kopfNeuZeichnen(){
 
 
 
-const launchBox = $("#launchbox");
-let launchStart = null;
-async function pruefeUpgrade(){
-  try {
-    const res = await api("/api/upgrades");
-    if (!res.ok) return;
-    const daten = await res.json();
-    const n = daten.notice;
-    if (!n || overlay.classList.contains("open")) return;
-    launchStart = n;
-    $("#launch-title").textContent = n.title;
-    $("#launch-gain").textContent = n.gain + " stärker";
-    $("#launch-text").textContent = n.text;
-    openOverlay(launchBox);
-    requestAnimationFrame(() => $("#launch-try").focus());
-  } catch {   }
-}
-async function launchSchliessen(){
-  closeOverlay(launchBox);
-  const start = launchStart;
-  launchStart = null;
-  if (!start) return;
-  try {
-    await api("/api/upgrades", { method: "POST", headers: {"Content-Type": "application/json"},
-                                 body: JSON.stringify({ action: "seen", id: start.id }) });
-  } catch {}
-  return start;
-}
-$("#launch-back").addEventListener("click", () => launchSchliessen());
-$("#launch-try").addEventListener("click", async () => {
-  const start = await launchSchliessen();
-  if (start) chooseModel({ id: start.model, label: start.label }, "AQUATICY_MODEL");
-});
-launchBox.addEventListener("click", (e) => { if (e.target === launchBox) launchSchliessen(); });
-launchBox.addEventListener("keydown", (e) => { if (e.key === "Escape") launchSchliessen(); });
-
-async function upgradeLaden(){
-  if (upgradeBusy || !overlay.classList.contains("open") || document.hidden) return;
-  const anfrage = ++upgradeAnfrage;
-  if (!kontoUltra){ upgradeZeigen({ locked: true }); return; }
-  try {
-    const res = await api("/api/upgrades", { quietErrors: true });
-    if (!res.ok) throw new Error();
-    const daten = await res.json();
-    if (anfrage !== upgradeAnfrage) return;
-    upgradeZeigen(daten.ultra ? daten.ultra : { unavailable: !daten.available });
-  } catch (err){
-    if (anfrage !== upgradeAnfrage) return;
-    $("#upgrade-status").textContent = nutzerFehler(err && err.message);
-    upgradeStand = "";
-    upgradePlanen();
-  }
-}
-async function upgradeAktion(body, knopf){
-  if (upgradeBusy) return;
-  upgradeBusy = true;
-  upgradeAnfrage++;
-  clearTimeout(upgradeTakt);
-  let nachladen = false;
-  if (knopf) knopf.disabled = true;
-  try {
-    const res = await api("/api/upgrades", { method: "POST",
-      headers: {"Content-Type": "application/json"}, body: JSON.stringify(body) });
-    const daten = await res.json();
-    if (!res.ok || daten.error){ hinweis(nutzerFehler(daten.error)); nachladen = true; return; }
-    upgradeZeigen(daten.ultra);
-    if (body.action === "upgrade" || body.action === "rollback") refreshHeader();
-  } catch (err){ hinweis(nutzerFehler(err && err.message)); nachladen = true; }
-  finally {
-    upgradeBusy = false;
-    if (knopf) knopf.disabled = knopf.id === "upgrade-on"
-      && (!kontoUltra || upgradeDaten.locked || upgradeDaten.unavailable);
-    if (nachladen) upgradeLaden(); else upgradePlanen();
-  }
-}
-let upgradeTakt = null;
-let upgradeAnfrage = 0, upgradeBusy = false, upgradeStand = "", upgradeDaten = {};
-function upgradePlanen(){
-  clearTimeout(upgradeTakt);
-
-
-  if (devSichtbar && upgradeDaten.enabled && !upgradeBusy && !document.hidden
-      && overlay.classList.contains("open") && !overlay.classList.contains("closing"))
-    upgradeTakt = setTimeout(upgradeLaden, upgradeDaten.running ? 4000 : 10000);
-}
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) clearTimeout(upgradeTakt);
-  else if (devSichtbar && overlay.classList.contains("open")) upgradeLaden();
-});
-function upgradeZeigen(d){
-  d = d || { unavailable: true };
-  upgradeDaten = d;
-  upgradePlanen();
-  const stand = JSON.stringify({ ultra: kontoUltra, ...d });
-  if (stand === upgradeStand) return;
-  upgradeStand = stand;
-  const gesperrt = !kontoUltra || d.locked;
-  $("#upgrade-lock").hidden = !gesperrt;
-  $("#upgrade-on").disabled = gesperrt || d.unavailable;
-  $("#upgrade-on").checked = !!d.enabled;
-  $("#upgrade-panel").hidden = gesperrt || !d.enabled;
-  const status = $("#upgrade-status");
-  status.className = "note";
-  if (d.unavailable){ status.textContent = "Auto-Upgrading läuft nur mit der Weboberfläche."; return; }
-  if (gesperrt){ status.textContent = ""; return; }
-  status.textContent = d.running ? "Trainiert gerade …"
-    : (d.message || (d.enabled ? "An — trainiert von selbst, sobald es neues bestätigtes Wissen gibt." : ""));
-  const liste = $("#upgrade-tracks");
-  liste.replaceChildren();
-  if (d.enabled && !(d.tracks || []).length){
-    const li = document.createElement("li");
-    li.textContent = "Kein lokales Modell gefunden — Auto-Upgrading braucht Ollama.";
-    liste.appendChild(li);
-  }
-  for (const t of d.tracks || []){
-    const li = document.createElement("li");
-    const zeile = document.createElement("div");
-    zeile.className = "zeile";
-    const wer = document.createElement("span");
-    wer.className = "wer";
-    wer.textContent = t.current_label;
-    const klein = document.createElement("small");
-    const k = t.candidate;
-    klein.textContent = k
-      ? `Neu: ${k.label} · ${k.gain_text}` + (k.can_upgrade ? "" : ` · Upgraden ab ${d.minor} %`)
-      : "Neueste Version — noch keine bessere";
-    wer.appendChild(klein);
-    const los = document.createElement("button");
-    los.type = "button";
-    los.className = "btn upgrade-go" + (k && k.can_upgrade ? " bereit" : "");
-    los.textContent = "Upgraden";
-    los.disabled = !(k && k.can_upgrade);
-    los.title = k && !k.can_upgrade ? `Erst ab ${d.minor} % besser` : "";
-    los.addEventListener("click", () => upgradeAktion({ action: "upgrade", base: t.base }, los));
-    zeile.append(wer, los);
-    if (k){
-      const weg = document.createElement("button");
-      weg.type = "button"; weg.className = "btn"; weg.textContent = "Überspringen";
-      weg.addEventListener("click", async () => {
-        if (await frage("Version überspringen?", `${k.label} wird verworfen.`, "Überspringen"))
-          upgradeAktion({ action: "skip", base: t.base }, weg);
-      });
-      zeile.appendChild(weg);
-    }
-    li.appendChild(zeile);
-    const alte = (t.versions || []).filter(v => !v.current);
-    if (alte.length){
-      const versionen = document.createElement("div");
-      versionen.className = "versionen";
-      for (const v of alte){
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "btn";
-        b.textContent = `${v.label} als neueste`;
-        b.title = "Zurückziehen: diese Version wird wieder die neueste";
-        b.addEventListener("click", async () => {
-          if (await frage("Version zurückziehen?",
-                          `${v.label} wird wieder die neueste Version für alle.`, "Zurückziehen"))
-            upgradeAktion({ action: "rollback", base: t.base, version: v.version }, b);
-        });
-        versionen.appendChild(b);
-      }
-      li.appendChild(versionen);
-    }
-    liste.appendChild(li);
-  }
-}
-$("#upgrade-on").addEventListener("change", (e) =>
-  upgradeAktion({ action: "enable", on: e.target.checked }, e.target));
-$("#upgrade-train").addEventListener("click", (e) =>
-  upgradeAktion({ action: "train" }, e.target));
 
 async function starteOberflaeche(){
   angemeldet = true;
@@ -11771,7 +11565,6 @@ async function starteOberflaeche(){
   pruefeLimits();
   pluginsLaden();
   coworkerAbzeichenLaden();
-  pruefeUpgrade();
   pruefeSperre();
   await wiederAufnehmen();
   input.focus();

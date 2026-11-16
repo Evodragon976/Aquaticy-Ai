@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import re
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,37 @@ def domain_of(url: str) -> str:
     except ValueError:
         return ""
     return host[4:] if host.startswith("www.") else host
+
+
+_TRACKING = re.compile(
+    r"^(?:utm_.*|fbclid|gclid|dclid|gbraid|wbraid|msclkid|mc_cid|mc_eid|igshid|yclid|_ga|"
+    r"ref|ref_src|spm)$", re.IGNORECASE)
+
+
+def canonical_url(url: str) -> str:
+    """Eine Schluessel-Adresse, unter der dieselbe Seite immer gleich heisst (16.0.0).
+
+    `http://www.x.de/a/?utm_source=n#oben` und `https://x.de/a` sind dieselbe Seite. Wer beide
+    getrennt zaehlt, teilt die Stimmen mehrerer Suchanfragen auf und listet sie doppelt. Es
+    wird nur verglichen: Angezeigt und abgerufen wird weiter die Adresse des Treffers.
+    """
+    text = (url or "").strip()
+    try:
+        teile = urlparse(text)
+        host = (teile.hostname or "").lower()
+        port = teile.port
+    except ValueError:
+        return text
+    if not host:
+        return text
+    if host.startswith("www."):
+        host = host[4:]
+    if port and port not in (80, 443):
+        host = f"{host}:{port}"
+    pfad = teile.path.rstrip("/") or ""
+    abfrage = urlencode(sorted((k, v) for k, v in parse_qsl(teile.query, keep_blank_values=True)
+                               if not _TRACKING.match(k)))
+    return f"https://{host}{pfad}" + (f"?{abfrage}" if abfrage else "")
 
 
 class SearchResult(BaseModel):

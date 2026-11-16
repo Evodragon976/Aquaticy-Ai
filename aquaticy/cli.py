@@ -252,7 +252,6 @@ def setup_command(
         "AQUATICY_LOCATION": location,
         "AQUATICY_LANG": lang,
         "AQUATICY_COUNTRY": country,
-        "AQUATICY_SUBAGENTS_AUTO": "true",
     }
     if backend_key_name and backend_key:
         values[backend_key_name] = backend_key
@@ -2888,6 +2887,10 @@ def _clear_memory(settings: Settings) -> None:
         console.print("[yellow]Der Speicher ist ausgeschaltet.[/yellow]")
         return
     count = _open_memory(settings).clear()
+    with contextlib.suppress(Exception):  # 16.0.0: auch die Zaehler fuer Sprache und Ort
+        from aquaticy import autoort
+
+        autoort.vergessen(settings.data_dir)
     if count:
         console.print(f"[green]{count} Notizen gelöscht.[/green]")
         console.print("[dim]Hochgeladene Dateien bleiben – /uploads clear.[/dim]")

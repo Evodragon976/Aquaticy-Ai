@@ -1317,6 +1317,8 @@ def coworker_agent_class() -> type:
         def _automatic_memory_allowed(self) -> bool:
             return False
 
+        LEARNS_SETTINGS = False
+
         def _warm_workshop(self) -> threading.Thread | None:
             return None
 

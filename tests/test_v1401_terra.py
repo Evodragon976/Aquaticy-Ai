@@ -247,6 +247,7 @@ def test_automatic_router_setup_and_live_results_in_browser(
                 page.locator("#btn-side").click()
             page.locator("#btn-settings").click()
             page.locator("#secure-setting").check()
+            page.locator("#secure-window-open").click()  # 16.0.0: eigenes Fenster
             playwright.expect(page.locator("#secure-router")).to_have_value("192.168.1.1")
             playwright.expect(page.locator("#secure-subnet")).to_have_value("192.168.1.0/24")
             page.locator("#secure-test").click()

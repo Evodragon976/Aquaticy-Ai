@@ -297,8 +297,10 @@ def test_secure_pro_is_part_of_home_and_network() -> None:
     start = formular.index("<legend>Zuhause &amp; Netz</legend>")
     netz = formular[start:formular.index("</fieldset>", start)]
     assert '<div class="sub-title">Secure Pro</div>' in netz
-    auswahl = netz[netz.index('id="secure-interval"'):netz.index("</select>",
-                                                                   netz.index("secure-interval"))]
+    # 16.0.0: Die Einstellungen von Secure Pro stehen in einem eigenen Fenster.
+    fenster = html[html.index('id="securebox"'):html.index('id="ortbox"')]
+    auswahl = fenster[fenster.index('id="secure-interval"'):fenster.index(
+        "</select>", fenster.index("secure-interval"))]
     werte = [int(w) for w in re.findall(r'value="(\d+)"', auswahl)]
     assert werte == list(secure_pro.INTERVALS)
     assert ">die ganze Zeit<" in auswahl and ">alle 30 Sekunden<" in auswahl

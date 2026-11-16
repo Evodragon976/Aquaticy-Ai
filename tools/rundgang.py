@@ -1733,6 +1733,33 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         )
         log.pruefe(ziel >= kopf - 4,
                    f"der Sprung landet unter dem stehenden Kopf ({ziel:.0f} / {kopf:.0f})")
+        # 16.0.0: Ort & Sprache und Secure Pro haben je ein eigenes Fenster.
+        log.pruefe(pg.locator('#settings [name="AQUATICY_LANG"]').count() == 0
+                   and pg.locator('[name="AQUATICY_LANG"][form="settings"]').count() == 1,
+                   "Ort & Sprache stehen nicht mehr im Formular, gehoeren aber dazu")
+        log.pruefe(pg.locator('#settings fieldset:has(legend:text-is("Helfer & Grenzen"))').count()
+                   == 0, "Helfer & Grenzen gibt es nicht mehr")
+        pg.click("#ort-open")
+        pg.wait_for_selector("#ortbox.open", state="visible")
+        pg.wait_for_timeout(500)
+        log.pruefe(pg.is_visible('#ortbox [name="AQUATICY_LOCATION"]')
+                   and pg.is_visible('#ortbox [name="AQUATICY_COUNTRY"]'),
+                   "das Fenster zeigt Ort, Sprache, Land")
+        pg.fill('#ortbox [name="AQUATICY_LOCATION"]', "Hamburg")
+        pg.press('#ortbox [name="AQUATICY_LOCATION"]', "Enter")
+        pg.wait_for_timeout(900)
+        if bilder:
+            pg.screenshot(path=str(bilder / "einstellungen-ort-sprache.png"))
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(500)
+        log.pruefe(not pg.is_visible("#ortbox.open") and pg.is_visible("#overlay.open"),
+                   "Escape schliesst nur das kleine Fenster")
+        log.pruefe("Hamburg" in pg.inner_text("#ort-stand"), "der Stand steht unter Konto")
+        log.pruefe(pg.is_visible("#secure-window-open") and pg.is_disabled("#secure-window-open"),
+                   "ohne Secure Pro bleibt der Knopf zum Einstellen aus")
+        log.pruefe(not pg.is_visible("#securebox.open"), "das Secure-Pro-Fenster ist zu")
+        if bilder:
+            pg.screenshot(path=str(bilder / "einstellungen-konto.png"))
         for knopf, notiz in (
             ("#probe", "#probe-note"),
             ("#storage-test", "#lager-note"),

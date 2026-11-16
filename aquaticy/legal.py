@@ -56,6 +56,14 @@ Installation entscheidet, wo sie läuft und welche optionalen Dienste eingeschal
     </li>
   <li><strong>Design:</strong> die Farben eines selbst erstellten Designs und die gewählte
     Schriftgröße, damit es auf jedem deiner Geräte gleich aussieht.</li>
+  <li><strong>Sprache und Ort aus dem Chat:</strong> Aquaticy merkt sich aus deinen eigenen
+    Nachrichten, in welcher Sprache du schreibst und nach welchen Orten du suchst. Damit stellt
+    es die Sprache und den Standard-Ort der Suche ein. Gespeichert werden nur kurze Zähler
+    (Sprachkürzel, Orte mit Anzahl) in deinem Kontoordner, nie der Text deiner Nachrichten. Das
+    passiert nur bei eingeschaltetem Gedächtnis. „Alles vergessen“ löscht die Zähler, „Alle
+    Daten löschen“ auch. Das Land stellst nur du ein. Aquaticy zeigt dir jede Änderung im Chat.
+    Was du selbst eingestellt hast, ändert es nie. Du findest alles unter Einstellungen → Konto →
+    Ort &amp; Sprache.</li>
 </ul>
 <h2>Verschlüsselung</h2>
 <p>Chats (Fragen, Antworten, Chatnamen, Notizen), hochgeladene Dateien und Fotos, Bilder,
@@ -103,20 +111,6 @@ diese Verwaltungsdaten sind pseudonym, nicht vollständig anonym. Aquaticy nutzt
 als ausdrücklich unvertrauenswürdiges Recherchematerial, trainiert damit keine Modellgewichte
 und sendet sie beim Beantworten passender Fragen an den dafür ausgewählten Modellanbieter.
 Öffentliche Quellen können Fehler enthalten; wichtige Angaben müssen erneut geprüft werden.</p>
-<p>Wenn ein Ultra-Konto das serverweite Auto-Upgrading einschaltet, können von mindestens
-zwei aktuell zustimmenden Konten unabhängig bestätigte Auszüge außerdem in den Systemtext
-abgeleiteter lokaler Ollama-Modelle übernommen werden. Auch hierbei werden keine Modellgewichte
-trainiert und keine privaten Chats übernommen. Ollama speichert diese öffentlichen Auszüge
-im Modell-Systemtext unverschlüsselt; Zugriff auf den Ollama-Dienst muss der Betreiber schützen.
-Aquaticy prüft vor der Nutzung solcher Fassungen, ob alle eingebauten Auszüge noch gültig und
-ausreichend bestätigt sind. Bei Ablauf, Widerruf, Kontolöschung oder erforderlicher erneuter
-Zustimmung zieht Aquaticy betroffene Fassungen zurück und nutzt das Ausgangsmodell.
-Die Löschung im Ollama-Dienst wird beim nächsten Hintergrundabgleich versucht
-(außerhalb aktiver Trainingsläufe etwa alle zehn Minuten) und bei Ausfällen wiederholt.
-Alte Fassungen ohne
-nachprüfbare Quellenzuordnung werden ebenfalls zurückgezogen; neue Fassungen entstehen erst
-aus aktuell freigegebenem Wissen. Bereits entstandene externe Sicherungen des Ollama-Dienstes
-liegen in der Verantwortung des Betreibers.</p>
 <p>Du kannst die Zustimmung jederzeit dort widerrufen. Das stoppt neue Übernahmen und
 entfernt deine Beitragszuordnung. Ein Auszug wird gelöscht, wenn kein anderes zustimmendes
 Konto denselben öffentlichen Auszug unabhängig beigetragen hat. „Alle Daten löschen“ und

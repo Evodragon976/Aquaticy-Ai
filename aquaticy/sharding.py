@@ -154,9 +154,9 @@ def ollama_gguf(name: str, base_url: str) -> Path:
 
 
 def ollama_models(base_url: str) -> list[dict[str, Any]]:
-    """Die Modelle aus Ollama mit Groesse -- ohne die von Auto-Upgrading gebauten."""
+    """Die Modelle aus Ollama mit Groesse -- ohne die frueher von Auto-Upgrading gebauten."""
+    from aquaticy.altmodelle import PREFIX
     from aquaticy.local_model import _tag_list
-    from aquaticy.upgrading import PREFIX
 
     modelle = []
     for eintrag in _tag_list(base_url):

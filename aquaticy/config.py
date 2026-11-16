@@ -963,6 +963,45 @@ def reset_settings_cache() -> None:
     get_settings.cache_clear()
 
 
+#: 16.0.0: Diese Werte standen unter "Helfer & Grenzen". Den Abschnitt gibt es nicht mehr -- es
+#: gelten die Werte ab Werk. Konten koennen sie weder sehen noch aendern. Nur wer den Server
+#: betreibt, kann sie noch als Umgebungsvariable setzen.
+FIXED_LIMIT_KEYS = ("AQUATICY_SUBAGENTS_AUTO", "AQUATICY_MAX_SUBAGENTS",
+                    "AQUATICY_SUBAGENT_BUDGET", "AQUATICY_SUBAGENT_PARALLEL", "AQUATICY_RPM",
+                    "AQUATICY_PARALLEL_CALLS", "AQUATICY_MAX_TOOL_CALLS",
+                    "AQUATICY_PLANNER_TIMEOUT")
+LIMITS_MARKER = "helfer-grenzen-entfernt"
+
+
+def forget_stored_limits(data_dir: Path, env_path: Path | None = None) -> list[str]:
+    """Einmal je Datenordner: nimmt die frueher in der Oberflaeche gespeicherten Werte heraus.
+
+    Die Einstellungen schrieben sie in die `.env`. Ohne das hier gaelten sie weiter, obwohl sie
+    niemand mehr sehen kann. Danach bleibt die Datei in Ruhe: Was ein Betreiber spaeter von Hand
+    eintraegt, bleibt stehen.
+
+    Returns: die entfernten Namen (leer, wenn es nichts zu tun gab).
+    """
+    marke = Path(data_dir) / LIMITS_MARKER
+    if marke.exists():
+        return []
+    ziel = env_path or find_env_file()
+    entfernt: list[str] = []
+    if ziel is not None and Path(ziel).is_file():
+        gespeichert = read_env_file(Path(ziel))
+        entfernt = [name for name in FIXED_LIMIT_KEYS if name in gespeichert]
+        if entfernt:
+            write_env_file({}, Path(ziel), remove=set(entfernt))
+            for name in entfernt:
+                # Nur was aus der Datei kam, verschwindet auch aus der laufenden Umgebung.
+                if os.environ.get(name, "").strip() == gespeichert[name].strip():
+                    os.environ.pop(name, None)
+            reset_settings_cache()
+    Path(data_dir).mkdir(parents=True, exist_ok=True)
+    marke.write_text("16.0.0\n", encoding="utf-8")
+    return entfernt
+
+
 ENV_KEY_RE = re.compile(r"[A-Z_][A-Z0-9_]{0,99}")
 
 

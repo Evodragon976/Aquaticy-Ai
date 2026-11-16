@@ -1539,11 +1539,11 @@ SETTING_SCHEMA: dict[str, Any] = {
         "name": "change_setting",
         "description": (
             "Aendert eine Einstellung, wenn der Nutzer darum bittet -- etwa 'mach den "
-            "Hintergrund weiss', 'such lieber auf Englisch', 'nimm weniger Teilfragen'. "
+            "Hintergrund weiss', 'such lieber auf Englisch'. "
             "Moegliche Namen: aussehen (hell/dunkel), farbschema (standard, nord, "
             "catppuccin, gruvbox, tokyo_night, solarized, dracula, rose_pine), "
             "ort, sprache, land, suchmaschine, "
-            "formulierungen, subagenten (an/aus), subagenten_anzahl, werkzeug_budget, "
+            "formulierungen, "
             "kontextfenster, browser_fallback (an/aus), modell. "
             "NICHT aenderbar sind Zugangsdaten und alles, was mir mehr Zugriff gaebe: "
             "Schalten im Haus, Mail und Kalender, Schreibrechte im Lager, Netzzugriff, "

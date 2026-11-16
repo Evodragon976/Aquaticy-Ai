@@ -90,10 +90,8 @@ def test_cloud_main_keeps_the_native_ollama_route_for_a_local_code_model(monkeyp
     assert settings.llm_kwargs_for(settings.code_model)['api_base'] == 'http://host:11999'
 
 
-def test_upgrade_backend_uses_the_operator_route_without_assuming_a_port():
-    from aquaticy.upgrading import OllamaBackend
-
-    assert OllamaBackend('http://host:11999/v1').url == 'http://host:11999'
+# 16.0.0: 1 Test(s) entfallen -- sie pruefen Teile, die es nicht mehr gibt
+# (Auto-Upgrading und die Einstellungen unter Helfer & Grenzen).
 
 
 @pytest.mark.skipif(not _browser_da(), reason='Playwright oder Browser fehlen')

@@ -306,15 +306,7 @@ SETTING_KEYS: tuple[str, ...] = (
     "AQUATICY_LOCATION",
     "AQUATICY_LANG",
     "AQUATICY_COUNTRY",
-    "AQUATICY_SUBAGENTS_AUTO",
-    "AQUATICY_MAX_SUBAGENTS",
-    "AQUATICY_SUBAGENT_BUDGET",
-    "AQUATICY_SUBAGENT_PARALLEL",
-    "AQUATICY_RPM",
-    "AQUATICY_PARALLEL_CALLS",
-    "AQUATICY_MAX_TOOL_CALLS",
     "AQUATICY_CONTEXT_TOKENS",
-    "AQUATICY_PLANNER_TIMEOUT",
     "AQUATICY_ENABLE_PLAYWRIGHT",
     "AQUATICY_HA_URL",
     "AQUATICY_HA_CONTROL",
@@ -340,16 +332,7 @@ SETTING_KEYS: tuple[str, ...] = (
 NUMBERS: dict[str, tuple[int, int]] = {
 
     "AQUATICY_SEARCH_VARIANTS": (1, 3),
-    "AQUATICY_MAX_SUBAGENTS": (1, 12),
-    "AQUATICY_SUBAGENT_BUDGET": (1, 40),
-
-    "AQUATICY_SUBAGENT_PARALLEL": (0, 12),
-    "AQUATICY_RPM": (1, 100_000),
-    "AQUATICY_PARALLEL_CALLS": (1, 64),
-    "AQUATICY_MAX_TOOL_CALLS": (1, 200),
-
     "AQUATICY_CONTEXT_TOKENS": (256, 2_000_000),
-    "AQUATICY_PLANNER_TIMEOUT": (1, 600),
 }
 
 
@@ -570,8 +553,8 @@ HOME_CA_ROUTES = frozenset({"/zertifikat", "/aquaticy-ca.crt"})
 LAN_ONLY = False
 
 
-UPGRADE_DIR: Path | None = None
-UPGRADER: Any = None
+#: 16.0.0: der Datenordner des Servers -- fuer die Reste von Auto-Upgrading (altmodelle.py).
+ALTMODELLE_DIR: Path | None = None
 _CLUSTER_RESTART = threading.Event()
 
 
@@ -638,7 +621,6 @@ _STRING_SETTINGS = {
     "GOOGLE_CLIENT_SECRET": "google_client_secret",
 }
 _BOOL_SETTINGS = {
-    "AQUATICY_SUBAGENTS_AUTO": "subagents_auto",
     "AQUATICY_ENABLE_PLAYWRIGHT": "enable_playwright",
     "AQUATICY_HA_CONTROL": "ha_control",
     "AQUATICY_HA_DIRECT": "ha_direct",
@@ -655,14 +637,7 @@ _BOOL_SETTINGS = {
 }
 _INT_SETTINGS = {
     "AQUATICY_SEARCH_VARIANTS": "search_variants",
-    "AQUATICY_MAX_SUBAGENTS": "max_subagents",
-    "AQUATICY_SUBAGENT_BUDGET": "subagent_budget",
-    "AQUATICY_SUBAGENT_PARALLEL": "subagent_parallel",
-    "AQUATICY_RPM": "rpm",
-    "AQUATICY_PARALLEL_CALLS": "parallel_calls",
-    "AQUATICY_MAX_TOOL_CALLS": "max_tool_calls",
     "AQUATICY_CONTEXT_TOKENS": "context_tokens",
-    "AQUATICY_PLANNER_TIMEOUT": "planner_timeout",
 }
 
 
@@ -730,14 +705,6 @@ def header_for(settings: Settings) -> dict[str, Any]:
         from aquaticy import standard
 
         kopf["model_label"] = standard.LABEL  # 15.8.9: antwortet ohne Sprachmodell
-    if UPGRADE_DIR is not None:
-        from aquaticy import upgrading
-
-        with contextlib.suppress(Exception):
-            schoen = upgrading.display_label(UPGRADE_DIR, kopf.get("model", ""))
-            if schoen:
-                kopf["model_label"] = kopf["model_label"].replace(
-                    kopf["model"].split("/")[-1], schoen)
     return kopf
 
 
@@ -1399,27 +1366,16 @@ class ChatSession:
                 if self.profile is not None
                 else get_settings()
             )
-            self._upgrade_gen = -1
-        if UPGRADE_DIR is not None:
-            from aquaticy import upgrading
+            if ALTMODELLE_DIR is not None:
+                # 16.0.0: Auto-Upgrading gibt es nicht mehr. Wer noch eine gebaute Fassung
+                # eingestellt hat, bekommt ihr Ausgangsmodell.
+                from aquaticy import altmodelle
 
-            directory = UPGRADE_DIR
-
-            def access(model: str) -> None:
-                if not upgrading.allowed(directory, model, self.ultra):
-                    raise ValueError("Diese Modellversion steht dir nicht mehr zur Wahl.")
-
-            self._settings.model_access = access
-            self._settings.model_context = lambda model: upgrading.model_context(
-                directory, model, self.ultra)
-            for field in ("model", "vision_model", "subagent_model", "code_model"):
-                value = getattr(self._settings, field)
-                if value and (field == "model" or not upgrading.allowed(
-                        directory, value, self.ultra)):
-                    with contextlib.suppress(upgrading.UpgradeError):
-                        setattr(self._settings, field, upgrading.resolve(
-                            directory, value, self.ultra,
-                            getattr(self.account, "id", "") or ""))
+                for field in ("model", "vision_model", "subagent_model", "code_model"):
+                    value = getattr(self._settings, field)
+                    if value and altmodelle.gebaut(value):
+                        setattr(self._settings, field,
+                                altmodelle.ausgangsmodell(ALTMODELLE_DIR, value))
         return self._settings
 
     @property
@@ -2147,6 +2103,10 @@ class ChatSession:
         if not self.settings().memory_enabled:
             return "Der Speicher ist ausgeschaltet – da ist nichts zu löschen."
         count = self.memory().clear()
+        with contextlib.suppress(Exception):  # 16.0.0: auch die Zaehler fuer Sprache und Ort
+            from aquaticy import autoort
+
+            autoort.vergessen(self.settings().data_dir)
         if not count:
             return "Der Speicher war schon leer."
         return f"{count} Notizen gelöscht. Hochgeladene Dateien bleiben – `/uploads clear`."
@@ -3244,16 +3204,7 @@ def current_values() -> dict[str, str]:
         "AQUATICY_LOCATION": settings.location,
         "AQUATICY_LANG": settings.lang,
         "AQUATICY_COUNTRY": settings.country,
-        "AQUATICY_SUBAGENTS_AUTO": "true" if settings.subagents_auto else "false",
-        "AQUATICY_MAX_SUBAGENTS": str(settings.max_subagents),
-        "AQUATICY_SUBAGENT_BUDGET": str(settings.subagent_budget),
-        "AQUATICY_SUBAGENT_PARALLEL": str(settings.subagent_parallel),
-
-        "AQUATICY_RPM": str(settings.rpm) if settings.rpm else "",
-        "AQUATICY_PARALLEL_CALLS": str(settings.parallel_calls) if settings.parallel_calls else "",
-        "AQUATICY_MAX_TOOL_CALLS": str(settings.max_tool_calls),
         "AQUATICY_CONTEXT_TOKENS": str(settings.context_tokens),
-        "AQUATICY_PLANNER_TIMEOUT": str(int(settings.planner_timeout)),
         "AQUATICY_ENABLE_PLAYWRIGHT": "true" if settings.enable_playwright else "false",
         "AQUATICY_HA_URL": settings.ha_url,
         "AQUATICY_HA_CONTROL": "true" if settings.ha_control else "false",
@@ -3590,13 +3541,6 @@ def save_values(payload: dict[str, Any]) -> Path:
             basis = values.get("AQUATICY_API_BASE", session.settings().api_base) or ""
             if not model_allowed(values[key], basis):
                 raise ValueError(MODEL_RULE_TEXT)
-    if UPGRADE_DIR is not None:
-        from aquaticy import upgrading
-
-        for key in ("AQUATICY_MODEL", "AQUATICY_VISION_MODEL",
-                    "AQUATICY_SUBAGENT_MODEL", "AQUATICY_CODE_MODEL"):
-            if values.get(key) and not upgrading.allowed(UPGRADE_DIR, values[key], session.ultra):
-                raise ValueError("Diese Modellversion steht dir nicht mehr zur Wahl.")
     ha_token = str(payload.get(HA_TOKEN_FIELD, "")).strip()
 
     geheim: dict[str, str] = {}
@@ -3644,9 +3588,6 @@ def save_values(payload: dict[str, Any]) -> Path:
         from aquaticy.memory import secure_file
 
         secure_file(written)
-    if UPGRADE_DIR is not None and values.get("AQUATICY_MODEL"):
-        upgrading.choose(UPGRADE_DIR, values["AQUATICY_MODEL"], session.ultra,
-                         getattr(session.account, "id", "") or "")
     session.reload()
     if (any(key.startswith("AQUATICY_VM_") for key in values)
             and workshop_changed(previous_settings, session.settings())):
@@ -5512,6 +5453,12 @@ class Handler(BaseHTTPRequestHandler):
             store = SESSION.memory()
             eintrag = (frage.get("id") or [""])[0].strip()
             if not eintrag:
+                # 16.0.0: "Alles vergessen" loescht auch, was Aquaticy fuer Sprache und
+                # Standard-Ort mitgezaehlt hat. Die eingestellten Werte bleiben.
+                with contextlib.suppress(Exception):
+                    from aquaticy import autoort
+
+                    autoort.vergessen(SESSION.settings().data_dir)
                 self._json({"forgotten": store.clear()})
                 return
 
@@ -5644,8 +5591,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(feature_view(SESSION.current()))
         elif route == "/api/linked":
             self._json(linked_view(SESSION.current()))
-        elif route == "/api/upgrades":
-            self._json(upgrades_view(SESSION.current()))
         elif route == "/api/auth/status":
             account = self._account()
             self._json(
@@ -5899,11 +5844,10 @@ class Handler(BaseHTTPRequestHandler):
                          "note": f"Verteilt auf {SHARDING.servers()} Server",
                          "source": "operator", "source_label": ""}] + [
                     m for m in alle if m.get("id") != SPLIT_MODEL_ID]
-            if UPGRADE_DIR is not None:
-                from aquaticy import upgrading
+            # 16.0.0: Die von Auto-Upgrading gebauten Fassungen stehen nicht mehr zur Wahl.
+            from aquaticy import altmodelle
 
-                current = SESSION.current() if isinstance(SESSION, SessionProxy) else SESSION
-                alle = upgrading.picker_entries(UPGRADE_DIR, alle, bool(current.ultra))
+            alle = [m for m in alle if not altmodelle.gebaut(str(m.get("id") or ""))]
             # 15.8.9: Aquaticy Standard antwortet ohne Sprachmodell -- immer waehlbar.
             from aquaticy import standard as standard_mod
 
@@ -6146,10 +6090,6 @@ class Handler(BaseHTTPRequestHandler):
             self._json(antwort, status)
         elif route == "/api/linked":
             antwort, status = linked_action(self._read_json(limit=AUTH_BODY_BYTES))
-            self._json(antwort, status)
-        elif route == "/api/upgrades":
-            antwort, status = upgrades_action(SESSION.current(),
-                                              self._read_json(limit=AUTH_BODY_BYTES))
             self._json(antwort, status)
         elif route == "/api/learning":
             from aquaticy.learning import Learning
@@ -7370,64 +7310,8 @@ def _cluster_view_full() -> dict[str, Any]:
     return antwort
 
 
-def upgrades_view(session: Any) -> dict[str, Any]:
-    """Auto-Upgrading (10.0 Luna): die Startmeldung fuer jedes Konto, der Stand fuer Ultra."""
-    if UPGRADE_DIR is None:
-        return {"available": False, "notice": None}
-    from aquaticy import upgrading
-
-    konto = getattr(getattr(session, "account", None), "id", "") or ""
-    antwort: dict[str, Any] = {"available": True,
-                               "notice": upgrading.launch_notice(UPGRADE_DIR, konto)}
-    if getattr(session, "ultra", False):
-        antwort["ultra"] = upgrading.view(UPGRADE_DIR)
-    return antwort
-
-
-def upgrades_action(session: Any, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
-    """Gesehen (jedes Konto); Schalter, Training, Upgraden, Ueberspringen und
-    Zuruecksetzen (nur Ultra -- geprueft hier, nicht im Browser)."""
-    if UPGRADE_DIR is None:
-        return {"error": "Auto-Upgrading läuft nur mit der Weboberfläche."}, 400
-    from aquaticy import upgrading
-
-    aktion = str(payload.get("action", ""))
-    konto = getattr(getattr(session, "account", None), "id", "") or ""
-    try:
-        if aktion == "seen":
-            upgrading.mark_seen(UPGRADE_DIR, konto, str(payload.get("id", "")))
-            return {"ok": True}, 200
-        if not getattr(session, "ultra", False):
-            return {"error": "Auto-Upgrading steuert nur ein Ultra-Konto.", "locked": True}, 403
-        base = str(payload.get("base", ""))
-        if aktion == "enable":
-            from aquaticy.local_model import installed_models
-
-            an = payload.get("on") is True
-            lokal = installed_models(OLLAMA_URL()) if an else []
-            upgrading.set_enabled(UPGRADE_DIR, an, lokal)
-            if an and UPGRADER is not None:
-                UPGRADER.run_now()
-        elif aktion == "train":
-            if not upgrading.load(UPGRADE_DIR)["enabled"]:
-                return {"error": "Schalte Auto-Upgrading zuerst ein."}, 400
-            if UPGRADER is not None:
-                UPGRADER.run_now()
-        elif aktion == "upgrade":
-            upgrading.upgrade(UPGRADE_DIR, base)
-        elif aktion == "skip":
-            upgrading.skip(UPGRADE_DIR, base, upgrading.OllamaBackend(OLLAMA_URL()))
-        elif aktion == "rollback":
-            upgrading.rollback(UPGRADE_DIR, base, str(payload.get("version", "")))
-        else:
-            return {"error": "Unbekannte Aktion."}, 400
-    except upgrading.UpgradeError as exc:
-        return {"error": str(exc)}, 400
-    return {"ok": True, "ultra": upgrading.view(UPGRADE_DIR)}, 200
-
-
 def OLLAMA_URL() -> str:
-    """Die Ollama-Adresse des Betreibers (fuer Auto-Upgrading)."""
+    """Die Ollama-Adresse des Betreibers."""
     from aquaticy.system import ollama_base
 
     return ollama_base(get_settings())
@@ -7967,7 +7851,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         for address, note in addresses_for(host, server.server_address[1], token):
             print(f"  {address} ({note})")
     port = server.server_address[1]
-    global SERVER, CLUSTER, UPGRADE_DIR, UPGRADER, SHARDING
+    global SERVER, CLUSTER, ALTMODELLE_DIR, SHARDING
     research_stop: threading.Event | None = None
     research_worker: threading.Thread | None = None
     from aquaticy.secure_pro import Watcher
@@ -8025,17 +7909,18 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
         research_stop, research_worker = start_cleanup(Learning(data_dir).research)
         SERVER = server
 
-        from aquaticy import upgrading
-        from aquaticy.local_model import installed_models
+        # 16.0.0: Auto-Upgrading ist entfernt. Die alte Zustandsdatei wird einmal ausgewertet
+        # (gebaute Fassung -> Ausgangsmodell) und geloescht.
+        from aquaticy import altmodelle
 
-        UPGRADE_DIR = data_dir
-        UPGRADER = upgrading.Trainer(
-            data_dir,
-            lambda: Learning(data_dir).confirmed_facts(upgrading.MAX_FACTS, metadata=True),
-            lambda: upgrading.OllamaBackend(OLLAMA_URL()),
-            lambda: installed_models(OLLAMA_URL()),
-            manifest=lambda: Learning(data_dir).upgrade_manifest())
-        UPGRADER.start()
+        ALTMODELLE_DIR = data_dir
+        with contextlib.suppress(Exception):
+            altmodelle.aufraeumen(data_dir)
+        # 16.0.0: "Helfer & Grenzen" ist entfernt -- frueher gespeicherte Werte gelten nicht mehr.
+        with contextlib.suppress(Exception):
+            from aquaticy.config import forget_stored_limits
+
+            forget_stored_limits(data_dir)
 
         try:
             frage = cluster.TerminalPrompt()
@@ -8093,10 +7978,7 @@ def _serve(host: str, port: int, open_browser: bool, token: str) -> None:
             SHARDING = None
         if CLUSTER is not None:
             CLUSTER.stop()
-        if UPGRADER is not None:
-            UPGRADER.stop()
-        UPGRADER = None
-        UPGRADE_DIR = None
+        ALTMODELLE_DIR = None
         _stop_schedulers()
         TOKEN = ""
         AUTH = None

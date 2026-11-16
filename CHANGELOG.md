@@ -3,6 +3,17 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 15.8.11:**
+
+- **Aquaticy Standard stürzt nicht mehr ab**, wenn der Dienst für Wechselkurse oder
+  Nachrichten etwas Unerwartetes schickt. Geht doch einmal etwas schief, kommt eine freundliche
+  Meldung statt eines Fehlers.
+- **Hilfe auch auf Englisch:** Auf „I want to kill myself“ und ähnliche Sätze nennt Aquaticy
+  Standard sofort Hilfe-Nummern. Normale Sätze wie „I hurt myself playing football“ zählen nicht
+  dazu.
+- **Zweistellige Jahre:** „geboren am 05.05.90“ heißt jetzt 1990, nicht 2090.
+- **Große Zahlen:** „1.000.000 plus 0,5 %“ wird richtig gerechnet.
+
 **Neu in 15.8.10:**
 
 - **Aquaticy Standard stürzt nicht mehr ab**, wenn du am 29. Februar Geburtstag hast.

@@ -202,7 +202,9 @@ def test_current_values_covers_every_setting_key(session: web.ChatSession) -> No
     assert set(values) == set(web.SETTING_KEYS)
     assert values["AQUATICY_MODEL"] == "mistral/mistral-large-latest"
     assert values["AQUATICY_LOCATION"] == "Bremen"
-    assert values["AQUATICY_SUBAGENTS_AUTO"] == "false"
+    assert values["AQUATICY_SEARCH_VARIANTS"]
+    # 16.0.0: "Helfer & Grenzen" ist entfernt -- diese Werte liefert /api/config nicht mehr.
+    assert not {"AQUATICY_SUBAGENTS_AUTO", "AQUATICY_RPM", "AQUATICY_MAX_TOOL_CALLS"} & set(values)
 
 
 def test_current_values_are_all_strings(session: web.ChatSession) -> None:
@@ -437,8 +439,8 @@ def test_config_post_reports_failures(
 def test_ui_file_offers_every_setting() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     for key in web.SETTING_KEYS:
-        if key == "AQUATICY_MAX_SUBAGENTS":
-            continue
+        if key == "AQUATICY_CONTEXT_TOKENS":
+            continue  # 16.0.0: ohne Abschnitt "Helfer & Grenzen" -- der Regler steht im Modellmenue
         assert f'name="{key}"' in html, f"{key} fehlt im Formular"
 
 
@@ -3599,26 +3601,29 @@ def test_a_number_field_with_letters_is_refused(client) -> None:
 
 
 def test_a_number_outside_its_range_is_refused(client) -> None:
-    status, data = client("POST", "/api/config", {"AQUATICY_MAX_SUBAGENTS": "5000"})
+    status, data = client("POST", "/api/config", {"AQUATICY_SEARCH_VARIANTS": "5000"})
     assert status == 400
     assert "ausserhalb" in json.loads(data)["error"]
 
 
-def test_the_request_rate_is_settable_and_checked(client) -> None:
-    """Wer einen größeren Vertrag hat, hebt die Grenze an -- aber mit Zahlen."""
-    assert "AQUATICY_RPM" in web.SETTING_KEYS
-    assert "AQUATICY_PARALLEL_CALLS" in web.SETTING_KEYS
+def test_the_limits_of_the_helpers_are_fixed_and_cannot_be_set(client) -> None:
+    """16.0.0: "Helfer & Grenzen" ist entfernt. Es gelten die Werte ab Werk -- ein Konto kann
+    sie weder sehen noch aendern, auch nicht mit einer selbst gebauten Anfrage.
+    """
+    from aquaticy.config import FIXED_LIMIT_KEYS
 
-    status, data = client("POST", "/api/config", {"AQUATICY_RPM": "viele"})
-    assert status == 400
-    assert "keine Zahl" in json.loads(data)["error"]
-
-    status, data = client("POST", "/api/config", {"AQUATICY_PARALLEL_CALLS": "500"})
-    assert status == 400
-    assert "ausserhalb" in json.loads(data)["error"]
-
-
-    assert client("POST", "/api/config", {"AQUATICY_RPM": ""})[0] == 200
+    for key in FIXED_LIMIT_KEYS:
+        assert key not in web.SETTING_KEYS, key
+        assert key not in web._INT_SETTINGS and key not in web._BOOL_SETTINGS, key
+    frech = {"AQUATICY_RPM": "600", "AQUATICY_MAX_TOOL_CALLS": "200",
+             "AQUATICY_SUBAGENTS_AUTO": "false"}
+    status, _ = client("POST", "/api/config", frech)
+    assert status == 200
+    nachher = json.loads(client("GET", "/api/config")[1])["values"]
+    assert not set(FIXED_LIMIT_KEYS) & set(nachher)
+    einstellungen = web.SESSION.settings()
+    assert einstellungen.rpm == 0 and einstellungen.max_tool_calls == 20
+    assert einstellungen.subagents_auto is True
 
 
 def test_an_invented_choice_is_refused(client) -> None:
@@ -4324,7 +4329,7 @@ def test_a_fresh_form_can_be_saved_as_it_is(client, web_settings: Settings) -> N
     erst ab 1 zu -- ein frisches Konto konnte gar nichts speichern."""
     _, body = client("GET", "/api/config")
     werte = json.loads(body)["values"]
-    assert werte["AQUATICY_SUBAGENT_PARALLEL"] == "0"
+    assert "AQUATICY_SUBAGENT_PARALLEL" not in werte  # 16.0.0: fest, nicht mehr einstellbar
     status, data = client("POST", "/api/config", werte)
     assert status == 200, data
 

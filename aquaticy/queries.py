@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Sequence
 
-from aquaticy.models import SearchResult, domain_of
+from aquaticy.models import SearchResult, canonical_url, domain_of
 
 RRF_K = 60
 
@@ -76,7 +76,12 @@ _PROPER = re.compile(r"\b([A-ZÄÖÜ][\wäöüß\-]+(?:\s+[A-ZÄÖÜ0-9][\wäö�
 
 def content_words(query: str) -> list[str]:
     """Die inhaltstragenden Woerter einer Anfrage, in ihrer Reihenfolge."""
-    words = _WORD.findall(query)
+    words = []
+    for roh in _WORD.findall(query):
+        # Ein Punkt am Ende ist Satzzeichen ("Bremen."), ausser das Wort hat noch einen
+        # ("e.V." bleibt, "3.5" bleibt).
+        word = roh.rstrip(".") if roh.count(".") == 1 and roh.endswith(".") else roh
+        words.append(word)
     return [word for word in words if word.lower() not in STOPWORDS and len(word) > 1]
 
 
@@ -192,9 +197,11 @@ def fuse(
     for results in lists:
         seen: set[str] = set()
         for result in results:
-            url = (result.url or "").strip()
-            if not url:
+            if not (result.url or "").strip():
                 continue
+            # 16.0.0: Schreibweisen derselben Seite zaehlen als eine -- sonst teilen sich ihre
+            # Stimmen auf, und sie steht mehrfach in der Liste.
+            url = canonical_url(result.url)
             if url not in seen:
                 scores[url] = scores.get(url, 0.0) + 1.0 / (RRF_K + len(seen) + 1)
                 seen.add(url)
@@ -205,7 +212,8 @@ def fuse(
                     continue
                 best[url] = result.model_copy()
 
-    order = sorted(best.values(), key=lambda item: -scores[item.url.strip()])
+    reihenfolge = sorted(best.items(), key=lambda eintrag: -scores[eintrag[0]])
+    order = [eintrag[1] for eintrag in reihenfolge]
     picked: list[SearchResult] = []
     spare: list[SearchResult] = []
     per_host: dict[str, int] = {}

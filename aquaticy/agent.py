@@ -2793,6 +2793,44 @@ class Agent:
     def _automatic_memory_allowed(self) -> bool:
         return True
 
+    #: Darf dieser Agent aus den Worten des Nutzers Sprache und Standard-Ort lernen (16.0.0)?
+    #: Nur ein Agent, der im Chat mit dem Nutzer selbst spricht -- nicht Coworker, Messenger.
+    LEARNS_SETTINGS = True
+
+    def _lernen_einstellungen(self, worte: str) -> None:
+        """Sprache, Standard-Ort und Land aus dem Chat lernen (aquaticy/autoort.py, 16.0.0).
+
+        Gelernt wird nur aus den eigenen Worten des Nutzers (``_memory_words``), hinter denselben
+        Schranken wie das Gedaechtnis. Was der Nutzer selbst eingestellt hat, bleibt.
+        """
+        if (not self.LEARNS_SETTINGS or self.secure_pro or not worte
+                or self.toolbox.memory_optout):
+            return
+        from aquaticy import autoort, preferences
+
+        data_dir = getattr(self.settings, "data_dir", None)
+        if data_dir is None:
+            return
+        aktuell = {"lang": self.settings.lang, "country": self.settings.country,
+                   "location": self.settings.location}
+        namen = {"lang": ("sprache", "lang"), "country": ("land", "country"),
+                 "location": ("ort", "location")}
+        for aenderung in autoort.lernen(data_dir, worte, aktuell):
+            feld, wert = aenderung["feld"], aenderung["wert"]
+            vorgabe = preferences.find(namen[feld][0])
+            if vorgabe is None:
+                autoort.zuruecknehmen(data_dir, feld)
+                continue
+            try:
+                preferences.store(vorgabe, wert, self.toolbox._profile_env())
+            except OSError:
+                autoort.zuruecknehmen(data_dir, feld)
+                continue
+            setattr(self.settings, namen[feld][1], wert)
+            if self.toolbox.on_settings_changed is not None:
+                self.toolbox.on_settings_changed()
+            self._emit("autosetting", label=vorgabe.label, value=wert, field=feld)
+
     def _memory_learn(self, question: str, mode: str = "") -> None:
         """Feste Muster sofort ablegen ("ich heisse Louis") -- vor der Antwort (15.3.4)."""
         from aquaticy import memory_auto
@@ -2813,6 +2851,8 @@ class Agent:
                 for text in memory_auto.forget_matching(store, wunsch):
                     self._emit("memory_forget", text=text)
                 return
+            with contextlib.suppress(Exception):
+                self._lernen_einstellungen(question)
             for fakt in memory_auto.store_facts(store, memory_auto.extract(question)):
                 self._emit("memory_save", text=fakt.text, topic=fakt.topic, auto=True)
                 self._gemerkt.append(fakt.text)
@@ -4461,6 +4501,7 @@ class Agent:
         gesehen = {eintrag.get("source_url", "") for eintrag in stats.visuals}
         gesehen |= {eintrag.get("url", "") for eintrag in stats.visuals}
         kandidaten: list[str] = []
+        titel: dict[str, str] = {}
         for adresse in answer_urls(answer):
             if adresse not in gesehen and adresse not in kandidaten:
                 kandidaten.append(adresse)
@@ -4468,7 +4509,12 @@ class Agent:
             adresse = str(eintrag.get("url", "")).strip()
             if adresse and adresse not in gesehen and adresse not in kandidaten:
                 kandidaten.append(adresse)
-        return kandidaten
+                titel[adresse] = str(eintrag.get("title", ""))
+        # 16.0.0: Adressen, die nach Kamera oder Satellit aussehen, zuerst -- sonst fuellt ein
+        # Zeitungsartikel einen der wenigen Versuche. Gleich Bewertete behalten ihre Reihenfolge.
+        from aquaticy.fetch import visual_score
+
+        return sorted(kandidaten, key=lambda a: -visual_score(f"{a} {titel.get(a, '')}"))
 
     def _should_force_visual(self) -> bool:
         """Muss der Agent zurueck, weil kein einziges Bild kam?

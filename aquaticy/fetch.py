@@ -527,6 +527,79 @@ def live_player_page(html: str) -> bool:
     return any(marker in text for marker in LIVE_PLAYER_MARKERS)
 
 
+#: Woerter, die eine Adresse oder ein Bild als Kamera- oder Satellitenbild ausweisen (16.0.0).
+#: Verglichen wird ganzes Wort gegen Wort ("alive" und "scam" zaehlen nicht als "live" und "cam").
+KAMERA_WOERTER = {
+    3: frozenset({
+        "webcam", "webcams", "livecam", "livecams", "livebild", "livebilder", "wetterkamera",
+        "kamera", "kameras", "camera", "cameras", "cam", "cams", "earthcam", "satellite",
+        "satellit", "satellitenbild", "worldview", "firms", "eumetsat", "goes", "sentinel",
+        "copernicus", "mapillary", "kartaview", "streetview",
+    }),
+    2: frozenset({"live", "panorama", "livestream", "aktuell", "snapshot", "stream"}),
+    1: frozenset({"current", "latest", "now", "jetzt", "view", "ansicht", "blick"}),
+}
+#: Zusammengesetzte deutsche Woerter ("Hafenkamera") -- nur Endungen, die sicher sind.
+KAMERA_ENDUNGEN = ("kamera", "webcam", "livecam")
+#: Woerter, die eine Seite eher als Shop, Test oder Artikel ausweisen.
+KEIN_BILD_WOERTER = frozenset({
+    "kaufen", "shop", "preis", "preise", "test", "vergleich", "buy", "price", "review", "blog",
+    "forum", "wiki", "artikel", "article", "news",
+})
+#: Bilder mit diesen Woertern im Dateinamen sind Zierde, nicht das gesuchte Bild.
+ZIERDE_WOERTER = frozenset({
+    "icon", "icons", "sprite", "sprites", "avatar", "banner", "favicon", "button", "badge",
+    "ad", "ads", "advert", "tracking", "emoji", "flag", "social", "share", "teilen",
+})
+_WORT = re.compile(r"[a-zäöüß0-9]+")
+
+
+def _woerter(text: str) -> list[str]:
+    return _WORT.findall(unquote(text or "").lower())
+
+
+def visual_score(text: str) -> int:
+    """Wie sehr sieht *text* (Adresse, Titel, Bildhinweis) nach einem Kamera- oder Satellitenbild
+    aus? Hoeher ist besser, 0 heisst: kein Hinweis. Fuer die Reihenfolge, nicht als Urteil.
+    """
+    score = 0
+    for wort in _woerter(text):
+        for punkte, menge in KAMERA_WOERTER.items():
+            if wort in menge:
+                score += punkte
+                break
+        else:
+            if len(wort) > 6 and wort.endswith(KAMERA_ENDUNGEN):
+                score += 3
+            elif wort in KEIN_BILD_WOERTER:
+                score -= 2
+    return score
+
+
+def _srcset_bild(srcset: str) -> str:
+    """Das groesste Bild aus einem ``srcset`` (Breite in ``w`` oder Dichte in ``x``)."""
+    beste, groesse = "", -1.0
+    for eintrag in (srcset or "").split(","):
+        teile = eintrag.strip().split()
+        if not teile:
+            continue
+        try:
+            wert = float(teile[1][:-1]) if len(teile) > 1 else 1.0
+        except ValueError:
+            wert = 1.0
+        if wert > groesse:
+            beste, groesse = teile[0], wert
+    return beste
+
+
+def _masse(node: Any) -> tuple[int, int]:
+    def zahl(name: str) -> int:
+        roh = re.sub(r"[^0-9]", "", str(node.attributes.get(name) or ""))
+        return int(roh) if roh else 0
+
+    return zahl("width"), zahl("height")
+
+
 def placeholder_image(url: str) -> bool:
     """Sieht diese Bildadresse nach Ladeanzeige oder Platzhalter aus?
 
@@ -746,8 +819,16 @@ class Fetcher:
         data, mime = captured
         return PublicVisual(url, data, mime) if len(data) <= MAX_VISUAL_BYTES else None
 
-    def load_public_visual(self, url: str) -> tuple[PublicVisual | None, str]:
-        """Lädt ein Bild oder löst es aus einer öffentlichen Seite auf."""
+    #: So viele Bilder einer Seite werden nacheinander versucht (16.0.0).
+    VISUAL_VERSUCHE = 3
+
+    def load_public_visual(self, url: str, _tiefe: int = 0) -> tuple[PublicVisual | None, str]:
+        """Lädt ein Bild oder löst es aus einer öffentlichen Seite auf.
+
+        Steckt in der Seite mehr als ein Bild, kommen die wahrscheinlichsten zuerst (Kamera-
+        Wörter im Hinweis, dann die Vorschau der Seite, dann der Rest). Scheitert eins, geht es
+        mit dem nächsten weiter -- bisher gab die Seite dann gleich auf.
+        """
         current = (url or "").strip()
         for _ in range(6):
             if not public_web_url(current):
@@ -798,43 +879,82 @@ class Fetcher:
                 if captured is not None:
                     return captured, ""
             tree = HTMLParser(response.text[:MAX_HTML_BYTES])
-            candidates: list[tuple[int, str]] = []
-            for selector in ('meta[property="og:image"]', 'meta[name="twitter:image"]'):
-                node = tree.css_first(selector)
-                inhalt = node.attributes.get("content") if node else None
-                if inhalt:
-                    candidates.append((0, inhalt))
-            for node in tree.css("img")[:80]:
-                source = node.attributes.get("src") or node.attributes.get("data-src") or ""
-                hint = " ".join(str(node.attributes.get(key) or "") for key in
-                                ("alt", "title", "id", "class", "src")).lower()
-                visual_words = ("webcam", "camera", "live", "satellite", "firms", "worldview")
-                rank = 0 if any(word in hint for word in visual_words) else 1
-                if source:
-                    candidates.append((rank, source))
-            selected = ""
-            for _, candidate in sorted(candidates, key=lambda item: item[0]):
-                absolute = urljoin(final, candidate)
-
-                if placeholder_image(absolute) or not public_web_url(absolute):
-                    continue
-
-                if final.startswith("https://") and absolute.startswith("http://"):
-                    absolute = "https://" + absolute[len("http://") :]
-                selected = absolute
-                break
-            if not selected:
+            kandidaten = self._bild_kandidaten(tree, final)
+            if kandidaten and _tiefe < 2:
+                erster_fehler = ""
+                for absolute in kandidaten[: self.VISUAL_VERSUCHE]:
+                    visual, fehler = self.load_public_visual(absolute, _tiefe + 1)
+                    if visual is not None:
+                        return visual, ""
+                    erster_fehler = erster_fehler or fehler
                 captured = self._capture(final)
                 if captured is not None:
                     return captured, ""
-                return None, "Auf der Seite wurde kein öffentliches Bild gefunden."
-            current = selected
+                return None, erster_fehler or "Auf der Seite wurde kein öffentliches Bild gefunden."
+            if kandidaten:
+                current = kandidaten[0]
+                continue
+            captured = self._capture(final)
+            if captured is not None:
+                return captured, ""
+            return None, "Auf der Seite wurde kein öffentliches Bild gefunden."
         return None, "Die Bildquelle leitet zu oft weiter."
 
     def find_public_visual(self, url: str) -> tuple[str, str]:
         """Kompatible Kurzform: gibt nur die aufgelöste Bildadresse zurück."""
         visual, error = self.load_public_visual(url)
         return (visual.url if visual else ""), error
+
+    @staticmethod
+    def _bild_kandidaten(tree: HTMLParser, seite: str) -> list[str]:
+        """Die Bilder einer Seite -- das wahrscheinlichste Kamerabild zuerst, ohne Zierde."""
+        gefunden: list[tuple[float, int, str]] = []
+
+        def aufnehmen(punkte: float, quelle: str) -> None:
+            quelle = (quelle or "").strip()
+            if not quelle or quelle.startswith("data:"):
+                return
+            absolute = urljoin(seite, quelle)
+            if placeholder_image(absolute) or not public_web_url(absolute):
+                return
+            if seite.startswith("https://") and absolute.startswith("http://"):
+                absolute = "https://" + absolute[len("http://"):]
+            if all(absolute != eintrag[2] for eintrag in gefunden):
+                gefunden.append((punkte, len(gefunden), absolute))
+
+        for selector in ('meta[property="og:image"]', 'meta[property="og:image:secure_url"]',
+                         'meta[name="twitter:image"]'):
+            node = tree.css_first(selector)
+            if node is not None:
+                aufnehmen(1.0, node.attributes.get("content") or "")
+        for node in tree.css("video[poster]")[:10]:
+            aufnehmen(1.0, node.attributes.get("poster") or "")
+        for node in tree.css("img")[:80]:
+            quelle = ""
+            for name in ("src", "data-src", "data-lazy-src", "data-original", "data-lazy"):
+                quelle = node.attributes.get(name) or ""
+                if quelle and not quelle.startswith("data:"):
+                    break
+            else:
+                quelle = ""
+            quelle = quelle or _srcset_bild(node.attributes.get("srcset")
+                                            or node.attributes.get("data-srcset") or "")
+            if not quelle:
+                continue
+            dateiname = urlparse(quelle).path.rsplit("/", 1)[-1]
+            if ZIERDE_WOERTER & set(_woerter(dateiname)):
+                continue
+            breite, hoehe = _masse(node)
+            if breite and hoehe and max(breite, hoehe) < 100:
+                continue
+            hinweis = " ".join(str(node.attributes.get(key) or "")
+                               for key in ("alt", "title", "id", "class", "src"))
+            punkte = float(min(3, max(0, visual_score(hinweis)))) * 1.5
+            if max(breite, hoehe) >= 300:
+                punkte += 0.5
+            aufnehmen(punkte, quelle)
+        gefunden.sort(key=lambda eintrag: (-eintrag[0], eintrag[1]))
+        return [eintrag[2] for eintrag in gefunden]
 
     def _finish_pdf(self, result: PageResult, data: bytes) -> PageResult:
         """Text aus einem PDF ziehen -- Datenblaetter, Speisekarten, Preislisten."""

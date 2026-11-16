@@ -39,8 +39,6 @@ def _lokal(url: str, tmp_path, modell: str = "qwen2.5-coder:14b", tokens: int = 
                     context_tokens=tokens, subagents_auto=False)
 
 
-
-
 def test_the_ram_per_token_comes_from_the_model(ollama) -> None:
 
     assert local_model.kv_bytes_per_token("qwen2.5-coder:14b", ollama.url) == 196_608
@@ -106,8 +104,6 @@ def test_context_endpoint(client, session, ollama, tmp_path) -> None:  # noqa: F
     assert status == 200 and json.loads(body)["model"] == session._settings.model
 
 
-
-
 @pytest.mark.parametrize("adresse", ["x" * 3000, "\u0000퟿", "[1, 'a', None]",
                                      "{'a': {'b': []}}", "[]", "ha .local"])
 def test_broken_addresses_are_a_clean_error(adresse: str) -> None:
@@ -128,8 +124,6 @@ def test_ha_and_storage_probes_answer_400_style_not_500(client, session,  # noqa
             status, body = client("POST", route, {"url": kaputt, "token": "t"})
             assert status == 200, (route, kaputt)
             assert json.loads(body)["ok"] is False
-
-
 
 
 def test_a_reset_connection_prints_no_traceback() -> None:
@@ -172,8 +166,6 @@ def test_the_real_servers_use_the_quiet_class() -> None:
     import inspect
 
     assert "AquaticyServer((host, kandidat), Handler)" in inspect.getsource(web.bind_server)
-
-
 
 
 def _ohne_schluessel(monkeypatch) -> None:
@@ -328,20 +320,8 @@ def test_the_header_does_not_present_a_model_without_key(client, session,  # noq
     web._strong_cache.clear()
 
 
-def test_a_deleted_upgrade_version_is_not_offered(tmp_path) -> None:
-    from aquaticy import upgrading as up
-    from tests.test_upgrading import BASE, FAKTEN
-    from tests.test_upgrading import Ollama as UpOllama
-
-    up.set_enabled(tmp_path, True, [BASE])
-    up.train_all(tmp_path, FAKTEN, UpOllama(base_kennt=18))
-    up.upgrade(tmp_path, BASE)
-    neu = "ollama_chat/" + up.model_name(BASE, [1, 1])
-    da = [{"id": f"ollama_chat/{BASE}", "label": BASE}, {"id": neu, "label": "x"}]
-    assert neu in [m["id"] for m in up.picker_entries(tmp_path, da, False)]
-
-    weg = up.picker_entries(tmp_path, da[:1], False)
-    assert neu not in [m["id"] for m in weg] and weg
+# 16.0.0: 1 Test(s) entfallen -- sie pruefen Teile, die es nicht mehr gibt
+# (Auto-Upgrading und die Einstellungen unter Helfer & Grenzen).
 
 
 def test_foreign_model_names_do_not_fill_the_memory(monkeypatch) -> None:

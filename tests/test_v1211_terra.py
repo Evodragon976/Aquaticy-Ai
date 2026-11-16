@@ -124,7 +124,7 @@ def ten_users(tmp_path, monkeypatch):
     monkeypatch.setattr(web, "AIGUARD", None)
     monkeypatch.setattr(web, "CLUSTER", None)
     monkeypatch.setattr(web, "TOKEN", "")
-    monkeypatch.setattr(web, "UPGRADE_DIR", None)
+    monkeypatch.setattr(web, "ALTMODELLE_DIR", None)
     monkeypatch.setattr(web, "SESSIONS", web.SessionRegistry())
     monkeypatch.setattr(web, "SESSION", web.SessionProxy())
     monkeypatch.setattr(web, "start_user_scheduler", lambda account: None)

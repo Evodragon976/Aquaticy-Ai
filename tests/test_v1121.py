@@ -26,9 +26,6 @@ def _python(code: str, **env: str) -> str:
     return fertig.stdout.strip()
 
 
-
-
-
 @pytest.mark.parametrize("model, provider", [
     ("mistral/mistral-large-latest", "mistral"),
     ("nvidia_nim/meta/llama-3.3-70b-instruct", "nvidia_nim"),
@@ -161,8 +158,6 @@ def test_parallel_tool_calls_use_at_most_eight_threads() -> None:
     assert [r["id"] for r in ergebnis] == [str(n) for n in range(20)]
     assert len(threads) <= agent.PARALLEL_LIMIT == 8
     assert gleichzeitig[1] <= 8
-
-
 
 
 from aquaticy import addons, plugins, review_scan  # noqa: E402
@@ -301,9 +296,6 @@ def test_review_prompt_without_hits_has_no_prescan_section(konto) -> None:
     assert "Automatische Vorprüfung" not in text
 
 
-
-
-
 def test_tunnel_keeps_trying_after_an_unexpected_error(tmp_path) -> None:
     from aquaticy.website import Tunnel
 
@@ -343,30 +335,8 @@ def test_cluster_question_survives_a_failing_answer(monkeypatch, capsys) -> None
     assert "Rückfrage fehlgeschlagen" in capsys.readouterr().out
 
 
-def test_auto_upgrading_survives_a_broken_state_file(tmp_path) -> None:
-    from aquaticy import upgrading
-
-    pfad = upgrading._path(tmp_path)
-    pfad.parent.mkdir(parents=True, exist_ok=True)
-    pfad.write_text('{"last_train": "kaputt"}', encoding="utf-8")
-    runden: list[int] = []
-
-    class Backend:
-        def __getattr__(self, name):
-            raise RuntimeError("kein Ollama")
-
-    trainer = upgrading.Trainer(tmp_path, facts=lambda: [], backend=lambda: Backend())
-    original = trainer.wake_event.wait
-
-    def warten(timeout=None):
-        runden.append(1)
-        if len(runden) >= 3:
-            trainer.stop_event.set()
-        return original(0.01)
-
-    trainer.wake_event.wait = warten  # type: ignore[method-assign]
-    trainer._loop()
-    assert len(runden) == 3
+# 16.0.0: 1 Test(s) entfallen -- sie pruefen Teile, die es nicht mehr gibt
+# (Auto-Upgrading und die Einstellungen unter Helfer & Grenzen).
 
 
 @pytest.mark.parametrize("code, wort", [

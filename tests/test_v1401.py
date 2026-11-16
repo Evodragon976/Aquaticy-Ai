@@ -178,6 +178,7 @@ def test_settings_open_secure_chat_in_real_browser(server, monkeypatch, width): 
         page.locator("#voice-setting").uncheck()
         playwright.expect(page.locator("#voice-setting")).to_be_enabled()
         page.locator("#secure-setting").check()
+        page.locator("#secure-window-open").click()  # 16.0.0: eigenes Fenster
         page.locator("#secure-subnet").fill("192.168.1.0/24")
         page.locator("#secure-consent").check()
         page.locator("#secure-apply").click()

@@ -1,4 +1,4 @@
-# Aquaticy AI 15.8.11
+# Aquaticy AI 16.0.0
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,18 +25,30 @@ $ aquaticy
 
 ---
 
-## Neu in 15.8.11
+## Neu in 16.0.0
 
-Diese Fassung behebt Fehler in Aquaticy Standard.
-
-- **Aquaticy Standard stürzt nicht mehr ab**, wenn der Dienst für Wechselkurse oder
-  Nachrichten etwas Unerwartetes schickt. Geht doch einmal etwas schief, kommt eine freundliche
-  Meldung statt eines Fehlers.
-- **Hilfe auch auf Englisch:** Auf „I want to kill myself“ und ähnliche Sätze nennt Aquaticy
-  Standard sofort Hilfe-Nummern. Normale Sätze wie „I hurt myself playing football“ zählen nicht
-  dazu.
-- **Zweistellige Jahre:** „geboren am 05.05.90“ heißt jetzt 1990, nicht 2090.
-- **Große Zahlen:** „1.000.000 plus 0,5 %“ wird richtig gerechnet.
+- **Einstellungen aufgeräumt.** Secure Pro hat ein eigenes Fenster: In den Einstellungen
+  stehen nur der Schalter und ein Knopf, der die Einstellungen öffnet. **Ort & Sprache**
+  stehen jetzt unter **Konto**, ebenfalls mit einem Knopf zum eigenen Fenster.
+- **„Helfer & Grenzen“ gibt es nicht mehr.** Aquaticy nutzt feste Werte, die du nicht
+  sehen musst. Früher gespeicherte Werte gelten nicht mehr. Wer den Server betreibt, kann sie
+  weiter als Umgebungsvariable setzen.
+- **Sprache und Ort aus dem Chat.** Schreibst du mehrmals hintereinander auf Japanisch, wird
+  Japanisch deine Sprache. Suchst du immer wieder nach etwas in New York, wird New York dein
+  Standard-Ort. Aquaticy zeigt dir jede Änderung im Chat. Was du selbst eingestellt hast,
+  ändert es nie. „Alles vergessen“ im Gedächtnis löscht auch das Mitgezählte. Das Land stellst
+  nur du ein, oder du sagst es Aquaticy: „Ich wohne in den USA.“
+- **Auto-Upgrading ist entfernt.** Die Modelle lernen über das Gedächtnis jedes Kontos. Wer
+  noch eine gebaute Modellfassung eingestellt hatte, bekommt wieder das Ausgangsmodell.
+  Die gebauten Fassungen selbst bleiben in Ollama liegen; `ollama rm <name>` räumt sie weg.
+- **Webcams und Satellitenbilder:** Aquaticy wählt aus einer Seite jetzt das wahrscheinlichste
+  Kamerabild (Wörter wie „Kamera“ oder „Livebild“, Poster von Playern, Bilder mit
+  `srcset` oder Lazy-Loading) und lässt Zierde wie Icons und Banner weg. Scheitert ein Bild,
+  versucht es das nächste. Nach einer Antwort ohne Bild probiert es zuerst die Adressen, die
+  nach Kamera oder Satellit aussehen.
+- **Genauere Suche im Pro-Modus:** Dieselbe Seite in anderer Schreibweise (`www.`, `http`,
+  Tracking-Zusätze) zählt jetzt als eine. Vorher teilte sich ihre Stimme auf, und sie stand
+  doppelt in der Liste. Ein Satzpunkt am Ende („… in Bremen.“) landet nicht mehr in der Suche.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -55,7 +67,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 - [Coworker](#coworker)
 - [Gmail und Kalender](#gmail-und-kalender)
 - [Zuhause: Heimnetz, Home Assistant, Lager](#zuhause-heimnetz-home-assistant-lager)
-- [Gemeinsames Lernen und Auto-Upgrading](#gemeinsames-lernen-und-auto-upgrading)
+- [Gemeinsames Lernen](#gemeinsames-lernen)
 - [Server-Verbund und Serverlast aufteilen](#server-verbund-und-serverlast-aufteilen)
 - [Sicherheit, Rechts-Leitplanken und Ai-guard](#sicherheit-rechts-leitplanken-und-ai-guard)
 - [Modelle und Anbieter](#modelle-und-anbieter)
@@ -135,7 +147,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 15.8.11
+aquaticy --version            # 16.0.0
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
@@ -434,8 +446,7 @@ zeigt, was darin passiert ist. Fehler und Sperren bleiben sichtbar. „↻ Erneu
 die Frage noch einmal.
 
 **Modellauswahl** (gleich nach 📎 Anhängen):
-- **Modelle:** Mistral und NVIDIA NIM, lokal, verbesserte Fassungen aus dem Auto-Upgrading
-  und das **Verbund-Modell**. Es steht nur da, was wirklich antwortet: ein Cloud-Modell nur mit
+- **Modelle:** Mistral und NVIDIA NIM, lokal und das **Verbund-Modell**. Es steht nur da, was wirklich antwortet: ein Cloud-Modell nur mit
   Schlüssel, ein lokales nur, wenn es in Ollama installiert ist. Die Liste fragt Ollama bei jedem
   Öffnen neu; `aquaticy web` zeigt beim Start, welche Modelle Ollama hat, und startet Ollama,
   wenn das eingestellte Modell lokal ist.
@@ -457,11 +468,13 @@ die Frage noch einmal.
 
 **Einstellungen** speichern sich selbst. Schalter sofort, Textfelder beim Verlassen. Was nur
 Ultra darf, trägt ein 🔒.
-- **Konto:** Name, E-Mail, Kontotyp, Nutzung, Abmelden. **Sicherheit** mit deinen Geräten,
+- **Konto:** Name, E-Mail, Kontotyp, Nutzung, Abmelden. **Ort & Sprache** hat einen Knopf
+  zum eigenen Fenster: Standard-Ort, Sprache und Land. **Sicherheit** mit deinen Geräten,
   Passwort ändern, überall sonst abmelden. **Daten und Konto löschen**.
 - Dazu: Gemeinsames Lernen, virtual machine, Speicher,
   Auslastung (Ultra), Nutzung, Gmail & Kalender, Zuhause & Netz (Ultra), Suche,
-  Ort & Sprache, Helfer & Grenzen, **Dev settings** (Ultra).
+  **Dev settings** (Ultra). Bei **Secure Pro** (unter Zuhause & Netz) stehen der Schalter und
+  ein Knopf, der das Fenster mit den Einstellungen öffnet.
 
 **Auf dem Handy** wird die Kopfzeile nach dem Senden mit einer kurzen Animation kompakter.
 „Infos“ klappt Ortsfilter und Chat-Status wieder auf. Seitenleiste, Einstellungen und neuer
@@ -581,7 +594,7 @@ Schlägt Installation oder Start fehl, meldet Setup den Fehler und lädt kein Mo
 | Internet für die virtual machine (Code-Modus) | – | – | ✔ |
 | Eigene Adressen für Modell und Suche | – | – | ✔ |
 | Rechts-Leitplanken abschaltbar (nur fürs eigene Konto) | – | – | ✔ |
-| Auto-Upgrading und Server-Verbund steuern | – | – | ✔ |
+| Server-Verbund steuern | – | – | ✔ |
 | Ai-guard | sperrt | sperrt | warnt nur |
 | Code zum Anlegen | – | 9 Zeichen | 14 Zeichen |
 
@@ -1059,7 +1072,7 @@ Beides ist freiwillig. Secure Pro läuft auch ohne, prüft dann aber weniger.
 
 - **nmap** liest, welche Dienste ein Gerät im Heimnetz anbietet. `aquaticy secure-pro` bietet
   an, nmap zu installieren (Linux mit apt). Sonst: `sudo apt install nmap` oder
-  `brew install nmap`. Danach schaltest du es ein: Einstellungen → Zuhause & Netz → Secure Pro.
+  `brew install nmap`. Danach schaltest du es ein: Einstellungen → Zuhause & Netz → Secure Pro einstellen.
   nmap prüft nur Ziele im freigegebenen Heimnetz, mit festen Befehlen.
 - **ClamAV** sucht Malware, aber nur in einem Ordner, den du freigibst. Installiere es mit
   `sudo apt install clamav` (oder `brew install clamav`) und hole die Virendaten mit
@@ -1072,7 +1085,7 @@ Beides ist freiwillig. Secure Pro läuft auch ohne, prüft dann aber weniger.
 
 ---
 
-## Gemeinsames Lernen und Auto-Upgrading
+## Gemeinsames Lernen
 
 **Gemeinsames Lernen** (freiwillig, *Einstellungen → Gemeinsames Lernen*). Mit deiner Zustimmung
 übernimmt Aquaticy kurze **Auszüge aus öffentlichen Sachartikeln**, die es für dich gelesen hat.
@@ -1084,19 +1097,6 @@ Chats werden nie geteilt.
 - Dazu ein persönlicher **Recherchecache**: kurze Stichpunkte mit Quelle, nur für dich,
   höchstens 48 Stunden.
 - Widerruf und Löschen entfernen deine Beiträge und deinen Cache.
-
-**Auto-Upgrading** (*Dev settings*, Ultra schaltet es für alle ein). Aquaticy baut lokale
-Ollama-Modelle mit Wissen aus, das mehrere Konten bestätigt haben. Ein Wissenstest misst, wie
-viel besser die neue Fassung ist.
-
-- Ultra sieht jeden Fortschritt (z. B. +0,00000002 %) und kann den Kandidaten sofort nutzen.
-- Ab **5 %** wird „Upgraden“ grün: aus `gemma3:4b` wird `gemma3:4b 1.1`. Ab **30 %** gibt es
-  eine ganze Version (`gemma3:4b 2`).
-- Ultra kann Versionen überspringen oder eine ältere zurückholen.
-- Nach einer Freigabe sieht jedes Konto einmal **Ausprobieren** und **Zurück**. Beide Fassungen
-  bleiben vier Tage wählbar.
-- Die Gewichte bleiben gleich. Ein Upgrade ist ein lokales Modell mit eingebautem, geprüftem
-  Wissen. Läuft das Wissen ab, wird die Fassung zurückgezogen.
 
 ---
 
@@ -1400,7 +1400,9 @@ mit. Für die eigene Domain im Container setzt du `AQUATICY_DOMAIN` und
 ## Konfiguration
 
 Alle Werte stehen in der `.env` (Vorlage: [`.env.example`](.env.example)). Die meisten stellst
-du auch in der Weboberfläche ein.
+du auch in der Weboberfläche ein. Die Werte von Helfern, Suchen je Frage und Anfragegrenzen
+(`AQUATICY_MAX_TOOL_CALLS` bis `AQUATICY_PARALLEL_CALLS` unten) stellt nur noch der Betreiber
+ein, als Umgebungsvariable. Konten sehen und ändern sie nicht.
 
 | Variable | Bedeutung | Standard |
 |---|---|---|

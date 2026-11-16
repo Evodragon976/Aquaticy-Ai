@@ -1385,7 +1385,7 @@ class AuthStore:
         profile = self.profile_dir(account.id)
         if profile.is_symlink():
             raise ValueError("Das Kontoprofil ist ein symbolischer Link; nichts gelöscht.")
-        from aquaticy import aiguard, guardrails, upgrading
+        from aquaticy import aiguard, guardrails
         from aquaticy.homeassistant import forget_states
         from aquaticy.learning import Learning
 
@@ -1393,8 +1393,6 @@ class AuthStore:
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             self._require_current_credential(conn, account)
-
-            upgrading.forget_account(self.data_dir, account.id)
             forget_states(profile)
             guardrails.forget_verdicts()
             aiguard.forget_judgements()
@@ -1416,7 +1414,7 @@ class AuthStore:
         profile = self.profile_dir(account.id)
         if profile.is_symlink():
             raise ValueError("Das Kontoprofil ist ein symbolischer Link; Löschung abgebrochen.")
-        from aquaticy import aiguard, guardrails, upgrading
+        from aquaticy import aiguard, guardrails
         from aquaticy.homeassistant import forget_states
         from aquaticy.learning import Learning
 
@@ -1424,7 +1422,6 @@ class AuthStore:
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             self._require_current_credential(conn, account)
-            upgrading.forget_account(self.data_dir, account.id)
             forget_states(profile)
             guardrails.forget_verdicts()
             aiguard.forget_judgements()

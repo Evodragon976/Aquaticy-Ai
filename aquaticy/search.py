@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 
-from aquaticy.models import SearchResult, domain_of
+from aquaticy.models import SearchResult, canonical_url, domain_of
 from aquaticy.queries import fuse
 
 STAGGER_SECONDS = 0.35
@@ -158,9 +158,10 @@ def _dedupe(results: list[SearchResult], count: int) -> list[SearchResult]:
     out: list[SearchResult] = []
     for result in results:
         url = result.url.strip()
-        if not url or url in seen:
+        schluessel = canonical_url(url)  # 16.0.0: dieselbe Seite in anderer Schreibweise
+        if not url or schluessel in seen:
             continue
-        seen.add(url)
+        seen.add(schluessel)
         result.rank = len(out) + 1
         result.source_domain = result.source_domain or domain_of(url)
         out.append(result)

@@ -45,7 +45,8 @@ Vor jedem Commit: `python tools/pruefung.py` muss mit 0 enden.
     `subagents.py`/`master.py` parallele Recherche, `ownservices.py` erkennt Fragen an
     Mails, Kalender, Home Assistant und Lager (dann ohne Websuche).
   - `web.py` Server und API, `webui.html` die ganze Oberfläche (HTML, CSS, JS).
-  - `cli.py` Kommandozeile, `config.py` Einstellungen.
+  - `cli.py` Kommandozeile, `config.py` Einstellungen. `autoort.py` lernt Sprache und
+    Standard-Ort aus dem Chat (nur eigene Worte, nur hinter den Schranken des Gedächtnisses).
   - Sicherheit: `netguard.py` (nur öffentliche Ziele), `injection.py`
     (Prompt-Injection), `aiguard.py` (Missbrauch), `guardrails.py` (Recht),
     `auth.py` (Konten), `privacy.py`/`keyvault.py` (Verschlüsselung),

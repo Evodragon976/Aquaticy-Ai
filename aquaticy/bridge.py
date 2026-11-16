@@ -927,6 +927,8 @@ def bridge_agent_class() -> type:
         """Ein Agent mit genau den Werkzeugen, die der Chat bekommen darf."""
 
         OWN_HINTS = False
+        #: Auch wer dem Messenger schreibt, stellt keine Sprache und keinen Ort um (16.0.0).
+        LEARNS_SETTINGS = False
 
         def __init__(self, settings: Any, erlaubt: frozenset[str], zusatz: str,
                      on_event: Any = None) -> None:

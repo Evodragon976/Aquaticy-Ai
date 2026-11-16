@@ -79,7 +79,7 @@ def test_f41_duplicate_coworker_names_cannot_select_an_arbitrary_recipient(setti
 
 
 def test_f42_integer_preferences_do_not_silently_truncate_fractional_values():
-    preference = preferences.find("subagenten_anzahl")
+    preference = preferences.find("formulierungen")  # 16.0.0: subagenten_anzahl gibt es nicht mehr
     assert preference is not None
     with pytest.raises(preferences.BadValue):
         preferences.coerce(preference, "2.9")

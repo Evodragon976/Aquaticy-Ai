@@ -385,6 +385,14 @@ class ChatRenderer:
         self._fetch_count = 0
         self._skips.clear()
 
+    def _on_autosetting(self, payload: dict[str, Any]) -> None:
+        wort = {"location": "Standard-Ort", "lang": "Sprache", "country": "Land"}.get(
+            str(payload.get("field", "")), str(payload.get("label", "")))
+        self._flush_reading()
+        self.console.print(Text.assemble(
+            ("  [Gemerkt]  ", "bold cyan"),
+            (f"{wort}: {payload.get('value', '')} (aus deinem Chat)", "white")))
+
     def _on_error(self, payload: dict[str, Any]) -> None:
         self._flush_reading()
         self.console.print(f"  [red]\\[Fehler][/red] {_fremd(payload.get('message', ''))}")

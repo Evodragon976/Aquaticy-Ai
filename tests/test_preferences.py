@@ -86,27 +86,31 @@ def test_a_nonsense_appearance_is_refused() -> None:
 
 @pytest.mark.parametrize("said", ["an", "ja", "true", "EIN", "1"])
 def test_switches_understand_yes(said: str) -> None:
-    assert preferences.coerce(preferences.find("subagenten"), said) == "true"
+    assert preferences.coerce(preferences.find("browser_fallback"), said) == "true"
 
 
 @pytest.mark.parametrize("said", ["aus", "nein", "false", "0"])
 def test_switches_understand_no(said: str) -> None:
-    assert preferences.coerce(preferences.find("subagenten"), said) == "false"
+    assert preferences.coerce(preferences.find("browser_fallback"), said) == "false"
 
 
 def test_a_switch_refuses_anything_else() -> None:
     with pytest.raises(BadValue, match="'an' oder 'aus'"):
-        preferences.coerce(preferences.find("subagenten"), "vielleicht")
+        preferences.coerce(preferences.find("browser_fallback"), "vielleicht")
 
 
 def test_numbers_keep_to_their_range() -> None:
-    """Ein Werkzeug-Budget von 5000 waere kein Wunsch, sondern ein Unfall."""
-    budget = preferences.find("werkzeug_budget")
-    assert preferences.coerce(budget, "30") == "30"
-    with pytest.raises(BadValue, match="zwischen 1 und 60"):
-        preferences.coerce(budget, "5000")
-    with pytest.raises(BadValue, match="zwischen 1 und 60"):
-        preferences.coerce(budget, "0")
+    """5000 Formulierungen je Suche waeren kein Wunsch, sondern ein Unfall.
+
+    16.0.0: Das Werkzeug-Budget ist keine Einstellung mehr (Helfer & Grenzen ist entfernt) --
+    der Test nimmt jetzt die Formulierungen je Suche.
+    """
+    zahl = preferences.find("formulierungen")
+    assert preferences.coerce(zahl, "2") == "2"
+    with pytest.raises(BadValue, match="zwischen 1 und 3"):
+        preferences.coerce(zahl, "5000")
+    with pytest.raises(BadValue, match="zwischen 1 und 3"):
+        preferences.coerce(zahl, "0")
 
 
 def test_a_number_that_is_none_is_refused() -> None:

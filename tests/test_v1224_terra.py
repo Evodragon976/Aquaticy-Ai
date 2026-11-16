@@ -36,7 +36,9 @@ def test_a_password_change_invalidates_pending_account_erasure(tmp_path, monkeyp
     assert store.verify_password(account, OLD)
     store.change_password(account, OLD, NEW)
     forgotten = []
-    monkeypatch.setattr("aquaticy.upgrading.forget_account",
+    # 16.0.0: Auto-Upgrading ist entfernt. Der Test haengt sich jetzt an das naechste, was nach
+    # der Passwortpruefung vergessen wird (die Zustaende von Home Assistant).
+    monkeypatch.setattr("aquaticy.homeassistant.forget_states",
                         lambda *args: forgotten.append(args))
 
     with pytest.raises(ValueError, match=r"Passwort|anmelden"):

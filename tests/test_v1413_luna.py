@@ -517,7 +517,8 @@ def test_setup_no_longer_asks_about_agents(monkeypatch, tmp_path: Path) -> None:
     assert ergebnis.exit_code == 0, ergebnis.output
     assert "Subagenten" not in ergebnis.output
     text = ziel.read_text()
-    assert "AQUATICY_SUBAGENTS_AUTO=true" in text and "Köln" in text
+    # 16.0.0: Das Setup schreibt die festen Werte von "Helfer & Grenzen" nicht mehr.
+    assert "AQUATICY_SUBAGENTS_AUTO" not in text and "Köln" in text
 
 
 # -- Oberflaeche ----------------------------------------------------------------------------------
@@ -529,10 +530,11 @@ def test_settings_are_grouped() -> None:
     html = _ui()
     formular = html[html.index('<form id="settings">'):html.index('id="savenote"')]
     legenden = re.findall(r"<legend>(.*?)</legend>", formular)
-    # 15.8.9: ohne Mitlesen.
+    # 15.8.9: ohne Mitlesen. 16.0.0: "Ort & Sprache" (jetzt unter Konto, eigenes Fenster) und
+    # "Helfer & Grenzen" (entfernt) sind keine Abschnitte mehr.
     assert legenden == ["Konto", "Nutzung", "Speicher", "Gemeinsames Lernen",
-                        "Auslastung · Ultra", "Ort &amp; Sprache", "Suche",
-                        "Helfer &amp; Grenzen", "Gmail &amp; Kalender", "Zuhause &amp; Netz",
+                        "Auslastung · Ultra", "Suche",
+                        "Gmail &amp; Kalender", "Zuhause &amp; Netz",
                         "virtual machine", "Messenger", "Dev settings"]
 
     def abschnitt(legende: str) -> str:
@@ -542,10 +544,13 @@ def test_settings_are_grouped() -> None:
     # 14.1.3 Terra: Secure Pro ist ein Unterpunkt von "Zuhause & Netz".
     netz = abschnitt("Zuhause &amp; Netz")
     assert netz.index('id="lanon"') < netz.index('id="secure-section"')
-    for feld in ("secure-setting", "secure-interval", "secure-watch", "secure-packets",
+    # 16.0.0: In den Einstellungen stehen nur der Schalter und der Knopf zum eigenen Fenster.
+    assert 'id="secure-setting"' in netz and 'id="secure-window-open"' in netz
+    fenster = html[html.index('id="securebox"'):html.index('id="ortbox"')]
+    for feld in ("secure-interval", "secure-watch", "secure-packets",
                  "secure-vm", "secure-nmap", "secure-task-text", "secure-important",
                  "secure-tips"):
-        assert f'id="{feld}"' in netz, feld
+        assert f'id="{feld}"' in fenster and f'id="{feld}"' not in netz, feld
     assert 'id="secure-status"' not in html, "Status zeigt die Seite ohnehin laufend"
     assert 'id="voice-setting"' in abschnitt("Messenger")
     assert 'id="pw"' in abschnitt("Suche")
@@ -556,7 +561,9 @@ def test_settings_are_grouped() -> None:
     assert dev.index('id="legalguard"') < dev.index('id="legal-rules"') < dev.index(
         'id="automodel"'), "die Leitplanken stehen bei ihren Regeln"
     assert formular.count('href="/privacy"') == 1, "der Datenschutz-Link stand doppelt da"
-    assert "Ab Werk an." in " ".join(abschnitt("Helfer &amp; Grenzen").split())
+    assert "Helfer &amp; Grenzen" not in formular  # 16.0.0: entfernt, es gelten feste Werte
+    konto = abschnitt("Konto")
+    assert 'id="ort-open"' in konto and 'name="AQUATICY_LOCATION"' not in formular
 
 
 def test_schedule_and_tasks_in_real_browser(server, monkeypatch):  # noqa: F811
@@ -587,6 +594,7 @@ def test_schedule_and_tasks_in_real_browser(server, monkeypatch):  # noqa: F811
         page.locator("#btn-settings").click()
         page.locator('#secnav button:has-text("Zuhause & Netz")').click()
         page.locator("#secure-setting").check()
+        page.locator("#secure-window-open").click()  # 16.0.0: eigenes Fenster
         playwright.expect(page.locator("#secure-more")).to_be_hidden()
         page.locator("#secure-subnet").fill("192.168.1.0/24")
         page.locator("#secure-consent").check()
@@ -606,7 +614,7 @@ def test_schedule_and_tasks_in_real_browser(server, monkeypatch):  # noqa: F811
         daten = json.loads(_req(server, "GET", "/api/features", cookie=cookie)[2])
         assert daten["seconds"] == 30 and daten["vm"] and len(daten["tasks"]) == 1
         if os.environ.get("AQUATICY_SCREENSHOT"):
-            page.locator("#secure-section").screenshot(path=os.environ["AQUATICY_SCREENSHOT"])
+            page.locator("#securebox .sheet").screenshot(path=os.environ["AQUATICY_SCREENSHOT"])
         page.locator("#secure-tasks li button").click()
         playwright.expect(page.locator("#secure-tasks li")).to_have_count(0)
         browser.close()
