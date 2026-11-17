@@ -3981,7 +3981,7 @@ def test_the_wait_for_a_loading_model_is_announced(
     settings.model = "ollama_chat/gemma3:12b"
     agent = Agent(settings, cache=None, toolbox=toolbox,
                   on_event=lambda name, payload: events.append((name, payload)))
-    agent.ask("Hallo, was kannst du?", stream=False)
+    agent.ask("Hallo, erklär mir den Event-Loop", stream=False)
 
     namen = [name for name, _ in events]
     assert "model_loading" in namen, "der Hinweis fehlt"

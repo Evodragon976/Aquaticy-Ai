@@ -76,10 +76,10 @@ _WOERTER = {
     "fr": "le la les des un une et est sont pas je tu il elle nous vous ils pour dans sur avec "
           "que qui quoi comment pourquoi quand où ou mon ma mes ton ta tes son sa ses ce cette "
           "ces au aux du de en ne plus très bien merci aujourd hui demain hier quel quelle "
-          "temps fait comment c'est qu'est",
+          "temps fait c'est qu'est bonjour salut ça va cherche trouver à oui",
     "es": "el la los las un una y es son no yo tú él ella nosotros para con por que qué como cómo "
           "por porqué cuándo dónde donde mi mis tu tus su sus este esta estos estas del al muy "
-          "más pero hoy mañana ayer cuál gracias hay",
+          "más pero hoy mañana ayer cuál gracias hay hola hace tiempo busco buscar dime",
     "it": "il lo la i gli le un una e è sono non io tu lui lei noi voi per con su che cosa come "
           "perché quando dove mio mia miei tuo tua suo sua questo questa del della dei delle al "
           "molto più ma oggi domani ieri quale grazie c'è",
@@ -180,8 +180,13 @@ def land_aus(text: str) -> str:
 # -- Orte ----------------------------------------------------------------------------------------
 
 # Kein Punkt im Namen: Sonst hinge "Paris. Hotels" aus zwei Saetzen zusammen.
-_NAME = r"[A-ZÄÖÜ][A-Za-zÄÖÜäöüßéèêàáâñçíóúô’'-]{1,}"
-_ORT = rf"(?P<ort>{_NAME}(?:[ -]{_NAME}){{0,2}})"
+# 16.1.0: Buchstaben mit Akzent zaehlen mit (São Paulo, Málaga, Kraków).
+_NAME = r"[A-ZÄÖÜÀ-ÖØ-ÞĀ-Ž](?:[^\W\d_]|['’-])+"
+#: Feste Zusaetze, die zum Namen gehoeren ("Frankfurt am Main") -- nur diese, damit
+#: "Berlin am Wochenende" nicht als Ort durchgeht.
+_ZUSATZ = (r"(?:\s+(?:am\s+(?:Main|Rhein|Neckar|Inn|Lech|See)|an\s+der\s+(?:Oder|Donau|Ruhr|"
+           r"Saale|Elbe|Weser|Ilm|Havel|Lahn|Weinstraße)|im\s+Breisgau|ob\s+der\s+Tauber))?")
+_ORT = rf"(?P<ort>(?:St\.\s?|Sankt\s)?{_NAME}(?:[ -]{_NAME}){{0,2}}{_ZUSATZ})"
 _THEMEN = (
     r"wetter|weather|restaurants?|cafés?|cafes?|hotels?|wohnung(?:en)?|apartments?|jobs?|"
     r"stellen|events?|veranstaltungen|konzerte?|kinos?|kinoprogramm|apotheken?|ärzte|"
@@ -191,7 +196,9 @@ _THEMEN = (
     r"nightlife|forecast|vorhersage"
 )
 _MUSTER = (
-    re.compile(rf"\b(?i:{_THEMEN})\b\s+(?i:in|im|bei|near|around|nahe)\s+{_ORT}"),
+    re.compile(rf"\b(?i:{_THEMEN})\b\s+(?i:(?:heute|morgen|übermorgen|today|tomorrow)\s+)?"
+               rf"(?i:in\s+der\s+nähe\s+von|in\s+der\s+naehe\s+von|"
+               rf"rund\s+um|in|im|bei|near|around|nahe)\s+{_ORT}"),
     re.compile(
         r"\b(?i:such\w*|find\w*|search\w*|look\w*|zeig\w*|show|gibt\s+es|where\s+(?:can|to)|"
         r"wo\s+(?:gibt|finde|kann))\b[^.?!\n]{0,60}?\b(?i:in|im|near|around|bei)\s+" + _ORT),

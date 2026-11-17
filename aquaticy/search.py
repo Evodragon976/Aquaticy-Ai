@@ -101,7 +101,7 @@ def _search_duckduckgo_html(query: str, options: SearchOptions) -> list[SearchRe
     """HTTP/1.1-Ausweichsuche fuer defekte HTTP/2-/TLS-Verbindungen."""
     response = httpx.get(
         "https://html.duckduckgo.com/html/",
-        params={"q": query, "kl": _region(options.country, options.lang)},
+        params={"q": query, "kl": _ddg_region(options.country, options.lang)},
         headers={
             "Accept": "text/html,application/xhtml+xml",
             "User-Agent": "Mozilla/5.0 (compatible; Aquaticy/9.2)",
@@ -129,6 +129,33 @@ def _region(country: str, lang: str) -> str:
     country = (country or "de").lower()
     lang = (lang or country).lower()
     return f"{country}-{lang}"
+
+
+#: Die Regionen der DuckDuckGo-Seite (kl): Land-Sprache in der Schreibweise von DuckDuckGo.
+DDG_REGIONEN = frozenset({
+    "ar-es", "at-de", "au-en", "be-fr", "be-nl", "br-pt", "bg-bg", "ca-en", "ca-fr", "ch-de",
+    "ch-fr", "ch-it", "cl-es", "cn-zh", "co-es", "cz-cs", "de-de", "dk-da", "ee-et", "es-ca",
+    "es-es", "fi-fi", "fr-fr", "gr-el", "hk-tzh", "hr-hr", "hu-hu", "id-en", "id-id", "ie-en",
+    "il-he", "in-en", "it-it", "jp-jp", "kr-kr", "lt-lt", "lv-lv", "mx-es", "my-en", "my-ms",
+    "nl-nl", "no-no", "nz-en", "pe-es", "ph-en", "ph-tl", "pl-pl", "pt-pt", "ro-ro", "ru-ru",
+    "se-sv", "sg-en", "sk-sk", "sl-sl", "th-th", "tr-tr", "tw-tzh", "ua-uk", "uk-en", "us-en",
+    "us-es", "vn-vi", "xa-ar", "xa-en", "xl-es", "za-en",
+})
+#: Wo DuckDuckGo andere Kuerzel nimmt als ISO.
+_DDG_LAND = {"gb": "uk"}
+_DDG_SPRACHE = {"ja": "jp", "ko": "kr"}
+
+
+def _ddg_region(country: str, lang: str) -> str:
+    """Die kl-Angabe fuer DuckDuckGo: das Paar, wenn es das dort gibt -- sonst die Region
+    des Landes, sonst ``wt-wt`` (ohne Region). Aus `de` + `ja` wird so `de-de` statt `de-ja`."""
+    land = (country or "de").lower()
+    land = _DDG_LAND.get(land, land)
+    sprache = (lang or land).lower()
+    paar = f"{land}-{_DDG_SPRACHE.get(sprache, sprache)}"
+    if paar in DDG_REGIONEN:
+        return paar
+    return next((r for r in sorted(DDG_REGIONEN) if r.startswith(land + "-")), "wt-wt")
 
 
 class SearchError(RuntimeError):

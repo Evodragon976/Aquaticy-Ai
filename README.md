@@ -1,4 +1,4 @@
-# Aquaticy AI 16.0.0
+# Aquaticy AI 16.1.0
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,30 +25,21 @@ $ aquaticy
 
 ---
 
-## Neu in 16.0.0
+## Neu in 16.1.0
 
-- **Einstellungen aufgeräumt.** Secure Pro hat ein eigenes Fenster: In den Einstellungen
-  stehen nur der Schalter und ein Knopf, der die Einstellungen öffnet. **Ort & Sprache**
-  stehen jetzt unter **Konto**, ebenfalls mit einem Knopf zum eigenen Fenster.
-- **„Helfer & Grenzen“ gibt es nicht mehr.** Aquaticy nutzt feste Werte, die du nicht
-  sehen musst. Früher gespeicherte Werte gelten nicht mehr. Wer den Server betreibt, kann sie
-  weiter als Umgebungsvariable setzen.
-- **Sprache und Ort aus dem Chat.** Schreibst du mehrmals hintereinander auf Japanisch, wird
-  Japanisch deine Sprache. Suchst du immer wieder nach etwas in New York, wird New York dein
-  Standard-Ort. Aquaticy zeigt dir jede Änderung im Chat. Was du selbst eingestellt hast,
-  ändert es nie. „Alles vergessen“ im Gedächtnis löscht auch das Mitgezählte. Das Land stellst
-  nur du ein, oder du sagst es Aquaticy: „Ich wohne in den USA.“
-- **Auto-Upgrading ist entfernt.** Die Modelle lernen über das Gedächtnis jedes Kontos. Wer
-  noch eine gebaute Modellfassung eingestellt hatte, bekommt wieder das Ausgangsmodell.
-  Die gebauten Fassungen selbst bleiben in Ollama liegen; `ollama rm <name>` räumt sie weg.
-- **Webcams und Satellitenbilder:** Aquaticy wählt aus einer Seite jetzt das wahrscheinlichste
-  Kamerabild (Wörter wie „Kamera“ oder „Livebild“, Poster von Playern, Bilder mit
-  `srcset` oder Lazy-Loading) und lässt Zierde wie Icons und Banner weg. Scheitert ein Bild,
-  versucht es das nächste. Nach einer Antwort ohne Bild probiert es zuerst die Adressen, die
-  nach Kamera oder Satellit aussehen.
-- **Genauere Suche im Pro-Modus:** Dieselbe Seite in anderer Schreibweise (`www.`, `http`,
-  Tracking-Zusätze) zählt jetzt als eine. Vorher teilte sich ihre Stimme auf, und sie stand
-  doppelt in der Liste. Ein Satzpunkt am Ende („… in Bremen.“) landet nicht mehr in der Suche.
+- **Sicherheit geprüft.** Wir haben 15 typische Angriffe ausprobiert: Skript im Nutzernamen,
+  fremde Chat-Nummer in der Adresse, `/admin`, Schlüssel im Browser, Prompt-Injection, Ultra
+  bei der Anmeldung, Preise und Zahlungen fälschen, Codes mehrfach einlösen, negative
+  Mengen, Codes erraten, falsche Bilder hochladen, `.env` im Git, die KI mit Anfragen fluten
+  und die Datenbank direkt abfragen. Keiner davon kam durch. Preise, Zahlungen und
+  Einlöse-Codes gibt es in Aquaticy gar nicht.
+- **„Hallo, wie geht es dir?“** versteht Aquaticy jetzt auch mit Gruß davor, ebenso
+  „Guten Morgen, alles gut?“ und „hi, how are you?“. Vorher kam „Da muss ich passen“.
+- **Ort aus dem Chat:** Orte mit Akzent („São Paulo“), mit „St.“ und mit festem Zusatz
+  („Frankfurt am Main“) werden erkannt, ebenso „in der Nähe von Köln“ und „Wetter morgen
+  in …“. Französisch und Spanisch erkennt Aquaticy in Alltagssätzen besser.
+- **Suche:** Die Ausweichsuche über DuckDuckGo schickt nur noch Regionen, die es dort gibt.
+  Mit Sprache Japanisch und Land Deutschland wird daraus „de-de“ statt „de-ja“.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -147,7 +138,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 16.0.0
+aquaticy --version            # 16.1.0
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

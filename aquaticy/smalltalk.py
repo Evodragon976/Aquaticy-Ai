@@ -262,7 +262,8 @@ ARTEN: tuple[Art, ...] = (
             r"(?:wie\s+geht(?:'?s|\s+es)(?:\s+(?:dir|ihnen|euch))?(?:\s+(?:heute|so))?"
             r"|wie\s+gehts(?:\s+dir)?|wie\s+läuft(?:'?s)?|wie\s+laeuft(?:'?s)?"
             r"|alles\s+(?:gut|fit|klar)\s+bei\s+dir|alles\s+fit|wie\s+stehts"
-            r"|wie\s+steht'?s|na\s+wie\s+geht'?s|was\s+geht\s+ab|wie\s+war\s+dein\s+tag)"
+            r"|wie\s+steht'?s|na\s+wie\s+geht'?s|was\s+geht\s+ab|wie\s+war\s+dein\s+tag"
+            r"|how\s+are\s+you(?:\s+doing)?(?:\s+today)?|how'?s\s+it\s+going)"
         ),
         (
             "Mir geht’s gut, danke! Was möchtest du heute herausfinden?",
@@ -676,11 +677,41 @@ def normalisieren(text: str) -> str:
     return re.sub(r"^[\W_]+|[\W_]+$", "", text)
 
 
+#: Ein Gruss vorne, dann ein Satzzeichen und der Rest ("Hallo, wie geht es dir?", 16.2.0).
+_GRUSS_VORNE = re.compile(r"^([^,!.;:?]{1,40}?)\s*[,!.;:?]+\s*(.+)$")
+_GRUESSE = frozenset({"begruessung", "morgen", "abend"})
+#: Nach einem Gruss meint "alles gut?" die Frage nach dem Befinden, keine Zustimmung.
+_BEFINDEN_NACH_GRUSS = re.compile(r"alles\s+(?:gut|klar|fit|ok(?:ay)?)|und\s+(?:selbst|du)"
+                                  r"|na|was\s+geht")
+
+
 def art_von(text: str, *, frage_offen: bool = False) -> Art | None:
     """Welche Art einfacher Nachricht *text* ist -- oder `None` fuer eine echte Frage."""
     kern = normalisieren(text)
     if not kern or len(kern) > 80:
         return None
+    art = _passende_art(kern, frage_offen)
+    if art is not None:
+        return art
+    teile = _GRUSS_VORNE.match(kern)
+    if teile is None:
+        return None
+    gruss = next((a for a in ARTEN if a.name in _GRUESSE and a.muster.fullmatch(teile[1])),
+                 None)
+    rest = normalisieren(teile[2])
+    if gruss is None or not rest:
+        return gruss
+    # Mit offener Rueckfrage ist "Hallo, alles klar" eine Antwort darauf -- die geht ans Modell.
+    if not frage_offen and _BEFINDEN_NACH_GRUSS.fullmatch(rest):
+        return next(a for a in ARTEN if a.name == "wie_gehts")
+    nach = _passende_art(rest, frage_offen)
+    if nach is not None and nach.name == "zustimmung":
+        return gruss
+    return nach
+
+
+def _passende_art(kern: str, frage_offen: bool) -> Art | None:
+    """Die erste Art, deren Muster *kern* ganz trifft."""
     for art in ARTEN:
         if art.nicht_bei_offener_frage and frage_offen:
             continue

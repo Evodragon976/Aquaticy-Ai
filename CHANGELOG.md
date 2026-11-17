@@ -3,6 +3,31 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.0.0:**
+
+- **Einstellungen aufgeräumt.** Secure Pro hat ein eigenes Fenster: In den Einstellungen
+  stehen nur der Schalter und ein Knopf, der die Einstellungen öffnet. **Ort & Sprache**
+  stehen jetzt unter **Konto**, ebenfalls mit einem Knopf zum eigenen Fenster.
+- **„Helfer & Grenzen“ gibt es nicht mehr.** Aquaticy nutzt feste Werte, die du nicht
+  sehen musst. Früher gespeicherte Werte gelten nicht mehr. Wer den Server betreibt, kann sie
+  weiter als Umgebungsvariable setzen.
+- **Sprache und Ort aus dem Chat.** Schreibst du mehrmals hintereinander auf Japanisch, wird
+  Japanisch deine Sprache. Suchst du immer wieder nach etwas in New York, wird New York dein
+  Standard-Ort. Aquaticy zeigt dir jede Änderung im Chat. Was du selbst eingestellt hast,
+  ändert es nie. „Alles vergessen“ im Gedächtnis löscht auch das Mitgezählte. Das Land stellst
+  nur du ein, oder du sagst es Aquaticy: „Ich wohne in den USA.“
+- **Auto-Upgrading ist entfernt.** Die Modelle lernen über das Gedächtnis jedes Kontos. Wer
+  noch eine gebaute Modellfassung eingestellt hatte, bekommt wieder das Ausgangsmodell.
+  Die gebauten Fassungen selbst bleiben in Ollama liegen; `ollama rm <name>` räumt sie weg.
+- **Webcams und Satellitenbilder:** Aquaticy wählt aus einer Seite jetzt das wahrscheinlichste
+  Kamerabild (Wörter wie „Kamera“ oder „Livebild“, Poster von Playern, Bilder mit
+  `srcset` oder Lazy-Loading) und lässt Zierde wie Icons und Banner weg. Scheitert ein Bild,
+  versucht es das nächste. Nach einer Antwort ohne Bild probiert es zuerst die Adressen, die
+  nach Kamera oder Satellit aussehen.
+- **Genauere Suche im Pro-Modus:** Dieselbe Seite in anderer Schreibweise (`www.`, `http`,
+  Tracking-Zusätze) zählt jetzt als eine. Vorher teilte sich ihre Stimme auf, und sie stand
+  doppelt in der Liste. Ein Satzpunkt am Ende („… in Bremen.“) landet nicht mehr in der Suche.
+
 **Neu in 15.8.11:**
 
 - **Aquaticy Standard stürzt nicht mehr ab**, wenn der Dienst für Wechselkurse oder
