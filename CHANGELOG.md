@@ -3,6 +3,22 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.1.0:**
+
+- **Sicherheit geprüft.** Wir haben 15 typische Angriffe ausprobiert: Skript im Nutzernamen,
+  fremde Chat-Nummer in der Adresse, `/admin`, Schlüssel im Browser, Prompt-Injection, Ultra
+  bei der Anmeldung, Preise und Zahlungen fälschen, Codes mehrfach einlösen, negative
+  Mengen, Codes erraten, falsche Bilder hochladen, `.env` im Git, die KI mit Anfragen fluten
+  und die Datenbank direkt abfragen. Keiner davon kam durch. Preise, Zahlungen und
+  Einlöse-Codes gibt es in Aquaticy gar nicht.
+- **„Hallo, wie geht es dir?“** versteht Aquaticy jetzt auch mit Gruß davor, ebenso
+  „Guten Morgen, alles gut?“ und „hi, how are you?“. Vorher kam „Da muss ich passen“.
+- **Ort aus dem Chat:** Orte mit Akzent („São Paulo“), mit „St.“ und mit festem Zusatz
+  („Frankfurt am Main“) werden erkannt, ebenso „in der Nähe von Köln“ und „Wetter morgen
+  in …“. Französisch und Spanisch erkennt Aquaticy in Alltagssätzen besser.
+- **Suche:** Die Ausweichsuche über DuckDuckGo schickt nur noch Regionen, die es dort gibt.
+  Mit Sprache Japanisch und Land Deutschland wird daraus „de-de“ statt „de-ja“.
+
 **Neu in 16.0.0:**
 
 - **Einstellungen aufgeräumt.** Secure Pro hat ein eigenes Fenster: In den Einstellungen

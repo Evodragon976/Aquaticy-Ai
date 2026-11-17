@@ -526,6 +526,23 @@ SMALL_TALK_RE = re.compile(
 )
 
 
+def smalltalk_fuer(agent: Any, question: str) -> str:
+    """Die Smalltalk-Antwort fuer diesen Agenten -- oder "" (16.3.0).
+
+    Mit Aquaticy Standard beantwortet Standard selbst "Was kannst du?": Die Smalltalk-Antwort
+    verspraeche Websuche und Code, die Standard nicht hat.
+    """
+    if agent._plugin_turn or agent.secure_pro:
+        return ""
+    from aquaticy import smalltalk
+
+    frage = getattr(agent, "_last_reply_asks", None)
+    art = smalltalk.art_von(question, frage_offen=bool(frage()) if callable(frage) else False)
+    if art is None or (art.name == "faehigkeiten" and agent._standard_model()):
+        return ""
+    return smalltalk.waehle(art)
+
+
 def standard_chat_reply(question: str, *, frage_offen: bool = False) -> str:
     """Eine kurze Antwort auf eindeutige Alltagsnachrichten -- ganz ohne Modell.
 
@@ -3636,8 +3653,7 @@ class Agent:
         if recheck is not None:
             self.recheck = bool(recheck)
 
-        standard = "" if self._plugin_turn or self.secure_pro else standard_chat_reply(
-            question, frage_offen=self._last_reply_asks())
+        standard = smalltalk_fuer(self, question)
         if not standard and not self._plugin_turn:
             standard = self._memory_answer(question)
         if not standard and not self._plugin_turn and self._standard_model():

@@ -132,6 +132,7 @@ ARTEN: tuple[Art, ...] = (
             r"|wie\s+ist\s+dein\s+name|was\s+ist\s+dein\s+name|hast\s+du\s+einen\s+namen"
             r"|stell\s+dich\s+(?:mal\s+|bitte\s+)?vor|was\s+ist\s+aquaticy|wer\s+ist\s+aquaticy"
             r"|mit\s+wem\s+(?:spreche|schreibe|rede)\s+ich(?:\s+hier)?"
+            r"|who\s+are\s+you|what(?:'s|\s+is)\s+your\s+name"
         ),
         (
             "Ich bin Aquaticy, ein KI-Assistent von Jonas. Wobei kann ich dir helfen?",
@@ -196,6 +197,7 @@ ARTEN: tuple[Art, ...] = (
         "faehigkeiten",
         _m(
             r"was\s+kannst\s+du(?:\s+(?:alles|so|eigentlich|denn|machen|mir\s+bieten))?"
+            r"|what\s+can\s+you\s+do|how\s+can\s+you\s+help(?:\s+me)?"
             r"|wobei\s+kannst\s+du\s+(?:mir\s+)?helfen|wie\s+kannst\s+du\s+(?:mir\s+)?helfen"
             r"|was\s+machst\s+du(?:\s+(?:so|eigentlich|genau))?|wofür\s+bist\s+du\s+(?:da|gut)"
             r"|wofuer\s+bist\s+du\s+(?:da|gut)|was\s+sind\s+deine\s+(?:fähigkeiten|faehigkeiten|"
@@ -295,7 +297,8 @@ ARTEN: tuple[Art, ...] = (
     ),
     Art(
         "morgen",
-        _m(r"(?:einen\s+)?(?:schönen\s+|schoenen\s+|wunderschönen\s+)?guten\s+morgen"),
+        _m(r"(?:einen\s+)?(?:schönen\s+|schoenen\s+|wunderschönen\s+)?guten\s+morgen"
+           r"|good\s+morning"),
         (
             "Guten Morgen! Hoffentlich hattest du einen guten Start. Wobei kann ich helfen?",
             "Guten Morgen! Kaffee schon da? Dann legen wir los — was steht an?",
@@ -370,8 +373,10 @@ ARTEN: tuple[Art, ...] = (
             r"fuer\s+alles|für\s+die\s+hilfe|fuer\s+die\s+hilfe|für\s+deine\s+hilfe|"
             r"dir\s+vielmals))*"
             r"|dankeschön|dankeschoen|vielen\s+(?:lieben\s+)?dank(?:e)?(?:\s+dir)?"
+            r"(?:\s+(?:für|fuer)\s+(?:deine|die)\s+hilfe)?"
             r"|tausend\s+dank|herzlichen\s+dank|besten\s+dank|dank\s+dir|merci(?:\s+beaucoup)?"
-            r"|thx|thanks|thank\s+you|ty|danki|dankö)"
+            r"|thx|thanks(?:\s+a\s+lot|\s+so\s+much)?|thank\s+you(?:\s+(?:so|very)\s+much)?"
+            r"|ty|danki|dankö)"
         ),
         (
             "Sehr gern! Wenn noch etwas offen ist, sag einfach Bescheid.",
@@ -403,7 +408,8 @@ ARTEN: tuple[Art, ...] = (
     ),
     Art(
         "gute_nacht",
-        _m(r"gute\s+nacht|guts\s+nächtle|gute\s+n8|n8|schlaf\s+gut|nacht|nachti"),
+        _m(r"(?:gute\s+nacht|guts\s+nächtle|gute\s+n8|n8|schlaf\s+gut|nacht|nachti|"
+           r"good\s+night)(?:\s+und\s+danke(?:\s+(?:dir|für\s+alles|fuer\s+alles))?)?"),
         (
             "Gute Nacht! Schlaf gut und bis bald.",
             "Schlaf gut! Ich bin morgen wieder für dich da.",
@@ -699,6 +705,11 @@ def art_von(text: str, *, frage_offen: bool = False) -> Art | None:
     gruss = next((a for a in ARTEN if a.name in _GRUESSE and a.muster.fullmatch(teile[1])),
                  None)
     rest = normalisieren(teile[2])
+    danke = next(a for a in ARTEN if a.name == "danke")
+    if gruss is None and danke.muster.fullmatch(teile[1]):
+        # 16.3.0: "Vielen Dank, das hilft mir sehr" -- Dank mit Lob bleibt ein Dank.
+        nach = _passende_art(rest, frage_offen) if rest else danke
+        return danke if nach is not None and nach.name in ("lob", "zustimmung", "danke") else nach
     if gruss is None or not rest:
         return gruss
     # Mit offener Rueckfrage ist "Hallo, alles klar" eine Antwort darauf -- die geht ans Modell.

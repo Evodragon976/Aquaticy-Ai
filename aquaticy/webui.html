@@ -2847,7 +2847,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "16.1.0";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "16.2.0";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -4317,6 +4317,7 @@ async function runCommand(line){
 
 
 async function ask(text){
+  if (neuerChatOffen) await neuerChatOffen;
   if (busy) return;
   if (!text.trim() && !pending.length) return;
 
@@ -5311,21 +5312,30 @@ $(".pane").addEventListener("click", (e) => {
 }, true);
 
 
+// 16.3.0: Solange der neue Chat angelegt wird, wartet "Senden" darauf. Was in der
+// Zwischenzeit getippt wurde, bleibt stehen und geht in den neuen Chat.
+let neuerChatOffen = null;
 async function neuerChat({ leiste = true } = {}){
   const opening = ++chatOpening;
-
-
+  const bisher = currentChat, entwurf = {text: input.value, files: pending};
+  let fertig = () => {}, getippt = null;
+  neuerChatOffen = new Promise((weiter) => { fertig = weiter; });
   try {
     const res = await api("/api/clear", { method:"POST" });
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json();
     if (opening !== chatOpening) return;
+    if (input.value !== entwurf.text) getippt = input.value;
     detachChat();
+    chatDrafts.set(bisher, entwurf);
     currentChat = data.current || "";
     secureChat = false; $("#secure-panel").hidden = true;
   } catch {
     toast("Neuer Chat ging gerade nicht. Versuch es gleich noch einmal.");
     return;
+  } finally {
+    if (opening === chatOpening) neuerChatOffen = null;
+    fertig();
   }
   thread.innerHTML = "";
   document.body.classList.remove("chat-compact", "chat-details-open");
@@ -5335,6 +5345,9 @@ async function neuerChat({ leiste = true } = {}){
   if (leiste && narrow()) document.body.classList.add("collapsed");
   input.value = ""; input.style.height = "auto"; markiereBefehl(); input.focus();
   restoreDraft();
+  if (getippt !== null){
+    input.value = getippt; markiereBefehl(); input.dispatchEvent(new Event("input"));
+  }
 }
 $("#btn-new").addEventListener("click", () => neuerChat());
 
