@@ -3,6 +3,27 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.2.0:**
+
+- **Alle Funktionen geprüft.** Jede Schnittstelle der Web-App bekam echte und kaputte
+  Eingaben (falsche Typen, leere und riesige Werte, fremde Pfade) — rund 270.000 Anfragen. Kein einziger
+  Absturz, keine Fehlermeldung aus dem Programm. Der Rundgang im Browser klickt alle Knöpfe
+  durch, ohne Fehler in der Konsole.
+- **Aquaticy Standard lässt weniger Fragen fallen.** Von 122 typischen Fragen ließ es
+  bisher rund jede fünfte fallen. Jetzt beantwortet es alle. Neu sind unter anderem: „ein
+  Drittel von 90“, „Um wie viel Prozent ist 120 größer als 100?“, „10 % Rabatt auf 59,99 €“,
+  „Wie viele Minuten haben 3 Stunden?“, „Welcher Wochentag ist heute?“, „Wie viele Tage hat
+  der Februar?“, „Wechselkurs Euro Pfund“, „Wie hoch ist der Mount Everest?“, „Wetter
+  Hamburg“, „Kann ich heute joggen gehen?“ und Fragen auf Englisch („what is 45 times 12“).
+- **Neuer Chat:** Wer gleich nach „Neuer Chat“ lostippt, verliert den Text nicht mehr. Vorher
+  löschte die späte Antwort des Servers das Eingabefeld, und „Senden“ schickte nichts.
+- **Ehrlich bei „Was kannst du?“:** Mit Aquaticy Standard nennt Aquaticy jetzt, was Standard
+  wirklich kann. Vorher versprach es Websuche und Code.
+- **Smalltalk versteht mehr:** „Vielen Dank für deine Hilfe“, „Gute Nacht und danke“ und
+  englische Sätze wie „Good morning“ oder „What can you do?“.
+- **Sicherheit:** Die Bildvorschau lässt sich nicht auf interne Adressen umlenken (auch nicht
+  mit Tricks wie `0x7f000001` oder IPv6). Exporte und Links bleiben geschützt.
+
 **Neu in 16.1.0:**
 
 - **Sicherheit geprüft.** Wir haben 15 typische Angriffe ausprobiert: Skript im Nutzernamen,

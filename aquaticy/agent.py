@@ -540,6 +540,12 @@ def smalltalk_fuer(agent: Any, question: str) -> str:
     art = smalltalk.art_von(question, frage_offen=bool(frage()) if callable(frage) else False)
     if art is None or (art.name == "faehigkeiten" and agent._standard_model()):
         return ""
+    if agent._standard_model():
+        # 16.4.2: In einer anderen Sprache antwortet Aquaticy Standard selbst -- in dieser.
+        from aquaticy import weltsprachen
+
+        if weltsprachen.sprache_von(question) not in ("", "de"):
+            return ""
     return smalltalk.waehle(art)
 
 

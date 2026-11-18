@@ -34,7 +34,7 @@ def _std(frage, holen=None):
     ("How many km is 26 miles?", "**41,8429 km"),
     ("Welcher Wochentag ist heute?", "Dienstag"),
     ("Was ist heute für ein Tag?", "Dienstag"),
-    ("what day is it today", "Dienstag"),
+    ("what day is it today", "2026-11-17"),  # 16.4.2: Englisch antwortet englisch
     ("In wie vielen Tagen ist Silvester?", "**44 Tage"),
     ("Wie viele Tage hat der Februar 2027?", "**28 Tage**"),
     ("Wie viele Tage hat der Februar 2028?", "**29 Tage**"),

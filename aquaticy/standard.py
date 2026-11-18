@@ -57,6 +57,9 @@ KEY_HINT_EN = ("\n\n*Aquaticy Standard answers without a language model. Pick an
 
 ERLAUBTE_HOSTS = ("de.wikipedia.org", "en.wikipedia.org", "api.open-meteo.com",
                   "geocoding-api.open-meteo.com", "api.frankfurter.app", "www.tagesschau.de")
+# 16.4.2: Wikipedia in jeder Sprache, die Aquaticy Standard kennt (feste Liste).
+ERLAUBTE_HOSTS += tuple(h for h in __import__("aquaticy.weltsprachen", fromlist=["x"]).WIKI_HOSTS
+                        if h not in ERLAUBTE_HOSTS)
 
 
 def holen_json(url: str) -> Any:
@@ -1097,27 +1100,30 @@ def thema_aus(text: str) -> str:
     return rest[:80]
 
 
-def wissen(thema: str, holen: Holen) -> str:
-    suche = holen("https://de.wikipedia.org/w/api.php?action=opensearch&limit=1&namespace=0"
+def wissen(thema: str, holen: Holen, sprache: str = "de") -> str:
+    """Der Anfang des passenden Wikipedia-Artikels -- in der Wikipedia *sprache* (16.4.2)."""
+    basis = f"https://{sprache}.wikipedia.org"
+    suche = holen(basis + "/w/api.php?action=opensearch&limit=1&namespace=0"
                   "&format=json&search=" + quote(thema))
     titel = ""
     if isinstance(suche, list) and len(suche) > 1 and suche[1]:
         titel = str(suche[1][0])
     if not titel:
         return ""
-    seite = holen("https://de.wikipedia.org/api/rest_v1/page/summary/"
+    seite = holen(basis + "/api/rest_v1/page/summary/"
                   + quote(titel.replace(" ", "_"), safe=""))
     if not isinstance(seite, dict) or seite.get("type") == "disambiguation":
         return (f"Zu „{thema}“ gibt es mehrere Bedeutungen. Sag mir genauer, welche du meinst."
-                if isinstance(seite, dict) else "")
+                if isinstance(seite, dict) and sprache == "de" else "")
     auszug = str(seite.get("extract") or "").strip()
     if not auszug:
         return ""
-    saetze = re.split(r"(?<=[.!?])\s+", auszug)
-    kurz = " ".join(saetze[:3])
+    saetze = re.split(r"(?<=[.!?])\s+|(?<=[。！？।۔])", auszug)
+    kurz = " ".join(s for s in saetze[:3] if s)[:700]
     link = ((seite.get("content_urls") or {}).get("desktop") or {}).get("page") or (
-        "https://de.wikipedia.org/wiki/" + quote(titel.replace(" ", "_")))
-    return f"**{seite.get('title', titel)}:** {kurz}\n\nQuelle: [Wikipedia]({link})"
+        basis + "/wiki/" + quote(titel.replace(" ", "_")))
+    quelle = "Quelle: [Wikipedia]" if sprache == "de" else "📖 [Wikipedia]"
+    return f"**{seite.get('title', titel)}:** {kurz}\n\n{quelle}({link})"
 
 
 # -- Uhrzeit in anderen Staedten ----------------------------------------------------------------
@@ -1889,6 +1895,16 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
             return text + KEY_HINT
         return ("Dazu habe ich ohne Sprachmodell leider kein festes Sicherheitswissen. Frag mich "
                 "nach einem Port (z. B. „Port 3389“), einem Dienst oder einer Malware." + KEY_HINT)
+    # 16.4.2: Andere Sprachen -- erkannt an typischen Woertern und an der Schrift. Worte einer
+    # Krise zuerst, in jeder Sprache derselben Schrift: Hilfe haengt nie an der Erkennung.
+    hilfe_sprache = welt_krise(frage)
+    if hilfe_sprache:
+        return hilfe_sprache
+    sprache = welt_sprache(frage, verlauf)
+    if sprache and sprache != "de":
+        text = welt_antwort(frage, sprache, holen, jetzt, wohnort, verlauf)
+        if text:
+            return text
 
     # 1. Antwort auf die eigene Rueckfrage: "Fuer welchen Ort?" -> "Erkelenz"
     vorher_gefragt = offene_ortsfrage(verlauf)
@@ -1962,13 +1978,18 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
     if gemerkt:
         return ("Alles klar, das merke ich mir:\n" + "\n".join(f"- {g}" for g in gemerkt[:5])
                 + "\n\nIch nutze das später, zum Beispiel beim Wetter.")
+    englisch = welt_texte("en") if sprache == "en" else {}
     thema = thema_aus(frage)
     if thema:
-        text = wissen(thema, holen)
+        text = wissen(thema, holen, "en" if englisch else "de")
         if text:
             return text
+        if englisch:
+            return englisch["nichts"].format(x=thema) + KEY_HINT_EN
         return (f"Zu „{thema}“ finde ich auf Wikipedia leider nichts Passendes. Vielleicht hilft "
                 "eine andere Schreibweise?" + KEY_HINT)
+    if englisch:
+        return englisch["rueckfall"] + KEY_HINT_EN
     return (waehle(("Hm, das kann ich ohne Sprachmodell leider nicht beantworten.",
                     "Das übersteigt leider, was ich ohne Sprachmodell kann.",
                     "Da muss ich passen – dafür bräuchte ich ein Sprachmodell."), kern)
@@ -1981,6 +2002,147 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
 VORSPANN = re.compile(r"^\s*(?:hallo|hi|hey|moin|servus|guten\s+(?:morgen|tag|abend)|"
                       r"danke(?:\s+(?:dir|schoen|schön))?|vielen\s+dank|ok(?:ay)?|super|prima)"
                       r"\s*[,!.;:]+\s*(?:und\s+)?", re.IGNORECASE)
+
+
+# -- Andere Sprachen (16.4.2) --------------------------------------------------------------------
+
+def welt_texte(code: str) -> dict[str, str]:
+    from aquaticy import weltsprachen
+
+    sprache = weltsprachen.SPRACHEN.get(code)
+    return dict(sprache.antworten) if sprache is not None else {}
+
+
+def _letzte_antwort(verlauf: list[dict[str, Any]] | None) -> str:
+    for eintrag in reversed(verlauf or []):
+        if isinstance(eintrag, dict) and eintrag.get("role") == "assistant":
+            return str(eintrag.get("content") or "").strip()
+    return ""
+
+
+def welt_sprache(frage: str, verlauf: list[dict[str, Any]] | None = None) -> str:
+    """Die Sprache der Frage -- nach "Für welchen Ort?" in einer Sprache auch die Antwort darauf."""
+    from aquaticy import weltsprachen
+
+    letzte = _letzte_antwort(verlauf)
+    if letzte and len(frage.split()) <= 5:
+        for sprache in weltsprachen.SPRACHEN.values():
+            if sprache.antworten.get("ort") and letzte == sprache.antworten["ort"]:
+                gefunden = weltsprachen.sprache_von(frage)
+                return gefunden if gefunden not in ("", "de") else sprache.code
+    return weltsprachen.sprache_von(frage)
+
+
+#: Diese Sprachen kennen wir gut. Bei den anderen steht unter der Hilfe auch der englische Satz --
+#: falls eine Uebersetzung holpert, kommt die Hilfe trotzdem an.
+_KRISE_SICHER = "en es fr pt it ru zh ja ko ar hi tr pl nl id vi uk fa ro el cs sv da no fi hu he"
+_KRISE_SICHER += " th"
+KRISE_SICHER = frozenset(_KRISE_SICHER.split())
+
+
+def welt_krise(frage: str) -> str:
+    """Hilfe in der Sprache, in der jemand von einer Krise schreibt -- oder ""."""
+    from aquaticy import weltsprachen
+
+    code = weltsprachen.krise_sprache(frage)
+    if not code or code in ("de", "en"):
+        return ""
+    text = weltsprachen.SPRACHEN[code].antworten["krise"]
+    if code not in KRISE_SICHER:
+        text += "\n\n" + weltsprachen.SPRACHEN["en"].antworten["krise"]
+    return text
+
+
+def welt_uhrzeit(ort: str, code: str, holen: Holen, jetzt: datetime) -> str:
+    """Die Uhrzeit an einem Ort ("¿Qué hora es en Tokio?") -- ueber die Zeitzone des Orts."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from aquaticy import weltsprachen
+
+    a = weltsprachen.SPRACHEN[code].antworten
+    geo = holen("https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&name="
+                + quote(ort))
+    treffer = (geo.get("results") or [None])[0] if isinstance(geo, dict) else None
+    if not isinstance(treffer, dict):
+        return a["nichts"].format(x=ort)
+    zone = str(treffer.get("timezone") or "")
+    try:
+        dort = jetzt.astimezone(ZoneInfo(zone)) if zone else None
+    except (ZoneInfoNotFoundError, ValueError):
+        dort = None
+    if dort is None:
+        return a["nichts"].format(x=ort)
+    return a["zeit"].format(zeit=f"{dort:%H:%M} ({treffer.get('name') or ort})")
+
+
+def welt_wetter(ort: str, code: str, frage: str, holen: Holen, heute: date) -> str:
+    """Das Wetter fuer *ort* -- mit Zahlen und Zeichen, die jede Sprache lesen kann."""
+    from aquaticy import weltsprachen
+
+    sprache = weltsprachen.SPRACHEN[code]
+    daten: dict[str, Any] | str = wetterdaten(ort, holen, heute)
+    # Gebeugte Formen ("в Москве", "Helsingissä") und Vorsilben ("בתל אביב"): noch einmal mit
+    # kuerzerem Namen versuchen.
+    versuche = [ort[:-1], ort[:-2]] if len(ort) >= 6 else []
+    versuche += [ort[len(v):] for v in sprache.listen["vorsilben"]
+                 if ort.startswith(v) and len(ort) - len(v) >= 3]
+    for anders in versuche:
+        if isinstance(daten, dict) or daten == NICHT_ERREICHBAR:
+            break
+        daten = wetterdaten(anders, holen, heute)
+    if not isinstance(daten, dict) or not daten.get("tage"):
+        return sprache.antworten["nichts"].format(x=ort)
+    tag = 1 if weltsprachen.enthaelt(frage, sprache, "morgen") and len(daten["tage"]) > 1 else 0
+    t = daten["tage"][tag]
+    wort = sprache.listen["morgen" if tag else "heute"][:1] or ("",)
+    zeichen = WETTERCODES.get(t.get("code"), "").split(" ")[-1]
+    regen = "" if t.get("regen") is None else f" · ☔ {_grad(t['regen'])} %"
+    return (f"**{daten['name']}** · {wort[0]}: {zeichen} {_grad(t.get('tief'))} – "
+            f"{_grad(t.get('hoch'))} °C{regen}\n\n[Open-Meteo](https://open-meteo.com)")
+
+
+def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: str = "",
+                 verlauf: list[dict[str, Any]] | None = None) -> str:
+    """Die Antwort in einer anderen Sprache -- oder "" (Englisch: dann der deutsche Weg)."""
+    from aquaticy import weltsprachen
+
+    sprache = weltsprachen.SPRACHEN.get(code)
+    if sprache is None or not sprache.antworten:
+        return ""
+    a = sprache.antworten
+    plaudern = ("hallo", "info", "danke", "tschuess", "wiegehts")
+    if weltsprachen.nur_aus(frage, sprache, plaudern):
+        for antwort, liste in (("wiegehts", "wiegehts"), ("intro", "info"), ("danke", "danke"),
+                               ("tschuess", "tschuess"), ("intro", "hallo")):
+            if weltsprachen.enthaelt(frage, sprache, liste):
+                return a[antwort]
+    wetter = weltsprachen.enthaelt(frage, sprache, "wetter")
+    if weltsprachen.enthaelt(frage, sprache, "zeit") and not wetter:
+        ort = weltsprachen.ort_aus(frage, sprache, ("zeit",))
+        if ort:
+            return welt_uhrzeit(ort, code, holen, jetzt)
+        versatz = jetzt.utcoffset()
+        stunden = int(versatz.total_seconds() // 3600) if versatz is not None else 0
+        return a["zeit"].format(zeit=f"{jetzt:%H:%M} (UTC{stunden:+d})")
+    if weltsprachen.enthaelt(frage, sprache, "datum") and not wetter:
+        return a["datum"].format(datum=jetzt.date().isoformat())
+    if not wetter and _letzte_antwort(verlauf) == a["ort"] and len(frage.split()) <= 5:
+        ort = frage.strip(" ?!.,;:¿¡")
+        return welt_wetter(ort, code, frage, holen, jetzt.date()) if ort else a["ort"]
+    if wetter:
+        ort = weltsprachen.ort_aus(frage, sprache) or str(wohnort or "").strip()
+        return welt_wetter(ort, code, frage, holen, jetzt.date()) if ort else a["ort"]
+    if code == "en":
+        return ""
+    ausdruck = re.search(r"[\d(][\d\s.,+\-*/()%^×÷]*[\d)]", frage)
+    if ausdruck and re.search(r"[+\-*/^×÷]", ausdruck.group(0)):
+        text = rechnen(ausdruck.group(0))
+        if text:
+            return text
+    thema = weltsprachen.thema(frage, sprache)
+    if thema:
+        return wissen(thema, holen, sprache.wiki) or a["nichts"].format(x=thema)
+    return a["rueckfall"]
 
 
 def ist_standard(model: str) -> bool:

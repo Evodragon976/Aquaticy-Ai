@@ -1,4 +1,4 @@
-# Aquaticy AI 16.2.0
+# Aquaticy AI 16.4.2
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,26 +25,23 @@ $ aquaticy
 
 ---
 
-## Neu in 16.2.0
+## Neu in 16.4.2
 
-- **Alle Funktionen geprüft.** Jede Schnittstelle der Web-App bekam echte und kaputte
-  Eingaben (falsche Typen, leere und riesige Werte, fremde Pfade) — rund 270.000 Anfragen. Kein einziger
-  Absturz, keine Fehlermeldung aus dem Programm. Der Rundgang im Browser klickt alle Knöpfe
-  durch, ohne Fehler in der Konsole.
-- **Aquaticy Standard lässt weniger Fragen fallen.** Von 122 typischen Fragen ließ es
-  bisher rund jede fünfte fallen. Jetzt beantwortet es alle. Neu sind unter anderem: „ein
-  Drittel von 90“, „Um wie viel Prozent ist 120 größer als 100?“, „10 % Rabatt auf 59,99 €“,
-  „Wie viele Minuten haben 3 Stunden?“, „Welcher Wochentag ist heute?“, „Wie viele Tage hat
-  der Februar?“, „Wechselkurs Euro Pfund“, „Wie hoch ist der Mount Everest?“, „Wetter
-  Hamburg“, „Kann ich heute joggen gehen?“ und Fragen auf Englisch („what is 45 times 12“).
-- **Neuer Chat:** Wer gleich nach „Neuer Chat“ lostippt, verliert den Text nicht mehr. Vorher
-  löschte die späte Antwort des Servers das Eingabefeld, und „Senden“ schickte nichts.
-- **Ehrlich bei „Was kannst du?“:** Mit Aquaticy Standard nennt Aquaticy jetzt, was Standard
-  wirklich kann. Vorher versprach es Websuche und Code.
-- **Smalltalk versteht mehr:** „Vielen Dank für deine Hilfe“, „Gute Nacht und danke“ und
-  englische Sätze wie „Good morning“ oder „What can you do?“.
-- **Sicherheit:** Die Bildvorschau lässt sich nicht auf interne Adressen umlenken (auch nicht
-  mit Tricks wie `0x7f000001` oder IPv6). Exporte und Links bleiben geschützt.
+- **Aquaticy Standard spricht 100 Sprachen.** Schreib auf Spanisch, Hindi, Arabisch, Japanisch,
+  Swahili oder in einer anderen der 100 meistgesprochenen Sprachen. Aquaticy Standard erkennt die
+  Sprache an typischen Wörtern und an der Schrift und antwortet in derselben Sprache.
+- **Was in jeder Sprache geht:** Begrüßung, Dank und Abschied, „Wie geht’s?“, „Wer bist du?“,
+  die Uhrzeit, das Datum, das Wetter für einen Ort (auch „morgen“), Rechnen und Wissen aus der
+  Wikipedia in der jeweiligen Sprache. Fehlt beim Wetter der Ort, fragt Aquaticy in deiner
+  Sprache nach und versteht die Antwort.
+- **Hilfe in Krisen in jeder Sprache:** Bei Worten über Suizid nennt Aquaticy in deiner Sprache
+  sofort Hilfe: die Notrufnummer deines Landes und kostenlose Hilfe-Telefone unter
+  findahelpline.com.
+- **Deutsch und Englisch** kann Aquaticy Standard wie bisher am genauesten. Englische Fragen
+  bekommen jetzt auch englische Antworten (Begrüßung, Uhrzeit, Datum, Wetter, Wikipedia).
+- **Grenzen:** Nah verwandte Sprachen teilen oft Wörter. Dann antwortet Aquaticy in der
+  größeren der beiden (etwa Indonesisch statt Malaiisch). Die Texte stammen nicht von
+  Muttersprachlern. Verbesserungen sind willkommen (`aquaticy/weltsprachen_daten.py`).
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -143,7 +140,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 16.2.0
+aquaticy --version            # 16.4.2
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup
