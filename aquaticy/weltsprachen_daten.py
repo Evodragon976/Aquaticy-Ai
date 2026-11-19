@@ -31,14 +31,17 @@ info = who are you; what can you do; help; what are you; what do you do
 danke = thanks; thank you; thank you very much; thanks a lot; many thanks
 tschuess = bye; goodbye; see you; see you later; good night
 wiegehts = how are you; how are you doing; how is it going; how's it going
-wetter = weather; forecast; temperature; raining; weather forecast
+wetter = weather; forecast; temperature; raining; weather forecast; will it rain;
+  going to rain; going to snow; is it snowing; how cold; how hot; is it sunny; is it windy;
+  what should i wear; what to wear; need an umbrella; take an umbrella; bring an umbrella
 zeit = what time is it; current time; the time; time now
 datum = what is the date; what's the date; today's date; what day is it; what date is it
 heute = today
 morgen = tomorrow
 wiki = what is {x}; what are {x}; who is {x}; who was {x}; tell me about {x}; what's {x}
 stopp = in; at; for; the; a; of; what; what's; whats; is; how; will; it; be; me; please;
-  show; tell; like; today; tomorrow; now; current; going; to; there
+  show; tell; like; today; tomorrow; now; current; going; to; there; do; i; need; an;
+  should; this; weekend; snowing; raining; and
 krise = kill myself; suicide; want to die; end my life; take my own life
 A.intro = Hello! I'm Aquaticy Standard. I can tell you the weather, the time and the date,
   do calculations and look things up on Wikipedia.
@@ -120,14 +123,15 @@ info = quién eres; qué puedes hacer; ayuda; qué eres; qué sabes hacer
 danke = gracias; muchas gracias; mil gracias; te lo agradezco
 tschuess = adiós; hasta luego; chao; nos vemos; hasta pronto; hasta mañana
 wiegehts = cómo estás; qué tal; cómo te va; cómo está usted
-wetter = tiempo hace; qué tiempo; el tiempo; tiempo; clima; pronóstico; temperatura; llueve; lluvia
+wetter = tiempo hace; qué tiempo; el tiempo; tiempo; clima; pronóstico; temperatura; llueve; lluvia;
+  llover; lloverá; nevar; nieva
 zeit = qué hora es; la hora; hora actual
 datum = qué día es hoy; qué fecha es; la fecha; fecha de hoy
 heute = hoy
 morgen = mañana
 wiki = qué es {x}; quién es {x}; quién fue {x}; qué son {x}; háblame de {x}
 stopp = en; de; para; el; la; los; las; qué; que; hace; hará; cómo; como; es; está; va; a;
-  hoy; mañana; tiempo; me; dime; por; favor; ahora
+  hoy; mañana; tiempo; me; dime; por; favor; ahora; llover; lloverá; nevar; nieva
 krise = suicidarme; quiero morir; matarme; quitarme la vida; suicidio
 A.intro = ¡Hola! Soy Aquaticy Standard. Puedo decirte el tiempo, la hora y la fecha,
   hacer cálculos y buscar en Wikipedia.
@@ -151,7 +155,8 @@ info = qui es-tu; qui êtes-vous; que peux-tu faire; aide; tu sais faire quoi
 danke = merci; merci beaucoup; merci bien; je te remercie
 tschuess = au revoir; à bientôt; salut à plus; bonne nuit; à plus tard; adieu
 wiegehts = comment ça va; ça va; comment vas-tu; comment allez-vous
-wetter = météo; quel temps; le temps; température; pleut; prévisions
+wetter = météo; quel temps; le temps; température; pleut; prévisions;
+  pleuvoir; pleuvra; neiger; neige
 zeit = quelle heure est-il; quelle heure; l'heure
 datum = quelle est la date; quel jour sommes-nous; la date; quel jour on est
 heute = aujourd'hui
@@ -159,7 +164,8 @@ morgen = demain
 wiki = qu'est-ce que {x}; qu'est-ce qu'un {x}; qu'est-ce qu'une {x}; qui est {x}; qui était {x};
   parle-moi de {x}
 stopp = à; a; en; au; aux; de; du; la; le; les; quel; quelle; fait; il; fera; est; va;
-  aujourd'hui; demain; pour; comment; temps; me; dis; donne
+  aujourd'hui; demain; pour; comment; temps; me; dis; donne; fait-il; fera-t-il; va-t-il;
+  pleuvoir; pleuvra; neiger; neige
 krise = me suicider; envie de mourir; me tuer; mettre fin à ma vie; suicide
 A.intro = Bonjour ! Je suis Aquaticy Standard. Je peux te donner la météo, l'heure et la date,
   faire des calculs et chercher sur Wikipédia.
@@ -655,7 +661,7 @@ info = تو کی هستی; شما کی هستید; چه کاری می\u200cتو�
 danke = ممنون; مرسی; متشکرم; سپاس; خیلی ممنون
 tschuess = خداحافظ; به امید دیدار; شب بخیر; بای
 wiegehts = حالت چطوره; حال شما چطور است; خوبی; چطوری
-wetter = هوا; آب و هوا; وضعیت هوا; دما; باران
+wetter = هوا; هوای; آب و هوا; وضعیت هوا; دما; باران
 zeit = ساعت چنده; ساعت چند است; الان ساعت چند است
 datum = امروز چندم است; تاریخ امروز; امروز چه روزی است; تاریخ
 heute = امروز
@@ -1384,7 +1390,7 @@ info = wie ben jij; wie ben je; wat kun je; wat kun jij doen; help; hulp
 danke = dank je; dank je wel; bedankt; dank u wel; hartelijk dank
 tschuess = doei; tot ziens; dag dag; tot later; welterusten; doeg
 wiegehts = hoe gaat het; hoe gaat het met je; alles goed; hoe is het
-wetter = weer; het weer; weerbericht; temperatuur; regent; regen
+wetter = weer; het weer; wat voor weer; weerbericht; temperatuur; regent; regen
 zeit = hoe laat is het; hoe laat; de tijd
 datum = welke datum is het; wat is de datum; welke dag is het; de datum van vandaag
 heute = vandaag

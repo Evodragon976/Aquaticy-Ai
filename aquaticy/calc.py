@@ -65,7 +65,13 @@ def _evaluate(node: ast.AST) -> float:
         left, right = _evaluate(node.left), _evaluate(node.right)
         try:
             if isinstance(node.op, ast.Pow):
-                if abs(right) > 12 or abs(left) > MAX_POWER:
+                # 16.4.5: Erlaubt bleibt alles wie bisher (Exponent bis 12, Basis bis 1000).
+                # Dazu alles, dessen Ergebnis nicht groesser als 1000 ** 12 wird:
+                # 1001 ** 2, 2 ** 13 und 1000000 ** 0.5 waren vorher "zu gross".
+                bisher = abs(right) <= 12 and abs(left) <= MAX_POWER
+                klein = abs(right) <= 10_000 and (left in (0, 1, -1) or abs(
+                    right * math.log10(abs(left))) <= 12 * math.log10(MAX_POWER))
+                if not (bisher or klein):
                     raise CalcError("Exponent zu gross.")
                 return left**right
             return _BINARY[type(node.op)](left, right)
