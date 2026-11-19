@@ -176,3 +176,129 @@ def test_links_keep_brackets_in_the_address():
 def test_multiplication_signs_are_not_italics():
     assert _md("a * b * c") == "<p>a * b * c</p>"
     assert _md("Text *mit Betonung* hier") == "<p>Text <em>mit Betonung</em> hier</p>"
+
+
+# -- Teil 2 -------------------------------------------------------------------------------
+
+
+def test_lone_surrogates_from_json_become_a_replacement_character():
+    from aquaticy.jsonutil import loads
+
+    daten = loads(b'{"a": "x\\ud800y", "b": ["\\ud83d\\ude00"], "\\udcff": 1}')
+    assert daten == {"a": "x�y", "b": ["\U0001F600"], "�": 1}
+    assert frag("Wetter in Berlin\ud800").encode("utf-8")
+
+
+def test_lookalike_usernames_are_refused(tmp_path, monkeypatch):
+    monkeypatch.setenv("AQUATICY_KDF", "schnell")
+    from aquaticy.auth import AuthStore, name_key, normalize_username
+
+    with pytest.raises(ValueError):
+        normalize_username("admin​")
+    assert normalize_username("Jürgen") == "Jürgen"
+    assert name_key("ＡＤＭＩＮ") == name_key("admin")
+    store = AuthStore(tmp_path, "PRO123456")
+    store.register("a@example.com", "sehr-langes-passwort-123", "normal", username="admin",
+                   terms_accepted=True, terms_version="t", trusted=True)
+    for doppelt in ("ADMIN", "ａｄｍｉｎ"):
+        with pytest.raises(ValueError):
+            store.register(f"{doppelt}@example.org".replace("ａ", "b"), "sehr-langes-passwort-123",
+                           "normal", username=doppelt, terms_accepted=True, terms_version="t",
+                           trusted=True)
+
+
+def test_changelog_has_no_dead_internal_links():
+    wurzel = Path(standard.__file__).resolve().parent.parent
+    text = (wurzel / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "](#was-aquaticy-kann)" not in text
+    for ziel in re.findall(r"\]\((tests/[^)#]+)\)", text):
+        assert (wurzel / ziel).exists(), ziel
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Wann geht morgen die Sonne in Berlin auf?", "Morgen geht die Sonne"),
+    ("Wann wird es morgen in Berlin dunkel?", "Morgen geht die Sonne"),
+    ("Wetter in 10 Tagen in Berlin", "nur sieben Tage"),
+    ("Wird es am Samstag in Berlin warm?", "°C"),
+    ("Was ziehe ich morgen in Berlin an?", "Für morgen"),
+    ("Werde ich morgen in Berlin nass?", "Schirm"),
+    ("Wetter Berlin morgen", "**Morgen in"),
+    ("Berlin Wetter am Montag", "Montag"),
+])
+def test_weather_questions_in_more_forms(frage, erwartet):
+    from datetime import date, timedelta
+
+    orte = []
+
+    def holen(url):
+        if "geocoding" in url:
+            orte.append(url)
+            return {"results": [{"name": "Berlin", "latitude": 52.5, "longitude": 13.4}]}
+        d0 = date(2026, 11, 19)
+        tage = [(d0 + timedelta(days=i)).isoformat() for i in range(7)]
+        return {"daily": {"time": tage, "weather_code": [71] * 7,
+                          "temperature_2m_max": [3] * 7, "temperature_2m_min": [-2] * 7,
+                          "precipitation_probability_max": [70] * 7,
+                          "sunrise": [f"{t}T07:40" for t in tage],
+                          "sunset": [f"{t}T16:10" for t in tage]}, "current": {}}
+
+    antwort = standard._antwort(frage, [], holen=holen, jetzt=JETZT)
+    assert erwartet in antwort, antwort
+    assert all("name=Berlin&" in url or url.endswith("name=Berlin") for url in orte), orte
+
+
+def test_snow_is_not_called_rain():
+    d = {"name": "Berlin", "jetzt": {}, "tage": [
+        {"datum": None, "code": 71, "tief": -2, "hoch": 1, "regen": 90}]}
+    assert "Schneerisiko 90 %" in standard._tageszeile(d, 0)
+
+
+@pytest.mark.parametrize("frage", ["Brauche ich in Frankfurt am Main eine Mütze?",
+                                   "Wann geht in Frankfurt am Main die Sonne auf?",
+                                   "Wann geht in Frankfurt am Main übermorgen die Sonne unter?"])
+def test_place_names_lose_the_rest_of_the_question(frage):
+    assert standard.orte_aus(frage) == ["Frankfurt am Main"]
+
+
+@pytest.mark.parametrize("frage, thema", [
+    ("Was ist eigentlich ein Axolotl?", "Axolotl"), ("Was heißt Demokratie?", "Demokratie"),
+    ("Kennst du Marie Curie?", "Marie Curie"), ("Weißt du, was ein Okapi ist?", "Okapi"),
+    ("Infos zu Paris", "Paris"), ("Wer erfand das Telefon?", "Telefon"),
+    ("Wann lebte Kleopatra?", "Kleopatra"), ("Wie alt wurde Einstein?", "Einstein"),
+    ("Was macht ein Notar?", "Notar"), ("Wie funktioniert ein Kühlschrank?", "Kühlschrank"),
+    ("Tell me about Rome", "Rome"),
+    ("Was ist das?", ""), ("Wer ist er?", ""), ("Kennst du mich?", ""),
+    ("Was heißt Hund auf Englisch?", ""), ("Was macht ein gutes Leben aus?", ""),
+])
+def test_topics_of_knowledge_questions(frage, thema):
+    assert standard.thema_aus(frage) == thema
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Was ist 10 % von 1.000?", "10 % von 1.000 sind **100**."),
+    ("Was ist 1.000 + 1?", "**1.001**"),
+    ("1.500 m in km", "1.500 m sind **1,5 km**."),
+    ("2.000 Euro netto in brutto", "2.000 € netto sind **2.380 € brutto**"),
+    ("Was ist 1.5 + 1?", "**2,5**"),
+    ("5 km sind wie viele Meilen?", "5 km sind **3,1069 Meilen**."),
+])
+def test_the_german_thousands_separator(frage, erwartet):
+    assert frag(frage).startswith(erwartet)
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Wie viel sind 1.000 Euro in Dollar?", "1.000 EUR sind **1.100 USD**"),
+    ("1,5 Mio Euro in Dollar", "1.500.000 EUR sind **1.650.000 USD**"),
+    ("100 Euro in Schweizer Franken", "100 EUR sind **110 CHF**"),
+    ("100 euro to pounds", "100 EUR sind **110 GBP**"),
+    ("Wie viele Dollar bekomme ich für 200 Euro?", "200 EUR sind **220 USD**"),
+    ("200 Euro sind wie viel Dollar?", "200 EUR sind **220 USD**"),
+    ("Wie steht der Dollar?", "1 EUR sind **1,1 USD**"),
+])
+def test_currency_questions(frage, erwartet):
+    def holen(url):
+        von = re.search(r"from=([A-Z]{3})", url).group(1)
+        nach = re.search(r"to=([A-Z]+)", url).group(1)
+        return {"base": von, "date": "2026-11-18", "rates": {nach: 1.1}}
+
+    assert standard._antwort(frage, [], holen=holen, jetzt=JETZT).startswith(erwartet)

@@ -4432,8 +4432,10 @@ class Toolbox:
             return {"error": "Keine Adresse angegeben."}
         try:
             address = socket.gethostbyname(host)
-        except OSError:
-            return {"host": host, "reachable": False, "error": f"{host} ist nicht aufloesbar."}
+        except (OSError, UnicodeError, TypeError, ValueError):
+            # Nullzeichen, zu lange Namen oder ".." warfen vorher TypeError/UnicodeError (16.4.5).
+            return {"host": host[:80], "reachable": False,
+                    "error": f"{host[:80]} ist nicht aufloesbar."}
 
         import ipaddress
 

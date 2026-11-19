@@ -102,6 +102,9 @@ def falten(text: str) -> str:
 def zahl(text: str) -> float:
     """'1.234,5' oder '1234.5' oder '1,5' als Zahl."""
     text = text.strip().replace(" ", "")
+    if re.fullmatch(r"-?\d{1,3}(?:\.\d{3})+", text):
+        # "1.000" und "12.500": deutscher Tausenderpunkt. Vorher war "1.000" eins (16.4.5).
+        return float(text.replace(".", ""))
     if "," in text and "." in text:
         text = text.replace(".", "").replace(",", ".")
     elif text.count(".") > 1:
@@ -155,7 +158,8 @@ def rechnen(text: str) -> str:
     kern = re.sub(r"(?:quadrat)?wurzel\s+(?:aus|von)\s+(\d[\d.,]*|\([^()]*\))",
                   r"(\1 ** 0.5)", kern)
     # 1.000.000 oder 1.234,5: Die Punkte trennen Tausender.
-    kern = re.sub(r"(?<![\d.,])\d{1,3}(?:\.\d{3}){2,}(?![\d.])|(?<![\d.,])\d{1,3}\.\d{3}(?=,\d)",
+    # 16.4.5: auch eine einzelne Gruppe ("1.000 + 1" ergab vorher 2).
+    kern = re.sub(r"(?<![\d.,])\d{1,3}(?:\.\d{3})+(?![\d.])|(?<![\d.,])\d{1,3}\.\d{3}(?=,\d)",
                   lambda t: t.group(0).replace(".", ""), kern)
     if not re.fullmatch(r"[\d\s.,+\-*/()%]+", kern) or not re.search(r"\d", kern):
         return ""
@@ -339,6 +343,11 @@ def einheiten(text: str) -> str:
     gefaltet = (falten(text).replace("grad celsius", "celsius")
                 .replace("grad fahrenheit", "fahrenheit"))
     treffer = UMRECHNEN.search(gefaltet)
+    # "5 km sind wie viele Meilen?" (16.4.5)
+    vorn = re.search(rf"{ZAHL}\s*([a-z°/0-9]+)\s+(?:sind|ist|ergeben|machen)\s+wie\s*viele?\s+"
+                     r"([a-z°/0-9]+)", gefaltet)
+    if vorn and not treffer:
+        treffer = vorn
     if treffer:
         wert, von, nach = zahl(treffer.group(1)), treffer.group(2), treffer.group(3)
     else:
@@ -682,18 +691,30 @@ WETTER_WORT = re.compile(r"\b(wetter|wettervorhersage|wetterbericht|wetterlage|w
                          r"\bwie\s+wird\s+(?:es|das\s+wochenende|der\s+tag|der\s+\w+tag|"
                          r"die\s+(?:naechste\s+|kommende\s+)?woche|heute|morgen|uebermorgen)\b|"
                          r"\bwird\s+es\s+(?:heute|morgen|uebermorgen|am\s+\w+)?\s*"
-                         r"(?:warm|kalt|nass|schoen|heiss|trocken)\b")
+                         r"(?:warm|kalt|nass|schoen|heiss|trocken)\b|"
+                         # "Wird es am Samstag in Berlin warm?" -- der Ort steht dazwischen (16.4.5)
+                         r"\bwird\s+es\b(?:\s+\S+){1,6}?\s+(?:warm|kalt|nass|schoen|heiss|"
+                         r"trocken)\b")
 ANZIEHEN_WORT = re.compile(r"\b(anziehen|anzieh|kleidung|klamotten|jacke|mantel|pulli|pullover|"
                            r"kurze\s+hose|kurzer?\s+hose|muetze|handschuhe|t-?shirt|outfit|"
-                           r"what\s+(?:should\s+i|to)\s+wear)\b")
+                           r"what\s+(?:should\s+i|to)\s+wear)\b|"
+                           # "Was ziehe ich morgen in Berlin an?" -- getrenntes Verb (16.4.5)
+                           r"\bzieh(?:e|st|t)?\s+(?:ich|man|wir|du)\b.*\ban\b")
 #: 16.3.0: "Kann ich heute joggen gehen?" -- das entscheidet das Wetter.
 DRAUSSEN = re.compile(r"\b(?:kann|koennen|soll|sollte|sollten)\s+(?:ich|man|wir)\b.*\b(?:joggen|"
                       r"laufen\s+gehen|radfahren|rad\s+fahren|fahrrad\s+fahren|grillen|"
                       r"baden\s+gehen|schwimmen\s+gehen|spazieren|wandern|draussen)\b")
-SCHIRM_WORT = re.compile(r"\b((regen)?schirm|umbrella|nass\s+werden|regenjacke)\b")
+SCHIRM_WORT = re.compile(r"\b((regen)?schirm|umbrella|nass\s+werden|regenjacke)\b|"
+                         # "Werde ich in Berlin nass?" (16.4.5)
+                         r"\b(?:werde\s+ich|werden\s+wir|wird\s+man)\b.*\bnass\b")
 SONNE_WORT = re.compile(r"\b(sonnenaufgang|sonnenuntergang|sonne\s+(?:auf|unter)|"
-                        r"geht\s+die\s+sonne|wird\s+es\s+(?:hell|dunkel)|sunrise|sunset)\b")
-ORT_NACH = re.compile(r"\b(?:in|fuer|bei|um|im)\s+([a-z][a-z\s.\-]{1,40}?)"
+                        r"geht\s+die\s+sonne|wird\s+es\s+(?:hell|dunkel)|sunrise|sunset)\b|"
+                        # "Wann geht morgen die Sonne in Berlin auf?" (16.4.5)
+                        r"\bgeht\s+(?:\S+\s+){1,2}?die\s+sonne\b|"
+                        r"\bwann\b.*\bsonne\b(?:\s+\S+){0,4}?\s+(?:auf|unter)\b|"
+                        # "Wann wird es in Berlin dunkel?" (16.4.5)
+                        r"\bwann\s+wird\s+es\b(?:\s+\S+){0,5}?\s+(?:hell|dunkel)\b")
+ORT_NACH = re.compile(r"\b(?:in|fuer|bei|um|im)\s+([a-z][a-z\s.\-]{1,60}?)"
                       r"(?:\s+(?:heute|morgen|uebermorgen|am\s+wochenende|diese\s+woche|"
                       r"die\s+naechsten\s+tage|am\s+\w+tag|am\s+mittwoch|am\s+samstag|"
                       r"am\s+sonntag|an|aus|anziehen|mitnehmen))?$")
@@ -714,7 +735,11 @@ ORT_FUELL = (r"\b(wetter|das|die|der|den|regnen|regnet|schneien|schneit|sonnig|w
              r"wird|es|sein|geben|anziehen|mitnehmen|soll|ich|einen|schirm|regenschirm|jacke|"
              r"brauche|draussen|gerade|jetzt|aktuell|bitte|denn|eigentlich|so|joggen|laufen|"
              r"gehen|radfahren|fahren|grillen|baden|schwimmen|spazieren|wandern|kann|man|ein|"
-             r"schoenes|gutes|tolles|herrliches|schlechtes|mieses)\b")
+             r"schoenes|gutes|tolles|herrliches|schlechtes|mieses|"
+             # Reste aus Anziehen-, Schirm- und Sonnenfragen ("Berlin eine Mütze", "Berlin
+             # die Sonne auf") gingen vorher mit in die Ortssuche (16.4.5).
+             r"eine|einer|muetze|hose|kurze|pulli|pullover|mantel|handschuhe|schal|"
+             r"sonnenbrille|sonnencreme|sonne|nass|dunkel|hell|zieh|ziehe)\b")
 #: Nach "in/im/für/bei" steht nicht immer ein Ort.
 NICHT_ORT = frozenset({
     "mir", "uns", "dir", "mich", "hier", "hause", "zuhause", "moment", "augenblick", "urlaub",
@@ -752,6 +777,13 @@ def tage_aus(kern: str, heute: date) -> list[int]:
     """Welche Tage gemeint sind: [0] heute, [1] morgen, Wochenende, Wochentag, naechste Tage."""
     if re.search(r"\b(naechsten\s+tage|diese\s+woche|ganze\s+woche|woche|7\s+tage)\b", kern):
         return list(range(0, 7))
+    # "Wetter in 10 Tagen" zeigte vorher stillschweigend heute (16.4.5).
+    in_tagen = re.search(r"\bin\s+(\d{1,3}|zwei|drei|vier|fuenf|sechs|sieben|acht|neun|zehn)"
+                         r"\s+tagen\b", kern)
+    if in_tagen:
+        woerter = {"zwei": 2, "drei": 3, "vier": 4, "fuenf": 5, "sechs": 6, "sieben": 7,
+                   "acht": 8, "neun": 9, "zehn": 10}
+        return [woerter.get(in_tagen.group(1)) or int(in_tagen.group(1))]
     if "wochenende" in kern:
         sa = (5 - heute.weekday()) % 7
         return [sa, sa + 1] if sa + 1 < 7 else [sa]
@@ -794,7 +826,9 @@ def orte_aus(frage: str) -> list[str]:
     kern = re.sub(r"\b(?:im\s+moment|im\s+augenblick|zur\s+zeit|zurzeit|momentan)\b", " ",
                   falten(frage))
     kern = re.sub(r"\s+", " ", kern).strip()
-    treffer = ORT_NACH.search(kern) or ORT_OHNE.search(kern)
+    # "Wetter Berlin morgen", "Berlin Wetter am Montag": ohne "in" stoerte der Tag (16.4.5).
+    ohne_zeit = re.sub(r"\s+", " ", re.sub(ZEIT_WORTE, " ", kern)).strip()
+    treffer = ORT_NACH.search(kern) or ORT_OHNE.search(kern) or ORT_OHNE.search(ohne_zeit)
     if not treffer:
         return []
     rest = re.sub(ZEIT_WORTE, " ", next(g for g in treffer.groups() if g))
@@ -802,7 +836,7 @@ def orte_aus(frage: str) -> list[str]:
     for teil in re.split(r"\s+(?:und|oder|sowie)\s+|\s*,\s*", rest):
         teil = re.sub(r"^\s*(?:in|im|fuer|bei|um)\s+", "", teil)
         teil = re.sub(r"\s+", " ", re.sub(ORT_FUELL, " ", teil)).strip(" .-")
-        teil = re.sub(r"^(?:am|und|in)\s+|\s+(?:am|und|in)$", "", teil).strip(" .-")
+        teil = re.sub(r"^(?:am|und|in)\s+|\s+(?:am|und|in|an|auf|unter)$", "", teil).strip(" .-")
         if not teil or teil in NICHT_ORT or teil.split()[-1] in NICHT_ORT:
             continue
         ort = original(frage, teil)
@@ -920,6 +954,10 @@ def _einschaetzung(t: dict[str, Any]) -> str:
     return "Ein ziemlich normaler Tag, nichts Besonderes zu beachten."
 
 
+#: Wettercodes mit Schnee (WMO): leichter bis starker Schnee, Schneegriesel, Schneeschauer.
+SCHNEE_CODES = frozenset({71, 73, 75, 77, 85, 86})
+
+
 def _tageszeile(d: dict[str, Any], i: int) -> str:
     """"**Heute in Erkelenz:** leichter Regen, -1 bis 7 °C, Regenrisiko 39 %. Gerade ..."."""
     t = d["tage"][i]
@@ -927,7 +965,9 @@ def _tageszeile(d: dict[str, Any], i: int) -> str:
              f"{WETTERCODES.get(int(t['code'] or 0), 'wechselhaft')}, "
              f"{_grad(t['tief'])} bis {_grad(t['hoch'])} °C")
     if t.get("regen") is not None:
-        zeile += f", Regenrisiko {t['regen']} %"
+        # Bei Schnee ist es kein Regen: die Zahl ist das Risiko fuer Niederschlag (16.4.5).
+        wort = "Schneerisiko" if int(t["code"] or 0) in SCHNEE_CODES else "Regenrisiko"
+        zeile += f", {wort} {t['regen']} %"
     zeile += "."
     jetzt = d["jetzt"]
     if i == 0 and jetzt.get("temperature_2m") is not None:
@@ -1096,18 +1136,51 @@ WAEHRUNGEN = {"euro": "EUR", "eur": "EUR", "€": "EUR", "dollar": "USD", "usd":
               "$": "USD", "pfund": "GBP", "gbp": "GBP", "franken": "CHF", "chf": "CHF",
               "yen": "JPY", "jpy": "JPY", "zloty": "PLN", "pln": "PLN", "krone": "SEK",
               "kronen": "SEK", "sek": "SEK", "dkk": "DKK", "nok": "NOK", "yuan": "CNY",
-              "cny": "CNY", "lira": "TRY", "try": "TRY", "aud": "AUD", "cad": "CAD"}
+              "cny": "CNY", "lira": "TRY", "try": "TRY", "aud": "AUD", "cad": "CAD",
+              # 16.4.5: englische und zusammengesetzte Namen
+              "dollars": "USD", "pound": "GBP", "pounds": "GBP", "francs": "CHF",
+              "franc": "CHF", "kronor": "SEK", "zlotys": "PLN"}
+#: "Schweizer Franken", "US-Dollar", "britische Pfund" -- vor der Suche zusammengefasst.
+WAEHRUNG_NAMEN = ((r"\bschweizer\s+franken\b", "franken"), (r"\bus-?\s?dollars?\b", "dollar"),
+                  (r"\bbritische[n]?\s+pfund\b", "pfund"), (r"\bswiss\s+francs?\b", "franken"),
+                  (r"\bbritish\s+pounds?\b", "pfund"), (r"\bjapanische[n]?\s+yen\b", "yen"),
+                  (r"\bschwedische[n]?\s+kronen?\b", "kronen"))
+#: "1,5 Mio Euro": Mio, Millionen, Mrd, Tausend hinter der Zahl.
+WAEHRUNG_MAL = {"tsd": 1e3, "tausend": 1e3, "k": 1e3, "mio": 1e6, "million": 1e6,
+                "millionen": 1e6, "mrd": 1e9, "milliarde": 1e9, "milliarden": 1e9}
 WAEHRUNG_SATZ = re.compile(rf"{ZAHL}?\s*([a-z€$]+)\s+(?:in|nach|zu|to)\s+([a-z€$]+)")
 
 
 def waehrung(text: str, holen: Holen) -> str:
     kern = falten(text).replace("€", " € ").replace("$", " $ ")
+    for muster, name in WAEHRUNG_NAMEN:
+        kern = re.sub(muster, name, kern)
+    # "1,5 Mio Euro" rechnete vorher mit einem Euro (16.4.5).
+    mal = re.search(rf"{ZAHL}\s*({'|'.join(WAEHRUNG_MAL)})\b", kern)
+    faktor = 1.0
+    if mal:
+        faktor = WAEHRUNG_MAL[mal.group(2)]
+        kern = kern[:mal.start(2)] + kern[mal.end(2):]
+    # "Wie viele Dollar bekomme ich für 200 Euro?", "200 Euro sind wie viel Dollar?"
+    umgekehrt = re.search(rf"wie\s*viele?\s+([a-z€$]+)\s+(?:bekomme|kriege|gibt\s+es)\s+"
+                          rf"(?:ich|man)?\s*(?:fuer|for)\s+{ZAHL}\s*([a-z€$]+)", kern)
+    vorn = re.search(rf"{ZAHL}\s*([a-z€$]+)\s+(?:sind|ist|macht|machen)\s+wie\s*viele?\s+"
+                     r"([a-z€$]+)", kern)
     treffer = WAEHRUNG_SATZ.search(kern)
     von = nach = None
-    if treffer:
+    betrag = 1.0
+    if umgekehrt and WAEHRUNGEN.get(umgekehrt.group(1)) and WAEHRUNGEN.get(umgekehrt.group(3)):
+        von, nach = WAEHRUNGEN[umgekehrt.group(3)], WAEHRUNGEN[umgekehrt.group(1)]
+        betrag = zahl(umgekehrt.group(2))
+    elif vorn and WAEHRUNGEN.get(vorn.group(2)) and WAEHRUNGEN.get(vorn.group(3)):
+        von, nach = WAEHRUNGEN[vorn.group(2)], WAEHRUNGEN[vorn.group(3)]
+        betrag = zahl(vorn.group(1))
+    elif treffer:
         von, nach = WAEHRUNGEN.get(treffer.group(2)), WAEHRUNGEN.get(treffer.group(3))
         betrag = zahl(treffer.group(1)) if treffer.group(1) else 1.0
-    if (not von or not nach) and re.search(r"\b(kurs|wechselkurs)\b", kern):
+    betrag *= faktor
+    kurs_frage = re.search(r"\b(kurs|wechselkurs)\b|\bwie\s+steht\s+(?:der|die|das)\b", kern)
+    if (not von or not nach) and kurs_frage:
         # 16.3.0: Ohne "in": die genannten Waehrungen der Reihe nach, eine allein gegen Euro.
         genannt = list(dict.fromkeys(WAEHRUNGEN[w] for w in re.findall(r"[a-z€$]+", kern)
                                      if w in WAEHRUNGEN and w != "try"))
@@ -1116,7 +1189,7 @@ def waehrung(text: str, holen: Holen) -> str:
         if len(genannt) >= 2:
             von, nach = genannt[0], genannt[1]
             betrag_text = re.search(r"-?\d[\d.,]*", kern)
-            betrag = zahl(betrag_text.group(0)) if betrag_text else 1.0
+            betrag = (zahl(betrag_text.group(0)) if betrag_text else 1.0) * faktor
     if not von or not nach or von == nach:
         return ""
     daten = holen(f"https://api.frankfurter.app/latest?from={von}&to={nach}")
@@ -1156,7 +1229,10 @@ def nachrichten(holen: Holen) -> str:
 WISSEN_VORN = re.compile(
     r"^(?:und\s+)?(?:wer|was)\s+(?:ist|sind|war|waren)\s+|^erzaehl\s+(?:mir\s+)?(?:etwas\s+|was\s+)?"
     r"(?:ueber|von)\s+|^was\s+weisst\s+du\s+(?:ueber|von)\s+|^erklaer(?:e)?\s+(?:mir\s+)?|"
-    r"^was\s+bedeutet\s+|^was\s+versteht\s+man\s+unter\s+|^(?:who|what)\s+(?:is|are|was)\s+")
+    r"^was\s+bedeutet\s+|^was\s+versteht\s+man\s+unter\s+|^(?:who|what)\s+(?:is|are|was)\s+|"
+    # 16.4.5: weitere uebliche Formen
+    r"^was\s+heisst\s+|^kennst\s+du\s+|^(?:infos?|informationen)\s+(?:zu|ueber)\s+|"
+    r"^tell\s+me\s+about\s+")
 ARTIKEL = re.compile(r"^(?:der|die|das|ein|eine|einen|den|dem|des|the|a|an)\s+")
 
 
@@ -1171,11 +1247,35 @@ WISSEN_FRAGEN = (
     re.compile(r"^wer\s+hat\s+(.+?)\s+(?:erfunden|entdeckt|gebaut|gegruendet|geschrieben|gemalt|"
                r"komponiert|entwickelt|erbaut)$"),
     re.compile(r"^(?:wikipedia|wiki)\s+(?:zu\s+|ueber\s+)?(.+)$"),
+    # 16.4.5: "Wer erfand das Telefon?", "Wann lebte Kleopatra?", "Wie alt wurde Einstein?",
+    # "Weißt du, was ein Okapi ist?", "Was macht ein Notar?", "Wie funktioniert ein Kühlschrank?"
+    re.compile(r"^wer\s+(?:erfand|entdeckte|gruendete|schrieb|malte|komponierte|baute|"
+               r"entwickelte)\s+(.+)$"),
+    re.compile(r"^wann\s+(?:lebte|lebten|starb|regierte)\s+(.+)$"),
+    re.compile(r"^wie\s+alt\s+wurde\s+(.+)$"),
+    re.compile(r"^weisst\s+du,?\s+(?:was|wer)\s+(.+?)\s+(?:ist|sind|war|waren)$"),
+    re.compile(r"^was\s+macht\s+(?:ein|eine)\s+(.+)$"),
+    re.compile(r"^wie\s+funktionier(?:t|en)\s+(.+)$"),
     re.compile(r"^(.+?)\s+(?:auf\s+)?(?:wikipedia|wiki)$"),
 )
 
 
 def thema_aus(text: str) -> str:
+    thema = _thema_aus(text)
+    # Kein Thema: Fuerwoerter ("Wie funktioniert das?", "Kennst du mich?"), Uebersetzungen
+    # ("Was heißt Hund auf Englisch?") und "Was macht ein gutes Leben aus?" (16.4.5).
+    klein = falten(thema)
+    if (klein in {"das", "es", "er", "die", "der", "mich", "dich", "uns", "euch", "ihn", "sie",
+                  "man", "du", "ich", "wer", "was",
+                  "dies", "dieses", "das hier", "so etwas", "sowas"}
+            or re.search(r"\bauf\s+(?:englisch|deutsch|franzoesisch|spanisch|italienisch|"
+                         r"tuerkisch|english|german)$", klein)
+            or (re.match(r"^was\s+macht\b", falten(text)) and re.search(r"\baus$", klein))):
+        return ""
+    return thema
+
+
+def _thema_aus(text: str) -> str:
     roh = re.sub(r"\s+", " ", text).strip(" ?!.")
     kern = falten(roh)
     for muster in WISSEN_FRAGEN:
@@ -1194,6 +1294,8 @@ def thema_aus(text: str) -> str:
     worte = roh.split(" ")
     vorn = len(treffer.group(0).split())
     rest = " ".join(worte[vorn:]).strip()
+    # "Was ist eigentlich ein Axolotl?" suchte vorher nach "eigentlich ein Axolotl" (16.4.5).
+    rest = re.sub(r"^(?:eigentlich|denn|genau|nochmal|so)\s+", "", rest, flags=re.I)
     rest = ARTIKEL.sub("", rest) if ARTIKEL.match(rest.lower()) else rest
     return rest[:80]
 
@@ -1976,6 +2078,8 @@ def antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure: 
     """
     # Nur Eintraege, die wie Nachrichten aussehen -- ein kaputter Verlauf bricht sonst ab.
     verlauf = [e for e in verlauf or [] if isinstance(e, dict)]
+    # Einzelne Surrogate (etwa aus der Kommandozeile) brachen die Ortssuche ab (16.4.5).
+    frage = re.sub("[\ud800-\udfff]", "\ufffd", str(frage or ""))
     try:
         return _antwort(frage, verlauf, secure=secure, holen=holen, jetzt=jetzt,
                         wuerfel=wuerfel, wohnort=wohnort, gemerkt=gemerkt)
@@ -2078,7 +2182,9 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
                  r"passiert\b|\bwas\s+ist\s+(?:heute\s+)?in\s+der\s+welt\s+passiert\b|"
                  r"\bwas\s+passiert\s+(?:gerade\s+)?in\s+der\s+welt\b", kern):
         return nachrichten(holen)
-    if re.search(r"\b(kurs|wechselkurs|umrechnen)\b", kern) or WAEHRUNG_SATZ.search(kern):
+    if re.search(r"\b(kurs|wechselkurs|umrechnen)\b|\bwie\s+steht\s+(?:der|die|das)\b|"
+                 r"\b(?:bekomme|kriege)\s+(?:ich|man)\s+fuer\b|\bsind\s+wie\s*viele?\b",
+                 kern) or WAEHRUNG_SATZ.search(kern):
         text = waehrung(frage, holen)
         if text:
             return text

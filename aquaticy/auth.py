@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+import unicodedata
 from collections import defaultdict, deque
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
@@ -221,10 +222,21 @@ def validate_password(password: str) -> None:
         raise ValueError("Das Passwort enthält ungültige Zeichen.") from exc
 
 
+def name_key(username: str) -> str:
+    """Vergleichsform eines Nutzernamens: "ＡＤＭＩＮ", "Admin" und "admin" sind dasselbe.
+
+    NFKC faltet Vollbreite und zusammengesetzte Zeichen ("Ju" + Trema = "Jü"), casefold die
+    Grossschreibung. So kann niemand ein Konto anlegen, das wie ein vorhandenes aussieht (16.4.5).
+    """
+    return unicodedata.normalize("NFKC", str(username or "")).casefold()
+
+
 def normalize_username(username: str) -> str:
-    value = " ".join((username or "").strip().split())
+    value = " ".join(unicodedata.normalize("NFC", username or "").strip().split())
+    # Unsichtbare Zeichen (U+200B, U+2060, weiches Trennzeichen, BOM) liessen "admin" und
+    # "admin" + U+200B als zwei Konten zu, die gleich aussehen (16.4.5).
     if (not USERNAME_RE.fullmatch(value)
-            or any(char in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+            or any(unicodedata.category(char) in ("Cf", "Cc", "Co", "Cs", "Zl", "Zp")
                    for char in value)):
         raise ValueError("Der Nutzername braucht 2 bis 40 sichtbare Zeichen.")
     try:
@@ -794,7 +806,7 @@ class AuthStore:
                 if self.single and self._owner_row(conn) is not None:
                     raise ValueError(SINGLE_TAKEN)
 
-                if any(str(row[0]).casefold() == username.casefold() for row in
+                if any(name_key(str(row[0])) == name_key(username) for row in
                        conn.execute("SELECT username FROM users")):
                     raise vergeben
 
@@ -1165,7 +1177,7 @@ class AuthStore:
         wanted = " ".join(str(name or "").split())
         eins = self.owner()
         passt = eins is not None and bool(wanted) and (
-            wanted.casefold() == eins.username.casefold()
+            name_key(wanted) == name_key(eins.username)
             or wanted.casefold() == eins.email.casefold())
         if eins is None or not passt:
             _argon_hash(str(password or "")[:128], b"\0" * 16, self._pepper)  # gleiche Dauer
@@ -1204,7 +1216,7 @@ class AuthStore:
         password_hash = _argon_hash(password, salt, self._pepper)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            if any(str(row[0]).casefold() == username.casefold() and str(row[1]) != eins.id
+            if any(name_key(str(row[0])) == name_key(username) and str(row[1]) != eins.id
                    for row in conn.execute("SELECT username, id FROM users")):
                 raise ValueError("Diesen Nutzernamen hat schon ein anderes Konto.")
             conn.execute("UPDATE users SET username=?, password_hash=?, password_salt=?, "
@@ -1247,7 +1259,7 @@ class AuthStore:
                 if row is not None:
                     return self._account(row)
             matches = [row for row in conn.execute("SELECT * FROM users")
-                       if str(row["username"]).casefold() == wanted.casefold()]
+                       if name_key(str(row["username"])) == name_key(wanted)]
         if len(matches) > 1:
             raise ValueError(
                 "Mehrere Konten haben diesen Nutzernamen. Verwende die E-Mail-Adresse."

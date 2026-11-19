@@ -50,7 +50,26 @@ def loads(raw: bytes | str) -> Any:
                     raise JsonDepthError("Die Anfrage ist zu stark verschachtelt.")
             elif token in ("]", "}"):
                 depth -= 1
-    return json.loads(text, parse_constant=_constant, parse_float=_number)
+    return ohne_surrogate(json.loads(text, parse_constant=_constant, parse_float=_number))
+
+
+_SURROGAT = re.compile("[\ud800-\udfff]")
+
+
+def ohne_surrogate(wert: Any) -> Any:
+    """Einzelne Surrogate ("\\ud800" im JSON) werden zu U+FFFD.
+
+    Python liest sie als Text ein, kann sie aber nicht als UTF-8 schreiben: Vorher liess
+    sich eine solche Nachricht weder im Verlauf speichern noch an den Browser senden.
+    Paare ("\\ud83d\\ude00") setzt json.loads schon zu einem Zeichen zusammen (16.4.5).
+    """
+    if isinstance(wert, str):
+        return _SURROGAT.sub("\ufffd", wert) if _SURROGAT.search(wert) else wert
+    if isinstance(wert, list):
+        return [ohne_surrogate(w) for w in wert]
+    if isinstance(wert, dict):
+        return {ohne_surrogate(k): ohne_surrogate(v) for k, v in wert.items()}
+    return wert
 
 
 def raw_decode(raw: str, index: int = 0) -> tuple[Any, int]:
