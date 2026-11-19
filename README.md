@@ -1,4 +1,4 @@
-# Aquaticy AI 16.4.4
+# Aquaticy AI 16.4.5
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,23 +25,18 @@ $ aquaticy
 
 ---
 
-## Neu in 16.4.4
+## Neu in 16.4.5
 
-- **Krisenhilfe kommt jetzt immer an.** Serbisch in lateinischer Schrift („ubijem se“) und
-  Persisch ohne Nullbreiten-Zeichen („میخواهم بمیرم“, so tippen die meisten) brachten keine
-  Hilfe. Jetzt nennt Aquaticy Standard auch dann sofort Notruf und findahelpline.com.
-- **Sprachen besser erkannt.** Ein Name in lateinischer Schrift verdeckt die Sprache nicht mehr
-  („Python是什么“, „ChatGPT क्या है“). Ohne Stichwort entscheiden typische Buchstaben (Urdu,
-  Ukrainisch, Persisch statt Arabisch oder Russisch). „Regen am Abend“ bleibt Deutsch,
-  „god morgen“ ist Dänisch, „Wie was Rembrandt?“ Niederländisch.
-- **Richtige Antworten statt Rückfall:** Ungarisch „mennyi az idő“, Kroatisch „koje je
-  vrijeme“ und Lettisch „cik ir laiks“ fragen nach der Uhrzeit, nicht nach dem Wetter.
-  Tadschikisch „субҳ ба хайр“ ist ein Gruß. Wissensfragen finden das Thema genauer
-  („co je to Paris“ sucht „Paris“).
-- **Wetter robuster:** Kaputte Antworten des Wetterdienstes bringen Aquaticy Standard nicht mehr
-  aus dem Tritt. Der Ort wird sauberer erkannt (Ungarisch, Chinesisch).
-- **Englische Oberfläche:** 86 Meldungen des Servers erschienen im englischen Modus auf Deutsch.
-  Jetzt gibt es sie auf Englisch.
+- **Gründlich nach Fehlern gesucht.** Jeder Fund wurde nachgestellt, behoben und mit einem Test
+  abgesichert. Die Liste steht unten in den Einzelheiten.
+- **Aquaticy Standard rechnet und zählt richtig:** „Wann ist Ostern 2024?“ nennt 2024, nicht das
+  nächste Ostern. „Welches Datum ist morgen?“ nennt morgen. Große Zahlen stimmen auf die letzte
+  Stelle. „Trinkgeld 10 Prozent auf 45 Euro“ rechnet mit 45 €. „1 PS in kW“ rechnet um, statt die
+  Kalenderwoche zu nennen.
+- **Englische Fragen** bekommen englische Zahlen („16.0934 km“) und englische Antworten.
+- **Links im Chat:** Ein Punkt am Satzende gehört nicht mehr zum Link. Wikipedia-Links mit Klammern
+  funktionieren. „a * b * c“ bleibt eine Rechnung und wird nicht kursiv.
+- **Werkzeuge:** Schickt das Modell eine Zahl als Text, bricht kein Werkzeug mehr ab.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -140,7 +135,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 16.4.4
+aquaticy --version            # 16.4.5
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

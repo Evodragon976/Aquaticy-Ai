@@ -114,6 +114,9 @@ def zahl(text: str) -> float:
 
 def schoen(wert: float, stellen: int = 2) -> str:
     """Deutsche Schreibweise: 1.234,56 -- ohne ueberfluessige Nullen."""
+    if isinstance(wert, int) and not isinstance(wert, bool):
+        # Ganze Zahlen exakt: 9999999999 * 9999999999 ist ...0001, nicht ...2048 (Gleitkomma).
+        return f"{wert:,}".replace(",", ".")
     if math.isinf(wert) or math.isnan(wert):
         return str(wert)
     gerundet = round(wert, stellen)
@@ -127,11 +130,17 @@ def schoen(wert: float, stellen: int = 2) -> str:
 ZAHL = r"(-?\d[\d.,]*)"
 
 
+def jahr_aus(kern: str) -> int | None:
+    """Ein ausdrueckliches Jahr ("Ostern 2024") -- sonst None. Nur der gregorianische Kalender."""
+    treffer = re.search(r"(?<![\d.])(1[6-9]\d\d|2\d\d\d)(?![\d.,])", kern)
+    return int(treffer.group(1)) if treffer else None
+
+
 # -- Rechnen und Prozente -----------------------------------------------------------------------
 
 RECHEN_VORN = re.compile(
     r"^(?:was\s+(?:ist|ergibt|gibt|sind|macht)|wie\s*viel\s+(?:ist|sind|ergibt|macht)|"
-    r"rechne(?:\s+mal)?(?:\s+aus)?|berechne(?:\s+mir)?|what\s+is|calculate)\s+")
+    r"rechne(?:\s+mal)?(?:\s+aus)?|berechne(?:\s+mir)?|what\s+is|what'?s|calculate)\s+")
 WOERTER = (("multiplied by", "*"), ("divided by", "/"), ("times", "*"),
            ("plus", "+"), ("minus", "-"), ("mal", "*"), ("geteilt durch", "/"),
            ("durch", "/"), ("hoch", "**"), ("x", "*"), ("×", "*"), ("÷", "/"), ("^", "**"))
@@ -182,6 +191,8 @@ BRUCH_VON = re.compile(r"\b(?:(ein|eine|einen|die|zwei|drei|vier|fuenf|sieben|ne
                        rf"hundertstel)\s+(?:von|aus)\s+{ZAHL}")
 PROZENT_ANTEIL = re.compile(rf"wie\s*viele?\s+prozent\s+(?:sind|ist|macht|machen|ergeben)\s+"
                             rf"{ZAHL}\s+(?:von|aus)\s+{ZAHL}")
+PROZENT_ANTEIL_VORN = re.compile(rf"{ZAHL}\s+(?:sind|ist|macht|machen|ergeben)\s+"
+                                 rf"wie\s*viele?\s+prozent\s+(?:von|aus)\s+{ZAHL}")
 PROZENT_ABSTAND = re.compile(
     rf"um\s+wie\s*viel(?:e)?\s+prozent\s+(?:ist|sind|liegt|war|waere)\s+{ZAHL}\s+(?:\w+\s+)?"
     r"(?:groesser|hoeher|mehr|teurer|kleiner|niedriger|weniger|billiger|guenstiger)\s+als\s+"
@@ -199,7 +210,8 @@ def prozente(text: str) -> str:
         n, g = BRUECHE[treffer.group(2)], zahl(treffer.group(3))
         if 0 < z <= 1000:
             return f"{z}/{n} von {schoen(g)} sind **{schoen(g * z / n)}**."
-    treffer = PROZENT_ANTEIL.search(kern)
+    # "80 ist wie viel Prozent von 200?" -- die Zahl steht vor der Frage.
+    treffer = PROZENT_ANTEIL.search(kern) or PROZENT_ANTEIL_VORN.search(kern)
     if treffer:
         teil, ganz = zahl(treffer.group(1)), zahl(treffer.group(2))
         if ganz:
@@ -264,6 +276,8 @@ _EINHEITEN_JE_ART: dict[str, list[tuple[str, float]]] = {
              ("min", 60), ("stunde", 3600), ("stunden", 3600), ("h", 3600), ("tag", 86400),
              ("tage", 86400), ("woche", 604800), ("wochen", 604800), ("jahr", 31557600),
              ("jahre", 31557600)],
+    "leistung": [("w", 1), ("watt", 1), ("kw", 1000), ("kilowatt", 1000), ("ps", 735.49875),
+                 ("hp", 745.699872)],
     "daten": [("byte", 1), ("bytes", 1), ("kb", 1e3), ("mb", 1e6), ("gb", 1e9), ("tb", 1e12),
               ("kib", 1024), ("mib", 1024**2), ("gib", 1024**3), ("tib", 1024**4)],
 }
@@ -280,7 +294,11 @@ for _name, _gleich in (("gram", "g"), ("grams", "g"), ("kilogram", "kg"), ("kilo
                        ("inches", "inch"), ("foot", "ft"), ("yard", "yd"), ("yards", "yd"),
                        ("liters", "l"), ("litres", "l"), ("gallons", "gallon"),
                        ("hour", "h"), ("hours", "h"), ("minutes", "min"), ("seconds", "s"),
-                       ("days", "tag"), ("day", "tag"), ("weeks", "woche")):
+                       ("days", "tag"), ("day", "tag"), ("weeks", "woche"),
+                       # "6 Fuß in Metern": die Einheit im Dativ (16.4.5).
+                       ("metern", "m"), ("kilometern", "km"), ("zentimetern", "cm"),
+                       ("millimetern", "mm"), ("litern", "l"), ("millilitern", "ml"),
+                       ("tagen", "tag"), ("jahren", "jahr"), ("wattstunden", "watt")):
     if _gleich == "yd":
         EINHEITEN.setdefault("yd", ("laenge", .9144))
     EINHEITEN.setdefault(_name, EINHEITEN[_gleich])
@@ -290,6 +308,12 @@ def anzeige(name: str) -> str:
     """Einheit so geschrieben, wie man sie liest: GB, Meilen, km/h."""
     if EINHEITEN.get(name, ("",))[0] == "daten":
         return name.upper().replace("IB", "iB")
+    deutsch = {"metern": "Meter", "kilometern": "Kilometer", "zentimetern": "Zentimeter",
+               "millimetern": "Millimeter", "litern": "Liter", "millilitern": "Milliliter",
+               "tagen": "Tage", "jahren": "Jahre", "tag": "Tag", "ps": "PS", "kw": "kW",
+               "w": "W"}
+    if name in deutsch:
+        return deutsch[name]
     if name.isalpha() and len(name) > 3:
         return name.capitalize()
     return name
@@ -299,6 +323,16 @@ def anzeige(name: str) -> str:
 UMRECHNEN_FRAGE = re.compile(rf"\b(?:wie\s*viele?|how\s+many)\s+([a-z°/0-9]+)\s+"
                              r"(?:sind|ist|hat|haben|ergeben|machen|is|are|in)\s+"
                              rf"(?:{ZAHL}|(einen|eine|ein|one|an|a)\b)\s*([a-z°/0-9]+)")
+
+
+def _englisch(text: str) -> str:
+    """Deutsche Zahlen und "sind" einer Antwort auf Englisch: "16,0934" -> "16.0934"."""
+    text = re.sub(r"\d[\d.,]*\d|\d", lambda z: z.group(0).replace(".", "\x00").replace(
+        ",", ".").replace("\x00", ","), text)
+    # "Miles" -> "miles": Einheiten schreibt man im Englischen klein.
+    text = re.sub(r"\b[A-Z][a-z]+\b", lambda w: w.group(0).lower()
+                  if w.group(0).lower() in EINHEITEN else w.group(0), text)
+    return text.replace(" sind ", " is ")
 
 
 def einheiten(text: str) -> str:
@@ -406,6 +440,16 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
         return f"Es ist **{jetzt:%H:%M} Uhr** ({zeit_mod.kurz(jetzt)})."
     if re.search(r"\b(welche[rs]?\s+(tag|datum)|den\s+wievielten|welches\s+datum|"
                  r"was\s+fuer\s+ein\s+tag)\b", kern) and not datum_aus(kern, heute):
+        from datetime import timedelta
+
+        # "Welches Datum ist morgen?" nannte vorher das Datum von heute.
+        for wort, name, versatz in (("uebermorgen", "Übermorgen", 2), ("vorgestern", "Vorgestern",
+                                    -2), ("morgen", "Morgen", 1), ("gestern", "Gestern", -1)):
+            if re.search(rf"\b{wort}\b", kern):
+                tag = heute + timedelta(days=versatz)
+                zeitform = "war" if versatz < 0 else "ist"
+                return (f"{name} {zeitform} **{WOCHENTAGE[tag.weekday()]}, der {tag:%d.%m.%Y}** "
+                        f"(KW {tag.isocalendar()[1]}).")
         return (f"Heute ist **{WOCHENTAGE[heute.weekday()]}, der {heute:%d.%m.%Y}** "
                 f"(KW {heute.isocalendar()[1]}).")
     # 16.3.0: "Welcher Wochentag ist heute?", "Was ist heute für ein Tag?", "what day is it".
@@ -415,7 +459,9 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                  kern):
         return (f"Heute ist **{WOCHENTAGE[heute.weekday()]}, der {heute:%d.%m.%Y}** "
                 f"(KW {heute.isocalendar()[1]}).")
-    if re.search(r"\b(kalenderwoche|kw)\b", kern):
+    if re.search(r"\bkalenderwoche\b", kern) or (
+            re.search(r"\bkw\b", kern)
+            and not re.search(r"\d\s*(?:kw|ps|w|watt)\b|\b(?:in|nach|zu)\s+(?:kw|ps)\b", kern)):
         return f"Wir haben **KW {heute.isocalendar()[1]}**."
     monat = re.search(r"\bwie\s*viele\s+tage\s+hat\s+(?:der\s+|dieser\s+)?(" + "|".join(MONATE)
                       + r")(?:\s+(\d{4}))?\b", kern)
@@ -448,6 +494,16 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                 gesucht = im_jahr(gesucht, gesucht.year + 1)
             if gesucht >= heute:
                 return tage_text((gesucht - heute).days, f"zum {gesucht:%d.%m.%Y}")
+            # "Wie viele Tage bis zum 1.1.2026?" mit einem Datum, das schon war.
+            tage = (heute - gesucht).days
+            return f"Der {gesucht:%d.%m.%Y} war vor **{tage} {'Tag' if tage == 1 else 'Tagen'}**."
+    seit = re.search(r"\bwie\s*(?:viele|lange)\b.*\bseit\b", kern)
+    if seit:
+        gesucht = datum_aus(kern, heute)
+        if gesucht and gesucht <= heute:
+            tage = (heute - gesucht).days
+            return (f"Seit dem {gesucht:%d.%m.%Y} sind **{tage} "
+                    f"{'Tag' if tage == 1 else 'Tage'}** vergangen.")
     treffer = re.search(r"\b(welche[rs]?\s+(?:wochen)?tag\s+(?:ist|war|wird|faellt)|"
                         r"auf\s+welchen\s+tag)\b", kern)
     if treffer:
@@ -455,7 +511,12 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
         if gesucht:
             zeitform = "war" if gesucht < heute else "ist"
             return f"Der {gesucht:%d.%m.%Y} {zeitform} ein **{WOCHENTAGE[gesucht.weekday()]}**."
-    if re.search(r"\bwann\s+ist\s+ostern\b", kern):
+    if re.search(r"\bwann\s+(?:ist|war|wird|faellt)\s+ostern\b", kern):
+        osterjahr = jahr_aus(kern)
+        if osterjahr:
+            # "Wann ist Ostern 2024?" nannte vorher das naechste Ostern.
+            tag = ostern(osterjahr)
+            return f"Ostersonntag {'war' if tag < heute else 'ist'} am **{tag:%d.%m.%Y}**."
         tag = ostern(heute.year)
         if tag < heute:
             tag = ostern(heute.year + 1)
@@ -500,6 +561,9 @@ def anlaesse(jahr: int) -> dict[str, tuple[str, date]]:
         "ersten advent": ("Der 1. Advent", vierter_advent - timedelta(days=21)),
         "erster advent": ("Der 1. Advent", vierter_advent - timedelta(days=21)),
         "4. advent": ("Der 4. Advent", vierter_advent),
+        "heiligabend": ("Heiligabend", date(jahr, 12, 24)),
+        "weihnachten": ("Heiligabend", date(jahr, 12, 24)),
+        "silvester": ("Silvester", date(jahr, 12, 31)),
     }
 
 
@@ -519,8 +583,21 @@ def anlass(text: str, heute: date) -> str:
                             f"{(tag - heute).days} Tagen. {satz}")
     if not re.search(r"\b(wann|wie\s*(?:viele|vielen|lange)|tage\s+bis|bis\s+zum?)\b", kern):
         return ""
+    jahr_genannt = jahr_aus(kern)
+    if jahr_genannt:
+        # "Wann ist Pfingsten 2026?" nannte vorher das naechste Pfingsten.
+        for wort, (name, tag) in anlaesse(jahr_genannt).items():
+            if wort in kern:
+                if tag == heute:
+                    return f"{name} ist **heute**!"
+                zeitform = "war" if tag < heute else "ist"
+                return f"{name} {zeitform} am **{WOCHENTAGE[tag.weekday()]}, {tag:%d.%m.%Y}**."
+        return ""
     for jahr in (heute.year, heute.year + 1):
         for wort, (name, tag) in anlaesse(jahr).items():
+            if wort in ("heiligabend", "weihnachten", "silvester") and not re.search(
+                    r"\bwann\b", kern):
+                continue  # "Wie viele Tage bis Weihnachten?" beantwortet zeit() wie bisher.
             if wort in kern and tag >= heute:
                 if tag == heute:
                     return f"{name} ist **heute**!"
@@ -550,8 +627,18 @@ NICHT_WAHL = re.compile(
 def zufall(text: str, wuerfel: random.Random | None = None) -> str:
     rnd = wuerfel or random.SystemRandom()
     kern = falten(text)
-    if re.search(r"\bwuerf(el|le)\b", kern):
-        return f"🎲 Gewürfelt: **{rnd.randint(1, 6)}**"
+    if re.search(r"\bwuerf(el|le|eln)?\b", kern):
+        # "Würfle 3 Würfel" und "einen W20": vorher immer ein Würfel mit sechs Seiten.
+        seiten_ = re.search(r"\b(?:w|d)(4|6|8|10|12|20|100)\b", kern)
+        anzahl_ = re.search(r"\b([2-9]|10|zwei|drei|vier|fuenf)\s+(?:w|d)?(?:\d+\s+)?wuerfel", kern)
+        seiten = int(seiten_.group(1)) if seiten_ else 6
+        woerter = {"zwei": 2, "drei": 3, "vier": 4, "fuenf": 5}
+        anzahl = (woerter.get(anzahl_.group(1)) or int(anzahl_.group(1))) if anzahl_ else 1
+        wuerfe = [rnd.randint(1, seiten) for _ in range(anzahl)]
+        art = f" (W{seiten})" if seiten != 6 else ""
+        if anzahl == 1:
+            return f"🎲 Gewürfelt{art}: **{wuerfe[0]}**"
+        return (f"🎲 Gewürfelt{art}: {' + '.join(str(w) for w in wuerfe)} = **{sum(wuerfe)}**")
     if re.search(r"\b(muenze|kopf\s+oder\s+zahl)\b", kern):
         return f"🪙 **{rnd.choice(('Kopf', 'Zahl'))}**"
     treffer = re.search(r"zufallszahl(?:\s+zwischen)?\s+(-?\d+)\s+(?:und|bis|-)\s+(-?\d+)", kern)
@@ -1200,6 +1287,21 @@ def feiertag(text: str, heute: date) -> str:
     if "feiertag" not in kern and not any(k in kern for k in FEIERTAG_NAMEN):
         return ""
     alle = feiertage(heute.year) + feiertage(heute.year + 1)
+    jahr_genannt = jahr_aus(kern)
+    if jahr_genannt:
+        # "Welche Feiertage gibt es 2027?" nannte vorher nur die naechsten drei.
+        im_jahr_ = feiertage(jahr_genannt)
+        for wort, name in FEIERTAG_NAMEN.items():
+            if wort in kern:
+                tag = next(t for t, n in im_jahr_ if n == name)
+                zeitform = "war" if tag < heute else "ist"
+                return (f"{name} {zeitform} {jahr_genannt} am "
+                        f"**{WOCHENTAGE[tag.weekday()]}, {tag:%d.%m.%Y}**.")
+        if not re.search(r"\b(heute|morgen|uebermorgen)\b", kern) and not datum_aus(kern, heute):
+            zeilen = [f"- **{n}:** {WOCHENTAGE[t.weekday()]}, {t:%d.%m.%Y}" for t, n in im_jahr_]
+            return (f"Die bundesweiten Feiertage {jahr_genannt}:\n" + "\n".join(zeilen)
+                    + "\n\nEinige Bundesländer haben noch weitere, zum Beispiel Fronleichnam oder "
+                    "den Reformationstag.")
     for wort, name in FEIERTAG_NAMEN.items():
         if wort in kern and "wann" in kern:
             tag = next(t for t, n in alle if n == name and t >= heute)
@@ -1286,15 +1388,23 @@ def alter(text: str, heute: date) -> str:
 BMI_SATZ = re.compile(r"\b(?:bmi|body\s*mass)\b.*?(\d{2,3}(?:[.,]\d)?)\s*kg.*?(\d[.,]\d{1,2}|\d{3})"
                       r"\s*(m|cm)?\b|\b(\d{2,3}(?:[.,]\d)?)\s*kg.*?(\d[.,]\d{1,2}|\d{3})\s*(m|cm)?"
                       r".*\bbmi\b")
+#: "BMI bei 1,75 m und 70 kg" -- erst die Groesse, dann das Gewicht.
+BMI_UMGEKEHRT = re.compile(r"\b(?:bmi|body\s*mass)\b.*?(\d[.,]\d{1,2}|\d{3})\s*(m|cm)\b.*?"
+                           r"(\d{2,3}(?:[.,]\d)?)\s*kg\b")
 
 
 def bmi(text: str) -> str:
     kern = falten(text)
     treffer = BMI_SATZ.search(kern)
-    if not treffer:
+    umgekehrt = BMI_UMGEKEHRT.search(kern)
+    if umgekehrt and (not treffer or umgekehrt.start(3) < (treffer.start(1) if treffer.group(1)
+                                                           else treffer.start(4))):
+        groesse, einheit, kg = umgekehrt.group(1), umgekehrt.group(2), umgekehrt.group(3)
+    elif not treffer:
         return ""
-    kg, groesse, einheit = (treffer.group(1), treffer.group(2), treffer.group(3)) if treffer.group(
-        1) else (treffer.group(4), treffer.group(5), treffer.group(6))
+    else:
+        kg, groesse, einheit = (treffer.group(1), treffer.group(2), treffer.group(3)) if (
+            treffer.group(1)) else (treffer.group(4), treffer.group(5), treffer.group(6))
     meter = zahl(groesse)
     if einheit == "cm" or meter > 3:
         meter /= 100
@@ -1316,7 +1426,8 @@ def trinkgeld(text: str) -> str:
     if "trinkgeld" not in kern:
         return ""
     zahlen = [zahl(z) for z in re.findall(r"\d[\d.,]*", kern)]
-    prozent = re.search(r"(\d[\d.,]*)\s*%", kern)
+    # "10 Prozent" wie "10 %": vorher galt die 10 als Betrag.
+    prozent = re.search(r"(\d[\d.,]*)\s*(?:%|prozent\b)", kern)
     satz = zahl(prozent.group(1)) if prozent else 10.0
     betraege = [z for z in zahlen if not prozent or z != satz]
     if not betraege:
@@ -1952,10 +2063,16 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         if ort and ort not in NICHT_ORT:
             return uhrzeit_in(original(frage, ort), holen, jetzt)
     for teil in (lambda: zeit(frage, jetzt), lambda: trinkgeld(frage), lambda: bmi(frage),
-                 lambda: prozente(frage), lambda: einheiten(frage), lambda: rechnen(frage)):
+                 lambda: prozente(frage)):
         text = teil()
         if text:
             return text
+    for teil in (lambda: einheiten(frage), lambda: rechnen(frage)):
+        text = teil()
+        if text:
+            # "Convert 10 miles to km" bekam vorher "10 Miles sind **16,0934 km**".
+            englisch_gefragt = sprache == "en" or re.search(r"\b(?:to|into)\b|\bhow\s+many\b", kern)
+            return _englisch(text) if englisch_gefragt else text
     if re.search(r"\b(nachrichten|news|schlagzeilen|neuigkeiten|tagesschau|"
                  r"was\s+gibt\s+es\s+neues)\b|\bwas\s+ist\s+heute\s+(?:in\s+der\s+welt\s+)?"
                  r"passiert\b|\bwas\s+ist\s+(?:heute\s+)?in\s+der\s+welt\s+passiert\b|"
@@ -2147,6 +2264,13 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
         stunden = int(versatz.total_seconds() // 3600) if versatz is not None else 0
         return a["zeit"].format(zeit=f"{jetzt:%H:%M} (UTC{stunden:+d})")
     if "datum" in arten and not wetter:
+        if weltsprachen.enthaelt(frage, sprache, "morgen"):
+            # "What is the date tomorrow?" nannte vorher das Datum von heute.
+            from datetime import timedelta
+
+            wort = sprache.listen["morgen"][0]
+            morgen = (jetzt.date() + timedelta(days=1)).isoformat()
+            return f"{wort[:1].upper()}{wort[1:]}: **{morgen}**"
         return a["datum"].format(datum=jetzt.date().isoformat())
     if not wetter and _letzte_antwort(verlauf) == a["ort"] and len(frage.split()) <= 5:
         ort = frage.strip(" ?!.,;:¿¡")

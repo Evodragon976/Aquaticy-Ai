@@ -12,6 +12,7 @@ import ast
 import math
 import operator
 import re
+import warnings
 from collections.abc import Callable
 
 MAX_POWER = 1000
@@ -92,7 +93,11 @@ def calculate(expression: str) -> float:
         raise CalcError("Ausdruck zu lang.")
     expression = normalize_numbers(expression)
     try:
-        tree = ast.parse(expression, mode="eval")
+        # Ohne das schrieb Python bei Eingaben wie "1_0x" eine SyntaxWarning in die Konsole --
+        # jede Nutzereingabe konnte so das Protokoll fuellen (16.4.5).
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            tree = ast.parse(expression, mode="eval")
     except SyntaxError as exc:
         raise CalcError(f"Kein gueltiger Ausdruck: {exc.msg}.") from exc
     result = _evaluate(tree)

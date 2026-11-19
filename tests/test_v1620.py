@@ -27,11 +27,11 @@ def _std(frage, holen=None):
     ("Um wie viel Prozent ist 80 kleiner als 100?", "**20 %**"),
     ("Wie viel Prozent sind 30 von 120?", "**25 %**"),
     ("what is 45 times 12", "**540**"),
-    ("what is 100 divided by 8", "**12,5**"),
+    ("what is 100 divided by 8", "**12.5**"),  # 16.4.5: englische Zahl
     ("Was ist 10 % Rabatt auf 59,99 €?", "**53,99"),
     ("Wie viele Gramm sind 2 Pfund?", "**1.000 Gramm"),
     ("Wie viele Minuten haben 3 Stunden?", "**180 Minuten"),
-    ("How many km is 26 miles?", "**41,8429 km"),
+    ("How many km is 26 miles?", "**41.8429 km"),  # 16.4.5
     ("Welcher Wochentag ist heute?", "Dienstag"),
     ("Was ist heute für ein Tag?", "Dienstag"),
     ("what day is it today", "2026-11-17"),  # 16.4.2: Englisch antwortet englisch
@@ -157,8 +157,8 @@ def test_weather_with_only_a_day_still_asks_for_the_place():
 
 @pytest.mark.parametrize("frage, erwartet", [
     ("Wie viele Sekunden hat eine Stunde?", "**3.600 Sekunden"),
-    ("how many grams is 1 pound", "**453,5924 Grams"),
-    ("convert 5 kilometers to miles", "**3,1069 Miles"),
+    ("how many grams is 1 pound", "**453.5924 grams"),  # 16.4.5
+    ("convert 5 kilometers to miles", "**3.1069 miles"),  # 16.4.5
 ])
 def test_more_unit_questions(frage, erwartet):
     text = _std(frage)

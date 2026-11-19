@@ -2847,7 +2847,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "16.4.4";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "16.4.5";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -3574,7 +3574,8 @@ function md(text){
     return `\u0000C${stuecke.length - 1}\u0000`;
   });
   h = h.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
-  h = h.replace(/(^|[\s(])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  // Kursiv nur ohne Leerzeichen innen: "a * b * c" ist eine Rechnung, keine Betonung.
+  h = h.replace(/(^|[\s(])\*([^*\s](?:[^*\n]*[^*\s])?)\*/g, "$1<em>$2</em>");
 
 
 
@@ -3582,8 +3583,16 @@ function md(text){
     stuecke.push(`<a href="${href}" target="_blank" rel="noopener">${label}</a>`);
     return `\u0000C${stuecke.length - 1}\u0000`;
   };
-  h = h.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, (m, label, href) => link(href, label));
-  h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)\u0000]+)/g, (m, vor, href) => vor + link(href, href));
+  // Eine Klammer im Link (Wikipedia: "Klammer_(Begriff)") gehoert zur Adresse.
+  h = h.replace(/\[([^\]]+)\]\((https?:(?:[^()\s]|\([^()\s]*\))+)\)/g,
+                (m, label, href) => link(href, label));
+  // Satzzeichen am Ende ("… https://example.com.") gehoeren nicht zum Link.
+  h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)\u0000]+)/g, (m, vor, href) => {
+    const rest = href.match(/(?:[.,;:!?]|&#39;|&quot;)+$/);
+    const ende = rest ? rest[0] : "";
+    const sauber = href.slice(0, href.length - ende.length);
+    return vor + link(sauber, sauber) + ende;
+  });
   const lines = h.split("\n"); const out = []; let list = null;
   const closeList = () => { if (list){ out.push(`</${list}>`); list = null; } };
   for (const line of lines){

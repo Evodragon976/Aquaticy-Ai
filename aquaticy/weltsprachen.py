@@ -198,7 +198,8 @@ _DEUTSCH = """der die das den dem des ein eine einen einem einer und oder ist si
 _ENGLISCH = """the an and or is are was were be been do does did have has had i you he
         she it we they me my your what how where when why who which can could would should will
         not no with of to for from on at by this that there please today tomorrow like look
-        going get tell show about"""
+        going get tell show about a flip roll coin dice joke leap year convert until days many
+        much whats"""
 FUNKTION = {"de": frozenset(_DEUTSCH.split()), "en": frozenset(_ENGLISCH.split())}
 
 

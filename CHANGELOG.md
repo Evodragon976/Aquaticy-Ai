@@ -3,6 +3,24 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.4.4:**
+
+- **Krisenhilfe kommt jetzt immer an.** Serbisch in lateinischer Schrift („ubijem se“) und
+  Persisch ohne Nullbreiten-Zeichen („میخواهم بمیرم“, so tippen die meisten) brachten keine
+  Hilfe. Jetzt nennt Aquaticy Standard auch dann sofort Notruf und findahelpline.com.
+- **Sprachen besser erkannt.** Ein Name in lateinischer Schrift verdeckt die Sprache nicht mehr
+  („Python是什么“, „ChatGPT क्या है“). Ohne Stichwort entscheiden typische Buchstaben (Urdu,
+  Ukrainisch, Persisch statt Arabisch oder Russisch). „Regen am Abend“ bleibt Deutsch,
+  „god morgen“ ist Dänisch, „Wie was Rembrandt?“ Niederländisch.
+- **Richtige Antworten statt Rückfall:** Ungarisch „mennyi az idő“, Kroatisch „koje je
+  vrijeme“ und Lettisch „cik ir laiks“ fragen nach der Uhrzeit, nicht nach dem Wetter.
+  Tadschikisch „субҳ ба хайр“ ist ein Gruß. Wissensfragen finden das Thema genauer
+  („co je to Paris“ sucht „Paris“).
+- **Wetter robuster:** Kaputte Antworten des Wetterdienstes bringen Aquaticy Standard nicht mehr
+  aus dem Tritt. Der Ort wird sauberer erkannt (Ungarisch, Chinesisch).
+- **Englische Oberfläche:** 86 Meldungen des Servers erschienen im englischen Modus auf Deutsch.
+  Jetzt gibt es sie auf Englisch.
+
 **Neu in 16.4.2:**
 
 - **Aquaticy Standard spricht 100 Sprachen.** Schreib auf Spanisch, Hindi, Arabisch, Japanisch,

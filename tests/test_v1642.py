@@ -129,7 +129,7 @@ def test_everyday_sentences_are_recognised(satz, code):
 
 def test_german_and_english_keep_their_bigger_path():
     antwort, _ = frag("How many km is 26 miles?")
-    assert "41,8429" in antwort
+    assert "41.8429" in antwort  # 16.4.5: englische Frage, englische Zahl
     antwort, _ = frag("Wie viel ist ein Drittel von 90?")
     assert "**30**" in antwort
     antwort, _ = frag("what day is it today")
