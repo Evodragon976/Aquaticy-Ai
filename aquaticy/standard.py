@@ -744,7 +744,12 @@ def wetterdaten(ort: str, holen: Holen, heute: date | None = None) -> dict[str, 
     if not treffer:
         return (f"Hm, einen Ort namens „{ort}“ finde ich nicht. Magst du ihn anders schreiben, "
                 "vielleicht mit dem Land dazu?")
-    stelle = treffer[0]
+    stelle = treffer[0] if isinstance(treffer, list) else None
+    # Fremde Daten: ohne Zahlen fuer Breite und Laenge gibt es keine Vorhersage.
+    if not isinstance(stelle, dict) or not all(
+            isinstance(stelle.get(k), (int, float)) and not isinstance(stelle.get(k), bool)
+            for k in ("latitude", "longitude")):
+        return NICHT_ERREICHBAR
     daten = holen("https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&daily="
                   "weather_code,temperature_2m_max,temperature_2m_min,"
                   "apparent_temperature_max,apparent_temperature_min,"
@@ -752,7 +757,7 @@ def wetterdaten(ort: str, holen: Holen, heute: date | None = None) -> dict[str, 
                   "uv_index_max,sunrise,sunset&current=temperature_2m,apparent_temperature,"
                   "weather_code,wind_speed_10m&timezone=auto&forecast_days=7"
                   .format(stelle.get("latitude"), stelle.get("longitude")))
-    if not isinstance(daten, dict) or "daily" not in daten:
+    if not isinstance(daten, dict) or not isinstance(daten.get("daily"), dict):
         return NICHT_ERREICHBAR
     t = daten["daily"]
     n = len(t.get("weather_code") or []) or 1
@@ -760,6 +765,11 @@ def wetterdaten(ort: str, holen: Holen, heute: date | None = None) -> dict[str, 
         "time", "weather_code", "temperature_2m_max", "temperature_2m_min",
         "apparent_temperature_max", "apparent_temperature_min", "precipitation_probability_max",
         "precipitation_sum", "wind_speed_10m_max", "uv_index_max", "sunrise", "sunset")}
+    for k, werte in spalten.items():
+        if k not in ("time", "sunrise", "sunset"):
+            # Was keine Zahl ist, gilt als fehlend -- sonst bricht "°C" an einem Text ab.
+            spalten[k] = [w if isinstance(w, (int, float)) and not isinstance(w, bool) else None
+                          for w in werte]
     tage = []
     for i in range(n):
         try:
@@ -777,8 +787,9 @@ def wetterdaten(ort: str, holen: Holen, heute: date | None = None) -> dict[str, 
                      "menge": spalten["precipitation_sum"][i],
                      "wind": spalten["wind_speed_10m_max"][i], "uv": spalten["uv_index_max"][i],
                      "auf": spalten["sunrise"][i], "unter": spalten["sunset"][i]})
-    return {"name": stelle.get("name", ort), "zone": stelle.get("timezone") or "",
-            "tage": tage, "jetzt": daten.get("current") or {}}
+    jetzt = daten.get("current")
+    return {"name": str(stelle.get("name") or ort), "zone": str(stelle.get("timezone") or ""),
+            "tage": tage, "jetzt": jetzt if isinstance(jetzt, dict) else {}}
 
 
 def _grad(wert: Any) -> str:
@@ -1735,6 +1746,8 @@ def letzter_ort(verlauf: list[dict[str, Any]]) -> str:
     Hat der Nutzer danach gesagt, wo er wohnt, gilt das (der Wohnort kommt dann vom Aufrufer).
     """
     for eintrag in reversed(verlauf[-12:]):
+        if not isinstance(eintrag, dict):
+            continue
         if eintrag.get("role") == "user" and re.search(
                 r"\b(?:wohne|lebe)\s+(?:jetzt\s+|seit\s+\S+\s+)?in\b|\bi\s+live\s+in\b",
                 falten(str(eintrag.get("content") or ""))):
@@ -1850,6 +1863,8 @@ def antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure: 
     brach vorher den ganzen Zug ab. Jetzt gibt es eine freundliche Meldung; der Fehler steht im
     Protokoll.
     """
+    # Nur Eintraege, die wie Nachrichten aussehen -- ein kaputter Verlauf bricht sonst ab.
+    verlauf = [e for e in verlauf or [] if isinstance(e, dict)]
     try:
         return _antwort(frage, verlauf, secure=secure, holen=holen, jetzt=jetzt,
                         wuerfel=wuerfel, wohnort=wohnort, gemerkt=gemerkt)
@@ -2110,21 +2125,28 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
     if sprache is None or not sprache.antworten:
         return ""
     a = sprache.antworten
-    plaudern = ("hallo", "info", "danke", "tschuess", "wiegehts")
+    # Reihenfolge = Vorrang bei gleich langen Wendungen; sonst gewinnt die laengste:
+    # "субҳ ба хайр" (guten Morgen) ist ein Gruss, auch wenn "хайр" allein Tschuess heisst.
+    plaudern = ("wiegehts", "info", "danke", "tschuess", "hallo")
+    gefaltet = weltsprachen.norm(frage)
     if weltsprachen.nur_aus(frage, sprache, plaudern):
-        for antwort, liste in (("wiegehts", "wiegehts"), ("intro", "info"), ("danke", "danke"),
-                               ("tschuess", "tschuess"), ("intro", "hallo")):
-            if weltsprachen.enthaelt(frage, sprache, liste):
-                return a[antwort]
-    wetter = weltsprachen.enthaelt(frage, sprache, "wetter")
-    if weltsprachen.enthaelt(frage, sprache, "zeit") and not wetter:
+        gefunden = weltsprachen.treffer(gefaltet, sprache, plaudern)
+        if gefunden:
+            liste = gefunden[0][0]
+            return a["intro" if liste in ("info", "hallo") else liste]
+    # Ungarisch "idő", Lettisch "laiks", Serbisch "време" heissen Wetter und Zeit: Steht das
+    # Wort nur in einer Zeit-Frage ("mennyi az idő"), ist es eine Zeit-Frage.
+    arten = {liste for liste, _ in weltsprachen.treffer(gefaltet, sprache,
+                                                         ("wetter", "zeit", "datum"))}
+    wetter = "wetter" in arten
+    if "zeit" in arten and not wetter:
         ort = weltsprachen.ort_aus(frage, sprache, ("zeit",))
         if ort:
             return welt_uhrzeit(ort, code, holen, jetzt)
         versatz = jetzt.utcoffset()
         stunden = int(versatz.total_seconds() // 3600) if versatz is not None else 0
         return a["zeit"].format(zeit=f"{jetzt:%H:%M} (UTC{stunden:+d})")
-    if weltsprachen.enthaelt(frage, sprache, "datum") and not wetter:
+    if "datum" in arten and not wetter:
         return a["datum"].format(datum=jetzt.date().isoformat())
     if not wetter and _letzte_antwort(verlauf) == a["ort"] and len(frage.split()) <= 5:
         ort = frage.strip(" ?!.,;:¿¡")

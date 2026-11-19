@@ -838,7 +838,9 @@ aus.englisch = aufEnglisch("3 files");
 console.log(JSON.stringify(aus));""",
     ))
     try:
-        lauf = subprocess.run(["node", "-e", skript], capture_output=True, text=True, timeout=30)
+        # Ueber stdin: Als Argument wird das Woerterbuch zu gross (Linux: 128 KB je Argument).
+        lauf = subprocess.run(["node"], input=skript, capture_output=True, text=True,
+                              timeout=30)
     except FileNotFoundError:
         pytest.skip("node fehlt")
     ergebnis = json.loads(lauf.stdout)
@@ -891,7 +893,9 @@ def test_patterns_never_touch_text_from_the_model_or_the_user() -> None:
   aufEnglisch("3 Dateien", 0, false)]));""",
     ))
     try:
-        lauf = subprocess.run(["node", "-e", skript], capture_output=True, text=True, timeout=30)
+        # Ueber stdin: Als Argument wird das Woerterbuch zu gross (Linux: 128 KB je Argument).
+        lauf = subprocess.run(["node"], input=skript, capture_output=True, text=True,
+                              timeout=30)
     except FileNotFoundError:
         pytest.skip("node fehlt")
     assert json.loads(lauf.stdout) == ["", "", "reading the request …", "3 files"]

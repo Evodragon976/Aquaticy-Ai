@@ -50,7 +50,9 @@ class Sprache:
 def norm(text: str) -> str:
     """Kleinbuchstaben, ohne Satzzeichen, einfache Leerzeichen -- Zeichen jeder Schrift bleiben."""
     text = unicodedata.normalize("NFKC", str(text or "")).replace("İ", "i").replace("’", "'")
-    text = text.replace("`", "'").casefold()
+    # Nullbreiten-Zeichen (ZWNJ/ZWJ) verbinden: "می" + ZWNJ + "خواهم" ist dasselbe Wort wie
+    # "میخواهم".
+    text = text.replace("`", "'").replace("\u200c", "").replace("\u200d", "").casefold()
     zeichen = [c if unicodedata.category(c)[0] in "LMN" or c in "'-" else " " for c in text]
     return " ".join("".join(zeichen).split()).strip("'- ")
 
@@ -72,9 +74,27 @@ def schrift(text: str) -> str:
     return max(zaehler, key=lambda k: zaehler[k]) if zaehler else ""
 
 
+def schriften_in(text: str) -> set[str]:
+    """Alle Schriften, in denen Buchstaben stehen ("Python是什么" -> latin und han)."""
+    arten: set[str] = set()
+    for c in str(text or ""):
+        if c.isalpha():
+            try:
+                wort = unicodedata.name(c).split(" ")[0]
+            except ValueError:
+                continue
+            arten.add(_SCHRIFT_NAMEN.get(wort, wort.lower()))
+    return arten
+
+
 def _teile(wert: str) -> tuple[str, ...]:
-    return tuple(t for t in (norm(s) if "{x}" not in s else s.strip().casefold()
-                             for s in wert.split(";")) if t)
+    teile: list[str] = []
+    for s in wert.split(";"):
+        formen = [norm(s), norm(s.replace("\u200c", " "))] if "{x}" not in s else [
+            s.strip().casefold()]
+        # Wer kein ZWNJ tippen kann, schreibt oft ein Leerzeichen ("می خواهم").
+        teile += [f for f in dict.fromkeys(formen) if f and f not in teile]
+    return tuple(teile)
 
 
 def lesen(daten: str) -> dict[str, Sprache]:
@@ -123,13 +143,40 @@ def _hat(text: str, satz: str, ohne_leer: bool) -> bool:
     return satz in text if ohne_leer else f" {satz} " in f" {text} "
 
 
+def _stellen(text: str, satz: str, ohne_leer: bool) -> list[tuple[int, int]]:
+    """Wo *satz* in *text* steht (Anfang, Ende) -- ohne Leerzeichen als Teilwort, sonst ganz."""
+    stellen, start = [], 0
+    rand = "" if ohne_leer else " "
+    voll = f"{rand}{text}{rand}"
+    such = f"{rand}{satz}{rand}"
+    while (i := voll.find(such, start)) >= 0:
+        # Die Leerzeichen am Rand gehoeren nicht dazu -- sonst "ueberlappen" Nachbarwoerter.
+        stellen.append((i + len(rand), i + len(such) - len(rand)))
+        start = i + max(1, len(such) - len(rand))
+    return stellen
+
+
+def treffer(text: str, sprache: Sprache, listen: tuple[str, ...]) -> list[tuple[str, str]]:
+    """Die Woerter dieser Listen in *text*, laengste zuerst, ohne Ueberlappung.
+
+    "kumusta ka diha" zaehlt so einmal ganz -- nicht noch einmal als "kumusta" und "kumusta ka".
+    """
+    kandidaten = sorted(((len(satz), liste, satz) for liste in listen
+                         for satz in sprache.listen[liste] if "{x}" not in satz),
+                        key=lambda k: -k[0])
+    belegt: list[tuple[int, int]] = []
+    gefunden: list[tuple[str, str]] = []
+    for _, liste, satz in kandidaten:
+        for anfang, ende in _stellen(text, satz, sprache.ohne_leerzeichen):
+            if all(ende <= a or anfang >= e for a, e in belegt):
+                belegt.append((anfang, ende))
+                gefunden.append((liste, satz))
+    return gefunden
+
+
 def punkte(text: str, sprache: Sprache) -> int:
     """Wie viele Zeichen von *text* nach dieser Sprache aussehen (laengere Treffer zaehlen mehr)."""
-    gesamt = 0
-    for liste in ERKENNEN:
-        for satz in sprache.listen[liste]:
-            if _hat(text, satz, sprache.ohne_leerzeichen):
-                gesamt += len(satz)
+    gesamt = sum(len(satz) for _, satz in treffer(text, sprache, ERKENNEN))
     for satz in sprache.listen["wiki"]:
         if _hat(text, satz, sprache.ohne_leerzeichen):
             gesamt += len(satz.replace("{x}", ""))
@@ -159,6 +206,21 @@ def _funktion(gefaltet: str, code: str) -> int:
     return sum(len(w) for w in gefaltet.split() if w in FUNKTION[code])
 
 
+def _ganz_belegt(gefaltet: str, sprache: Sprache) -> bool:
+    """Besteht der Text nur aus Woertern dieser Sprache, mit mindestens einer Wendung aus
+    mehreren Woertern? Dann ist "god morgen" Daenisch, obwohl "morgen" auch deutsch ist."""
+    gefunden = treffer(gefaltet, sprache, ERKENNEN)
+    return any(" " in satz for _, satz in gefunden) and nur_aus(gefaltet, sprache, ERKENNEN)
+
+
+def _wiki_belegt(gefaltet: str, sprache: Sprache) -> bool:
+    """Passt eine Wissensfrage dieser Sprache ganz, und stehen im Thema keine deutschen oder
+    englischen kleinen Woerter? Dann ist "wie was rembrandt" Niederlaendisch."""
+    gesucht = thema(gefaltet, sprache)
+    return bool(gesucht) and not any(
+        w in FUNKTION["de"] or w in FUNKTION["en"] for w in gesucht.split())
+
+
 def sprache_von(text: str) -> str:
     """Die Sprache einer Nachricht -- oder "" (dann bleibt es beim deutschen Weg).
 
@@ -170,18 +232,34 @@ def sprache_von(text: str) -> str:
     if not gefaltet or not art:
         return ""
     beste, beste_punkte = "", 0
+    # Ein Name in lateinischer Schrift ("ChatGPT क्या है") macht den Satz nicht lateinisch:
+    # Jede Schrift im Text bringt ihre Sprachen mit.
+    arten = schriften_in(text)
     for sprache in SPRACHEN.values():
-        if art not in sprache.schriften:
+        if not arten & set(sprache.schriften):
             continue
         zahl = punkte(gefaltet, sprache)
         if zahl > beste_punkte:
             beste, beste_punkte = sprache.code, zahl
     if art == "latin":
         deutsch, englisch = _funktion(gefaltet, "de"), _funktion(gefaltet, "en")
-        if beste not in ("de", "en") and beste_punkte <= 2 * max(deutsch, englisch):
+        if (beste not in ("", "de", "en") and "latin" in SPRACHEN[beste].schriften
+                and beste_punkte <= 2 * max(deutsch, englisch)
+                and not _ganz_belegt(gefaltet, SPRACHEN[beste])
+                and not _wiki_belegt(gefaltet, SPRACHEN[beste])):
             beste = ""
         if not beste and max(deutsch, englisch) >= 3:
             beste = "de" if deutsch >= englisch else "en"
+    if not beste and art != "latin":
+        # Kein Stichwort: Buchstaben, die nur wenige Sprachen haben ("ے" Urdu, "ї" Ukrainisch,
+        # "ә" Kasachisch), sagen mehr als die Schrift allein. In lateinischer Schrift nicht --
+        # "Crêpes" allein ist kein Französisch.
+        zahl_beste = 0
+        for sprache in SPRACHEN.values():
+            if art in sprache.schriften:
+                zahl = sum(gefaltet.count(z) for z in sprache.listen["zeichen"])
+                if zahl > zahl_beste:
+                    beste, zahl_beste = sprache.code, zahl
     return beste or SCHRIFT_SPRACHE.get(art, "")
 
 
@@ -192,8 +270,9 @@ def krise_sprache(text: str) -> str:
     """
     gefaltet = norm(text)
     art = schrift(text)
-    for sprache in SPRACHEN.values():
-        if art in sprache.schriften and sprache.antworten.get("krise") and any(
+    # Die Schrift zaehlt hier nicht: Serbisch steht oft in lateinischer Schrift ("ubijem se").
+    for sprache in sorted(SPRACHEN.values(), key=lambda s: art not in s.schriften):
+        if sprache.antworten.get("krise") and any(
                 _hat(gefaltet, satz, sprache.ohne_leerzeichen)
                 for satz in sprache.listen["krise"]):
             return sprache.code
@@ -206,11 +285,13 @@ _MUSTER_CACHE: dict[tuple[str, bool], re.Pattern[str]] = {}
 def _wiki_muster(satz: str, ohne_leer: bool) -> re.Pattern[str]:
     schluessel = (satz, ohne_leer)
     if schluessel not in _MUSTER_CACHE:
-        vorn, _, hinten = satz.partition("{x}")
-        vorn, hinten = norm(vorn), norm(hinten)
-        lueck = "" if ohne_leer else r"\s+"
-        teile = [re.escape(vorn) + lueck if vorn else "", r"(?P<x>.+?)",
-                 lueck + re.escape(hinten) if hinten else ""]
+        roh_vorn, _, roh_hinten = satz.partition("{x}")
+        vorn, hinten = norm(roh_vorn), norm(roh_hinten)
+        # "{x}manta" (Quechua) oder "{x}-ийн" (Mongolisch): die Endung haengt direkt am Thema.
+        lueck_vorn = r"\s+" if not ohne_leer and roh_vorn.endswith(" ") else ""
+        lueck_hinten = r"\s+" if not ohne_leer and roh_hinten.startswith(" ") else ""
+        teile = [re.escape(vorn) + lueck_vorn if vorn else "", r"(?P<x>.+?)",
+                 lueck_hinten + re.escape(hinten) if hinten else ""]
         _MUSTER_CACHE[schluessel] = re.compile("".join(teile))
     return _MUSTER_CACHE[schluessel]
 
@@ -218,14 +299,15 @@ def _wiki_muster(satz: str, ohne_leer: bool) -> re.Pattern[str]:
 def thema(text: str, sprache: Sprache) -> str:
     """Das Thema einer Wissensfrage ("qué es la fotosíntesis" -> "fotosíntesis") -- oder ""."""
     gefaltet = norm(text)
-    for satz in sprache.listen["wiki"]:
+    # Laengstes Muster zuerst: "co je to {x}" vor "co je {x}" -- sonst ist "to" Teil des Themas.
+    for satz in sorted(sprache.listen["wiki"], key=lambda s: -len(s.replace("{x}", ""))):
         treffer = _wiki_muster(satz, sprache.ohne_leerzeichen).fullmatch(gefaltet)
         if treffer:
             worte = treffer.group("x").split()
             # Artikel und kleine Woerter vorn gehoeren nicht zum Thema ("la fotosíntesis").
             while len(worte) > 1 and worte[0] in sprache.listen["stopp"]:
                 worte = worte[1:]
-            return " ".join(worte).strip()
+            return " ".join(worte).strip(" -'")
     return ""
 
 
@@ -248,14 +330,40 @@ def nur_aus(text: str, sprache: Sprache, listen: tuple[str, ...]) -> bool:
     return not rest.strip(" -'")
 
 
+def _abdecken(text: str, saetze: list[str]) -> str:
+    """Ersetzt bekannte Woerter durch Leerzeichen -- so, dass moeglichst viele Zeichen wegfallen.
+
+    Gierig von links waere "今天气温" (heute Temperatur) zu "今|天气|温" geworden.
+    """
+    # Zeichen fuer Zeichen klein -- "ß".casefold() waere "ss" und verschoebe die Stellen.
+    klein = "".join(z.lower() if len(z.lower()) == 1 else z for z in text)
+    laenge = len(klein)
+    kandidaten = sorted({s.lower() for s in saetze if s}, key=len, reverse=True)
+    # beste[i] = (abgedeckte Zeichen ab i, -Zahl der Woerter, naechster Schritt)
+    beste: list[tuple[int, int, int, bool]] = [(0, 0, laenge, False)] * (laenge + 1)
+    for i in range(laenge - 1, -1, -1):
+        wahl = (beste[i + 1][0], beste[i + 1][1], i + 1, False)
+        for satz in kandidaten:
+            if klein.startswith(satz, i):
+                j = i + len(satz)
+                probe = (beste[j][0] + len(satz), beste[j][1] - 1, j, True)
+                if probe[:2] > wahl[:2]:
+                    wahl = probe
+        beste[i] = wahl
+    teile, i = [], 0
+    while i < laenge:
+        _, _, weiter, weg = beste[i]
+        teile.append(" " if weg else text[i:weiter])
+        i = weiter
+    return "".join(teile)
+
+
 def ort_aus(text: str, sprache: Sprache, listen: tuple[str, ...] = ("wetter",)) -> str:
     """Der Ort einer Frage: alles, was nach Wetter- (oder Uhrzeit-), Tages- und Fuellwoertern
     uebrig ist."""
     weg = [s for n in (*listen, "heute", "morgen", "stopp", "hallo") for s in sprache.listen[n]]
     if sprache.ohne_leerzeichen:
-        rest = unicodedata.normalize("NFKC", str(text or ""))
-        for satz in sorted(weg, key=len, reverse=True):
-            rest = re.sub(re.escape(satz), " ", rest, flags=re.IGNORECASE)
+        rest = _abdecken(unicodedata.normalize("NFKC", str(text or "")), weg)
         rest = "".join(c if unicodedata.category(c)[0] in "LMN" or c in " -" else " "
                        for c in rest)
         worte = []
@@ -272,21 +380,27 @@ def ort_aus(text: str, sprache: Sprache, listen: tuple[str, ...] = ("wetter",)) 
         stueck = roh.strip("?!.,;:¿¡«»“”\"()[]،؟。、")
         if "'" in stueck.replace("’", "'") and stueck[:1].isupper():
             stueck = stueck.replace("’", "'").split("'")[0]
-        for endung in sprache.listen["endungen"]:
-            if len(stueck) > len(endung) + 1 and norm(stueck).endswith(endung):
-                stueck = stueck[: len(stueck) - len(endung)]
-                break
         if stueck:
             worte.append(stueck)
-    gefaltet = [norm(w) for w in worte]
+
+    def ohne_endung(stueck: str) -> str:
+        for endung in sprache.listen["endungen"]:
+            if len(stueck) > len(endung) + 1 and norm(stueck).endswith(endung):
+                return stueck[: len(stueck) - len(endung)]
+        return stueck
+
+    # Erst die bekannten Wendungen im ganzen Wort suchen, dann mit abgeschnittener Endung:
+    # Sonst wird Ungarisch "milyen az idő" zu "mily az idő" und passt nicht mehr.
+    gekuerzt = [ohne_endung(w) for w in worte]
     raus = [False] * len(worte)
-    for satz in sorted(weg, key=lambda s: -len(s.split())):
-        teile = satz.split()
-        for i in range(len(gefaltet) - len(teile) + 1):
-            if gefaltet[i:i + len(teile)] == teile:
-                for j in range(i, i + len(teile)):
-                    raus[j] = True
-    return " ".join(w for w, r in zip(worte, raus, strict=True) if not r)[:60]
+    for formen in ([norm(w) for w in worte], [norm(w) for w in gekuerzt]):
+        for satz in sorted(weg, key=lambda s: -len(s.split())):
+            teile = satz.split()
+            for i in range(len(formen) - len(teile) + 1):
+                if formen[i:i + len(teile)] == teile:
+                    for j in range(i, i + len(teile)):
+                        raus[j] = True
+    return " ".join(w for w, r in zip(gekuerzt, raus, strict=True) if not r)[:60]
 
 
 __all__ = [
@@ -300,6 +414,8 @@ __all__ = [
     "nur_aus",
     "ort_aus",
     "schrift",
+    "schriften_in",
     "sprache_von",
     "thema",
+    "treffer",
 ]

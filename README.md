@@ -1,4 +1,4 @@
-# Aquaticy AI 16.4.2
+# Aquaticy AI 16.4.4
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,23 +25,23 @@ $ aquaticy
 
 ---
 
-## Neu in 16.4.2
+## Neu in 16.4.4
 
-- **Aquaticy Standard spricht 100 Sprachen.** Schreib auf Spanisch, Hindi, Arabisch, Japanisch,
-  Swahili oder in einer anderen der 100 meistgesprochenen Sprachen. Aquaticy Standard erkennt die
-  Sprache an typischen Wörtern und an der Schrift und antwortet in derselben Sprache.
-- **Was in jeder Sprache geht:** Begrüßung, Dank und Abschied, „Wie geht’s?“, „Wer bist du?“,
-  die Uhrzeit, das Datum, das Wetter für einen Ort (auch „morgen“), Rechnen und Wissen aus der
-  Wikipedia in der jeweiligen Sprache. Fehlt beim Wetter der Ort, fragt Aquaticy in deiner
-  Sprache nach und versteht die Antwort.
-- **Hilfe in Krisen in jeder Sprache:** Bei Worten über Suizid nennt Aquaticy in deiner Sprache
-  sofort Hilfe: die Notrufnummer deines Landes und kostenlose Hilfe-Telefone unter
-  findahelpline.com.
-- **Deutsch und Englisch** kann Aquaticy Standard wie bisher am genauesten. Englische Fragen
-  bekommen jetzt auch englische Antworten (Begrüßung, Uhrzeit, Datum, Wetter, Wikipedia).
-- **Grenzen:** Nah verwandte Sprachen teilen oft Wörter. Dann antwortet Aquaticy in der
-  größeren der beiden (etwa Indonesisch statt Malaiisch). Die Texte stammen nicht von
-  Muttersprachlern. Verbesserungen sind willkommen (`aquaticy/weltsprachen_daten.py`).
+- **Krisenhilfe kommt jetzt immer an.** Serbisch in lateinischer Schrift („ubijem se“) und
+  Persisch ohne Nullbreiten-Zeichen („میخواهم بمیرم“, so tippen die meisten) brachten keine
+  Hilfe. Jetzt nennt Aquaticy Standard auch dann sofort Notruf und findahelpline.com.
+- **Sprachen besser erkannt.** Ein Name in lateinischer Schrift verdeckt die Sprache nicht mehr
+  („Python是什么“, „ChatGPT क्या है“). Ohne Stichwort entscheiden typische Buchstaben (Urdu,
+  Ukrainisch, Persisch statt Arabisch oder Russisch). „Regen am Abend“ bleibt Deutsch,
+  „god morgen“ ist Dänisch, „Wie was Rembrandt?“ Niederländisch.
+- **Richtige Antworten statt Rückfall:** Ungarisch „mennyi az idő“, Kroatisch „koje je
+  vrijeme“ und Lettisch „cik ir laiks“ fragen nach der Uhrzeit, nicht nach dem Wetter.
+  Tadschikisch „субҳ ба хайр“ ist ein Gruß. Wissensfragen finden das Thema genauer
+  („co je to Paris“ sucht „Paris“).
+- **Wetter robuster:** Kaputte Antworten des Wetterdienstes bringen Aquaticy Standard nicht mehr
+  aus dem Tritt. Der Ort wird sauberer erkannt (Ungarisch, Chinesisch).
+- **Englische Oberfläche:** 86 Meldungen des Servers erschienen im englischen Modus auf Deutsch.
+  Jetzt gibt es sie auf Englisch.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -140,7 +140,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 16.4.2
+aquaticy --version            # 16.4.4
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

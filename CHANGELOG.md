@@ -3,6 +3,24 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.4.2:**
+
+- **Aquaticy Standard spricht 100 Sprachen.** Schreib auf Spanisch, Hindi, Arabisch, Japanisch,
+  Swahili oder in einer anderen der 100 meistgesprochenen Sprachen. Aquaticy Standard erkennt die
+  Sprache an typischen Wörtern und an der Schrift und antwortet in derselben Sprache.
+- **Was in jeder Sprache geht:** Begrüßung, Dank und Abschied, „Wie geht’s?“, „Wer bist du?“,
+  die Uhrzeit, das Datum, das Wetter für einen Ort (auch „morgen“), Rechnen und Wissen aus der
+  Wikipedia in der jeweiligen Sprache. Fehlt beim Wetter der Ort, fragt Aquaticy in deiner
+  Sprache nach und versteht die Antwort.
+- **Hilfe in Krisen in jeder Sprache:** Bei Worten über Suizid nennt Aquaticy in deiner Sprache
+  sofort Hilfe: die Notrufnummer deines Landes und kostenlose Hilfe-Telefone unter
+  findahelpline.com.
+- **Deutsch und Englisch** kann Aquaticy Standard wie bisher am genauesten. Englische Fragen
+  bekommen jetzt auch englische Antworten (Begrüßung, Uhrzeit, Datum, Wetter, Wikipedia).
+- **Grenzen:** Nah verwandte Sprachen teilen oft Wörter. Dann antwortet Aquaticy in der
+  größeren der beiden (etwa Indonesisch statt Malaiisch). Die Texte stammen nicht von
+  Muttersprachlern. Verbesserungen sind willkommen (`aquaticy/weltsprachen_daten.py`).
+
 **Neu in 16.2.0:**
 
 - **Alle Funktionen geprüft.** Jede Schnittstelle der Web-App bekam echte und kaputte

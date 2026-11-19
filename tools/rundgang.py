@@ -2403,6 +2403,8 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         karte.locator("details").filter(
             has=pg.locator("summary", has_text="Regeln — was")).evaluate("e => e.open = true")
         haus = karte.locator(".recht").filter(has_text="Im Haus etwas schalten")
+        # Erst warten, bis alle drei Knoepfe stehen -- unter Last las der Rundgang zu frueh.
+        haus.get_by_role("radio").nth(2).wait_for()
         log.pruefe(haus.get_by_role("radio").all_text_contents() ==
                    ["Erlauben", "Fragen", "Sperren"],
                    "Erlauben steht direkt in der Haus-Regel")

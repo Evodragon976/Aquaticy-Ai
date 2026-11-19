@@ -16,7 +16,7 @@ info = wer bist du; was kannst du; hilfe
 danke = danke; danke schön; vielen dank; dankeschön
 tschuess = tschüss; auf wiedersehen; bis bald; gute nacht
 wiegehts = wie geht es dir; wie geht's; wie gehts
-wetter = wetter; wettervorhersage; temperatur; regnet
+wetter = wetter; wettervorhersage; temperatur; regnet; regen; schnee; gewitter; nebel; hagel; sturm
 zeit = wie spät ist es; uhrzeit; wie viel uhr
 datum = welches datum; welcher tag ist heute; datum
 heute = heute
@@ -363,7 +363,7 @@ info = あなたは誰; 誰ですか; 何ができる; 何ができますか; �
 danke = ありがとう; ありがとうございます; どうもありがとう; サンキュー
 tschuess = さようなら; バイバイ; またね; おやすみ; おやすみなさい; じゃあね
 wiegehts = お元気ですか; 元気ですか; 元気; 調子はどう; 調子どう
-wetter = 天気; 天気予報; 気温; 雨
+wetter = 天気; 天気予報; 気温; 雨が; 雨は; 雨の予報; 雨です; 雨降
 zeit = 何時ですか; 何時; 今何時; 時間
 datum = 今日は何日; 何日ですか; 日付; 何曜日; 今日の日付
 heute = 今日
@@ -662,6 +662,7 @@ heute = امروز
 morgen = فردا
 wiki = {x} چیست; {x} کیست; {x} چه است; درباره {x} بگو
 stopp = در; هوای; برای; چطور; چطوره; است; امروز; فردا; الان; بگو; چه; از
+zeichen = پ;چ;ژ;گ
 krise = خودکشی; می\u200cخواهم بمیرم; خودم را بکشم
 A.intro = سلام! من Aquaticy Standard هستم. می\u200cتوانم وضعیت هوا، ساعت و تاریخ را بگویم، حساب
   کنم و
@@ -1172,11 +1173,11 @@ A.rueckfall = माफ करू, भाषा मॉडल बिना हम
 A.krise = अहाँ असगर नहि छी। जँ अपन जान लेबाक विचार आबि रहल अछि त' एखने ककरोसँ बात करू: अपन
   देशक आपातकालीन नंबरपर फोन करू वा https://findahelpline.com पर मुफ्त हेल्पलाइन ताकू।
 
-@uz Oʻzbekcha | wiki=uz | schrift=latin
-hallo = salom; assalomu alaykum; xayrli tong; xayrli kun; xayrli kech; салом
+@uz Oʻzbekcha | wiki=uz | schrift=latin,cyrillic
+hallo = salom; assalomu alaykum; xayrli tong; xayrli kun; xayrli kech
 info = sen kimsan; siz kimsiz; nima qila olasan; nima qila olasiz; yordam
-danke = rahmat; katta rahmat; tashakkur; раҳмат; рахмат
-tschuess = xayr; ko'rishguncha; xayrli tun; хайр
+danke = rahmat; katta rahmat; tashakkur
+tschuess = xayr; ko'rishguncha; xayrli tun
 wiegehts = qalaysan; qalaysiz; yaxshimisiz; ishlar qalay; нима гап
 wetter = ob-havo; ob havo; harorat; yomg'ir; об-ҳаво
 zeit = soat necha; hozir soat necha; vaqt qancha; соат неча
@@ -1525,9 +1526,9 @@ A.krise = Anjeun henteu nyalira. Upami anjeun mikir pikeun ngeureunkeun hirup, m
 
 @ff Fulfulde | wiki=ff | schrift=latin
 zeichen = ɓ;ɗ;ŋ;ƴ
-hallo = jam waali; jam na; no mbaɗa; a jaraama; jam weeti
+hallo = jam waali; jam na; no mbaɗa; jam weeti
 info = a hono; ko mbaawɗa waɗde; ballal; wallu kam
-danke = a jaaraama; jaraama; useko
+danke = a jaaraama; a jaraama; jaraama; useko
 tschuess = haa jango; en kawtan; jam waala
 wiegehts = no mbaɗ-ɗaa; a selli na; no mbaɗa
 wetter = weeyo; ndiyam ndungu; ngulndi
@@ -1877,20 +1878,19 @@ A.krise = Вы не адны. Калі вы думаеце пра тое, каб
 
 @sr Српски | wiki=sr | schrift=cyrillic
 zeichen = ђ;ћ;џ;ј;љ;њ
-hallo = здраво; добар дан; добро јутро; добро вече; ћао; zdravo; dobar dan; ćao
-info = ко си ти; шта знаш; шта можеш; помоћ; ko si ti; šta možeš; pomoć
-danke = хвала; хвала пуно; хвала вам; hvala; hvala puno
-tschuess = довиђења; видимо се; лаку ноћ; doviđenja; vidimo se; laku noć
-wiegehts = како си; како сте; шта има; kako si; kako ste; šta ima
-wetter = време; временска прогноза; температура; киша; vreme; vremenska prognoza; kiša
-zeit = колико је сати; koliko je sati; које је време
-datum = који је данас датум; који је данас дан; koji je danas datum; koji je danas dan
-heute = данас; danas
-morgen = сутра; sutra
-wiki = шта је {x}; ко је {x}; ко је био {x}; šta je {x}; ko je {x}; ko je bio {x}
-stopp = у; на; за; какво; како; ће; бити; данас; сутра; сада; u; na; za; kakvo; kako; će; biti;
-  danas; sutra; sada; je
-krise = убијем се; желим да умрем; самоубиство; ubijem se; želim da umrem; samoubistvo
+hallo = здраво; добар дан; добро јутро; добро вече; ћао
+info = ко си ти; шта знаш; шта можеш; помоћ
+danke = хвала; хвала пуно; хвала вам
+tschuess = довиђења; видимо се; лаку ноћ
+wiegehts = како си; како сте; шта има
+wetter = време; временска прогноза; температура; киша
+zeit = колико је сати; које је време
+datum = који је данас датум; који је данас дан
+heute = данас
+morgen = сутра
+wiki = шта је {x}; ко је {x}; ко је био {x}
+stopp = у; на; за; какво; како; ће; бити; данас; сутра; сада; је
+krise = убијем се; желим да умрем; самоубиство
 A.intro = Здраво! Ја сам Aquaticy Standard. Могу да ти кажем време, сат и датум, да рачунам и да
   тражим на Википедији.
 A.danke = Нема на чему!
@@ -2341,19 +2341,19 @@ A.krise = Nisi sam. Ako razmišljaš o tome da si oduzmeš život, razgovaraj s 
   https://findahelpline.com.
 
 @bs Bosanski | wiki=bs | schrift=latin
-hallo = zdravo; dobar dan; dobro jutro; selam
+hallo = zdravo; dobar dan; dobro jutro; ćao; selam
 info = ko si ti; šta znaš; šta možeš; pomoć
-danke = hvala; hvala lijepo; puno hvala; fala
+danke = hvala; hvala lijepo; puno hvala; hvala puno; fala
 tschuess = doviđenja; vidimo se; laku noć; zbogom
 wiegehts = kako si; kako ste; šta ima; kako je
-wetter = vrijeme; vremenska prognoza; temperatura; kiša
+wetter = vrijeme; kakvo je vreme; vremenska prognoza; temperatura; kiša
 zeit = koliko je sati; koliko je sahat; koje je vrijeme
 datum = koji je danas datum; koji je danas dan; današnji datum
 heute = danas
 morgen = sutra
 wiki = šta je {x}; ko je {x}; ko je bio {x}; reci mi o {x}
 stopp = u; na; za; kakvo; kako; će; biti; danas; sutra; sada; je
-krise = ubiti se; želim umrijeti; samoubistvo
+krise = ubiti se; ubijem se; želim umrijeti; želim da umrem; samoubistvo
 A.intro = Zdravo! Ja sam Aquaticy Standard. Mogu ti reći vrijeme, sat i datum, računati i tražiti
   na Wikipediji.
 A.danke = Nema na čemu!
@@ -2871,7 +2871,7 @@ A.krise = Не си сам. Ако размислуваш да си го одз�
 
 @ca Català | wiki=ca | schrift=latin
 zeichen = ·;ï
-hallo = hola; bon dia; bona tarda; bona nit; ei; salut
+hallo = hola; bon dia; bona tarda; ei; salut
 info = qui ets; què pots fer; què saps fer; ajuda
 danke = gràcies; moltes gràcies; mercès; gràcies de debò
 tschuess = adéu; fins aviat; a reveure; fins després; bona nit
