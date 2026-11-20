@@ -161,6 +161,8 @@ def rechnen(text: str) -> str:
     kern = re.sub(r"\s+(?:zum\s+quadrat|squared|im\s+quadrat)\b", " ** 2", kern)
     kern = re.sub(r"\s+(?:hoch\s+drei|cubed)\b", " ** 3", kern)
     kern = re.sub(r"(?<=\d)\s+:\s+(?=[\d(])", " / ", kern)
+    # 16.4.5: "27 hoch 1/3" ergab 9 -- mit "hoch" ist der ganze Bruch der Exponent.
+    kern = re.sub(r"\bhoch\s+(-?\d+)\s*/\s*(\d+)", r"hoch (\1/\2)", kern)
     for wort, zeichen in WOERTER:
         kern = re.sub(rf"(?:(?<=[\d\s)])|^){re.escape(wort)}(?=[\s\d(])", f" {zeichen} ", kern)
     kern = re.sub(r"\b(?:die\s+|the\s+)?(?:quadrat)?wurzel\s+(?:aus|von)\s+"
@@ -173,6 +175,8 @@ def rechnen(text: str) -> str:
     # 16.4.5: auch eine einzelne Gruppe ("1.000 + 1" ergab vorher 2).
     kern = re.sub(r"(?<![\d.,])\d{1,3}(?:\.\d{3})+(?![\d.])|(?<![\d.,])\d{1,3}\.\d{3}(?=,\d)",
                   lambda t: t.group(0).replace(".", ""), kern)
+    if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", kern.strip()):
+        return ""  # "2026-12-24" ist ein Datum, keine Rechnung (16.4.5)
     if not re.fullmatch(r"[\d\s.,+\-*/()%]+", kern) or not re.search(r"\d", kern):
         return ""
     if not re.search(r"[+\-*/%]", kern):
@@ -442,12 +446,18 @@ def _englisch(text: str) -> str:
     # "Miles" -> "miles": Einheiten schreibt man im Englischen klein.
     text = re.sub(r"\b[A-Z][a-z]+\b", lambda w: w.group(0).lower()
                   if w.group(0).lower() in EINHEITEN else w.group(0), text)
-    return text.replace(" sind ", " is ")
+    return text.replace(" sind ", " is ").replace(" ist ", " is ")
 
 
 def einheiten(text: str) -> str:
     gefaltet = (falten(text).replace("grad celsius", "celsius")
                 .replace("grad fahrenheit", "fahrenheit"))
+    # 16.4.5: "3 Fuß 6 Zoll in cm" rechnete vorher nur die 6 Zoll; "ein Zoll in cm" ging nicht.
+    gefaltet = re.sub(r"(\d+(?:[.,]\d+)?)\s*(?:fuss|ft|')\s*(\d+(?:[.,]\d+)?)\s*"
+                      r"(?:zoll|inch|inches|\")",
+                      lambda t: f"{schoen(zahl(t.group(1)) * 12 + zahl(t.group(2)))} zoll",
+                      gefaltet)
+    gefaltet = re.sub(r"\bein(?:e|en|em)?\s+(?=[a-z°/]+\s+(?:in|nach|zu|to)\s)", "1 ", gefaltet)
     treffer = UMRECHNEN.search(gefaltet)
     # "5 km sind wie viele Meilen?" (16.4.5)
     vorn = re.search(rf"{ZAHL}\s*([a-z°/0-9]+)\s+(?:sind|ist|ergeben|machen)\s+wie\s*viele?\s+"
@@ -466,12 +476,14 @@ def einheiten(text: str) -> str:
         celsius = {"c": wert, "f": (wert - 32) * 5 / 9, "k": wert - 273.15}[TEMPERATUR[von]]
         ziel = {"c": celsius, "f": celsius * 9 / 5 + 32, "k": celsius + 273.15}[TEMPERATUR[nach]]
         zeichen = {"c": "°C", "f": "°F", "k": "K"}
-        return (f"{schoen(wert)} {zeichen[TEMPERATUR[von]]} sind "
+        return (f"{schoen(wert)} {zeichen[TEMPERATUR[von]]} {'ist' if wert == 1 else 'sind'} "
                 f"**{schoen(ziel)} {zeichen[TEMPERATUR[nach]]}**.")
     if von not in EINHEITEN or nach not in EINHEITEN or EINHEITEN[von][0] != EINHEITEN[nach][0]:
         return ""
     ergebnis = wert * EINHEITEN[von][1] / EINHEITEN[nach][1]
-    return f"{schoen(wert)} {anzeige(von)} sind **{schoen(ergebnis, 4)} {anzeige(nach)}**."
+    # "1 Meile sind" war falsch -- eins ist Einzahl (16.4.5).
+    verb = "ist" if wert == 1 else "sind"
+    return f"{schoen(wert)} {anzeige(von)} {verb} **{schoen(ergebnis, 4)} {anzeige(nach)}**."
 
 
 # -- Datum und Uhrzeit --------------------------------------------------------------------------
@@ -498,6 +510,13 @@ def ostern(jahr: int) -> date:
 
 def datum_aus(text: str, heute: date) -> date | None:
     """'24.12.', '24.12.2026', '3. Oktober', '3 oktober 2027'."""
+    # 16.4.5: auch ISO-Daten ("2026-12-24"), wie im Worker -- vorher gab es dazu keine Antwort.
+    iso = re.search(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", text)
+    if iso:
+        try:
+            return date(int(iso.group(1)), int(iso.group(2)), int(iso.group(3)))
+        except ValueError:
+            return None
     # Am Satzende fehlt der letzte Punkt oft ("bis zum 24.12?").
     treffer = re.search(r"\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4})?|(?=\s*$))", text)
     if treffer:
@@ -567,6 +586,38 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
     jetzt = jetzt or zeit_mod.jetzt()
     heute = jetzt.date()
     kern = falten(text)
+    # 16.4.5: "Wie spät ist es in 3 Stunden?" nannte vorher die Uhrzeit von jetzt.
+    spaeter = re.search(r"\b(in|vor)\s+(\d{1,3})\s+(stunden?|minuten?)\b", kern)
+    if spaeter and re.search(r"\b(wie\s*spaet|uhrzeit|wieviel\s+uhr|wie\s+viel\s+uhr)\b", kern):
+        from datetime import timedelta
+
+        menge = int(spaeter.group(2))
+        schritt = timedelta(hours=menge) if spaeter.group(3).startswith("stunde") else timedelta(
+            minutes=menge)
+        dann = jetzt + schritt if spaeter.group(1) == "in" else jetzt - schritt
+        anderer_tag = "" if dann.date() == heute else f", {WOCHENTAGE[dann.weekday()]}"
+        einheit = {"stunde": "Stunde", "stunden": "Stunden", "minute": "Minute",
+                   "minuten": "Minuten"}[spaeter.group(3)]
+        if spaeter.group(1) == "in":
+            return f"In {menge} {einheit} ist es **{dann:%H:%M} Uhr**{anderer_tag}."
+        return f"Vor {menge} {einheit} war es **{dann:%H:%M} Uhr**{anderer_tag}."
+    # "Wie lange noch bis 18 Uhr?"
+    bis_uhr = re.search(r"\b(?:wie\s*(?:lange|viele\s+(?:minuten|stunden))"
+                        r"(?:\s+(?:noch|ist\s+es))*|"
+                        r"wann\s+ist\s+es)\s+bis\s+(\d{1,2})(?::(\d{2}))?\s*uhr\b", kern)
+    if bis_uhr and int(bis_uhr.group(1)) <= 24 and int(bis_uhr.group(2) or 0) < 60:
+        from datetime import timedelta
+
+        stunde, minute = int(bis_uhr.group(1)) % 24, int(bis_uhr.group(2) or 0)
+        ziel = jetzt.replace(hour=stunde, minute=minute, second=0, microsecond=0)
+        if ziel <= jetzt:
+            ziel += timedelta(days=1)
+        minuten = int((ziel - jetzt).total_seconds() // 60)
+        std, rest = divmod(minuten, 60)
+        teile = ([f"{std} {'Stunde' if std == 1 else 'Stunden'}"] if std else []) + (
+            [f"{rest} {'Minute' if rest == 1 else 'Minuten'}"] if rest else [])
+        dauer = " und ".join(teile) or "0 Minuten"
+        return f"Bis {stunde:02d}:{minute:02d} Uhr sind es noch **{dauer}**."
     if re.search(r"\b(wie\s*spaet|uhrzeit|wieviel\s+uhr|wie\s+viel\s+uhr)\b", kern):
         return f"Es ist **{jetzt:%H:%M} Uhr** ({zeit_mod.kurz(jetzt)})."
     # 16.4.5: "Welchen Tag haben wir heute?", "Was ist heute für ein Datum?"
@@ -1340,12 +1391,13 @@ WAEHRUNGEN = {"euro": "EUR", "eur": "EUR", "€": "EUR", "dollar": "USD", "usd":
               "cny": "CNY", "lira": "TRY", "try": "TRY", "aud": "AUD", "cad": "CAD",
               # 16.4.5: englische und zusammengesetzte Namen
               "dollars": "USD", "pound": "GBP", "pounds": "GBP", "francs": "CHF",
-              "franc": "CHF", "kronor": "SEK", "zlotys": "PLN"}
+              "franc": "CHF", "kronor": "SEK", "zlotys": "PLN", "euros": "EUR"}
 #: "Schweizer Franken", "US-Dollar", "britische Pfund" -- vor der Suche zusammengefasst.
 WAEHRUNG_NAMEN = ((r"\bschweizer\s+franken\b", "franken"), (r"\bus-?\s?dollars?\b", "dollar"),
                   (r"\bbritische[n]?\s+pfund\b", "pfund"), (r"\bswiss\s+francs?\b", "franken"),
                   (r"\bbritish\s+pounds?\b", "pfund"), (r"\bjapanische[n]?\s+yen\b", "yen"),
-                  (r"\bschwedische[n]?\s+kronen?\b", "kronen"))
+                  (r"\bschwedische[n]?\s+kronen?\b", "kronen"),
+                  (r"\bpolnische[n]?\s+zloty\b", "zloty"))
 #: "1,5 Mio Euro": Mio, Millionen, Mrd, Tausend hinter der Zahl.
 WAEHRUNG_MAL = {"tsd": 1e3, "tausend": 1e3, "k": 1e3, "mio": 1e6, "million": 1e6,
                 "millionen": 1e6, "mrd": 1e9, "milliarde": 1e9, "milliarden": 1e9}
@@ -1367,6 +1419,13 @@ def waehrung(text: str, holen: Holen) -> str:
                           rf"(?:ich|man)?\s*(?:fuer|for)\s+{ZAHL}\s*([a-z€$]+)", kern)
     vorn = re.search(rf"{ZAHL}\s*([a-z€$]+)\s+(?:sind|ist|macht|machen)\s+wie\s*viele?\s+"
                      r"([a-z€$]+)", kern)
+    # 16.4.5: "Wie viel Euro sind 1000 Yen?"
+    frage_vorn = re.search(rf"wie\s*viele?\s+([a-z€$]+)\s+(?:sind|ist|macht|machen|ergeben)\s+"
+                           rf"{ZAHL}\s*([a-z€$]+)", kern)
+    if frage_vorn and not vorn and WAEHRUNGEN.get(frage_vorn.group(1)) and WAEHRUNGEN.get(
+            frage_vorn.group(3)):
+        vorn = re.search(rf"{ZAHL}\s*([a-z€$]+)\s+(?:in)\s+([a-z€$]+)",
+                         f"{frage_vorn.group(2)} {frage_vorn.group(3)} in {frage_vorn.group(1)}")
     treffer = WAEHRUNG_SATZ.search(kern)
     von = nach = None
     betrag = 1.0
@@ -1403,7 +1462,8 @@ def waehrung(text: str, holen: Holen) -> str:
     if not math.isfinite(kurs) or kurs <= 0:
         return "Die Wechselkurse lassen sich gerade nicht abrufen."
     stand = str(daten.get("date", "") or "")[:20] if isinstance(daten, dict) else ""
-    return (f"{schoen(betrag)} {von} sind **{schoen(betrag * float(kurs))} {nach}** "
+    return (f"{schoen(betrag)} {von} {'ist' if betrag == 1 else 'sind'} "
+            f"**{schoen(betrag * float(kurs))} {nach}** "
             f"(Kurs {schoen(float(kurs), 4)}, Stand {stand}).\n\nQuelle: Europäische Zentralbank "
             "über [Frankfurter](https://www.frankfurter.app)")
 
@@ -1487,6 +1547,8 @@ def _thema_aus(text: str) -> str:
                 return ""
             rest = original(roh, frage.group(1)).strip()
             rest = ARTIKEL.sub("", rest) if ARTIKEL.match(rest.lower()) else rest
+            # "Wie funktioniert die Zellatmung genau?" -- Fuellwoerter am Ende weg (16.4.5).
+            rest = re.sub(r"\s+(?:eigentlich|denn|genau|nochmal|so|bitte)$", "", rest, flags=re.I)
             return rest[:80]
     treffer = WISSEN_VORN.match(kern)
     if not treffer:
@@ -1498,7 +1560,31 @@ def _thema_aus(text: str) -> str:
     # "Was ist eigentlich ein Axolotl?" suchte vorher nach "eigentlich ein Axolotl" (16.4.5).
     rest = re.sub(r"^(?:eigentlich|denn|genau|nochmal|so)\s+", "", rest, flags=re.I)
     rest = ARTIKEL.sub("", rest) if ARTIKEL.match(rest.lower()) else rest
+    rest = re.sub(r"\s+(?:eigentlich|denn|genau|nochmal|so|bitte)$", "", rest, flags=re.I)
     return rest[:80]
+
+
+#: Abkuerzungen, nach denen kein Satz endet.
+ABKUERZUNGEN = frozenset({"z", "b", "d", "h", "u", "a", "s", "v", "ca", "bzw", "vgl", "usw", "evtl",
+                          "ggf", "dr", "prof", "st", "nr", "jh", "mio", "mrd", "chr", "geb",
+                          "gest", "etc", "e", "g", "i", "vs", "mr", "mrs", "jr", "sr", "no"})
+
+
+def saetze_aus(text: str) -> list[str]:
+    """Saetze eines Auszugs -- nicht nach "14. März", "z. B." oder "ca. 84" getrennt (16.4.5)."""
+    teile: list[str] = []
+    anfang = 0
+    for ende in re.finditer(r"[.!?](?=\s+\S)|[。！？।۔]", text):
+        davor = re.search(r"(\w+)\W*$", text[anfang:ende.start()])
+        wort = davor.group(1) if davor else ""
+        danach = text[ende.end():].lstrip()[:1]
+        if ende.group(0) == "." and (wort.isdigit() or wort.lower() in ABKUERZUNGEN
+                                     or not danach or not danach.isupper()):
+            continue
+        teile.append(text[anfang:ende.end()].strip())
+        anfang = ende.end()
+    rest = text[anfang:].strip()
+    return [t for t in [*teile, rest] if t]
 
 
 def wissen(thema: str, holen: Holen, sprache: str = "de") -> str:
@@ -1519,10 +1605,13 @@ def wissen(thema: str, holen: Holen, sprache: str = "de") -> str:
     auszug = str(seite.get("extract") or "").strip()
     if not auszug:
         return ""
-    saetze = re.split(r"(?<=[.!?])\s+|(?<=[。！？।۔])", auszug)
-    kurz = " ".join(s for s in saetze[:3] if s)[:700]
-    link = ((seite.get("content_urls") or {}).get("desktop") or {}).get("page") or (
-        basis + "/wiki/" + quote(titel.replace(" ", "_")))
+    kurz = " ".join(saetze_aus(auszug)[:3])[:700]
+    # 16.4.5: Ein unerwartetes "content_urls" (Liste statt Objekt) brachte die Antwort zum Absturz.
+    urls = seite.get("content_urls")
+    desktop = urls.get("desktop") if isinstance(urls, dict) else None
+    link = desktop.get("page") if isinstance(desktop, dict) else None
+    if not isinstance(link, str) or not link.startswith(basis + "/"):
+        link = basis + "/wiki/" + quote(titel.replace(" ", "_"))
     quelle = "Quelle: [Wikipedia]" if sprache == "de" else "📖 [Wikipedia]"
     return f"**{seite.get('title', titel)}:** {kurz}\n\n{quelle}({link})"
 
@@ -1542,8 +1631,11 @@ def uhrzeit_in(ort: str, holen: Holen, jetzt: datetime | None = None) -> str:
                 + quote(ort))
     if not isinstance(geo, dict):
         return "Die Ortssuche antwortet gerade nicht. Versuch es gleich noch einmal."
-    treffer = geo.get("results") or []
-    zone = str((treffer[0] if treffer else {}).get("timezone") or "")
+    # 16.4.5: Kaputte Ortsdaten ("results": "x" oder [None]) brachten die Antwort zum Absturz.
+    treffer = geo.get("results")
+    erster = treffer[0] if isinstance(treffer, list) and treffer and isinstance(
+        treffer[0], dict) else {}
+    zone = erster.get("timezone") if isinstance(erster.get("timezone"), str) else ""
     if not zone:
         return f"Für „{ort}“ finde ich keine Zeitzone. Schreib die Stadt vielleicht etwas genauer?"
     try:
@@ -1559,7 +1651,7 @@ def uhrzeit_in(ort: str, holen: Holen, jetzt: datetime | None = None) -> str:
                        f"{'mehr' if diff > 0 else 'weniger'} als bei dir.")
     else:
         unterschied = " Dieselbe Zeit wie bei dir."
-    name = treffer[0].get("name", ort)
+    name = str(erster.get("name") or ort)
     return (f"In **{name}** ist es gerade **{dort:%H:%M} Uhr** "
             f"({WOCHENTAGE[dort.weekday()]}).{unterschied}")
 
@@ -1711,6 +1803,20 @@ def alter(text: str, heute: date) -> str:
     if not re.search(r"\b(wie\s+alt|alter|geboren|geburtstag)\b", kern):
         return ""
     geburt = datum_aus(kern, heute)
+    mit_jahr = re.search(r"\d{1,2}\.\d{1,2}\.\d{2,4}|\b(?:" + "|".join(MONATE) + r")\s+\d{4}\b|"
+                         r"\b\d{4}-\d{1,2}-\d{1,2}\b", kern)
+    if geburt is not None and not mit_jahr:
+        # 16.4.5: "Ich habe am 1. Januar Geburtstag" hiess vorher "Dann bist du 0 Jahre alt",
+        # "Mein Geburtstag ist am 20.11." bekam keine Antwort.
+        naechster = im_jahr(geburt, heute.year)
+        if naechster < heute:
+            naechster = im_jahr(geburt, heute.year + 1)
+        bis = (naechster - heute).days
+        if bis == 0:
+            return "Heute ist dein Geburtstag – herzlichen Glückwunsch! 🎉"
+        if bis == 1:
+            return "Morgen ist dein Geburtstag. 🎂"
+        return f"Bis zu deinem Geburtstag am {naechster:%d.%m.} sind es noch **{bis} Tage**."
     if geburt is None:
         jahr = re.search(r"\b(19\d{2}|20\d{2})\b", kern)
         if not jahr or not re.search(r"\bgeboren\b", kern):
@@ -1758,7 +1864,9 @@ def bmi(text: str) -> str:
         meter /= 100
     if not 0.5 < meter < 2.6:
         return ""
-    wert = zahl(kg) / (meter * meter)
+    # 16.4.5: Die Stufe gilt fuer den angezeigten Wert -- vorher hiess es
+    # "18,5 – Untergewicht" und "25 – Normalgewicht".
+    wert = round(zahl(kg) / (meter * meter), 1)
     stufe = ("Untergewicht" if wert < 18.5 else "Normalgewicht" if wert < 25 else
              "Übergewicht" if wert < 30 else "starkes Übergewicht")
     return (f"Dein BMI liegt bei **{schoen(wert, 1)}** – das gilt als {stufe}. Der BMI ist aber "
@@ -1783,9 +1891,12 @@ def trinkgeld(text: str) -> str:
                 "rechne ich es aus.")
     betrag = betraege[0]
     tg = betrag * satz / 100
+    gesamt = round(betrag + tg, 2)
+    # "Aufrunden auf 220 €" bei genau 220,00 € war sinnlos (16.4.5).
+    runden = (f" Aufrunden auf {schoen(math.ceil(gesamt))} € geht auch."
+              if gesamt != math.ceil(gesamt) else "")
     return (f"{schoen(satz)} % Trinkgeld auf {geld(betrag)} sind **{geld(tg)}** – "
-            f"zusammen also **{geld(betrag + tg)}**. Aufrunden auf "
-            f"{schoen(math.ceil(betrag + tg))} € geht auch.")
+            f"zusammen also **{geld(gesamt)}**.{runden}")
 
 
 def geld(wert: float) -> str:
@@ -1914,7 +2025,7 @@ def zahlenkram(text: str, heute: date) -> str:
         if art.startswith("hex"):
             return f"{schoen(n)} ist hexadezimal **{n:X}**."
         return f"{schoen(n)} ist oktal **{n:o}**."
-    treffer = re.search(r"\b(durchschnitt|mittelwert|summe)\s+(?:von|aus)\s+([\d.,\s]+(?:und\s+"
+    treffer = re.search(r"\b(durchschnitt|mittelwert|summe)\s+(?:von|aus)\s+([\d.,;\s]+(?:und\s+"
                         r"[\d.,]+)?)", kern)
     if treffer:
         stuecke = re.split(r"\s+und\s+|\s*;\s*|,\s+|\s+", treffer.group(2).strip(" ,."))
@@ -1963,7 +2074,7 @@ def textkram(text: str) -> str:
                 return "Das ist **1 Wort**."
             return f"Das sind **{anzahl} Wörter**."
     treffer = re.search(r"z(?:ä|ae)hl\w*\s+(?:mal\s+)?(?:die\s+)?(w(?:ö|oe)rter|buchstaben|"
-                        r"zeichen)\s+(?:in|von|im\s+text|im\s+satz)?\s*:?\s*(.+)", roh, re.I)
+                        r"zeichen)\s*:?\s+(?:in|von|im\s+text|im\s+satz)?\s*:?\s*(.+)", roh, re.I)
     if treffer and inhalt(treffer.group(2)):
         was, stueck = treffer.group(1).lower(), inhalt(treffer.group(2))
         if was == "buchstaben":
@@ -2066,7 +2177,11 @@ SCHLECHT = re.compile(
 #: Wer so schreibt, braucht einen Menschen -- und zwar sofort die richtigen Nummern.
 KRISE = re.compile(
     r"\b(nicht\s+mehr\s+(?:weiter)?leben|(?:will|moechte|wuerde\s+(?:gern|gerne|am\s+liebsten))"
-    r"\s+(?:nur\s+noch\s+|einfach\s+|lieber\s+)?(?:sterben|tot\s+sein)|mich\s+(?:selbst\s+)?"
+    r"\s+(?:nur\s+noch\s+|einfach\s+|lieber\s+)?(?:sterben|tot\s+sein)|"
+    # 16.4.5: "Ich will einfach nur tot sein", "Am liebsten wäre ich tot" bekamen keine Hilfe.
+    r"(?:will|moechte)\s+(?:(?!nicht\b)\w+\s+){1,3}?(?:sterben|tot\s+sein)|"
+    r"(?:am\s+liebsten|lieber|besser)\s+waere\s+ich\s+tot|waere\s+ich\s+(?:doch\s+)?"
+    r"(?:lieber\s+|besser\s+)?tot|mich\s+(?:selbst\s+)?"
     r"umbringen|bringe?\s+mich\s+(?:selbst\s+)?um|mir\s+das\s+leben\s+(?:zu\s+)?nehmen|"
     r"nehme\s+mir\s+das\s+leben|(?:suizid|selbstmord)gedanken|(?:denke|gedanken|gedacht)\s+"
     r"(?:\w+\s+){0,3}?(?:suizid|selbstmord)|mich\s+(?:selbst\s+)?ritzen|ritze\s+mich|"
@@ -2214,6 +2329,9 @@ def sicherheit(text: str) -> str:
         ergebnisse = [e for e in (treffer or {}).get("results") or [] if isinstance(e, dict)]
         if not ergebnisse:
             continue
+        if not port:
+            # 16.4.5: "Was ist ein Trojaner?" nannte vorher Port 20000 statt der Malware-Familie.
+            ergebnisse.sort(key=lambda e: e.get("art") not in ("malware", "schwachstelle"))
         zeilen = []
         for e in ergebnisse[:3]:
             kopf = f"**{e.get('name', '')}**" + (f" (Port {e['port']})" if e.get("port") else "")
@@ -2307,7 +2425,8 @@ def definitionsfrage(frage: str, kern: str) -> bool:
                  r"jetzt|gerade|now|draussen|outside)\b", kern):
         return False
     thema = falten(thema_aus(frage))
-    return bool(thema) and not any(w in WETTER_THEMEN for w in thema.split())
+    # Nur "Wetter" allein ist eine Wetterfrage -- "Unterschied zwischen Wetter und Klima" nicht.
+    return bool(thema) and thema not in WETTER_THEMEN
 
 
 def offene_ortsfrage(verlauf: list[dict[str, Any]]) -> str:
@@ -2415,7 +2534,7 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
     if hilfe:
         return hilfe
     # 16.3.0: Ein Gruss oder Dank vorne aendert die Frage nicht.
-    ohne_vorspann = VORSPANN.sub("", frage, count=1).strip()
+    ohne_vorspann = FUELL_VORN.sub("", VORSPANN.sub("", frage, count=1), count=1).strip()
     if ohne_vorspann and ohne_vorspann != frage and falten(ohne_vorspann):
         frage, kern = ohne_vorspann, falten(ohne_vorspann)
     if secure:
@@ -2434,6 +2553,11 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         text = welt_antwort(frage, sprache, holen, jetzt, wohnort, verlauf)
         if text:
             return text
+    if sprache == "en":
+        # 16.4.5: "What is 1,000 + 1?" ergab vorher 2 -- das Komma ist im Englischen ein
+        # Tausendertrenner, der Punkt das Dezimalzeichen.
+        frage = englische_zahlen(frage)
+        kern = falten(frage)
 
     # 1. Antwort auf die eigene Rueckfrage: "Fuer welchen Ort?" -> "Erkelenz"
     vorher_gefragt = offene_ortsfrage(verlauf)
@@ -2482,7 +2606,8 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
                  r"\bwas\s+passiert\s+(?:gerade\s+)?in\s+der\s+welt\b", kern):
         return nachrichten(holen)
     if re.search(r"\b(kurs|wechselkurs|umrechnen)\b|\bwie\s+steht\s+(?:der|die|das)\b|"
-                 r"\b(?:bekomme|kriege)\s+(?:ich|man)\s+fuer\b|\bsind\s+wie\s*viele?\b",
+                 r"\b(?:bekomme|kriege)\s+(?:ich|man)\s+fuer\b|\bsind\s+wie\s*viele?\b|"
+                 r"\bwie\s*viele?\s+[a-z€$]+\s+(?:sind|ist|macht|machen)\s+\d",
                  kern) or WAEHRUNG_SATZ.search(kern):
         text = waehrung(frage, holen)
         if text:
@@ -2545,11 +2670,22 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
 
 #: Gruss oder Dank am Anfang, mit Satzzeichen dahinter.
 VORSPANN = re.compile(r"^\s*(?:hallo|hi|hey|moin|servus|guten\s+(?:morgen|tag|abend)|"
-                      r"danke(?:\s+(?:dir|schoen|schön))?|vielen\s+dank|ok(?:ay)?|super|prima)"
+                      r"danke(?:\s+(?:dir|schoen|schön))?|vielen\s+dank|ok(?:ay)?|super|prima|"
+                      r"bitte|sag\s+mal|also)(?:\s+aquaticy)?"
                       r"\s*[,!.;:]+\s*(?:und\s+)?", re.IGNORECASE)
+#: 16.4.5: "Und was ist 9 durch 3?", "Ok und was ist 2 hoch 8?", "Hey Aquaticy, was ist 2+2?"
+#: -- vorher kam "kann ich nicht".
+FUELL_VORN = re.compile(r"^\s*(?:(?:und|ok(?:ay)?|also|bitte|sag\s+mal)[,!]?\s+)+"
+                        r"(?=(?:was|wie|wann|wer|wo|welche\w*|rechne|berechne)\b)", re.IGNORECASE)
 
 
 # -- Andere Sprachen (16.4.2) --------------------------------------------------------------------
+
+def englische_zahlen(text: str) -> str:
+    """'1,000,000' -> '1000000', '1,234.5' -> '1234.5' -- nur Gruppen mit drei Ziffern."""
+    return re.sub(r"(?<![\d.,])\d{1,3}(?:,\d{3})+(?:\.\d+)?(?![\d,])",
+                  lambda t: t.group(0).replace(",", ""), text)
+
 
 def welt_texte(code: str) -> dict[str, str]:
     from aquaticy import weltsprachen
@@ -2620,6 +2756,59 @@ def welt_uhrzeit(ort: str, code: str, holen: Holen, jetzt: datetime) -> str:
     return a["zeit"].format(zeit=f"{dort:%H:%M} ({treffer.get('name') or ort})")
 
 
+#: 16.4.5: "uebermorgen" in Sprachen, deren Wort sicher ist. Vorher landete "pasado mañana",
+#: "après-demain" oder "послезавтра" im Ortsnamen, und gezeigt wurde heute oder morgen.
+UEBERMORGEN = {
+    "en": ("the day after tomorrow", "day after tomorrow"), "es": ("pasado mañana",),
+    "fr": ("après-demain", "apres-demain"), "it": ("dopodomani",), "pt": ("depois de amanhã",),
+    "nl": ("overmorgen",), "pl": ("pojutrze",), "ru": ("послезавтра",), "uk": ("післязавтра",),
+    "cs": ("pozítří",), "sv": ("i övermorgon", "övermorgon"), "da": ("i overmorgen", "overmorgen"),
+    "no": ("i overmorgen", "overmorgen"), "tr": ("yarından sonra",), "hu": ("holnapután",),
+    "ro": ("poimâine",), "el": ("μεθαύριο",), "fi": ("ylihuomenna",),
+}
+
+
+#: Wochentage (Montag bis Sonntag) in Sprachen, deren Namen sicher sind (16.4.5).
+WOCHENTAGE_WELT = {
+    "en": ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"),
+    "es": ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"),
+    "fr": ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"),
+    "it": ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"),
+    "pt": ("segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira",
+           "sábado", "domingo"),
+    "nl": ("maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"),
+    "sv": ("måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"),
+    "da": ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"),
+    "no": ("mandag", "tirsdag", "onsdag", "torsdag", "fredag", "lørdag", "søndag"),
+    "pl": ("poniedziałek", "wtorek", "środę", "czwartek", "piątek", "sobotę", "niedzielę"),
+    "ru": ("понедельник", "вторник", "среду", "четверг", "пятницу", "субботу", "воскресенье"),
+    "cs": ("pondělí", "úterý", "středu", "čtvrtek", "pátek", "sobotu", "neděli"),
+}
+#: Die Woerter davor, die mit dem Tag zusammen weg muessen ("el sábado", "on Saturday").
+TAG_VORN = r"(?:(?:el|le|il|o|on|op|på|w|в|ve|v)\s+)?"
+
+
+def wochentag_in(frage: str, code: str, heute: date) -> tuple[int, str, str]:
+    """(Tag ab heute, Wort, Frage ohne den Tag) -- oder (-1, "", Frage)."""
+    for nummer, wort in enumerate(WOCHENTAGE_WELT.get(code, ())):
+        # Englisch nur mit "on/this/next" davor: "Sunday Island" ist ein Ort.
+        vorn = r"(?:on|this|next)\s+" if code == "en" else TAG_VORN
+        treffer = re.search(rf"(?<![\w-]){vorn}{re.escape(wort)}(?!\w)", frage, re.IGNORECASE)
+        if treffer:
+            rest = (frage[:treffer.start()] + " " + frage[treffer.end():]).strip()
+            return (nummer - heute.weekday()) % 7, wort, rest
+    return -1, "", frage
+
+
+def uebermorgen_in(frage: str, code: str) -> tuple[str, str]:
+    """(gefundenes Wort, Frage ohne dieses Wort) -- oder ("", Frage)."""
+    for wort in UEBERMORGEN.get(code, ()):
+        treffer = re.search(rf"(?<!\w){re.escape(wort)}(?!\w)", frage, re.IGNORECASE)
+        if treffer:
+            return treffer.group(0), (frage[:treffer.start()] + " " + frage[treffer.end():]).strip()
+    return "", frage
+
+
 def welt_wetter(ort: str, code: str, frage: str, holen: Holen, heute: date) -> str:
     """Das Wetter fuer *ort* -- mit Zahlen und Zeichen, die jede Sprache lesen kann."""
     from aquaticy import weltsprachen
@@ -2637,9 +2826,17 @@ def welt_wetter(ort: str, code: str, frage: str, holen: Holen, heute: date) -> s
         daten = wetterdaten(anders, holen, heute)
     if not isinstance(daten, dict) or not daten.get("tage"):
         return sprache.antworten["nichts"].format(x=ort)
-    tag = 1 if weltsprachen.enthaelt(frage, sprache, "morgen") and len(daten["tage"]) > 1 else 0
+    ueber, _ = uebermorgen_in(frage, code)
+    wochentag, tagname, _ = wochentag_in(frage, code, heute)
+    wort: tuple[str, ...]
+    if ueber and len(daten["tage"]) > 2:
+        tag, wort = 2, (ueber.lower(),)
+    elif 0 <= wochentag < len(daten["tage"]):
+        tag, wort = wochentag, (tagname,)
+    else:
+        tag = 1 if weltsprachen.enthaelt(frage, sprache, "morgen") and len(daten["tage"]) > 1 else 0
+        wort = sprache.listen["morgen" if tag else "heute"][:1] or ("",)
     t = daten["tage"][tag]
-    wort = sprache.listen["morgen" if tag else "heute"][:1] or ("",)
     zeichen = WETTERCODES.get(t.get("code"), "").split(" ")[-1]
     regen = "" if t.get("regen") is None else f" · ☔ {_grad(t['regen'])} %"
     return (f"**{daten['name']}** · {wort[0]}: {zeichen} {_grad(t.get('tief'))} – "
@@ -2671,6 +2868,9 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
     wetter = "wetter" in arten
     if "zeit" in arten and not wetter:
         ort = weltsprachen.ort_aus(frage, sprache, ("zeit",))
+        # 16.4.5: Ein Rest der Zeit-Frage ist kein Ort ("지금 몇 시야" suchte die Uhrzeit in "야").
+        ort = " ".join(w for w in ort.split() if len(w) > 2 or not any(
+            w.lower() in z for z in sprache.listen["zeit"]))
         if ort:
             return welt_uhrzeit(ort, code, holen, jetzt)
         versatz = jetzt.utcoffset()
@@ -2689,7 +2889,8 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
         ort = frage.strip(" ?!.,;:¿¡")
         return welt_wetter(ort, code, frage, holen, jetzt.date()) if ort else a["ort"]
     if wetter:
-        ort = weltsprachen.ort_aus(frage, sprache) or str(wohnort or "").strip()
+        ohne_tag = wochentag_in(uebermorgen_in(frage, code)[1], code, jetzt.date())[2]
+        ort = weltsprachen.ort_aus(ohne_tag, sprache) or str(wohnort or "").strip()
         return welt_wetter(ort, code, frage, holen, jetzt.date()) if ort else a["ort"]
     if code == "en":
         return ""
@@ -2700,6 +2901,9 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
             return text
     thema = weltsprachen.thema(frage, sprache)
     if thema:
+        # Die Schreibweise aus der Frage: vorher hiess es „victor hugo“ statt „Victor Hugo“.
+        wie_gefragt = re.search(re.escape(thema), frage, re.I)
+        thema = wie_gefragt.group(0) if wie_gefragt else thema
         return wissen(thema, holen, sprache.wiki) or a["nichts"].format(x=thema)
     return a["rueckfall"]
 

@@ -26,10 +26,17 @@ _ICH_HABE = (r"(?:hab(?:e)?\s+ich|habe\s+ich|hast\s+du\s+(?:f(?:ü|ue)r\s+mich)|
 
 _DAVOR_ICH = r"\s+(?:hab(?:e)?\s+ich|hast\s+du\s+f(?:ü|ue)r\s+mich|do\s+i\s+have)\b"
 
-_MAIL_WORT = r"(?:e-?mails?|mails?|posteingang|postfach|inbox|gmail)"
+# 16.4.5: Nicht als Teil eines Wortes: "E-Mail-Programme" ist keine Frage ans Postfach.
+_MAIL_WORT = r"(?:e-?mails?|mails?|posteingang|postfach|inbox|gmail)(?![-\w])"
+#: "Gibt es Termine für die Impfung in Berlin?" fragt nach fremden Terminen, nicht nach den
+#: eigenen -- dann ist das Netz gefragt.
+_FREMD = (r"(?!\s+(?:f(?:ü|ue)r|bei|beim|zur|zum|in|im|for|at|with|in)\s+"
+          r"(?!mich\b|mir\b|me\b|uns\b|us\b|mein\w*|my\b|unser\w*|our\b))")
+_ES_GIBT = r"(?:gibt\s+es|is\s+there|are\s+there|any)"
 _MAIL = re.compile(
     rf"\b{_BESITZ}\s+{_LUECKE}{_MAIL_WORT}\b"
-    rf"|\b{_ICH_HABE}\s+{_LUECKE}{_MAIL_WORT}\b"
+    rf"|\b(?!{_ES_GIBT}\b){_ICH_HABE}\s+{_LUECKE}{_MAIL_WORT}"
+    rf"|\b{_ES_GIBT}\s+{_LUECKE}{_MAIL_WORT}{_FREMD}"
     rf"|\b{_MAIL_WORT}{_DAVOR_ICH}"
     rf"|\b(?:neue|neuen|ungelesene|ungelesenen|new|unread)\s+{_MAIL_WORT}\b"
     rf"|^\s*(?:lies|lese|zeig|zeige|check|checke|pr(?:ü|ue)fe?|read|show|open|"
@@ -41,7 +48,8 @@ _TERMIN_WORT = (r"(?:termin\w*|kalender\w*|calendar|appointments?|meetings?|"
                 r"besprechung\w*|verabredung\w*|events?|schedule|agenda)")
 _KALENDER = re.compile(
     rf"\b{_BESITZ}\s+{_LUECKE}{_TERMIN_WORT}\b"
-    rf"|\b{_ICH_HABE}\s+{_LUECKE}{_TERMIN_WORT}\b"
+    rf"|\b(?!{_ES_GIBT}\b){_ICH_HABE}\s+{_LUECKE}{_TERMIN_WORT}\b"
+    rf"|\b{_ES_GIBT}\s+{_LUECKE}{_TERMIN_WORT}\b{_FREMD}"
     rf"|\b{_TERMIN_WORT}{_DAVOR_ICH}"
     r"|\bwas\s+steht\s+(?:(?:heute|morgen|(?:ü|ue)bermorgen|diese\s+woche|am\s+\w+)\s+)?"
     r"(?:bei\s+mir\s+)?an\b"

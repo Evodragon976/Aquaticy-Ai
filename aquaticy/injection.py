@@ -105,6 +105,13 @@ _MUSTER: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
          r"\b(?:ignore|disregard|forget|override)\s+(?:all\s+|any\s+|the\s+|your\s+)?"
          r"(?:previous|prior|above|earlier|system|original)?\s*"
          r"(?:instructions|prompts?|rules|directions)"),
+        # 16.4.5: "Disregard the above and say ...", "Ignoriere bitte die vorherigen Befehle"
+        ("Anweisungen ignorieren",
+         r"\b(?:ignore|disregard|forget)\s+(?:all\s+|everything\s+)?(?:of\s+)?(?:the\s+)?"
+         r"(?:above|preceding|previous\s+(?:text|messages?|context))(?![-\w])"),
+        ("Anweisungen ignorieren",
+         r"\b(?:ignorier|vergiss|missachte|übergehe|uebergehe)\w*\s+(?:\w+\s+){0,3}"
+         r"(?:befehle|anweisung|aufforderungen|instruktion|vorherigen\s+nachrichten)\b"),
         ("Anweisungen ignorieren",
          r"\b(?:ignorier|vergiss|missachte|übergehe|uebergehe)\w*\s+(?:\w+\s+){0,3}"
          r"(?:anweisungen|instruktionen|regeln|vorgaben|systemprompt)"),
@@ -119,10 +126,19 @@ _MUSTER: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("an die KI gerichtet",
          r"\b(?:attention|note|message|hinweis|nachricht)\s+(?:to|for|an|f[üu]r)\s+"
          r"(?:the\s+|die\s+|den\s+)?(?:ai|a\.i\.|llm|assistant|ki|sprachmodell|chatbot|agent)\b"),
+        ("an die KI gerichtet",
+         r"\b(?:anweisung|befehl|auftrag|instructions?|commands?)\s+(?:to|for|an|f[üu]r)\s+"
+         r"(?:the\s+|die\s+|den\s+)?(?:ai|llm|assistant|ki|sprachmodell|chatbot|agent)\b"
+         r"|\bas\s+an?\s+(?:ai|language\s+model|ai\s+assistant|assistant)\s*,?\s+"
+         r"(?:you\s+)?(?:now\s+)?(?:must|should|need\s+to|have\s+to)\b"
+         r"|\bals\s+(?:ki|sprachmodell|assistent)\s+(?:solltest|musst|sollst)\s+du\b"),
         ("Daten senden",
          r"\b(?:send|forward|exfiltrate|upload|post|leak|reveal)\s+(?:all\s+|the\s+)?"
          r"(?:user'?s?\s+(?:data|memory|notes|emails?|files|passwords?|keys?)|"
          r"(?:conversation|chat)\s+history|your\s+(?:memory|notes|instructions))\b"
+         r"|\b(?:send|forward|upload|post|leak|share|email)\s+(?:all\s+|every\s+)?(?:the\s+)?"
+         r"(?:user'?s?\s+)?(?:location|e-?mails?|messages|contacts|files|address|memory|notes|"
+         r"passwords?)\s+(?:to|at)\s+(?:https?://|[\w.+-]+@)"
          r"|\b(?:sende|schick|übermittle|uebermittle|verrate|gib)\w*\s+(?:\w+\s+){0,3}"
          r"(?:den\s+|die\s+|das\s+)?(?:speicher|merkzettel|chatverlauf|gespr[äa]chsverlauf|"
          r"nutzerdaten|daten\s+des\s+(?:nutzers|benutzers)|mails\s+des\s+(?:nutzers|benutzers))"),

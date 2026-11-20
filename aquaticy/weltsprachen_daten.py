@@ -124,14 +124,14 @@ danke = gracias; muchas gracias; mil gracias; te lo agradezco
 tschuess = adiós; hasta luego; chao; nos vemos; hasta pronto; hasta mañana
 wiegehts = cómo estás; qué tal; cómo te va; cómo está usted
 wetter = tiempo hace; qué tiempo; el tiempo; tiempo; clima; pronóstico; temperatura; llueve; lluvia;
-  llover; lloverá; nevar; nieva
+  llover; lloverá; nevar; nieva; hará frío; hará calor; hace frío; hace calor
 zeit = qué hora es; la hora; hora actual
 datum = qué día es hoy; qué fecha es; la fecha; fecha de hoy
 heute = hoy
 morgen = mañana
 wiki = qué es {x}; quién es {x}; quién fue {x}; qué son {x}; háblame de {x}
 stopp = en; de; para; el; la; los; las; qué; que; hace; hará; cómo; como; es; está; va; a;
-  hoy; mañana; tiempo; me; dime; por; favor; ahora; llover; lloverá; nevar; nieva
+  hoy; mañana; tiempo; me; dime; por; favor; ahora; llover; lloverá; nevar; nieva; frío; calor
 krise = suicidarme; quiero morir; matarme; quitarme la vida; suicidio
 A.intro = ¡Hola! Soy Aquaticy Standard. Puedo decirte el tiempo, la hora y la fecha,
   hacer cálculos y buscar en Wikipedia.
@@ -156,7 +156,7 @@ danke = merci; merci beaucoup; merci bien; je te remercie
 tschuess = au revoir; à bientôt; salut à plus; bonne nuit; à plus tard; adieu
 wiegehts = comment ça va; ça va; comment vas-tu; comment allez-vous
 wetter = météo; quel temps; le temps; température; pleut; prévisions;
-  pleuvoir; pleuvra; neiger; neige
+  pleuvoir; pleuvra; neiger; neige; fait froid; fait chaud; fait beau
 zeit = quelle heure est-il; quelle heure; l'heure
 datum = quelle est la date; quel jour sommes-nous; la date; quel jour on est
 heute = aujourd'hui
@@ -165,7 +165,7 @@ wiki = qu'est-ce que {x}; qu'est-ce qu'un {x}; qu'est-ce qu'une {x}; qui est {x}
   parle-moi de {x}
 stopp = à; a; en; au; aux; de; du; la; le; les; quel; quelle; fait; il; fera; est; va;
   aujourd'hui; demain; pour; comment; temps; me; dis; donne; fait-il; fera-t-il; va-t-il;
-  pleuvoir; pleuvra; neiger; neige
+  pleuvoir; pleuvra; neiger; neige; est-ce; qu'il; froid; chaud; beau
 krise = me suicider; envie de mourir; me tuer; mettre fin à ma vie; suicide
 A.intro = Bonjour ! Je suis Aquaticy Standard. Je peux te donner la météo, l'heure et la date,
   faire des calculs et chercher sur Wikipédia.
@@ -247,14 +247,14 @@ info = quem é você; quem és tu; o que você pode fazer; o que sabes fazer; aj
 danke = obrigado; obrigada; muito obrigado; muito obrigada; valeu
 tschuess = tchau; adeus; até logo; até mais; até breve
 wiegehts = como vai; como está; tudo bem; como você está; como estás
-wetter = tempo; previsão do tempo; clima; temperatura; chove; chuva
+wetter = tempo; previsão do tempo; clima; temperatura; chove; chuva; chover; vai chover
 zeit = que horas são; que hora é; as horas
 datum = que dia é hoje; qual é a data; a data de hoje; que data é hoje
 heute = hoje
 morgen = amanhã
 wiki = o que é {x}; quem é {x}; quem foi {x}; o que são {x}; fale sobre {x}
 stopp = em; no; na; de; do; da; para; o; a; os; as; que; qual; como; está; vai; fazer; faz;
-  hoje; amanhã; tempo; me; diga; por; favor; agora
+  hoje; amanhã; tempo; me; diga; por; favor; agora; chover; chove; chuva
 krise = me matar; quero morrer; suicídio; tirar minha vida; tirar a minha vida
 A.intro = Olá! Eu sou o Aquaticy Standard. Posso dizer o tempo, a hora e a data, fazer contas
   e pesquisar na Wikipédia.
@@ -285,7 +285,7 @@ morgen = завтра
 wiki = что такое {x}; кто такой {x}; кто такая {x}; кто такие {x}; кто был {x};
   расскажи о {x}; расскажи про {x}
 stopp = в; во; на; для; какая; какой; какое; как; будет; сегодня; завтра; сейчас; скажи;
-  пожалуйста; там; погода
+  пожалуйста; там; погода; ли; дождь
 krise = покончить с собой; хочу умереть; убить себя; суицид; самоубийство
 A.intro = Привет! Я Aquaticy Standard. Я могу сказать погоду, время и дату, посчитать и найти
   информацию в Википедии.
@@ -491,7 +491,8 @@ datum = bugün ayın kaçı; bugün tarih ne; tarih ne; bugün günlerden ne; bu
 heute = bugün
 morgen = yarın
 wiki = {x} nedir; {x} kimdir; {x} ne demek; {x} hakkında bilgi ver
-stopp = nasıl; ne; bugün; yarın; için; de; da; olacak; olur; durumu; bana; söyle; şimdi; mi
+stopp = nasıl; ne; bugün; yarın; için; de; da; olacak; olur; durumu; bana; söyle; şimdi; mi;
+  yağacak; mı; yağmur
 krise = intihar; ölmek istiyorum; kendimi öldür; canıma kıy
 endungen = 'da; 'de; 'ta; 'te; 'nın; 'nin; da; de
 A.intro = Merhaba! Ben Aquaticy Standard. Sana hava durumunu, saati ve tarihi söyleyebilir,
@@ -779,14 +780,15 @@ info = chi sei; cosa sai fare; cosa puoi fare; aiuto; che cosa sei
 danke = grazie; grazie mille; ti ringrazio; molte grazie
 tschuess = arrivederci; ci vediamo; a presto; buonanotte; addio
 wiegehts = come stai; come va; come sta; tutto bene
-wetter = che tempo fa; il tempo; meteo; previsioni; temperatura; piove; pioggia
+wetter = che tempo fa; il tempo; meteo; previsioni; temperatura; piove; pioggia;
+  pioverà; che tempo farà
 zeit = che ore sono; che ora è; l'ora
 datum = che giorno è oggi; che data è; la data di oggi; quanti ne abbiamo
 heute = oggi
 morgen = domani
 wiki = cos'è {x}; cosa è {x}; che cos'è {x}; chi è {x}; chi era {x}; parlami di {x}
 stopp = a; in; di; il; la; lo; per; che; fa; farà; com'è; oggi; domani; tempo; sarà; dimmi;
-  ora; adesso
+  ora; adesso; pioverà; piove; pioggia
 krise = suicidarmi; voglio morire; uccidermi; togliermi la vita; suicidio
 A.intro = Ciao! Sono Aquaticy Standard. Posso dirti il meteo, l'ora e la data, fare calcoli e
   cercare su Wikipedia.
@@ -1041,14 +1043,15 @@ info = kim jesteś; co potrafisz; co umiesz; co możesz zrobić; pomoc; pomóż
 danke = dziękuję; dzięki; dziękuję bardzo; wielkie dzięki
 tschuess = do widzenia; na razie; pa; do zobaczenia; dobranoc; cześć na razie
 wiegehts = jak się masz; co słychać; jak leci; jak się pan ma; jak się pani ma
-wetter = pogoda; pogodę; pogody; prognoza pogody; temperatura; deszcz; pada
+wetter = pogoda; pogodę; pogody; prognoza pogody; temperatura; deszcz; pada; padać
 zeit = która godzina; która jest godzina; ile jest godzin
 datum = jaka jest dzisiaj data; jaki dziś dzień; którego dzisiaj; dzisiejsza data
 heute = dzisiaj
 morgen = jutro
 wiki = co to jest {x}; czym jest {x}; kto to jest {x}; kim jest {x}; kim był {x};
   opowiedz o {x}
-stopp = w; we; na; dla; jaka; jaki; jak; będzie; dzisiaj; dziś; jutro; teraz; powiedz; jest
+stopp = w; we; na; dla; jaka; jaki; jak; będzie; dzisiaj; dziś; jutro; teraz; powiedz; jest;
+  czy; padać; pada; deszcz
 krise = zabić się; chcę umrzeć; samobójstwo; odebrać sobie życie
 A.intro = Cześć! Jestem Aquaticy Standard. Mogę podać pogodę, godzinę i datę, liczyć i szukać
   w Wikipedii.
@@ -1390,13 +1393,14 @@ info = wie ben jij; wie ben je; wat kun je; wat kun jij doen; help; hulp
 danke = dank je; dank je wel; bedankt; dank u wel; hartelijk dank
 tschuess = doei; tot ziens; dag dag; tot later; welterusten; doeg
 wiegehts = hoe gaat het; hoe gaat het met je; alles goed; hoe is het
-wetter = weer; het weer; wat voor weer; weerbericht; temperatuur; regent; regen
+wetter = weer; het weer; wat voor weer; weerbericht; temperatuur; regent; regen; regenen
 zeit = hoe laat is het; hoe laat; de tijd
 datum = welke datum is het; wat is de datum; welke dag is het; de datum van vandaag
 heute = vandaag
 morgen = morgen
 wiki = wat is {x}; wie is {x}; wie was {x}; vertel me over {x}
-stopp = in; op; voor; het; de; hoe; is; wordt; vandaag; morgen; nu; wat; zal; weer
+stopp = in; op; voor; het; de; hoe; is; wordt; vandaag; morgen; nu; wat; zal; weer;
+  gaat; regenen; regent
 krise = zelfmoord; ik wil dood; mezelf van kant maken; mezelf doden
 A.intro = Hallo! Ik ben Aquaticy Standard. Ik kan je het weer, de tijd en de datum vertellen,
   rekenen en op Wikipedia zoeken.
@@ -1740,13 +1744,13 @@ info = kdo jsi; co umíš; co dokážeš; pomoc; pomoz mi
 danke = děkuji; díky; děkuju; moc děkuji; mockrát děkuji
 tschuess = na shledanou; ahoj zatím; měj se; dobrou noc; zatím
 wiegehts = jak se máš; jak se máte; jak se vede; co děláš
-wetter = počasí; předpověď počasí; teplota; prší; déšť
+wetter = počasí; předpověď počasí; teplota; prší; déšť; pršet
 zeit = kolik je hodin; kolik je; jaký je čas
 datum = jaké je dnes datum; kolikátého je dnes; jaký je dnes den; dnešní datum
 heute = dnes
 morgen = zítra
 wiki = co je {x}; co je to {x}; kdo je {x}; kdo byl {x}; řekni mi o {x}
-stopp = v; ve; na; pro; jaké; jaký; jak; bude; dnes; zítra; teď; je; řekni
+stopp = v; ve; na; pro; jaké; jaký; jak; bude; dnes; zítra; teď; je; řekni; pršet; prší
 krise = zabít se; chci umřít; sebevražda; vzít si život
 A.intro = Ahoj! Jsem Aquaticy Standard. Můžu ti říct počasí, čas a datum, počítat a hledat na
   Wikipedii.
@@ -1770,13 +1774,13 @@ info = vem är du; vad kan du; vad kan du göra; hjälp
 danke = tack; tack så mycket; tusen tack; tackar
 tschuess = hej då; vi ses; adjö; god natt; ha det bra
 wiegehts = hur mår du; hur är det; läget; hur har du det
-wetter = väder; vädret; väderprognos; temperatur; regnar
+wetter = väder; vädret; väderprognos; temperatur; regnar; regna; kommer det att regna
 zeit = vad är klockan; hur mycket är klockan; klockan
 datum = vilket datum är det; vad är det för datum; vilken dag är det; dagens datum
 heute = idag
 morgen = imorgon
 wiki = vad är {x}; vem är {x}; vem var {x}; berätta om {x}
-stopp = i; på; för; hur; blir; är; det; idag; imorgon; nu; vad
+stopp = i; på; för; hur; blir; är; det; idag; imorgon; nu; vad; kommer; att; regna; regnar
 krise = ta livet av mig; vill dö; självmord
 A.intro = Hej! Jag är Aquaticy Standard. Jag kan berätta om vädret, tiden och datumet, räkna och
   söka på Wikipedia.

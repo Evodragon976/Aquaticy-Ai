@@ -163,7 +163,9 @@ _LAND = "|".join(sorted((re.escape(n) for n in LAENDER), key=len, reverse=True))
 _WOHNE = re.compile(
     r"(?i)\bich\s+(?:wohne|lebe|bin\s+wohnhaft)\s+(?:jetzt\s+|derzeit\s+|aktuell\s+|"
     r"zurzeit\s+|zur\s+zeit\s+|inzwischen\s+)?(?:in|im)\s+(?:den\s+|der\s+|dem\s+)?"
-    rf"({_LAND})\b(?!\s*[-,]?\s*[A-ZÄÖÜ])")
+    # 16.4.5: Der Grossbuchstabe danach ("Mexiko Stadt") nur gross -- unter (?i) passte vorher
+    # jeder Buchstabe, und "Ich wohne in Österreich und arbeite in Wien" ergab kein Land.
+    rf"({_LAND})\b(?!\s*[-,]?\s*(?-i:[A-ZÄÖÜ]))")
 _LIVE = re.compile(
     rf"(?i)\bi\s+(?:live|reside|(?:am|'m)\s+living|am\s+based)\s+in\s+(?:the\s+)?({_LAND})\b")
 
