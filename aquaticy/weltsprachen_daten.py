@@ -32,8 +32,9 @@ danke = thanks; thank you; thank you very much; thanks a lot; many thanks
 tschuess = bye; goodbye; see you; see you later; good night
 wiegehts = how are you; how are you doing; how is it going; how's it going
 wetter = weather; forecast; temperature; raining; weather forecast; will it rain;
-  going to rain; going to snow; is it snowing; how cold; how hot; is it sunny; is it windy;
-  what should i wear; what to wear; need an umbrella; take an umbrella; bring an umbrella
+  going to rain; going to snow; is it snowing; will it snow; how cold; how hot; is it sunny;
+  is it windy; what should i wear; what to wear; need an umbrella; take an umbrella;
+  bring an umbrella
 zeit = what time is it; current time; the time; time now
 datum = what is the date; what's the date; today's date; what day is it; what date is it
 heute = today
@@ -131,7 +132,8 @@ heute = hoy
 morgen = mañana
 wiki = qué es {x}; quién es {x}; quién fue {x}; qué son {x}; háblame de {x}
 stopp = en; de; para; el; la; los; las; qué; que; hace; hará; cómo; como; es; está; va; a;
-  hoy; mañana; tiempo; me; dime; por; favor; ahora; llover; lloverá; nevar; nieva; frío; calor
+  hoy; mañana; tiempo; me; dime; por; favor; ahora; llover; lloverá; nevar; nieva; frío; calor;
+  y
 krise = suicidarme; quiero morir; matarme; quitarme la vida; suicidio
 A.intro = ¡Hola! Soy Aquaticy Standard. Puedo decirte el tiempo, la hora y la fecha,
   hacer cálculos y buscar en Wikipedia.
@@ -165,7 +167,7 @@ wiki = qu'est-ce que {x}; qu'est-ce qu'un {x}; qu'est-ce qu'une {x}; qui est {x}
   parle-moi de {x}
 stopp = à; a; en; au; aux; de; du; la; le; les; quel; quelle; fait; il; fera; est; va;
   aujourd'hui; demain; pour; comment; temps; me; dis; donne; fait-il; fera-t-il; va-t-il;
-  pleuvoir; pleuvra; neiger; neige; est-ce; qu'il; froid; chaud; beau
+  pleuvoir; pleuvra; neiger; neige; est-ce; qu'il; froid; chaud; beau; et
 krise = me suicider; envie de mourir; me tuer; mettre fin à ma vie; suicide
 A.intro = Bonjour ! Je suis Aquaticy Standard. Je peux te donner la météo, l'heure et la date,
   faire des calculs et chercher sur Wikipédia.
@@ -254,7 +256,8 @@ heute = hoje
 morgen = amanhã
 wiki = o que é {x}; quem é {x}; quem foi {x}; o que são {x}; fale sobre {x}
 stopp = em; no; na; de; do; da; para; o; a; os; as; que; qual; como; está; vai; fazer; faz;
-  hoje; amanhã; tempo; me; diga; por; favor; agora; chover; chove; chuva
+  hoje; amanhã; tempo; me; diga; por; favor; agora; chover; chove; chuva; e;
+  estar; estará
 krise = me matar; quero morrer; suicídio; tirar minha vida; tirar a minha vida
 A.intro = Olá! Eu sou o Aquaticy Standard. Posso dizer o tempo, a hora e a data, fazer contas
   e pesquisar na Wikipédia.
@@ -788,7 +791,7 @@ heute = oggi
 morgen = domani
 wiki = cos'è {x}; cosa è {x}; che cos'è {x}; chi è {x}; chi era {x}; parlami di {x}
 stopp = a; in; di; il; la; lo; per; che; fa; farà; com'è; oggi; domani; tempo; sarà; dimmi;
-  ora; adesso; pioverà; piove; pioggia
+  ora; adesso; pioverà; piove; pioggia; e
 krise = suicidarmi; voglio morire; uccidermi; togliermi la vita; suicidio
 A.intro = Ciao! Sono Aquaticy Standard. Posso dirti il meteo, l'ora e la data, fare calcoli e
   cercare su Wikipedia.

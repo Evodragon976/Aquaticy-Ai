@@ -127,9 +127,11 @@ def safe_link(url: object) -> str:
     try:
         parsed = httpx.URL(text)
         schema = parsed.scheme.lower()
+        # 16.4.5: .host wirft bei kaputtem Punycode erst hier -- der Export brach ab.
+        rechner = parsed.host
     except (httpx.InvalidURL, TypeError, ValueError):
         return ""
-    return text if schema in ("http", "https") and parsed.host else ""
+    return text if schema in ("http", "https") and rechner else ""
 
 
 def download_images(turns: list[Turn], directory: Path, timeout: float = 15.0) -> dict[str, str]:

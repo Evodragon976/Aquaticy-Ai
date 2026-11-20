@@ -29,10 +29,13 @@ ein API-Schluessel (Add-ons) freie Antworten auf alles bringt.
 from __future__ import annotations
 
 import calendar
+import decimal
+import fractions
 import json
 import math
 import random
 import re
+import statistics
 import unicodedata
 from collections.abc import Callable
 from datetime import date, datetime
@@ -143,7 +146,11 @@ def jahr_aus(kern: str) -> int | None:
 
 RECHEN_VORN = re.compile(
     r"^(?:was\s+(?:ist|ergibt|gibt|sind|macht)|wie\s*viel\s+(?:ist|sind|ergibt|macht)|"
-    r"rechne(?:\s+mal)?(?:\s+aus)?|berechne(?:\s+mir)?|what\s+is|what'?s|calculate)\s+")
+    r"rechne(?:\s+mal)?(?:\s+aus)?|berechne(?:\s+mir)?|what\s+is|what'?s|calculate|"
+    # 16.4.5: "¿Cuánto es 2+2?", "Combien font 2+2 ?" -- ohne erkannte Sprache kam vorher eine
+    # deutsche Absage.
+    r"¿?\s*cuanto\s+(?:es|son)|combien\s+(?:font|fait)|quanto\s+(?:fa|e)|hoeveel\s+is|"
+    r"ile\s+(?:to\s+)?(?:jest|bedzie)|kac\s+eder|hur\s+mycket\s+a?e?r|hvor\s+meget\s+er)\s+")
 WOERTER = (("multiplied by", "*"), ("divided by", "/"), ("to the power of", "**"),
            ("times", "*"), ("plus", "+"), ("minus", "-"), ("mal", "*"), ("geteilt durch", "/"),
            ("durch", "/"), ("hoch", "**"), ("modulo", "%"), ("mod", "%"), ("x", "*"),
@@ -158,6 +165,17 @@ def rechnen(text: str) -> str:
     roh = str(text).replace("²", " ** 2").replace("³", " ** 3")
     roh = re.sub(r"√\s*(\d[\d.,]*)", r"(\1 ** 0.5)", roh)
     kern = RECHEN_VORN.sub("", falten(roh)).rstrip("= ")
+    # 16.4.5: "5!", "10 Fakultät", "Fakultät von 6" -- der Worker konnte das schon.
+    # Das "!" steht im Original -- falten() nimmt Satzzeichen am Ende weg.
+    ausrufe = RECHEN_VORN.sub("", str(text).lower().strip()).strip(" ?.")
+    fakultaet = (re.fullmatch(r"(\d{1,3})\s*!", ausrufe)
+                 or re.fullmatch(r"(\d{1,3})\s+fakultaet|fakultaet\s+(?:von\s+)?(\d{1,3})",
+                                 kern.strip()))
+    if fakultaet:
+        n = int(next(g for g in fakultaet.groups() if g))
+        if n > 100:
+            return "Das wird mir zu groß – Fakultäten rechne ich bis 100 aus."
+        return f"**{schoen(math.factorial(n))}**"
     kern = re.sub(r"\s+(?:zum\s+quadrat|squared|im\s+quadrat)\b", " ** 2", kern)
     kern = re.sub(r"\s+(?:hoch\s+drei|cubed)\b", " ** 3", kern)
     kern = re.sub(r"(?<=\d)\s+:\s+(?=[\d(])", " / ", kern)
@@ -165,12 +183,17 @@ def rechnen(text: str) -> str:
     kern = re.sub(r"\bhoch\s+(-?\d+)\s*/\s*(\d+)", r"hoch (\1/\2)", kern)
     for wort, zeichen in WOERTER:
         kern = re.sub(rf"(?:(?<=[\d\s)])|^){re.escape(wort)}(?=[\s\d(])", f" {zeichen} ", kern)
-    kern = re.sub(r"\b(?:die\s+|the\s+)?(?:quadrat)?wurzel\s+(?:aus|von)\s+"
-                  r"(\d[\d.,]*|\([^()]*\))|(?:the\s+)?square\s+root\s+of\s+(\d[\d.,]*)",
-                  lambda t: f"({t.group(1) or t.group(2)} ** 0.5)", kern)
+    # 16.4.5: erst die dritte Wurzel -- vorher griff "wurzel aus 27" in "dritte Wurzel aus 27"
+    # zuerst, und es kam keine Antwort.
     kern = re.sub(r"(?:die\s+|the\s+)?(?:kubikwurzel|dritte\s+wurzel)\s+(?:aus|von)\s+"
                   r"(\d[\d.,]*)|(?:the\s+)?cube\s+root\s+of\s+(\d[\d.,]*)",
                   lambda t: f"({t.group(1) or t.group(2)} ** (1/3))", kern)
+    if re.search(r"\b(?:quadrat)?wurzel\s+(?:aus|von)\s+(?:minus\s+|-\s*)\d|"
+                 r"\bsquare\s+root\s+of\s+(?:minus\s+|-\s*)\d", kern):
+        return "Die Wurzel aus einer negativen Zahl ist keine reelle Zahl."
+    kern = re.sub(r"\b(?:die\s+|the\s+)?(?:quadrat)?wurzel\s+(?:aus|von)\s+"
+                  r"(\d[\d.,]*|\([^()]*\))|(?:the\s+)?square\s+root\s+of\s+(\d[\d.,]*)",
+                  lambda t: f"({t.group(1) or t.group(2)} ** 0.5)", kern)
     # 1.000.000 oder 1.234,5: Die Punkte trennen Tausender.
     # 16.4.5: auch eine einzelne Gruppe ("1.000 + 1" ergab vorher 2).
     kern = re.sub(r"(?<![\d.,])\d{1,3}(?:\.\d{3})+(?![\d.])|(?<![\d.,])\d{1,3}\.\d{3}(?=,\d)",
@@ -344,6 +367,9 @@ def prozente(text: str) -> str:
         if treffer.group(2) == "of":
             # "What is 15% of 200?" landete vorher bei Wikipedia (16.4.5).
             return _englisch(f"{schoen(p)} % of {schoen(g)} is **{schoen(g * p / 100)}**.")
+        if kern[treffer.end():].lstrip().startswith(("%", "prozent")):
+            # 16.4.5: "10 % von 10 %" ist 1 % -- vorher stand dort "sind 1".
+            return f"{schoen(p)} % von {schoen(g)} % sind **{schoen(g * p / 100)} %**."
         return f"{schoen(p)} % von {schoen(g)} sind **{schoen(g * p / 100)}**."
     treffer = PROZENT_PLUS.search(kern)
     if treffer:
@@ -450,8 +476,7 @@ def _englisch(text: str) -> str:
 
 
 def einheiten(text: str) -> str:
-    gefaltet = (falten(text).replace("grad celsius", "celsius")
-                .replace("grad fahrenheit", "fahrenheit"))
+    gefaltet = re.sub(r"\b(?:grad|degrees?)\s+(celsius|fahrenheit)\b", r"\1", falten(text))
     # 16.4.5: "3 Fuß 6 Zoll in cm" rechnete vorher nur die 6 Zoll; "ein Zoll in cm" ging nicht.
     gefaltet = re.sub(r"(\d+(?:[.,]\d+)?)\s*(?:fuss|ft|')\s*(\d+(?:[.,]\d+)?)\s*"
                       r"(?:zoll|inch|inches|\")",
@@ -647,6 +672,11 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                         f"(KW {tag.isocalendar()[1]}).")
         return (f"Heute ist **{WOCHENTAGE[heute.weekday()]}, der {heute:%d.%m.%Y}** "
                 f"(KW {heute.isocalendar()[1]}).")
+    # 16.4.5: "Datum", "Datum heute", "heutiges Datum" -- "Uhrzeit" allein ging schon.
+    if re.fullmatch(r"(?:das\s+)?(?:datum(?:\s+(?:heute|von\s+heute))?|heutiges\s+datum|"
+                    r"heute(?:\s+ist)?\s+(?:der|den)\s+wievielte)", kern):
+        return (f"Heute ist **{WOCHENTAGE[heute.weekday()]}, der {heute:%d.%m.%Y}** "
+                f"(KW {heute.isocalendar()[1]}).")
     # 16.3.0: "Welcher Wochentag ist heute?", "Was ist heute für ein Tag?", "what day is it".
     if re.search(r"\bwelche[rs]?\s+wochentag\s+(?:ist\s+heute|haben\s+wir(?:\s+heute)?)\b|"
                  r"\bwas\s+(?:ist\s+)?heute\s+fuer\s+ein\s+tag\b|"
@@ -665,6 +695,11 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
     if re.search(r"\bkalenderwoche\b", kern) or (
             re.search(r"\bkw\b", kern)
             and not re.search(r"\d\s*(?:kw|ps|w|watt)\b|\b(?:in|nach|zu)\s+(?:kw|ps)\b", kern)):
+        # 16.4.5: "Welche KW ist der 1. März?" nannte vorher die Woche von heute.
+        tag_kw = datum_aus(kern, heute)
+        if tag_kw:
+            jahr_kw, woche_kw = tag_kw.isocalendar()[:2]
+            return f"Der {tag_kw:%d.%m.%Y} liegt in **KW {woche_kw}** ({jahr_kw})."
         return f"Wir haben **KW {heute.isocalendar()[1]}**."
     if re.search(r"\bwie\s*viele\s+tage\s+hat\s+(?:dieser|der\s+aktuelle|unser)\s+monat\b",
                  kern):
@@ -807,6 +842,12 @@ def anlass(text: str, heute: date) -> str:
                             f"{wann}. {satz}")
     if not re.search(r"\b(wann|wie\s*(?:viele|vielen|lange)|tage\s+bis|bis\s+zum?)\b", kern):
         return ""
+    # 16.4.5: "Wann beginnt der Winter?", "Winterbeginn" -- nur "Winteranfang" ging.
+    zeiten = {"fruehling": "fruehlingsanfang", "fruehlings": "fruehlingsanfang",
+              "sommer": "sommeranfang", "herbst": "herbstanfang", "winter": "winteranfang"}
+    kern = re.sub(r"\b(?:beginnt|startet|faengt)\s+(?:der\s+|das\s+)?(fruehling|sommer|herbst|"
+                  r"winter)\b|\b(fruehlings|sommer|herbst|winter)beginn\b",
+                  lambda t: zeiten[t.group(1) or t.group(2)], kern)
     jahr_genannt = jahr_aus(kern)
     if jahr_genannt:
         # "Wann ist Pfingsten 2026?" nannte vorher das naechste Pfingsten.
@@ -858,6 +899,10 @@ def zufall(text: str, wuerfel: random.Random | None = None) -> str:
         seiten = int(seiten_.group(1)) if seiten_ else 6
         woerter = {"zwei": 2, "drei": 3, "vier": 4, "fuenf": 5}
         anzahl = (woerter.get(anzahl_.group(1)) or int(anzahl_.group(1))) if anzahl_ else 1
+        # 16.4.5: "Würfle 3W6", "2d20" -- vorher ein Wurf mit sechs Seiten.
+        kombi = re.search(r"\b([1-9]|1\d|20)\s*[wd](4|6|8|10|12|20|100)\b", kern)
+        if kombi:
+            anzahl, seiten = int(kombi.group(1)), int(kombi.group(2))
         wuerfe = [rnd.randint(1, seiten) for _ in range(anzahl)]
         art = f" (W{seiten})" if seiten != 6 else ""
         if anzahl == 1:
@@ -927,7 +972,12 @@ WETTER_WORT = re.compile(r"\b(wetter|wettervorhersage|wetterbericht|wetterlage|w
                          r"raining|temperature|wie\s*viel\s+grad|grad\s+(?:hat|haben|sind)|"
                          r"regnet|regnen|regen|sonne|sonnig|temperatur|grad\s+warm|"
                          r"wie\s+warm|wie\s+kalt|schnee|schneit|schneien|gewitter|vorhersage|"
-                         r"wind|windig|sturm|frost|glatt|glatteis|draussen)\b|"
+                         r"wind|windig|sturm|frost|glatt|glatteis|draussen|"
+                         # 16.4.5: "Ist es heute neblig?", "Friert es morgen?", "Brauche ich
+                         # Sonnencreme?", "Wie hoch ist die Regenwahrscheinlichkeit?"
+                         r"nebel|neblig|friert\s+es|es\s+friert|es\s+frieren|sonnencreme|"
+                         r"regenwahrscheinlichkeit|"
+                         r"niederschlag|regenrisiko|hagel|hagelt|nieselt|niesel)\b|"
                          r"\bwie\s+wird\s+(?:es|das\s+wochenende|der\s+tag|der\s+\w+tag|"
                          r"die\s+(?:naechste\s+|kommende\s+)?woche|heute|morgen|uebermorgen)\b|"
                          r"\bwird\s+es\s+(?:heute|morgen|uebermorgen|am\s+\w+)?\s*"
@@ -964,9 +1014,12 @@ ORT_NACH = re.compile(r"\b(?<!was\s)(?:in|fuer|bei|um|im)\s+([a-z][a-z\s.\-]{1,6
 _KEIN_ORTSWORT = (r"(?!.*\b(?:wie|wird|ist|sind|war|das|der|die|was|es|gibt|ein|eine|kein|so|"
                   r"gut|gutes|schlecht|schlechtes|schoen|schoenes|mies|mieses|toll|tolles|super|"
                   r"bitte|ich|du|mir|dir|fuer|heute|morgen|uebermorgen|aktuell|gerade)\b)")
+#: 16.4.5: auch "Regen Berlin", "Nebel Hamburg" -- vorher kam die Rueckfrage nach dem Ort,
+#: obwohl er dastand. Nicht hinten: "leichter Regen" ist kein Ort "leichter".
+_WETTER_NOMEN = r"(?:regen|schnee|nebel|hagel|sturm|frost|gewitter|glatteis|wind)"
 ORT_OHNE = re.compile(r"^(?:wie\s+ist\s+)?(?:das\s+)?(?:wetter|wetterbericht|wettervorhersage|"
-                      r"vorhersage|weather|forecast|temperatur)\s+" + _KEIN_ORTSWORT
-                      + r"([a-z][a-z\s.\-]{1,40}?)$|^" + _KEIN_ORTSWORT
+                      r"vorhersage|weather|forecast|temperatur|" + _WETTER_NOMEN[3:-1] + r")\s+"
+                      + _KEIN_ORTSWORT + r"([a-z][a-z\s.\-]{1,40}?)$|^" + _KEIN_ORTSWORT
                       + r"([a-z][a-z\s.\-]{1,40}?)\s+(?:wetter|weather)$")
 ZEIT_WORTE = (r"\b(?:am\s+)?(?:wochenende|montag|dienstag|mittwoch|donnerstag|freitag|samstag|"
               r"sonntag)\b|\b(?:heute|morgen|uebermorgen)(?:\s+(?:frueh|abend|nacht|mittag))?\b|"
@@ -981,7 +1034,10 @@ ORT_FUELL = (r"\b(wetter|das|die|der|den|regnen|regnet|schneien|schneit|sonnig|w
              # Reste aus Anziehen-, Schirm- und Sonnenfragen ("Berlin eine Mütze", "Berlin
              # die Sonne auf") gingen vorher mit in die Ortssuche (16.4.5).
              r"eine|einer|muetze|hose|kurze|pulli|pullover|mantel|handschuhe|schal|"
-             r"sonnenbrille|sonnencreme|sonne|nass|dunkel|hell|zieh|ziehe)\b")
+             r"sonnenbrille|sonnencreme|sonne|nass|dunkel|hell|zieh|ziehe|"
+             # "Kann man am Wochenende in Hamburg Fahrrad fahren?" suchte "Hamburg Fahrrad".
+             r"fahrrad|rad|ski|skifahren|schlitten|eislaufen|segeln|surfen|neblig|friert|"
+             r"regenwahrscheinlichkeit|niederschlag)\b")
 #: Nach "in/im/für/bei" steht nicht immer ein Ort.
 NICHT_ORT = frozenset({
     "mir", "uns", "dir", "mich", "hier", "hause", "zuhause", "moment", "augenblick", "urlaub",
@@ -1084,6 +1140,8 @@ def orte_aus(frage: str) -> list[str]:
     orte: list[str] = []
     for teil in re.split(r"\s+(?:und|oder|sowie)\s+|\s*,\s*", rest):
         teil = re.sub(r"^\s*(?:in|im|fuer|bei|um)\s+", "", teil)
+        # 16.4.5: "für eine Radtour in Köln" -- der Ort steht hinter dem zweiten "in".
+        teil = re.sub(r"^(?:eine?[nmr]?|den|die|das|der)\s+[a-z]+\s+(?:in|bei)\s+", "", teil)
         teil = re.sub(r"\s+", " ", re.sub(ORT_FUELL, " ", teil)).strip(" .-")
         teil = re.sub(r"^(?:am|und|in)\s+|\s+(?:am|und|in|an|auf|unter)$", "", teil).strip(" .-")
         if not teil or teil in NICHT_ORT or teil.split()[-1] in NICHT_ORT:
@@ -1518,6 +1576,12 @@ WISSEN_FRAGEN = (
     re.compile(r"^was\s+macht\s+(?:ein|eine)\s+(.+)$"),
     re.compile(r"^wie\s+funktionier(?:t|en)\s+(.+)$"),
     re.compile(r"^(.+?)\s+(?:auf\s+)?(?:wikipedia|wiki)$"),
+    # 16.4.5: "Kannst du mir etwas über die Römer erzählen?", "Wann war der Zweite Weltkrieg?"
+    # fanden vorher kein Thema.
+    re.compile(r"^(?:kannst|koenntest)\s+du\s+mir\s+(?:etwas|was|mehr|bitte\s+etwas)\s+"
+               r"(?:ueber|zu)\s+(.+?)\s+(?:erzaehlen|sagen|erklaeren)$"),
+    re.compile(r"^wann\s+(?:war|begann|endete)\s+(?:der|die|das)\s+(?!letzte|naechste|erste\s+"
+               r"(?:schnee|frost))(.+)$"),
 )
 
 
@@ -1618,8 +1682,12 @@ def wissen(thema: str, holen: Holen, sprache: str = "de") -> str:
 
 # -- Uhrzeit in anderen Staedten ----------------------------------------------------------------
 
+#: 16.4.5: "Was ist die Zeitverschiebung nach Tokio?", "Wie viele Stunden ist Tokio voraus?"
+ZEITVERSCHIEBUNG = re.compile(r"\b(?:zeitverschiebung|zeitunterschied)\s+(?:nach|zu|mit|in)\s+"
+                              r"([a-z][a-z\s.\-]{1,40})$|\bwie\s*viele\s+stunden\s+(?:ist|liegt)\s+"
+                              r"([a-z][a-z\s.\-]{1,40}?)\s+(?:voraus|zurueck|hinterher)$")
 UHRZEIT_IN = re.compile(r"\b(?:wie\s*spaet|uhrzeit|wieviel\s+uhr|wie\s+viel\s+uhr)\b.*?\b"
-                        r"(?:in|auf)\s+([a-z][a-z\s.\-]{1,40})$")
+                        r"(?:in|auf)\s+([a-z][a-z\s.,\-]{1,60})$")
 
 
 def uhrzeit_in(ort: str, holen: Holen, jetzt: datetime | None = None) -> str:
@@ -1681,6 +1749,12 @@ def feiertag(text: str, heute: date) -> str:
     kern = falten(text)
     if "feiertag" not in kern and not any(k in kern for k in FEIERTAG_NAMEN):
         return ""
+    if re.search(r"\bwie\s*viele\s+(?:gesetzliche\s+)?feiertage\b", kern) and not re.search(
+            r"\b(?:im|in|bis|noch)\b", kern):
+        # 16.4.5: "Wie viele Feiertage hat Deutschland?" bekam vorher die naechsten drei.
+        return (f"Bundesweit gibt es in Deutschland **{len(feiertage(heute.year))} gesetzliche "
+                "Feiertage**. Je nach Bundesland kommen weitere dazu, zum Beispiel Fronleichnam "
+                "oder der Reformationstag.")
     alle = feiertage(heute.year) + feiertage(heute.year + 1)
     jahr_genannt = jahr_aus(kern)
     if jahr_genannt:
@@ -1783,6 +1857,13 @@ def mond(text: str, heute: date) -> str:
                              else ("Vollmond", bis_voll, "🌕"))
     heute_ist = phase.startswith(gesucht)
     gefragt = gesucht.lower() in kern
+    if gefragt and not heute_ist and re.search(r"\b(?:letzte[rn]?|vorige[rn]?)\b|\bwann\s+war\b",
+                                               kern):
+        # 16.4.5: "Wann war der letzte Vollmond?" nannte vorher den naechsten.
+        vor = round((alter - 14.765) % synodisch if gesucht == "Vollmond" else alter) or 1
+        damals = date.fromordinal(heute.toordinal() - vor)
+        return (f"Der letzte {gesucht} war etwa **am {damals:%d.%m.%Y}** ({vor} Tage her). "
+                "(Ungefähr berechnet, auf ein bis zwei Tage genau.)")
     if gefragt and heute_ist:
         satz = f"Ja, heute ist **{gesucht} {zeichen}**."
     elif gefragt and re.search(r"\b(wann|naechste[rn]?)\b", kern):
@@ -1847,7 +1928,7 @@ BMI_UMGEKEHRT = re.compile(r"\b(?:bmi|body\s*mass)\b.*?(\d[.,]\d{1,2}|\d{3})\s*(
                            r"(\d{2,3}(?:[.,]\d)?)\s*kg\b")
 
 
-def bmi(text: str) -> str:
+def bmi(text: str, englisch: bool = False) -> str:
     kern = falten(text)
     treffer = BMI_SATZ.search(kern)
     umgekehrt = BMI_UMGEKEHRT.search(kern)
@@ -1869,6 +1950,12 @@ def bmi(text: str) -> str:
     wert = round(zahl(kg) / (meter * meter), 1)
     stufe = ("Untergewicht" if wert < 18.5 else "Normalgewicht" if wert < 25 else
              "Übergewicht" if wert < 30 else "starkes Übergewicht")
+    if englisch:
+        # 16.4.5: "What is my BMI if I weigh 70 kg ...?" bekam vorher eine deutsche Antwort.
+        stufe_en = {"Untergewicht": "underweight", "Normalgewicht": "normal weight",
+                    "Übergewicht": "overweight", "starkes Übergewicht": "obese"}[stufe]
+        return (f"Your BMI is **{wert:.1f}** – that counts as {stufe_en}. The BMI is only a "
+                "rough value: it does not count muscles, age or build.")
     return (f"Dein BMI liegt bei **{schoen(wert, 1)}** – das gilt als {stufe}. Der BMI ist aber "
             "nur ein grober Wert: Muskeln, Alter und Körperbau zählt er nicht mit.")
 
@@ -1911,7 +1998,11 @@ def passwort(text: str) -> str:
     kern = falten(text)
     if not re.search(r"\b(passwort|password|kennwort)\b", kern) or not re.search(
             r"\b(generier|erstell|erzeug|mach|gib|vorschlag|neues|zufaellig|sicheres)|"
-            r"^(?:ein\s+)?(?:passwort|password|kennwort)\s+mit\s+\d{1,3}\s*(?:zeichen|stellen)$",
+            r"^(?:ein\s+)?(?:passwort|password|kennwort)\s+mit\s+\d{1,3}\s*(?:zeichen|stellen)$|"
+            # 16.4.5: "Passwort mit 8 Zeichen ohne Sonderzeichen", "Passwort 12 Zeichen"
+            r"^(?:ein\s+)?(?:passwort|password|kennwort)(?:\s+mit)?(?:\s+\d{1,3}\s*(?:zeichen|"
+            r"stellen))?(?:\s+(?:und\s+)?(?:ohne|keine)\s+sonderzeichen)?$(?<!passwort)"
+            r"(?<!password)(?<!kennwort)",
             kern):
         return ""
     laenge = re.search(r"\b(\d{1,3})\s*(?:zeichen|stellen|stellig|characters)", kern)
@@ -1959,6 +2050,92 @@ def _roemisch_wert(zeichen: str) -> int:
     return summe
 
 
+#: Kleine Zahlwoerter fuer "auf zwei Stellen".
+KLEINE_ZAHLEN = {"null": 0, "eine": 1, "einer": 1, "eins": 1, "zwei": 2, "drei": 3, "vier": 4,
+                 "fuenf": 5, "sechs": 6}
+_LISTE = r"(-?\d[\d.,]*(?:(?:\s*[,;]\s*|\s+und\s+|\s+)-?\d[\d.,]*)+)"
+
+
+def _werte(liste: str) -> list[float]:
+    stuecke = re.split(r"\s+und\s+|\s*;\s*|,\s+|\s+", liste.strip(" ,."))
+    try:
+        return [zahl(st.strip(",")) for st in stuecke if st.strip(",")]
+    except ValueError:
+        return []
+
+
+def _mehr_zahlen(kern: str) -> str:
+    """16.4.5: Fragen, die vorher bei Wikipedia oder bei "kann ich nicht" landeten."""
+    treffer = re.search(r"\b(median|maximum|minimum|groesste\s+zahl|kleinste\s+zahl)\s+"
+                        r"(?:von|aus|der\s+zahlen|unter)\s+" + _LISTE, kern)
+    if treffer:
+        werte_ = _werte(treffer.group(2))
+        if len(werte_) >= 2:
+            art = treffer.group(1)
+            if art == "median":
+                return f"Der Median ist **{schoen(statistics.median(werte_), 4)}**."
+            if art in ("maximum", "groesste zahl"):
+                return f"Die größte Zahl ist **{schoen(max(werte_), 4)}**."
+            return f"Die kleinste Zahl ist **{schoen(min(werte_), 4)}**."
+    treffer = re.search(r"\bsumme\s+(?:aller\s+zahlen\s+|der\s+zahlen\s+)?(?:von\s+)?"
+                        r"(-?\d{1,9})\s+bis\s+(-?\d{1,9})\b", kern)
+    if treffer:
+        a, b = int(treffer.group(1)), int(treffer.group(2))
+        if a <= b:
+            return (f"Die Summe der ganzen Zahlen von {schoen(a)} bis {schoen(b)} ist "
+                    f"**{schoen((a + b) * (b - a + 1) // 2)}**.")
+    treffer = re.search(r"\b(ggt|groesste[rn]?\s+gemeinsame[rn]?\s+teiler|kgv|kleinste[sn]?\s+"
+                        r"gemeinsame[sn]?\s+vielfache)\s+(?:von\s+)?" + _LISTE, kern)
+    if treffer:
+        werte_ = _werte(treffer.group(2))
+        if len(werte_) >= 2 and all(w == int(w) and 0 < abs(w) <= 10 ** 12 for w in werte_):
+            ganze = [abs(int(w)) for w in werte_]
+            if treffer.group(1).startswith(("ggt", "groesste")):
+                return f"Der größte gemeinsame Teiler ist **{schoen(math.gcd(*ganze))}**."
+            return f"Das kleinste gemeinsame Vielfache ist **{schoen(math.lcm(*ganze))}**."
+    treffer = re.search(r"\bprimfaktor(?:en|zerlegung)\s+(?:von\s+)?(\d{1,10})\b", kern)
+    if treffer:
+        n = int(treffer.group(1))
+        if n < 2:
+            return f"{n} hat keine Primfaktoren."
+        faktoren, rest, t = [], n, 2
+        while t * t <= rest:
+            while rest % t == 0:
+                faktoren.append(t)
+                rest //= t
+            t += 1
+        if rest > 1:
+            faktoren.append(rest)
+        return f"{schoen(n)} = **{' × '.join(schoen(f) for f in faktoren)}**"
+    treffer = re.search(r"\brunde\w*\s+(-?\d[\d.,]*)\s+auf\s+(\d|" + "|".join(KLEINE_ZAHLEN)
+                        + r")\s+(?:nach\s*komma\s*)?(?:stellen?|nachkommastellen?)\b", kern)
+    if treffer:
+        try:
+            wert = decimal.Decimal(str(zahl(treffer.group(1))))
+        except (ValueError, decimal.InvalidOperation):
+            wert = None
+        stellen = KLEINE_ZAHLEN.get(treffer.group(2))
+        stellen = int(treffer.group(2)) if stellen is None else stellen
+        if wert is not None:
+            # Kaufmaennisch: 2,5 wird 3 (round() rundet zur geraden Zahl).
+            gerundet = wert.quantize(decimal.Decimal(1).scaleb(-stellen), decimal.ROUND_HALF_UP)
+            text = f"{gerundet:,.{stellen}f}".replace(",", "\x00").replace(".", ",")
+            return f"Gerundet: **{text.replace(chr(0), '.')}**"
+    treffer = re.search(r"\b(-?\d{1,6})\s*/\s*(\d{1,6})\s+(?:als|in)\s+(?:dezimalzahl|"
+                        r"kommazahl|dezimal)\b", kern)
+    if treffer and int(treffer.group(2)):
+        a, b = int(treffer.group(1)), int(treffer.group(2))
+        return f"{a}/{b} ist **{schoen(a / b, 6)}**."
+    treffer = re.search(r"\b(-?\d{1,6}(?:,\d{1,6})?)\s+(?:als|in)\s+(?:einen\s+)?bruch\b",
+                        kern)
+    if treffer:
+        bruch = fractions.Fraction(treffer.group(1).replace(",", ".")).limit_denominator(10 ** 6)
+        if bruch.denominator == 1:
+            return f"{treffer.group(1)} ist die ganze Zahl **{bruch.numerator}**."
+        return f"{treffer.group(1)} ist als Bruch **{bruch.numerator}/{bruch.denominator}**."
+    return ""
+
+
 def zahlenkram(text: str, heute: date) -> str:
     """Primzahl, Schaltjahr, roemische Zahlen, Binaer/Hex, Durchschnitt, Sternzeichen."""
     kern = falten(text)
@@ -1976,6 +2153,24 @@ def zahlenkram(text: str, heute: date) -> str:
             return (f"Nein, {schoen(n)} ist keine Primzahl: Sie lässt sich durch {schoen(teiler)} "
                     f"teilen ({schoen(teiler)} × {schoen(n // teiler)}).")
         return f"Ja, **{schoen(n)}** ist eine Primzahl."
+    # 16.4.5: "Was ist ein Schaltjahr?", "Wann war das letzte Schaltjahr?" und "Wann ist das
+    # nächste?" bekamen vorher alle "Nein, 2026 ist kein Schaltjahr".
+    if re.search(r"\bschaltjahr", kern) and not re.search(r"\d{4}", kern):
+        def schalt(j: int) -> bool:
+            return j % 4 == 0 and (j % 100 != 0 or j % 400 == 0)
+
+        if re.search(r"^was\s+(?:ist|sind|bedeutet)\s+(?:ein\s+)?schaltjahr", kern):
+            return ("Ein **Schaltjahr** hat 366 Tage – der Februar hat dann 29 Tage. Schaltjahre "
+                    "sind durch 4 teilbar, außer volle Jahrhunderte, die nicht durch 400 teilbar "
+                    "sind: 2000 war eins, 2100 ist keins.")
+        if re.search(r"\b(?:letzte[sn]?|vorige[sn]?)\b", kern):
+            letztes = next(j for j in range(heute.year - 1, heute.year - 9, -1) if schalt(j))
+            return f"Das letzte Schaltjahr war **{letztes}**."
+        if re.search(r"\b(?:wann|welche[sn]?|naechste[sn]?)\b", kern):
+            naechstes = next(j for j in range(heute.year + 1, heute.year + 9) if schalt(j))
+            jetzt_ = (f"Dieses Jahr ({heute.year}) ist ein Schaltjahr. " if schalt(heute.year)
+                      else "")
+            return f"{jetzt_}Das nächste Schaltjahr ist **{naechstes}**."
     treffer = re.search(r"\b(?:ist|war|wird)\s+(\d{4})\s+ein\s+schaltjahr\b|"
                         r"\bschaltjahr\b.*?\b(\d{4})\b", kern)
     if treffer or re.search(r"\bschaltjahr\b", kern):
@@ -2016,6 +2211,21 @@ def zahlenkram(text: str, heute: date) -> str:
         # 16.4.5: "Was ist 0xFF?", "0b1010 in dezimal"
         wert = int(treffer.group(1), 16) if treffer.group(1) else int(treffer.group(2), 2)
         return f"{treffer.group(0)} ist dezimal **{schoen(wert)}**."
+    systeme = r"(binaer\w*|dual\w*|hex\w*|oktal\w*)"
+    zurueck = re.search(r"\b([0-9a-f]{1,16})\s+(?:von\s+|aus\s+)?" + systeme
+                        + r"\s+(?:in|als|nach|zu)\s+(?:dezimal\w*|zehner\w*|zahl)\b", kern)
+    vorn = re.search(r"\b" + systeme + r"\s+([0-9a-f]{1,16})\s+(?:in|als|nach|zu)\s+"
+                     r"(?:dezimal\w*|zehner\w*)\b", kern)
+    if zurueck or vorn:
+        # 16.4.5: "Was ist 1010 binär in dezimal?" rechnete vorher 1010 (dezimal) nach binaer.
+        ziffern, art = ((zurueck.group(1), zurueck.group(2)) if zurueck
+                        else (vorn.group(2), vorn.group(1)) if vorn else ("", ""))
+        basis = 2 if art.startswith(("binaer", "dual")) else 16 if art.startswith("hex") else 8
+        name = {2: "binär", 16: "hexadezimal", 8: "oktal"}[basis]
+        try:
+            return f"{ziffern.upper()} ({name}) ist dezimal **{schoen(int(ziffern, basis))}**."
+        except ValueError:
+            return f"„{ziffern.upper()}“ ist keine gültige Zahl im System {name}."
     treffer = re.search(r"\b(\d{1,15})\s+(?:(?:in|als)\s+)?(binaer\w*|dual\w*|hex\w*|oktal\w*)",
                         kern)
     if treffer:
@@ -2038,6 +2248,9 @@ def zahlenkram(text: str, heute: date) -> str:
                 return f"Die Summe ist **{schoen(sum(werte_), 4)}**."
             return (f"Der Durchschnitt von {len(werte_)} Zahlen ist "
                     f"**{schoen(sum(werte_) / len(werte_), 4)}**.")
+    text_zahl = _mehr_zahlen(kern)
+    if text_zahl:
+        return text_zahl
     if "sternzeichen" in kern:
         tag = datum_aus(kern, heute)
         if tag:
@@ -2057,7 +2270,8 @@ def textkram(text: str) -> str:
 
     treffer = re.search(r"wie\s*viele\s+(buchstaben|zeichen|w(?:ö|oe)rter)\s+"
                         r"(?:hat|haben|sind\s+in|stecken\s+in|enth(?:ä|ae)lt)\s+"
-                        r"(das\s+wort\s+|der\s+satz\s+|der\s+text\s+|der\s+name\s+)?(.+)",
+                        # 16.4.5: auch "der Satz: ..." mit Doppelpunkt
+                        r"((?:das\s+wort|der\s+satz|der\s+text|der\s+name)\s*:?\s+)?(.+)",
                         roh, re.I)
     if treffer:
         was, stueck = treffer.group(1).lower(), inhalt(treffer.group(3))
@@ -2093,6 +2307,33 @@ def textkram(text: str) -> str:
     if treffer and inhalt(treffer.group(1)):
         stueck = inhalt(treffer.group(1))
         return f"„{stueck}“ rückwärts ist **{stueck[::-1]}**."
+    # 16.4.5: "Dreh das Wort Lagerregal um", "Ist Otto ein Palindrom?", "Sortiere 5, 3, 9, 1"
+    treffer = re.fullmatch(r"dreh\w*\s+(?:(?:das\s+wort|den\s+satz)\s+(.+?)|"
+                           r"([„\x22'‚»].+?[“\x22'‘«]))\s+um", roh.strip(" ?!."), re.I)
+    if treffer and inhalt(treffer.group(1) or treffer.group(2)):
+        stueck = inhalt(treffer.group(1) or treffer.group(2))
+        return f"„{stueck}“ rückwärts ist **{stueck[::-1]}**."
+    treffer = re.fullmatch(r"ist\s+(.+?)\s+ein\s+palindrom", roh.strip(" ?!."), re.I)
+    if treffer and inhalt(treffer.group(1)):
+        stueck = inhalt(treffer.group(1))
+        nur = [c.casefold() for c in stueck if c.isalnum()]
+        if nur and nur == nur[::-1]:
+            return f"Ja, „{stueck}“ ist ein Palindrom – vorwärts und rückwärts gleich."
+        return f"Nein, „{stueck}“ ist kein Palindrom. Rückwärts heißt es „{stueck[::-1]}“."
+    treffer = re.fullmatch(r"sortier\w*\s+(?:mir\s+)?(?:die\s+(?:zahlen|w(?:ö|oe)rter|liste)"
+                           r"\s*:?\s*)?(.+?)(?:\s+(auf|ab)steigend|\s+alphabetisch)?",
+                           roh.strip(" ?!."), re.I)
+    if treffer:
+        teile = [t.strip(" „“\"'") for t in re.split(r"\s*[,;]\s*|\s+und\s+", treffer.group(1))]
+        teile = [t for t in teile if t]
+        if len(teile) >= 2:
+            try:
+                sortiert = [schoen(w, 4) for w in sorted(zahl(t) for t in teile)]
+            except ValueError:
+                sortiert = sorted(teile, key=lambda t: falten(t))
+            if (treffer.group(2) or "").lower() == "ab":
+                sortiert.reverse()
+            return "Sortiert: **" + ", ".join(sortiert) + "**"
     treffer = re.search(r"buchstabier\w*\s+(?:mir\s+)?(?:das\s+wort\s+)?(.+)", roh, re.I)
     if treffer and inhalt(treffer.group(1)):
         stueck = inhalt(treffer.group(1))[:40]
@@ -2171,7 +2412,10 @@ SCHLECHT = re.compile(
     r"ueberfordert|erschoepft|fertig|am\s+ende)|fuehle\s+mich\s+(?:so\s+|sehr\s+|total\s+)?"
     r"(?:schlecht|einsam|allein|leer|mies|traurig|ueberfordert)|mir\s+ist\s+zum\s+heulen|"
     r"hab\w?\s+(?:so\s+|grosse\s+|viel\s+)?(?:angst|sorgen|stress|kummer|liebeskummer)|"
-    r"alles\s+(?:ist\s+)?(?:zu\s+viel|sinnlos|doof|bloed)|kann\s+nicht\s+mehr)\b")
+    r"alles\s+(?:ist\s+)?(?:zu\s+viel|sinnlos|doof|bloed)|kann\s+nicht\s+mehr|"
+    # 16.4.5: "Ich hatte einen schlechten Tag" -- die Trost-Antworten passen genau dazu.
+    r"(?:hatte|habe|hab)\s+(?:heute\s+)?(?:einen\s+|nen\s+)?(?:echt\s+|so\s+|richtig\s+)?"
+    r"(?:schlechten|miesen|beschissenen|harten|bloeden|doofen)\s+tag)\b")
 
 
 #: Wer so schreibt, braucht einen Menschen -- und zwar sofort die richtigen Nummern.
@@ -2254,12 +2498,18 @@ def gespraech(text: str, rnd: random.Random) -> str:
         return f"{frage}\n\n*Lösung: {loesung}*"
     if re.search(r"\bzungenbrecher\b", kern):
         return "Versuch den mal dreimal schnell hintereinander:\n\n" + rnd.choice(ZUNGENBRECHER)
+    # "Mir ist nicht langweilig" bekam vorher Ideen gegen Langeweile (16.4.5).
     if re.search(r"\b(langweilig|langeweile|bored|was\s+(?:soll|kann)\s+ich\s+(?:heute\s+)?"
-                 r"(?:machen|tun|unternehmen))\b", kern):
+                 r"(?:machen|tun|unternehmen))\b", kern) and not re.search(
+                     r"\b(?:nicht|nie|keine)\s+(?:so\s+|mehr\s+)?(?:langweilig|langeweile)|not\s+bored",
+                     kern):
         ideen = rnd.sample(LANGEWEILE, 3)
         return ("Ich hab ein paar Ideen für dich:\n" + "\n".join(f"- {i}" for i in ideen)
                 + "\n\nUnd wenn das Wetter mitspielt: Frag mich einfach, wie es draußen wird.")
+    # "Erzähl mir einen Fakt" kannte Standard vorher nicht (16.4.5).
     if re.search(r"\b(fun\s*fact|erzaehl\s+(?:mir\s+)?(?:was|etwas)\s+(?:interessantes|spannendes)|"
+                 r"(?:erzaehl|nenn|sag|gib)\w*\s+(?:mir\s+)?(?:einen|ein|nen|noch\s+einen)\s+"
+                 r"(?:fakt|zufaelligen\s+fakt|interessanten\s+fakt)|fakt\s+des\s+tages|"
                  r"wusstest\s+du|interessante\s+tatsache)\b", kern):
         return "Wusstest du schon? " + rnd.choice(FAKTEN)
     if re.search(r"^(?:was\s+kannst\s+du|hilfe|help|was\s+(?:kann|koennte)\s+ich\s+dich\s+fragen|"
@@ -2558,6 +2808,9 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         # Tausendertrenner, der Punkt das Dezimalzeichen.
         frage = englische_zahlen(frage)
         kern = falten(frage)
+        text = englisch_kram(kern, heute)
+        if text:
+            return text
 
     # 1. Antwort auf die eigene Rueckfrage: "Fuer welchen Ort?" -> "Erkelenz"
     vorher_gefragt = offene_ortsfrage(verlauf)
@@ -2583,14 +2836,21 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         text = teil()
         if text:
             return text
-    treffer = UHRZEIT_IN.search(kern)
+    treffer = UHRZEIT_IN.search(kern) or ZEITVERSCHIEBUNG.search(kern)
     if treffer:
         ort = re.sub(r"\s+", " ", re.sub(r"\b(gerade|jetzt|aktuell|denn|eigentlich)\b", " ",
-                                         treffer.group(1))).strip(" .-")
-        if ort and ort not in NICHT_ORT:
-            return uhrzeit_in(original(frage, ort), holen, jetzt)
-    for teil in (lambda: zeit(frage, jetzt), lambda: trinkgeld(frage), lambda: bmi(frage),
-                 lambda: prozente(frage)):
+                                         next(g for g in treffer.groups() if g))).strip(" .-")
+        # 16.4.5: "in der Türkei" suchte "der Türkei", "in Tokio und in London" einen Ort
+        # "Tokio und in London".
+        orte_zeit = [re.sub(r"^(?:in|auf)\s+", "", o_).strip()
+                     for o_ in re.split(r"\s+(?:und|sowie|oder)\s+|\s*,\s*", ort)]
+        orte_zeit = [re.sub(r"^(?:der|die|den|dem|das)\s+", "", o_) for o_ in orte_zeit if o_]
+        orte_zeit = [o_ for o_ in orte_zeit if o_ and o_ not in NICHT_ORT][:3]
+        if orte_zeit:
+            return "\n\n".join(uhrzeit_in(original(frage, o_), holen, jetzt)
+                               for o_ in orte_zeit)
+    for teil in (lambda: zeit(frage, jetzt), lambda: trinkgeld(frage),
+                 lambda: bmi(frage, sprache == "en"), lambda: prozente(frage)):
         text = teil()
         if text:
             return text
@@ -2634,6 +2894,12 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
     # 3. Alles, was einen Ort braucht: Wetter, Anziehen, Schirm, Sonne
     art = absicht(kern)
     if art and definitionsfrage(frage, kern):
+        art = ""
+    if art and (re.match(r"(?:warum|wieso|weshalb|wie\s+entsteh\w*|woraus\s+besteh\w*)\b", kern)
+                or re.match(r"ist\s+\w+\s+(?:gut|schlecht|gesund|ungesund|gefaehrlich|"
+                            r"schaedlich|wichtig)\s+fuer\b", kern)) and not re.search(
+                                r"\b(heute|morgen|uebermorgen|wochenende|jetzt|gerade)\b", kern):
+        # 16.4.5: allgemeine Fragen, keine Vorhersage ("Ist Regen gut für Pflanzen?").
         art = ""
     if art:
         orte = orte_aus(frage)
@@ -2680,6 +2946,122 @@ FUELL_VORN = re.compile(r"^\s*(?:(?:und|ok(?:ay)?|also|bitte|sag\s+mal)[,!]?\s+)
 
 
 # -- Andere Sprachen (16.4.2) --------------------------------------------------------------------
+
+MONTHS = ("january", "february", "march", "april", "may", "june", "july", "august",
+          "september", "october", "november", "december")
+WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _en_datum(kern: str, heute: date) -> date | None:
+    """'July 4, 1776', '4 July 1776', '2026-12-24', 'December 24'."""
+    monate = "|".join(MONTHS)
+    for muster, reihe in ((r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b", "jmt"),
+                          (rf"\b({monate})\s+(\d{{1,2}})(?!\d)(?:st|nd|rd|th)?(?:,?\s+(\d{{4}}))?",
+                           "mtj"),
+                          (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({monate})(?:,?\s+(\d{{4}}))?",
+                           "tmj")):
+        treffer = re.search(muster, kern)
+        if not treffer:
+            continue
+        teile = dict(zip(reihe, treffer.groups(), strict=True))
+        monat = teile["m"]
+        nummer = MONTHS.index(monat) + 1 if monat in MONTHS else int(monat)
+        try:
+            return date(int(teile["j"] or heute.year), nummer, int(teile["t"]))
+        except ValueError:
+            return None
+    return None
+
+
+def englisch_kram(kern: str, heute: date) -> str:
+    """16.4.5: Englische Fragen zu Datum und Zahlen -- vorher kam "Sorry, I can't answer that".
+
+    Die deutsche Kette erkennt diese Saetze nicht, und ihre Antworten waeren deutsch.
+    """
+    if re.fullmatch(r"(?:what|which)\s+year\s+is\s+it(?:\s+(?:now|today))?", kern):
+        return f"It is **{heute.year}**."
+    if re.fullmatch(r"(?:what|which)\s+(?:calendar\s+)?week\s+(?:is\s+it|are\s+we\s+in)"
+                    r"(?:\s+(?:now|today))?|(?:what\s+is\s+the\s+)?(?:current\s+)?week\s+number",
+                    kern):
+        return f"It is **week {heute.isocalendar()[1]}**."
+    ziele = {"christmas eve": (12, 24), "christmas": (12, 25), "new year's eve": (12, 31),
+             "new years eve": (12, 31), "new year": (1, 1), "new year's": (1, 1),
+             "new years": (1, 1), "halloween": (10, 31), "valentine's day": (2, 14),
+             "valentines day": (2, 14)}
+    treffer = re.search(r"\bhow\s+(?:many\s+days|long)\s+(?:is\s+it\s+)?(?:until|till|til|to|"
+                        r"before)\s+(" + "|".join(sorted(ziele, key=len, reverse=True)) + r")\b",
+                        kern)
+    if treffer:
+        monat, tag_nr = ziele[treffer.group(1)]
+        ziel = date(heute.year, monat, tag_nr)
+        if ziel < heute:
+            ziel = date(heute.year + 1, monat, tag_nr)
+        tage = (ziel - heute).days
+        name = treffer.group(1).title().replace("'S", "'s")
+        if tage == 0:
+            return f"{name} is today!"
+        return f"There {'is' if tage == 1 else 'are'} **{tage} day{'s' * (tage != 1)}** until " \
+               f"{name} ({ziel.isoformat()})."
+    treffer = re.search(r"\bwhen\s+is\s+easter(?:\s+sunday)?(?:\s+(?:in\s+)?(\d{4}))?\b", kern)
+    if treffer:
+        jahr = int(treffer.group(1) or heute.year)
+        ostertag = ostern(jahr)
+        if not treffer.group(1) and ostertag < heute:
+            ostertag = ostern(jahr + 1)
+        return (f"Easter Sunday is on **{ostertag.isoformat()}** "
+                f"({MONTHS[ostertag.month - 1].title()} {ostertag.day}).")
+    treffer = re.search(r"\bis\s+(\d{1,4})\s+a\s+leap\s+year\b", kern)
+    if treffer:
+        jahr = int(treffer.group(1))
+        if calendar.isleap(jahr):
+            return f"Yes, **{jahr}** is a leap year (366 days)."
+        return f"No, {jahr} is not a leap year (365 days)."
+    treffer = re.search(r"\bis\s+(-?\d{1,12})\s+(?:a\s+)?prime(?:\s+number)?\b", kern)
+    if treffer:
+        n = int(treffer.group(1))
+        if n < 2:
+            return f"No, {n} is not a prime number. Prime numbers start at 2."
+        teiler = next((t for t in range(2, int(n ** 0.5) + 1) if n % t == 0), 0)
+        if teiler:
+            return (f"No, {n:,} is not a prime number: it can be divided by {teiler:,} "
+                    f"({teiler:,} × {n // teiler:,}).")
+        return f"Yes, **{n:,}** is a prime number."
+    treffer = re.search(r"\b(\d{1,4})\s+factorial\b|\bfactorial\s+of\s+(\d{1,4})\b", kern)
+    if treffer:
+        n = int(treffer.group(1) or treffer.group(2))
+        if n > 100:
+            return "That gets too big – I calculate factorials up to 100."
+        return f"{n}! = **{math.factorial(n):,}**"
+    treffer = re.search(r"\b(average|mean|sum)\s+of\s+(-?\d+(?:\.\d+)?(?:(?:\s*,\s*|\s+and\s+|"
+                        r"\s*,\s*and\s+|\s+)-?\d+(?:\.\d+)?)+)", kern)
+    if treffer:
+        werte_ = [float(w) for w in re.findall(r"-?\d+(?:\.\d+)?", treffer.group(2))]
+        ergebnis = sum(werte_) if treffer.group(1) == "sum" else sum(werte_) / len(werte_)
+        art = "sum" if treffer.group(1) == "sum" else "average"
+        return _englisch(f"The {art} of {len(werte_)} numbers is **{schoen(ergebnis, 4)}**.")
+    treffer = re.search(r"\bhow\s+many\s+days\s+(?:are\s+there\s+|does\s+)?(?:in\s+)?(" +
+                        "|".join(MONTHS) + r")(?:\s+(\d{4}))?(?:\s+have)?\b", kern)
+    if treffer:
+        jahr = int(treffer.group(2) or heute.year)
+        nummer = MONTHS.index(treffer.group(1)) + 1
+        tage = calendar.monthrange(jahr, nummer)[1]
+        return f"{treffer.group(1).title()} {jahr} has **{tage} days**."
+    if re.search(r"\bwhat\s+day\s+(?:of\s+the\s+week\s+)?(?:was|is|will)\b", kern):
+        gesucht = _en_datum(kern, heute)
+        if gesucht:
+            zeitform = "was" if gesucht < heute else "is" if gesucht == heute else "will be"
+            return (f"{MONTHS[gesucht.month - 1].title()} {gesucht.day}, {gesucht.year} "
+                    f"{zeitform} a **{WEEKDAYS[gesucht.weekday()]}**.")
+    treffer = re.search(r"\bhow\s+old\s+am\s+i\b.*\bborn\s+in\s+(\d{4})\b|"
+                        r"\bborn\s+in\s+(\d{4})\b.*\bhow\s+old\b", kern)
+    if treffer:
+        jahr = int(treffer.group(1) or treffer.group(2))
+        if jahr > heute.year:
+            return f"{jahr} is still in the future."
+        return (f"If you were born in {jahr}, you turn **{heute.year - jahr}** this year (or "
+                "already have, depending on your birthday).")
+    return ""
+
 
 def englische_zahlen(text: str) -> str:
     """'1,000,000' -> '1000000', '1,234.5' -> '1234.5' -- nur Gruppen mit drei Ziffern."""

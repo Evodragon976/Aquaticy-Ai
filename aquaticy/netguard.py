@@ -229,13 +229,16 @@ def url_check(url: str) -> tuple[str, bool]:
     nicht aufzuloesen war?"""
     try:
         ziel = httpx.URL(str(url or "").strip())
+        # 16.4.5: .host dekodiert Punycode erst beim Lesen -- "http://xn--/" warf vorher
+        # IDNAError aus dem Abruf (auch ueber Bilder und Weiterleitungen fremder Seiten).
+        rechner = ziel.host
     except (httpx.InvalidURL, TypeError, ValueError):
         return "Die Adresse ist ungültig.", False
     if ziel.scheme not in ("http", "https"):
         return "Nur http- und https-Adressen werden abgerufen.", False
-    if not ziel.host:
+    if not rechner:
         return "Die Adresse hat keinen Rechnernamen.", False
-    return _host_check(ziel.host, ziel.port or (443 if ziel.scheme == "https" else 80))
+    return _host_check(rechner, ziel.port or (443 if ziel.scheme == "https" else 80))
 
 
 def url_problem(url: str) -> str:

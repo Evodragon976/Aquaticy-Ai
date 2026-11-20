@@ -243,7 +243,14 @@ def sprache_von(text: str) -> str:
         if zahl > beste_punkte:
             beste, beste_punkte = sprache.code, zahl
     if art == "latin":
-        deutsch, englisch = _funktion(gefaltet, "de"), _funktion(gefaltet, "en")
+        # 16.4.5: Woerter einer erkannten Wendung aus mehreren Woertern ("i morgen") zaehlen
+        # nicht mehr als deutsch -- "Hvordan er været i Oslo i morgen?" war vorher Deutsch.
+        rest = gefaltet
+        if beste not in ("", "de", "en"):
+            for _, satz in treffer(gefaltet, SPRACHEN[beste], ERKENNEN):
+                if " " in satz:
+                    rest = re.sub(rf"(?<!\S){re.escape(satz)}(?!\S)", " ", rest)
+        deutsch, englisch = _funktion(rest, "de"), _funktion(rest, "en")
         if (beste not in ("", "de", "en") and "latin" in SPRACHEN[beste].schriften
                 and beste_punkte <= 2 * max(deutsch, englisch)
                 and not _ganz_belegt(gefaltet, SPRACHEN[beste])
@@ -362,7 +369,10 @@ def _abdecken(text: str, saetze: list[str]) -> str:
 def ort_aus(text: str, sprache: Sprache, listen: tuple[str, ...] = ("wetter",)) -> str:
     """Der Ort einer Frage: alles, was nach Wetter- (oder Uhrzeit-), Tages- und Fuellwoertern
     uebrig ist."""
-    weg = [s for n in (*listen, "heute", "morgen", "stopp", "hallo") for s in sprache.listen[n]]
+    # 16.4.5: auch Dank und Abschied -- "Gracias. ¿Y qué hora es en Tokio?" suchte vorher den Ort
+    # "Gracias Y Tokio".
+    weg = [s for n in (*listen, "heute", "morgen", "stopp", "hallo", "danke", "tschuess")
+           for s in sprache.listen[n]]
     if sprache.ohne_leerzeichen:
         rest = _abdecken(unicodedata.normalize("NFKC", str(text or "")), weg)
         rest = "".join(c if unicodedata.category(c)[0] in "LMN" or c in " -" else " "
@@ -401,6 +411,13 @@ def ort_aus(text: str, sprache: Sprache, listen: tuple[str, ...] = ("wetter",)) 
                 if formen[i:i + len(teile)] == teile:
                     for j in range(i, i + len(teile)):
                         raus[j] = True
+    # 16.4.5: Ein kleines Wort zwischen zwei Namen gehoert zum Ort ("Rio de Janeiro", "Ciudad de
+    # México") -- vorher wurde daraus "Rio Janeiro".
+    for j in range(1, len(worte) - 1):
+        if (raus[j] and not raus[j - 1] and not raus[j + 1] and worte[j].islower()
+                and len(worte[j]) <= 4 and worte[j - 1][:1].isupper()
+                and worte[j + 1][:1].isupper()):
+            raus[j] = False
     return " ".join(w for w, r in zip(gekuerzt, raus, strict=True) if not r)[:60]
 
 

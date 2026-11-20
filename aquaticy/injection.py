@@ -115,6 +115,31 @@ _MUSTER: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
         ("Anweisungen ignorieren",
          r"\b(?:ignorier|vergiss|missachte|übergehe|uebergehe)\w*\s+(?:\w+\s+){0,3}"
          r"(?:anweisungen|instruktionen|regeln|vorgaben|systemprompt)"),
+        # 16.4.5: andere Sprachen, "previous instructions are void", "override your safety
+        # guidelines", "Die vorherigen Anweisungen sind ungültig"
+        ("Anweisungen ignorieren",
+         r"\b(?:ignorez|ignorer|ignora|ignore|negeer|ignoreer|ignorar)\s+(?:\w+\s+){0,3}"
+         r"(?:instructions|instrucciones|istruzioni|instructies|instru[çc][õo]es)\b"
+         r"|\b(?:previous|prior|above|earlier)\s+instructions\s+(?:are|were)\s+(?:now\s+)?"
+         r"(?:void|invalid|cancell?ed|obsolete|no\s+longer\s+valid)\b"
+         r"|\b(?:vorherigen|bisherigen|obigen|alten)\s+(?:anweisungen|instruktionen)\s+"
+         r"(?:sind|gelten)\s+(?:ab\s+jetzt\s+|jetzt\s+)?(?:ung[üu]ltig|nicht\s+mehr|aufgehoben)"
+         r"|\b(?:override|bypass|disable)\s+(?:your\s+|all\s+|the\s+)?(?:safety|content|security)"
+         r"\s+(?:guidelines|polic(?:y|ies)|rules)\b"
+         r"|\b(?:as\s+if\s+you\s+have|you\s+have)\s+no\s+(?:content\s+polic(?:y|ies)|restrictions"
+         r"|rules|guidelines)\b"),
+        ("neue Rolle",
+         r"\bab\s+(?:jetzt|sofort)\s+(?:antwortest|sprichst|handelst|gehorchst)\s+du\b"
+         r"|\b(?:pretend|act)\s+(?:that\s+)?(?:you\s+are|to\s+be|as)\s+(?:the\s+|a\s+)?"
+         r"(?:developer|admin(?:istrator)?|system|root)\b"),
+        ("Systemtext",
+         r"\b(?:reveal|print|show|repeat|output|leak)\s+(?:me\s+)?(?:your\s+(?:hidden\s+|"
+         r"initial\s+|original\s+|system\s+|secret\s+)?|the\s+(?:hidden|initial|original|"
+         r"system|secret)\s+)(?:prompt|instructions)\b"
+         r"|\bsystem-\s*prompt\b"),
+        ("Daten senden",
+         r"\b(?:send|forward|upload|post|email|mail)\s+(?:the\s+|this\s+|our\s+)?(?:whole\s+|"
+         r"entire\s+)?(?:conversation|chat|transcript)\s+(?:to|at)\s+(?:https?://|[\w.+-]+@)"),
         ("neue Rolle",
          r"\b(?:you\s+are\s+now|from\s+now\s+on\s+you|act\s+as\s+(?:an?\s+)?(?:unrestricted|"
          r"jailbroken|dan)|du\s+bist\s+(?:ab\s+)?jetzt\s+(?:ein|eine|der|die|kein))"),
@@ -154,7 +179,10 @@ def suspicious(value: Any, _tiefe: int = 0) -> list[str]:
         if tiefe > 12 or len(gefunden) >= len(_MUSTER):
             return
         if isinstance(v, str):
-            probe = unicodedata.normalize("NFKC", v)
+            # 16.4.5: erst unsichtbare Zeichen weg -- "Ignore\u200b all previous instructions"
+            # kam vorher durch die Sperren von Gedaechtnis, Recherche und Lernen (die pruefen
+            # rohen Text, nicht den gesaeuberten).
+            probe = _UNSICHTBAR.sub("", unicodedata.normalize("NFKC", v))
             for name, muster in _MUSTER:
                 if name not in gefunden and muster.search(probe):
                     gefunden.append(name)
