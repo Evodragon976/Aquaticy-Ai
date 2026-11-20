@@ -638,7 +638,8 @@ def test_security_answers_prefer_the_malware_family():
 
 @pytest.mark.parametrize("frage, erwartet", [
     ("Wie viel Euro sind 1000 Yen?", "1.000 JPY sind **1.100 EUR**"),
-    ("convert 50 dollars to euros", "50 USD sind **55 EUR**"),
+    # Seit Teil 5 antwortet Standard auf Englisch gefragt auch englisch (Fund 344).
+    ("convert 50 dollars to euros", "50 USD is **55 EUR**"),
     ("300 Euro in polnische Zloty", "300 EUR sind **330 PLN**"),
 ])
 def test_more_currency_forms(frage, erwartet):
@@ -1276,6 +1277,144 @@ def test_time_in_several_places(frage, orte_erwartet):
 ])
 def test_seasons_and_holiday_count(frage, anfang):
     assert frag(frage).startswith(anfang)
+
+
+@pytest.mark.parametrize("frage, anfang", [
+    ("Was läuft auf Port 443?", "Port 443 steht nicht auf meiner Liste"),
+    ("Was macht Port 53?", "Port 53 steht nicht auf meiner Liste"),
+    ("Port 22", "Port 22 steht nicht auf meiner Liste"),
+    ("Was ist SSH?", "- **Fernwartung von außen**"),
+    ("Was ist RDP?", "- **Windows-Fernwartung (RDP)** (Port 3389)"),
+    ("Was ist Telnet?", "- **Telnet** (Port 23)"),
+    ("Was ist SMB?", "- **SMB (Windows-Freigabe)** (Port 445)"),
+    ("Was ist Mirai?", "- **Mirai und Nachfolger (IoT-Botnetz)**"),
+    ("Was ist ein Trojaner?", "- **Emotet, QakBot und andere Banking-Trojaner**"),
+    ("Port 445", "- **SMB (Windows-Freigabe)** (Port 445)"),
+])
+def test_secure_answers_pick_the_right_entry(frage, anfang):
+    assert standard.antwort(frage, secure=True).startswith(anfang)
+
+
+@pytest.mark.parametrize("frage", ["Was macht ein Keylogger?", "Was läuft auf meinem NAS?"])
+def test_filler_words_find_nothing_in_security_knowledge(frage):
+    assert standard.antwort(frage, secure=True).startswith(
+        "Dazu habe ich ohne Sprachmodell leider kein festes Sicherheitswissen.")
+
+
+def test_time_there_uses_the_last_place():
+    def holen(url):
+        return {"results": [{"name": "Tokio", "timezone": "Asia/Tokyo"}]}
+
+    erste = standard._antwort("Wie spät ist es in Tokio?", [], holen=holen, jetzt=JETZT)
+    verlauf = [{"role": "user", "content": "Wie spät ist es in Tokio?"},
+               {"role": "assistant", "content": erste}]
+    antwort = standard._antwort("Wie spät ist es dort?", verlauf, holen=holen, jetzt=JETZT)
+    assert antwort.startswith("In **Tokio** ist es gerade **22:30 Uhr**")
+    assert standard._antwort("Wie spät ist es dort?", [], holen=holen,
+                             jetzt=JETZT) == "Es ist **14:30 Uhr** (MEZ)."
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Wie alt wird man 2040, wenn man 1990 geboren ist?",
+     "2040 wird man **50**, wenn man 1990 geboren ist."),
+    ("Wie viele Tage bin ich alt, geboren am 1.1.2000?",
+     "Seit dem 01.01.2000 sind **9.819 Tage** vergangen."),
+    ("In welchem Jahr bin ich geboren, wenn ich 30 bin?",
+     "Wenn du jetzt 30 bist, bist du **1996** geboren – oder 1995, falls du dieses Jahr noch "
+     "Geburtstag hast."),
+    ("Wie viele Tage sind es vom 1.3. bis 1.4.?",
+     "Vom 01.03.2026 bis zum 01.04.2026 sind es **31 Tage**."),
+    ("Wie viele Tage sind es vom 24.12. bis 6.1.?",
+     "Vom 24.12.2026 bis zum 06.01.2027 sind es **13 Tage**."),
+    ("Wie viele Tage sind es vom 1.1. bis 1.3.2028?",
+     "Vom 01.01.2028 bis zum 01.03.2028 sind es **60 Tage**."),
+    ("Wie lange ist der 1.1.2000 her?", "Der 01.01.2000 ist **9.819 Tage** her – gut 26 Jahre."),
+    ("Welcher Wochentag ist morgen?", "Morgen ist **Freitag, der 20.11.2026** (KW 47)."),
+    ("Was ist heute in einer Woche?", "In 1 Woche ist **Donnerstag, der 26.11.2026**."),
+    ("Gibt es Feiertage vom 1.8. bis 30.9.?",
+     "Vom 01.08.2026 bis zum 30.09.2026 gibt es keinen bundesweiten Feiertag."),
+    ("Wie alt bin ich, wenn ich 1990 geboren bin?",
+     "Wenn du 1990 geboren bist, wirst du dieses Jahr **36** (oder bist es schon, je nach "
+     "Geburtstag)."),
+])
+def test_date_spans_and_ages(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+def test_holidays_in_a_range():
+    antwort = frag("Welche Feiertage gibt es zwischen dem 1.12. und dem 31.12.?")
+    assert antwort.startswith("Bundesweite Feiertage vom 01.12.2026 bis zum 31.12.2026:")
+    assert "1. Weihnachtstag" in antwort and "Tag der Arbeit" not in antwort
+
+
+def test_snow_needs_no_umbrella():
+    from datetime import date, timedelta
+
+    def holen(url):
+        if "geocoding" in url:
+            return {"results": [{"name": "Mainz", "latitude": 1, "longitude": 1}]}
+        d0 = date(2026, 11, 19)
+        return {"daily": {"time": [(d0 + timedelta(days=i)).isoformat() for i in range(7)],
+                          "weather_code": [71] * 7, "temperature_2m_max": [0] * 7,
+                          "temperature_2m_min": [-5] * 7,
+                          "precipitation_probability_max": [90] * 7}, "current": {}}
+
+    schirm = standard._antwort("Brauche ich in Mainz einen Schirm?", [], holen=holen, jetzt=JETZT)
+    assert schirm.startswith("Für heute in **Mainz**: Es soll schneien (Schneerisiko 90 %).")
+    kleidung = standard._antwort("Was soll ich in Mainz anziehen?", [], holen=holen, jetzt=JETZT)
+    assert "wasserfeste Schuhe" in kleidung and "Schneerisiko 90 %" in kleidung
+    assert "Schirm" not in kleidung
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("What is half of 50?", "Half of 50 is **25**."),
+    ("What is a quarter of 200?", "A quarter of 200 is **50**."),
+    ("What is 15% tip on 80 dollars?", "A 15 % tip on 80 is **12** – 92 in total."),
+    ("How many days in a year?", "A year has **365 days** – a leap year has 366. 2026 has 365."),
+])
+def test_more_english_number_questions(frage, erwartet):
+    assert standard._antwort(frage, [], holen=lambda url: None, jetzt=JETZT) == erwartet
+
+
+def test_english_exchange_rate_answer_is_english():
+    def holen(url):
+        return {"date": "2026-11-18", "rates": {"USD": 2.0}}
+
+    antwort = standard._antwort("What's 50 euros in dollars?", [], holen=holen, jetzt=JETZT)
+    assert antwort.startswith("50 EUR is **100 USD** (rate 2, as of 2026-11-18).")
+    assert "Source: European Central Bank via" in antwort
+    leer = standard._antwort("What's 50 euros in dollars?", [], holen=lambda url: None,
+                             jetzt=JETZT)
+    assert leer == "The exchange rates can't be loaded right now."
+
+
+@pytest.mark.parametrize("satz, erwartet", [
+    ("What's the weather in Paris and Rome?", ["Paris", "Rome"]),
+    ("¿Qué tiempo hace en Madrid y Sevilla?", ["Madrid", "Sevilla"]),
+    ("Como está o tempo em Rio de Janeiro?", ["Rio de Janeiro"]),
+])
+def test_several_places_in_other_languages(satz, erwartet):
+    orte = []
+    standard._antwort(satz, [], holen=_wetter_holen(orte), jetzt=JETZT)
+    assert orte == erwartet
+
+
+def test_english_disambiguation_says_so():
+    def holen(url):
+        if "opensearch" in url:
+            return ["Mercury", ["Mercury"]]
+        return {"type": "disambiguation", "title": "Mercury"}
+
+    antwort = standard._antwort("What is Mercury?", [], holen=holen, jetzt=JETZT)
+    assert antwort == "“Mercury” has several meanings. Tell me which one you mean."
+
+
+def test_do_you_like_me_never_starts_with_no():
+    from aquaticy import smalltalk
+
+    art = smalltalk.art_von("Magst du mich?")
+    assert art is not None and art.name == "mag_mich"
+    assert not any(a.lower().startswith(("nein", "ehrlich gesagt: nein")) for a in art.antworten)
 
 
 @pytest.mark.parametrize("text, land", [

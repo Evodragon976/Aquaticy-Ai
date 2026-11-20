@@ -566,10 +566,23 @@ ARTEN: tuple[Art, ...] = (
             "Yes, I do — und Deutsch sowieso. In welcher Sprache möchtest du schreiben?",
         ),
     ),
+    # 16.4.5: "Magst du mich?" bekam vorher eine Antwort zu Gefuehlen, zum Beispiel
+    # "Ehrlich gesagt: Nein, ich empfinde nichts." -- das klang wie "Nein, ich mag dich nicht".
+    Art(
+        "mag_mich",
+        _m(r"magst\s+du\s+mich|hast\s+du\s+mich\s+(?:gern|lieb)"),
+        (
+            "Gefühle wie ein Mensch habe ich nicht – aber ich schreibe gern mit dir und helfe dir, "
+            "wo ich kann.",
+            "Mögen kann ich als KI nicht wirklich. Aber ich bin gern für dich da!",
+            "Als KI empfinde ich nichts – trotzdem unterhalte ich mich gern mit dir. Was kann ich "
+            "für dich tun?",
+        ),
+    ),
     Art(
         "gefuehle",
         _m(rf"hast\s+du\s+gef(?:ü|ue)hle|bist\s+{_DU}\s+(?:glücklich|gluecklich|traurig|müde|"
-           r"muede|einsam|gelangweilt)|magst\s+du\s+mich|kannst\s+du\s+(?:fühlen|fuehlen|"
+           r"muede|einsam|gelangweilt)|kannst\s+du\s+(?:fühlen|fuehlen|"
            r"denken)|träumst\s+du|traeumst\s+du"),
         (
             "Gefühle wie ein Mensch habe ich nicht — ich bin eine KI. Aber ich helfe dir sehr "
