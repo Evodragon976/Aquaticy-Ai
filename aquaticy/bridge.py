@@ -387,6 +387,9 @@ def matches_exact_number(number: str, eintrag: str) -> bool:
     """
     n = re.sub(r"\D", "", str(number or ""))
     roh = " ".join(str(eintrag or "").split())
+    # 16.4.5: Die uebliche Schreibweise "+49 (0) 170 ..." passte vorher nie: Die "(0)" ist die
+    # Null der Inlandsvorwahl und gehoert mit Landesvorwahl nicht zur Nummer.
+    roh = re.sub(r"^((?:\+|00)\d{1,3})\s*\(0\)", r"\1", roh)
     if not n or not roh or not re.fullmatch(r"[+\d\s()\-./]+", roh):
         return False
     e = re.sub(r"\D", "", roh)

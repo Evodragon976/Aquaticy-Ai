@@ -59,7 +59,10 @@ _SECRETISH = (r"(?:passw(?:or)?d|passwort|pwd|secret|token|api_?key|apikey|auth|
               r"private_?key|session|nonce|salt|otp)")
 _USER_INPUT = (r"(?:request\.(?:args|form|values|json|data|files|GET|POST|query_params|"
                r"path_params|headers|cookies)|req\.(?:query|body|params|headers|cookies)|"
-               r"params\[|\$_(?:GET|POST|REQUEST|COOKIE)|input\()")
+               r"params\[|\$_(?:GET|POST|REQUEST|COOKIE)|input\(|"
+               # 16.4.5: Java (getParameter) und Go (FormValue, URL.Query) fehlten.
+               r"\.getParameter\s*\(|\.getHeader\s*\(|\.FormValue\s*\(|"
+               r"\.URL\.Query\(\))")
 
 
 _SQL = (r"(?:SELECT\b[^\"'`]*?\bFROM\b|INSERT\s+INTO\b|UPDATE\s+\w+\s+SET\b|"
@@ -75,7 +78,8 @@ _PLACEHOLDER = re.compile(
 SECRET_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Zugangsdaten in einer Adresse", _r(
         r"[a-z][a-z0-9+.-]*://[^\s/:@\"']+:[^\s/@\"']+@", _I)),
-    ("AWS-Zugangsschlüssel", _r(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    # 16.4.5: Der Beispielschluessel aus der AWS-Doku (...EXAMPLE) ist kein Fund.
+    ("AWS-Zugangsschlüssel", _r(r"\b(?:AKIA|ASIA)(?![0-9A-Z]{9}EXAMPLE\b)[0-9A-Z]{16}\b")),
     ("GitHub-Token", _r(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})\b")),
     ("API-Schlüssel (sk-…)", _r(r"\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}")),
     ("Slack-Token", _r(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
@@ -83,6 +87,14 @@ SECRET_FORMATS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Stripe-Schlüssel", _r(r"\b(?:sk|rk)_live_[0-9A-Za-z]{16,}")),
     ("Privater Schlüssel",
      _r(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY")),
+    # 16.4.5: Diese Formate gingen vorher ohne verraeterischen Variablennamen durch.
+    ("SendGrid-Schlüssel", _r(r"\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{16,64}\b")),
+    ("npm-Token", _r(r"\bnpm_[A-Za-z0-9]{36}\b")),
+    ("GitLab-Token", _r(r"\bglpat-[A-Za-z0-9_-]{20,}")),
+    ("Hugging-Face-Token", _r(r"\bhf_[A-Za-z0-9]{30,}\b")),
+    ("JSON Web Token", _r(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
+    ("Azure-Speicherschlüssel", _r(r"AccountKey=[A-Za-z0-9+/]{40,}={0,2}")),
+    ("Twilio-Schlüssel", _r(r"\bSK[0-9a-fA-F]{32}\b")),
 )
 
 
@@ -112,53 +124,117 @@ def _secret_value_ok(name: str, value: str) -> bool:
 RULES: tuple[Rule, ...] = (
 
     Rule("CWE-95", "security", "hoch", "eval/exec führt Text als Code aus",
-         _r(r"(?<![\w.])(?:eval|exec)\s*\(|\bnew\s+Function\s*\(")),
+         _r(r"(?<![\w.])(?:eval|exec)\s*\(|\bnew\s+Function\s*\(|"
+            # 16.4.5: setTimeout("..." + x) und vm.runInNewContext(...) fuehren Text aus.
+            r"\bset(?:Timeout|Interval)\s*\(\s*[\"'`][^\"'`]*[\"'`]\s*\+|"
+            r"\bvm\.run(?:InNewContext|InThisContext|InContext)\s*\(")),
     Rule("CWE-78", "security", "hoch", "Befehl über die Shell (shell=True, os.system, exec)",
          _r(r"shell\s*=\s*True|\bos\.(?:system|popen)\s*\(|child_process|\bexecSync\s*\(|"
-            r"\bRuntime\.getRuntime\(\)\.exec\s*\(|\bshell_exec\s*\(|\bpassthru\s*\(")),
+            r"\bRuntime\.getRuntime\(\)\.exec\s*\(|\bshell_exec\s*\(|\bpassthru\s*\(|"
+            # 16.4.5: Go exec.Command("sh", "-c", ...) und Node { shell: true } fehlten.
+            r"\bexec\.Command(?:Context)?\s*\([^)]*\"(?:/bin/)?(?:ba|z)?sh\"\s*,\s*\"-c\"|"
+            r"\bexec\.Command\s*\(\s*\"cmd(?:\.exe)?\"\s*,\s*\"/[cC]\"|\bshell\s*:\s*true\b")),
+    # 16.4.5: Anfuehrungszeichen im SQL ("... name = '" + name + "'") und PHP-Verkettung mit "."
+    # gingen vorher durch; ".exec(" und ".query(" zaehlen nur mit SQL im Text -- sonst war
+    # child_process.exec("ls " + dir) ein SQL-Treffer.
     Rule("CWE-89", "security", "hoch", "SQL aus Text zusammengesetzt statt mit Parametern",
-         _r(r"(?:\.(?:execute|executemany|executescript|raw|query|exec)\s*\(\s*"
-            r"(?:[fF][\"']|[\"'][^\"']*[\"']\s*(?:%|\+|\.format\b)))|"
-            r"[fF][\"']" + _SQL + r"[^\"']*\{|"
+         _r(r"(?:\.(?:execute|executemany|executescript|raw)\s*\(\s*"
+            r"(?:[fF][\"']|\"[^\"]*\"\s*(?:%|\+|\.format\b)|'[^']*'\s*(?:%|\+|\.format\b)))|"
+            r"\.(?:query|exec)\s*\(\s*(?:\"" + _SQL + r"[^\"]*\"|'" + _SQL + r"[^']*')"
+            r"\s*(?:%|\+|\.format\b)|"
+            r"[fF]\"" + _SQL + r"[^\"]*\{|[fF]'" + _SQL + r"[^']*\{|"
             r"`" + _SQL + r"[^`]*\$\{|"
-            r"[\"']" + _SQL + r"[^\"']*[\"']\s*\+\s*\w", _I)),
+            r"\"" + _SQL + r"[^\"]*\"\s*(?:\+\s*\w|\.\s*\$)|"
+            r"'" + _SQL + r"[^']*'\s*(?:\+\s*\w|\.\s*\$)|"
+            # 16.4.5: Go fmt.Sprintf("SELECT ... %s") und Java String.format fehlten.
+            r"\b(?:Sprintf|String\.format)\s*\(\s*[\"`]" + _SQL + r"[^\"`]*%[sv]", _I)),
     Rule("CWE-79", "security", "hoch", "HTML ohne Escaping (XSS)",
-         _r(r"\.(?:innerHTML|outerHTML)\s*\+?=(?!\s*[\"'`]{2}\s*;?\s*$)|insertAdjacentHTML\s*\(|"
+         # 16.4.5: Eine feste Zeichenkette ohne ${...} und ohne + ist kein XSS (vorher nur "").
+         _r(r"\.(?:innerHTML|outerHTML)\s*\+?="
+            r"(?!\s*(?:\"[^\"\\]*\"|'[^'\\]*'|`[^`$\\]*`)\s*;?\s*$)|insertAdjacentHTML\s*\(|"
             r"document\.write(?:ln)?\s*\(|dangerouslySetInnerHTML|\bv-html\b|"
             r"\|\s*safe\b|\bmark_safe\s*\(|\bMarkup\s*\(|autoescape\s*=\s*False|"
             r"\{\{\{\s*[\w.]+\s*\}\}\}|<%-|\bbypassSecurityTrust\w*\s*\(")),
     Rule("CWE-502", "security", "hoch", "Unsichere Deserialisierung (pickle, yaml.load, marshal)",
          _r(r"\b(?:c?[pP]ickle|dill|joblib|marshal|shelve)\.(?:loads?|open)\s*\(|"
-            r"\byaml\.(?:unsafe_load|load_all|load)\s*\(|\bunserialize\s*\(|ObjectInputStream"),
-         unless=_r(r"SafeLoader|CSafeLoader|safe_load")),
+            # 16.4.5: jsonpickle.decode und read_pickle laden ebenso beliebige Objekte.
+            r"\bjsonpickle\.decode\s*\(|\bread_pickle\s*\(|"
+            r"\byaml\.(?:unsafe_load|load_all|load)\s*\(|\bunserialize\s*\(|ObjectInputStream|"
+            # 16.4.5: Ruby Marshal.load und .NET BinaryFormatter & Co. fehlten.
+            r"\bMarshal\.load\s*\(|\b(?:BinaryFormatter|NetDataContractSerializer|LosFormatter|"
+            r"SoapFormatter|ObjectStateFormatter)\b|TypeNameHandling\.(?:All|Auto|Objects)\b"),
+         # 16.4.5: vorher "safe_load" -- das steckt auch in "unsafe_load", das so nie auffiel.
+         unless=_r(r"SafeLoader|CSafeLoader|(?<![Uu]n)safe_load")),
     Rule("CWE-295", "security", "hoch", "Zertifikatsprüfung abgeschaltet",
          _r(r"verify\s*=\s*False|rejectUnauthorized\s*:\s*false|_create_unverified_context|"
             r"CERT_NONE|InsecureSkipVerify\s*:\s*true|check_hostname\s*=\s*False|"
             r"NODE_TLS_REJECT_UNAUTHORIZED[\"']?\s*[=:,]\s*[\"']?0", _I)),
     Rule("CWE-347", "security", "hoch", "JWT ohne Signaturprüfung",
-         _r(r"verify_signature[\"']?\s*:\s*False|algorithms\s*=\s*\[[^\]]*[\"']none[\"']|"
+         # 16.4.5: auch { algorithms: ["none"] } (JavaScript)
+         _r(r"verify_signature[\"']?\s*:\s*False|algorithms\s*[=:]\s*\[[^\]]*[\"']none[\"']|"
             r"jwt\.decode\([^)]*verify\s*=\s*False|\.decode\(\s*\w+\s*,\s*None\s*,\s*False", _I)),
     Rule("CWE-22", "security", "hoch", "Dateipfad aus Nutzereingabe (Path Traversal)",
          _r(r"\bopen\s*\(|send_file\s*\(|send_from_directory\s*\(|readFile(?:Sync)?\s*\(|"
-            r"createReadStream\s*\(|\bpath\.join\s*\(|os\.path\.join\s*\(|res\.sendFile\s*\("),
+            r"createReadStream\s*\(|\bpath\.join\s*\(|os\.path\.join\s*\(|res\.sendFile\s*\(|"
+            # 16.4.5: Ruby File.read, Java new File/Paths.get und Go os.Open fehlten.
+            r"\bFile\.(?:read|open|readlines|binread|new)\s*\(|\bnew\s+File(?:InputStream)?\s*\(|"
+            r"\bPaths\.get\s*\(|\bos\.(?:Open|ReadFile)\s*\(|\bioutil\.ReadFile\s*\("),
          also=_r(_USER_INPUT)),
     Rule("CWE-918", "security", "hoch", "Abruf einer Adresse aus Nutzereingabe (SSRF)",
          _r(r"\brequests\.(?:get|post|put|request|head)\s*\(|\burlopen\s*\(|\bhttpx\.\w+\s*\(|"
             r"\bfetch\s*\(|\baxios(?:\.\w+)?\s*\(|\burllib\.request\."),
+         also=_r(_USER_INPUT)),
+    # 16.4.5: offene Weiterleitung, Template aus Nutzereingabe (SSTI), Express-Antwort mit
+    # Nutzereingabe (XSS) und Ruby system(...) mit params fehlten.
+    Rule("CWE-601", "security", "mittel", "Weiterleitung an eine Adresse aus Nutzereingabe",
+         _r(r"\bredirect\s*\(|\.redirect\s*\(|HttpResponseRedirect\s*\(|\.sendRedirect\s*\(|"
+            r"\bhttp\.Redirect\s*\(|"
+            r"header\s*\(\s*[\"']Location\s*:", _I),
+         also=_r(_USER_INPUT)),
+    Rule("CWE-1336", "security", "hoch", "Template aus Nutzereingabe (Server-Side Template "
+         "Injection)",
+         _r(r"\brender_template_string\s*\(|\b(?:jinja2\.)?Template\s*\(|"
+            r"\bEnvironment\([^)]*\)\.from_string\s*\("),
+         also=_r(_USER_INPUT)),
+    # 16.4.5: include $_GET[...] (PHP) und require(req.query...) (Node) laden fremden Code.
+    Rule("CWE-98", "security", "hoch", "Datei oder Modul aus Nutzereingabe geladen "
+         "(include/require)",
+         _r(r"\b(?:include|require)(?:_once)?\s*\(|\b(?:include|require)(?:_once)?\s+\$"),
+         also=_r(_USER_INPUT)),
+    Rule("CWE-79", "security", "hoch", "Nutzereingabe ungefiltert in der Antwort (XSS)",
+         _r(r"\bres\.(?:send|write|end)\s*\(|\bresponse\.write\s*\(|\becho\s+"),
+         also=_r(_USER_INPUT)),
+    Rule("CWE-78", "security", "hoch", "Befehl mit Nutzereingabe (system, spawn)",
+         _r(r"\bsystem\s*\(|\bspawn\s*\(|\bIO\.popen\s*\(|%x\(|\bexec\s*\("),
          also=_r(_USER_INPUT)),
     Rule("CWE-22/Zip", "security", "mittel", "Entpacken ohne Pfadprüfung (Zip Slip)",
          _r(r"\.extractall\s*\("), unless=_r(r"filter\s*=")),
     Rule("CWE-327", "security", "mittel", "Schwacher Hash (MD5/SHA-1) -- schlecht für "
          "Passwörter und Signaturen",
          _r(r"\bhashlib\.(?:md5|sha1)\s*\(|createHash\(\s*[\"'](?:md5|sha1)[\"']|"
-            r"MessageDigest\.getInstance\(\s*\"(?:MD5|SHA-?1)\"|\bmd5\s*\(", _I),
+            r"MessageDigest\.getInstance\(\s*\"(?:MD5|SHA-?1)\"|\bmd5\s*\(|"
+            # 16.4.5: PHP sha1() und Go md5/sha1 fehlten.
+            r"(?<![.\w])sha1\s*\(|\b(?:md5|sha1)\.(?:New|Sum)\s*\(", _I),
+         unless=_r(r"usedforsecurity\s*=\s*False")),
+    # 16.4.5: DES/RC4, SSLv3/TLS 1.0/1.1 und hashlib.new("md5") fehlten.
+    Rule("CWE-327", "security", "mittel", "Veraltete Verschlüsselung (DES, RC4, SSLv3, "
+         "TLS 1.0/1.1)",
+         _r(r"Cipher\.getInstance\(\s*\"(?:DES|DESede|RC4|RC2|ARCFOUR)\b|"
+            r"\b(?:DES|DES3|ARC4|ARC2)\.new\s*\(|"
+            r"\bPROTOCOL_(?:SSLv2|SSLv3|TLSv1|TLSv1_1)\b|\bTLSv1_(?:0|1)\b|"
+            r"\bhashlib\.new\(\s*[\"'](?:md5|sha1)[\"']|"
+            # 16.4.5: crypto.createCipher (ohne IV, Schluessel per MD5) fehlte.
+            r"\bcreate(?:Cipher|Decipher)\s*\(", _I),
          unless=_r(r"usedforsecurity\s*=\s*False")),
     Rule("CWE-327/ECB", "security", "mittel", "Verschlüsselung im ECB-Modus",
-         _r(r"MODE_ECB|/ECB/|\baes-\d+-ecb\b", _I)),
+         # 16.4.5: Cipher.getInstance("AES") nimmt in Java ECB, ohne dass es dasteht.
+         _r(r"MODE_ECB|/ECB/|\baes-\d+-ecb\b|Cipher\.getInstance\(\s*\"AES\"\s*\)", _I)),
     Rule("CWE-338", "security", "mittel", "Zufall ohne kryptografischen Generator für "
          "Geheimnisse (secrets/crypto nehmen)",
          _r(r"\brandom\.(?:random|randint|choice|choices|randrange|getrandbits|sample)\s*\(|"
-            r"Math\.random\s*\(|\brand\s*\(|\bmt_rand\s*\("),
+            r"Math\.random\s*\(|\brand\s*\(|\bmt_rand\s*\(|"
+            # 16.4.5: Java new Random() und Go math/rand fehlten.
+            r"\bnew\s+Random\s*\(|\brand\.(?:Intn|Int63n?|Int31n?|Float64|Uint32|Perm)\s*\("),
          also=_r(_SECRETISH, _I)),
     Rule("CWE-208", "security", "mittel", "Geheimnis mit == verglichen (konstante Zeit "
          "nehmen: hmac.compare_digest)",
@@ -170,19 +246,30 @@ RULES: tuple[Rule, ...] = (
          _r(r"\b(?:log(?:ger|ging)?|console)\.(?:debug|info|warn(?:ing)?|error|log|"
             r"critical|exception)\s*\(|\bprint\s*\("),
          also=_r(r"(?:[(,+][ \t]{0,8}|\{|%[ \t]{0,8})(?:[\w.]{0,40}\.)?\w{0,30}"
-                 r"(?:passw(?:or)?d|passwort|secret|token|api_?key|authorization)\w{0,30}"
+                 # 16.4.5: print(token_count), max_tokens & Co. zaehlen nur -- vorher Fehlalarm.
+                 r"(?:passw(?:or)?d|passwort|secret|api_?key|authorization|"
+                 r"(?<!max_)(?<!num_)(?<!total_)(?<!prompt_)(?<!completion_)(?<!input_)"
+                 r"(?<!output_)(?<!n_)token(?!s?_?(?:count|counts|len|length|limit|usage|budget|"
+                 r"type|index|ids?|used|total)\b))\w{0,30}"
                  r"[ \t]{0,8}(?:[,)}+]|$)", _I)),
     Rule("CWE-942", "security", "mittel", "CORS für jede Herkunft offen",
-         _r(r"Access-Control-Allow-Origin[\"']?\s*[,:]\s*[\"']\*|"
+         # 16.4.5: auch ohne Anfuehrungszeichen ("Access-Control-Allow-Origin: *", nginx)
+         _r(r"Access-Control-Allow-Origin[\"']?\]?(?:\s*[,:=]\s*|\s+)[\"']?\*|"
             r"allow_origins\s*=\s*\[\s*[\"']\*|origins?\s*[:=]\s*[\"']\*[\"']|"
             r"CORS\(\s*\w+\s*\)", _I)),
+    # 16.4.5: Rechte fuer alle (chmod 777) fehlten.
+    Rule("CWE-732", "security", "mittel", "Datei für alle schreibbar (chmod 777)",
+         _r(r"\bchmod\s*\([^)]*,\s*0o?777\b|\bchmod(?:Sync)?\s*\([^)]*[\"']?0?777[\"']?\s*\)|"
+            r"\bchmod\s+(?:-R\s+)?0?777\b")),
     Rule("CWE-489", "security", "mittel", "Debug-Modus eingeschaltet",
          _r(r"\bdebug\s*=\s*True|\bDEBUG\s*=\s*True|\.run\([^)]*debug\s*=\s*True")),
     Rule("CWE-377", "security", "niedrig", "Unsichere temporäre Datei (tempfile.mktemp)",
          _r(r"\btempfile\.mktemp\s*\(|\bos\.tempnam\s*\(")),
     Rule("CWE-611", "security", "niedrig", "XML-Parser ohne Schutz vor externen Entitäten "
          "(defusedxml)",
+         # 16.4.5: auch "from lxml import etree" (vorher nur "lxml.etree")
          _r(r"\bresolve_entities\s*=\s*True|\bxml\.(?:etree|dom|sax)\b|\blxml\.etree\b|"
+            r"\bfrom\s+lxml\s+import\s+(?:etree|objectify)\b|"
             r"XMLInputFactory|DocumentBuilderFactory|libxml_disable_entity_loader\(\s*false")),
     Rule("CWE-1333", "security", "niedrig", "Regulärer Ausdruck aus Nutzereingabe",
          _r(r"\bre\.(?:compile|match|search|fullmatch|sub)\s*\(|new\s+RegExp\s*\("),
@@ -395,6 +482,7 @@ def _scan_unit(unit: Unit) -> list[Hint]:
             schluessel = "CWE-798:" + geheim
             treffer.setdefault(schluessel, []).append(index + 1)
             erster.setdefault(schluessel, zeile)
+        ids_der_zeile: set[str] = set()
         for regel in RULES:
             if kommentar and not regel.comments:
                 continue
@@ -410,9 +498,15 @@ def _scan_unit(unit: Unit) -> list[Hint]:
             if regel.next_line is not None and not regel.next_line.match(
                     _next_code_line(zeilen, index)):
                 continue
-            treffer.setdefault(regel.id, []).append(index + 1)
-            erster.setdefault(regel.id, zeile)
-            regeln[regel.id] = regel
+            # 16.4.5: Zwei Regeln mit gleicher ID melden eine Zeile nur einmal; der Auszug
+            # gehoert zum Text der Regel, die ihn gefunden hat.
+            if regel.id in ids_der_zeile:
+                continue
+            ids_der_zeile.add(regel.id)
+            schluessel = regel.id + "|" + regel.text
+            treffer.setdefault(schluessel, []).append(index + 1)
+            erster.setdefault(schluessel, zeile)
+            regeln[schluessel] = regel
     hinweise = []
     for schluessel, nummern in treffer.items():
         if schluessel.startswith("CWE-798:"):

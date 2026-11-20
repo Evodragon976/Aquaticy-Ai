@@ -334,6 +334,12 @@ def prozente(text: str) -> str:
         wort = "Aufschlag" if art == "aufschlag" else "Rabatt"
         return (f"{schoen(p)} % {wort} auf {schoen(g)} sind **{schoen(g * faktor)}** "
                 f"(Unterschied: {schoen(abs(g * faktor - g))}).")
+    treffer = re.search(rf"(?<![\d/.,])(\d{{1,4}})\s*/\s*(\d{{1,4}})\s+(?:von|aus|of)\s+"
+                        rf"{ZAHL}", kern)
+    if treffer and int(treffer.group(2)) > 0:
+        # 16.4.5: "3/4 von 200" und "1/3 von 90" gingen vorher an Wikipedia.
+        z, n, g = int(treffer.group(1)), int(treffer.group(2)), zahl(treffer.group(3))
+        return f"{z}/{n} von {schoen(g)} sind **{schoen(g * z / n)}**."
     treffer = BRUCH_VON.search(kern)
     if treffer:
         oben = treffer.group(1) or "ein"
@@ -475,7 +481,43 @@ def _englisch(text: str) -> str:
     return text.replace(" sind ", " is ").replace(" ist ", " is ")
 
 
+_DAUER_TEIL = {"h": 3600, "min": 60, "s": 1}
+_DAUER_ZIEL = {"stunden": ("Stunden", 3600), "stunde": ("Stunden", 3600), "h": ("Stunden", 3600),
+               "minuten": ("Minuten", 60), "minute": ("Minuten", 60), "min": ("Minuten", 60),
+               "sekunden": ("Sekunden", 1), "sekunde": ("Sekunden", 1), "s": ("Sekunden", 1),
+               "hours": ("hours", 3600), "minutes": ("minutes", 60), "seconds": ("seconds", 1)}
+_DAUER = re.compile(
+    r"(?:(\d+(?:[.,]\d+)?)\s*(?:stunden?|std|h|hours?)\s+(?:und\s+|and\s+)?)?"
+    r"(?:(\d+(?:[.,]\d+)?)\s*(?:minuten?|min|minutes?)\s*(?:und\s+|and\s+)?)?"
+    r"(?:(\d+(?:[.,]\d+)?)\s*(?:sekunden?|sek|s|seconds?))?"
+    r"\s+(?:in|nach|zu|to|into)\s+(stunden?|h|minuten?|min|sekunden?|s|hours|minutes|seconds)\b")
+
+
+def _dauer_umrechnen(gefaltet: str) -> str:
+    """16.4.5: "3 Stunden 20 Minuten in Minuten" -- vorher "20 Minuten sind 20 Minuten"."""
+    treffer = _DAUER.search(gefaltet)
+    if not treffer or sum(1 for g in treffer.groups()[:3] if g) < 2:
+        return ""
+    teile = [(treffer.group(1), "h"), (treffer.group(2), "min"), (treffer.group(3), "s")]
+    sekunden = sum(zahl(wert) * _DAUER_TEIL[art] for wert, art in teile if wert)
+    englisch = treffer.group(4) in ("hours", "minutes", "seconds")
+    namen = ({"h": "h", "min": "min", "s": "s"} if englisch
+             else {"h": "Std.", "min": "Min.", "s": "Sek."})
+    vorn = " ".join(f"{schoen(zahl(wert))} {namen[art]}" for wert, art in teile if wert)
+    name, faktor = _DAUER_ZIEL[treffer.group(4)]
+    verb = "is" if englisch else "sind"
+    return f"{vorn} {verb} **{schoen(sekunden / faktor)} {name}**."
+
+
 def einheiten(text: str) -> str:
+    # 16.4.5: "Wie viel sind 72 Grad Fahrenheit?" -- ohne Ziel die andere Temperaturskala.
+    ohne_ziel = re.fullmatch(r"(?:wie\s*viel\s+(?:sind|ist)\s+|was\s+(?:sind|ist)\s+)?"
+                             r"(-?\d+(?:[.,]\d+)?)\s*(?:grad\s+|°\s*)?(fahrenheit|celsius|f|c)",
+                             falten(text))
+    if ohne_ziel and (ohne_ziel.group(2) in ("fahrenheit", "celsius")
+                      or "grad" in falten(text)):
+        nach_ = "celsius" if ohne_ziel.group(2).startswith("f") else "fahrenheit"
+        text = f"{ohne_ziel.group(1)} {ohne_ziel.group(2)} in {nach_}"
     gefaltet = re.sub(r"\b(?:grad|degrees?)\s+(celsius|fahrenheit)\b", r"\1", falten(text))
     # 16.4.5: "3 Fuß 6 Zoll in cm" rechnete vorher nur die 6 Zoll; "ein Zoll in cm" ging nicht.
     gefaltet = re.sub(r"(\d+(?:[.,]\d+)?)\s*(?:fuss|ft|')\s*(\d+(?:[.,]\d+)?)\s*"
@@ -483,6 +525,9 @@ def einheiten(text: str) -> str:
                       lambda t: f"{schoen(zahl(t.group(1)) * 12 + zahl(t.group(2)))} zoll",
                       gefaltet)
     gefaltet = re.sub(r"\bein(?:e|en|em)?\s+(?=[a-z°/]+\s+(?:in|nach|zu|to)\s)", "1 ", gefaltet)
+    dauer = _dauer_umrechnen(gefaltet)
+    if dauer:
+        return dauer
     treffer = UMRECHNEN.search(gefaltet)
     # "5 km sind wie viele Meilen?" (16.4.5)
     vorn = re.search(rf"{ZAHL}\s*([a-z°/0-9]+)\s+(?:sind|ist|ergeben|machen)\s+wie\s*viele?\s+"
@@ -585,8 +630,27 @@ def in_tagen(tage: int) -> str:
     return "morgen" if tage == 1 else f"in {tage} Tagen"
 
 
-def in_einheit(text: str, kern: str, tage: int) -> str:
+def arbeitstage(von: date, bis: date) -> int:
+    """Montag bis Freitag ohne bundesweite Feiertage, *von* und *bis* mitgezaehlt."""
+    from datetime import timedelta
+
+    if bis < von:
+        return 0
+    frei = {t for jahr_ in range(von.year, bis.year + 1) for t, _ in feiertage(jahr_)}
+    return sum(1 for i in range((bis - von).days + 1)
+               if (von + timedelta(days=i)).weekday() < 5 and von + timedelta(days=i) not in frei)
+
+
+def in_einheit(text: str, kern: str, tage: int, heute: date | None = None) -> str:
     """"Wie viele Wochen bis ...?" bekam vorher nur Tage (16.4.5)."""
+    if heute is not None and 1 <= tage <= 3660 and re.search(r"\b(?:werk|arbeits)tage?\b", kern):
+        # 16.4.5: "Wie viele Werktage bis Weihnachten?" nannte vorher alle Kalendertage.
+        from datetime import timedelta
+
+        anzahl = arbeitstage(heute + timedelta(days=1), heute + timedelta(days=tage - 1))
+        wort = "Arbeitstag" if anzahl == 1 else "Arbeitstage"
+        return (text + f" Dazwischen liegen **{anzahl} {wort}** (Montag bis Freitag, ohne "
+                "bundesweite Feiertage).")
     if tage >= 7 and re.search(r"\bwochen\b", kern):
         wochen, rest = divmod(tage, 7)
         mehr = f" und {rest} {'Tag' if rest == 1 else 'Tage'}" if rest else ""
@@ -602,7 +666,8 @@ def tage_text(tage: int, was: str, wann: str = "") -> str:
         return f"{was}{wann} ist **heute**."
     if tage == 1:
         return f"Bis {was}{wann} ist es noch **1 Tag**."
-    return f"Bis {was}{wann} sind es noch **{tage} Tage**."
+    # 16.4.5: mit Tausenderpunkt -- vorher "1139 Tage".
+    return f"Bis {was}{wann} sind es noch **{schoen(tage)} Tage**."
 
 
 _DATUM_TEIL = (r"(\d{1,2}\.\s*\d{1,2}(?:\.(?:\d{2,4})?)?|\d{1,2}\.?\s+(?:" + "|".join(MONATE)
@@ -752,6 +817,18 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
         # 16.4.5: "Wie viele Tage hat dieser Monat?"
         kern = re.sub(r"\b(?:dieser|der\s+aktuelle|unser)\s+monat\b",
                       f"{MONATE[heute.month - 1]} {heute.year}", kern)
+    arbeit = re.search(r"\bwie\s*viele\s+(?:arbeits|werk)tage\s+(?:hat|haben|gibt\s+es\s+im)\s+"
+                       r"(?:der\s+|dieser\s+|im\s+)?(" + "|".join(MONATE)
+                       + r")(?:\s+(\d{4}))?\b", kern)
+    if arbeit and 1 <= int(arbeit.group(2) or heute.year) <= 9999:
+        # 16.4.5: "Wie viele Arbeitstage hat der Dezember?" ging vorher nicht.
+        jahr = int(arbeit.group(2) or heute.year)
+        nummer = MONATE.index(arbeit.group(1)) + 1
+        letzter = calendar.monthrange(jahr, nummer)[1]
+        anzahl = arbeitstage(date(jahr, nummer, 1), date(jahr, nummer, letzter))
+        name = "März" if nummer == 3 else arbeit.group(1).capitalize()
+        return (f"Der {name} {jahr} hat **{anzahl} Arbeitstage** (Montag bis Freitag, ohne "
+                "bundesweite Feiertage).")
     monat = re.search(r"\bwie\s*viele\s+tage\s+hat\s+(?:der\s+|dieser\s+)?(" + "|".join(MONATE)
                       + r")(?:\s+(\d{4}))?\b", kern)
     if monat:
@@ -777,7 +854,7 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                            else tag.replace(year=tag.year + 1))
                 anzeige = {"heiligabend": "Heiligabend"}.get(name, name.capitalize())
                 return in_einheit(tage_text((tag - heute).days, anzeige, f"{tag:%d.%m.%Y}"),
-                                  kern, (tag - heute).days)
+                                  kern, (tag - heute).days, heute)
         if re.search(r"\bbis\s+(?:zum\s+)?wochenende\b", kern):
             if heute.weekday() >= 5:
                 return "Es ist schon **Wochenende**."
@@ -793,16 +870,17 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                 gesucht = im_jahr(gesucht, gesucht.year + 1)
             if gesucht >= heute:
                 return in_einheit(tage_text((gesucht - heute).days, f"zum {gesucht:%d.%m.%Y}"),
-                                  kern, (gesucht - heute).days)
+                                  kern, (gesucht - heute).days, heute)
             # "Wie viele Tage bis zum 1.1.2026?" mit einem Datum, das schon war.
             tage = (heute - gesucht).days
-            return f"Der {gesucht:%d.%m.%Y} war vor **{tage} {'Tag' if tage == 1 else 'Tagen'}**."
+            return (f"Der {gesucht:%d.%m.%Y} war vor **{schoen(tage)} "
+                    f"{'Tag' if tage == 1 else 'Tagen'}**.")
     seit = re.search(r"\bwie\s*(?:viele|lange)\b.*\bseit\b", kern)
     if seit:
         gesucht = datum_aus(kern, heute)
         if gesucht and gesucht <= heute:
             tage = (heute - gesucht).days
-            return (f"Seit dem {gesucht:%d.%m.%Y} sind **{tage} "
+            return (f"Seit dem {gesucht:%d.%m.%Y} sind **{schoen(tage)} "
                     f"{'Tag' if tage == 1 else 'Tage'}** vergangen.")
     treffer = re.search(r"\b(welche[rs]?\s+(?:wochen)?tag\s+(?:ist|war|wird|faellt)|"
                         r"auf\s+welchen\s+tag)\b", kern)
@@ -1827,7 +1905,10 @@ def feiertag(text: str, heute: date) -> str:
             if bis < von and not re.search(r"\d{4}", b_text):
                 bis = im_jahr(bis, von.year + 1)
             von, bis = min(von, bis), max(von, bis)
-            drin = [(t, n) for t, n in feiertage(von.year) + feiertage(von.year + 1)
+            if bis.year - von.year > 2:
+                return ("Nenn mir einen kürzeren Zeitraum – höchstens zwei Jahre, dann zähle ich "
+                        "die Feiertage auf.")
+            drin = [(t, n) for jahr_ in range(von.year, bis.year + 1) for t, n in feiertage(jahr_)
                     if von <= t <= bis]
             if not drin:
                 return (f"Vom {von:%d.%m.%Y} bis zum {bis:%d.%m.%Y} gibt es keinen bundesweiten "
@@ -1976,7 +2057,8 @@ def alter(text: str, heute: date) -> str:
             return "Heute ist dein Geburtstag – herzlichen Glückwunsch! 🎉"
         if bis == 1:
             return "Morgen ist dein Geburtstag. 🎂"
-        return f"Bis zu deinem Geburtstag am {naechster:%d.%m.} sind es noch **{bis} Tage**."
+        return (f"Bis zu deinem Geburtstag am {naechster:%d.%m.} sind es noch "
+                f"**{schoen(bis)} Tage**.")
     alt_jetzt = re.search(r"\bwenn\s+ich\s+(\d{1,3})\s+(?:jahre\s+(?:alt\s+)?)?bin\b|"
                           r"\bich\s+bin\s+(\d{1,3})(?:\s+jahre(?:\s+alt)?)?\b", kern)
     if (geburt is None and alt_jetzt and re.search(r"\b(?:wann|welchem\s+jahr)\b", kern)
@@ -2265,6 +2347,9 @@ def zahlenkram(text: str, heute: date) -> str:
         def schalt(j: int) -> bool:
             return j % 4 == 0 and (j % 100 != 0 or j % 400 == 0)
 
+        if re.search(r"\bwie\s*viele\s+tage\s+(?:hat|haben)\s+(?:ein|das)\s+schaltjahr", kern):
+            # 16.4.5: vorher "Nein, 2026 ist kein Schaltjahr".
+            return "Ein Schaltjahr hat **366 Tage** – der Februar hat dann 29 Tage."
         if re.search(r"^was\s+(?:ist|sind|bedeutet)\s+(?:ein\s+)?schaltjahr", kern):
             return ("Ein **Schaltjahr** hat 366 Tage – der Februar hat dann 29 Tage. Schaltjahre "
                     "sind durch 4 teilbar, außer volle Jahrhunderte, die nicht durch 400 teilbar "
@@ -2994,6 +3079,9 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         if text:
             # "Convert 10 miles to km" bekam vorher "10 Miles sind **16,0934 km**".
             englisch_gefragt = sprache == "en" or re.search(r"\b(?:to|into)\b|\bhow\s+many\b", kern)
+            # 16.4.5: "1 km2 ist 100 Hektar" -- falten() macht aus "km²" ein "km2".
+            text = re.sub(r"\b(k?m|cm|mm|dm)([23])\b",
+                          lambda t: t.group(1) + {"2": "²", "3": "³"}[t.group(2)], text)
             return _englisch(text) if englisch_gefragt else text
     if re.search(r"\b(nachrichten|news|schlagzeilen|neuigkeiten|tagesschau|"
                  r"was\s+gibt\s+es\s+neues)\b|\bwas\s+ist\s+heute\s+(?:in\s+der\s+welt\s+)?"
@@ -3142,7 +3230,7 @@ def englisch_kram(kern: str, heute: date) -> str:
         name = treffer.group(1).title().replace("'S", "'s")
         if tage == 0:
             return f"{name} is today!"
-        return f"There {'is' if tage == 1 else 'are'} **{tage} day{'s' * (tage != 1)}** until " \
+        return f"There {'is' if tage == 1 else 'are'} **{tage:,} day{'s' * (tage != 1)}** until " \
                f"{name} ({ziel.isoformat()})."
     treffer = re.search(r"\bwhen\s+is\s+easter(?:\s+sunday)?(?:\s+(?:in\s+)?(\d{4}))?\b", kern)
     if treffer:

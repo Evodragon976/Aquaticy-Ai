@@ -1417,6 +1417,76 @@ def test_do_you_like_me_never_starts_with_no():
     assert not any(a.lower().startswith(("nein", "ehrlich gesagt: nein")) for a in art.antworten)
 
 
+def test_holiday_range_stays_within_two_years():
+    assert frag("Feiertage vom 1.1.2026 bis 31.12.2030").startswith(
+        "Nenn mir einen kürzeren Zeitraum")
+    assert "9999" in frag("Feiertage vom 24.12. bis 31.12.9999")
+    antwort = frag("Feiertage vom 1.12. bis 31.1.")
+    assert "1. Weihnachtstag" in antwort and "Neujahr" in antwort
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Wie viele Tage hat ein Schaltjahr?",
+     "Ein Schaltjahr hat **366 Tage** – der Februar hat dann 29 Tage."),
+    ("Wie viel sind 72 Grad Fahrenheit?", "72 °F sind **22,22 °C**."),
+    ("Was sind 20 Grad Celsius?", "20 °C sind **68 °F**."),
+    ("30 Grad Celsius in Fahrenheit", "30 °C sind **86 °F**."),
+])
+def test_leap_year_days_and_temperatures_without_target(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Wie viele Hektar sind 1 km²?", "1 km² ist **100 Hektar**."),
+    ("5 m³ in Liter", "5 m³ sind **5.000 Liter**."),
+    ("Was ist 5 km in m?", "5 km sind **5.000 m**."),
+])
+def test_unit_answers_keep_superscripts(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("3 Stunden 20 Minuten in Minuten", "3 Std. 20 Min. sind **200 Minuten**."),
+    ("1 Stunde 30 Minuten in Stunden", "1 Std. 30 Min. sind **1,5 Stunden**."),
+    ("5 Minuten 30 Sekunden in Sekunden", "5 Min. 30 Sek. sind **330 Sekunden**."),
+    ("1 Stunde 1 Minute 1 Sekunde in Sekunden", "1 Std. 1 Min. 1 Sek. sind **3.661 Sekunden**."),
+    ("2 hours 30 minutes in minutes", "2 h 30 min is **150 minutes**."),
+    ("1,5 Stunden in Minuten", "1,5 Stunden sind **90 Minuten**."),
+])
+def test_compound_durations(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+def test_working_days_until_and_per_month():
+    assert frag("Wie viele Werktage sind es bis Weihnachten?").endswith(
+        "Dazwischen liegen **24 Arbeitstage** (Montag bis Freitag, ohne bundesweite Feiertage).")
+    assert "**28 Arbeitstage**" in frag("Wie viele Arbeitstage noch bis Silvester?")
+    assert "Arbeitstage" not in frag("Wie viele Tage bis Weihnachten?")
+    assert frag("Wie viele Arbeitstage hat der Dezember?") == (
+        "Der Dezember 2026 hat **22 Arbeitstage** (Montag bis Freitag, ohne bundesweite "
+        "Feiertage).")
+    assert "**19 Arbeitstage**" in frag("Wie viele Werktage hat der Mai 2027?")
+    assert "**21 Arbeitstage**" in frag("Wie viele Arbeitstage gibt es im März 2027?")
+    assert "Arbeitstage" not in frag("Wie viele Arbeitstage bis zum 1.1.9999?")
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Wie viel sind 3/4 von 200?", "3/4 von 200 sind **150**."),
+    ("Was ist 1/3 von 90?", "1/3 von 90 sind **30**."),
+    ("Was ist 2/3 von 9?", "2/3 von 9 sind **6**."),
+])
+def test_digit_fractions_of_a_number(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+def test_large_day_counts_have_thousands_separators():
+    assert frag("Wie viele Tage seit dem 1.1.2000?") == (
+        "Seit dem 01.01.2000 sind **9.819 Tage** vergangen.")
+    assert frag("Wie viele Tage bis zum 1.1.2030?") == (
+        "Bis zum 01.01.2030 sind es noch **1.139 Tage**.")
+    assert frag("Wie viele Tage bis zum 1.1.2000?") == "Der 01.01.2000 war vor **9.819 Tagen**."
+
+
 @pytest.mark.parametrize("text, land", [
     ("Ich wohne in Österreich und arbeite in Wien", "at"),
     ("Ich lebe in Italien und liebe es", "it"),
@@ -1446,3 +1516,173 @@ def test_general_home_questions_stay_web_questions(frage):
     from aquaticy import ownservices
 
     assert ownservices.own_sources(frage) == ()
+
+
+@pytest.mark.parametrize("eintrag, passt", [
+    ("+49 (0) 170 1234567", True), ("0049 (0)170 1234567", True), ("+49 170 1234567", True),
+    ("(0) 170 1234567", False), ("0170 1234567", False),
+])
+def test_number_with_trunk_zero_in_brackets(eintrag, passt):
+    from aquaticy import bridge
+
+    assert bridge.matches_exact_number("+491701234567", eintrag) is passt
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.py", "cur.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")", "CWE-89"),
+    ("x.py", "q = f\"SELECT * FROM t WHERE a = '{a}'\"", "CWE-89"),
+    ("x.php", "$q = \"SELECT * FROM t WHERE id=\" . $_GET[\"id\"];", "CWE-89"),
+    ("x.txt", "Access-Control-Allow-Origin: *", "CWE-942"),
+    ("x.conf", "add_header Access-Control-Allow-Origin *;", "CWE-942"),
+    ("x.py", "resp.headers[\"Access-Control-Allow-Origin\"] = \"*\"", "CWE-942"),
+    ("x.py", "os.chmod(p, 0o777)", "CWE-732"),
+    ("x.sh", "chmod -R 777 /var/www", "CWE-732"),
+])
+def test_review_scan_finds_more_patterns(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.js", "child_process.exec(\"ls \" + req.query.dir)", "CWE-89"),
+    ("x.py", "cur.execute(\"SELECT * FROM users WHERE id = %s\", (uid,))", "CWE-89"),
+    ("x.py", "os.chmod(p, 0o644)", "CWE-732"),
+    ("x.txt", "Access-Control-Allow-Origin: https://example.com", "CWE-942"),
+])
+def test_review_scan_stays_quiet(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel not in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.js", "setTimeout(\"run(\" + userInput + \")\", 100)", "CWE-95"),
+    ("x.js", "vm.runInNewContext(userCode)", "CWE-95"),
+    ("x.py", "obj = jsonpickle.decode(request.data)", "CWE-502"),
+    ("x.java", "Cipher c = Cipher.getInstance(\"DES\");", "CWE-327"),
+    ("x.py", "ctx = ssl.SSLContext(ssl.PROTOCOL_TLSv1)", "CWE-327"),
+    ("x.py", "hashlib.new(\"md5\", data)", "CWE-327"),
+    ("x.py", "return redirect(request.args.get(\"next\"))", "CWE-601"),
+    ("x.js", "res.redirect(req.query.url)", "CWE-601"),
+    ("x.js", "res.send(\"<h1>\" + req.query.name + \"</h1>\")", "CWE-79"),
+    ("x.php", "echo $_GET[\"name\"];", "CWE-79"),
+    ("x.py", "return render_template_string(request.args[\"t\"])", "CWE-1336"),
+    ("x.rb", "system(\"ls #{params[:dir]}\")", "CWE-78"),
+])
+def test_review_scan_finds_common_web_mistakes(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.js", "setTimeout(() => go(), 100)", "CWE-95"),
+    ("x.py", "return redirect(url_for(\"index\"))", "CWE-601"),
+    ("x.js", "res.send(\"ok\")", "CWE-79"),
+    ("x.py", "return render_template(\"a.html\", name=request.args[\"n\"])", "CWE-1336"),
+    ("x.py", "ctx.minimum_version = ssl.TLSVersion.TLSv1_2", "CWE-327"),
+    ("x.py", "hashlib.new(\"sha256\", data)", "CWE-327"),
+    ("x.rb", "system(\"ls\")", "CWE-78"),
+])
+def test_review_scan_new_rules_stay_quiet(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel not in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+@pytest.mark.parametrize("code", [
+    'x = "npm_abcdefghijklmnopqrstuvwxyz0123456789"',
+    'x = "glpat-abcdefghijklmnopqrst"',
+    'x = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmN"',
+    'c = "DefaultEndpointsProtocol=https;AccountKey=abcdefghijklmnopqrstuvwxyz0123456789ABCD=="',
+])
+def test_review_scan_knows_more_key_formats(code):
+    from aquaticy import review_scan
+
+    treffer = review_scan.scan_file("x.js", code)
+    assert "CWE-798" in [h.rule for h in treffer]
+    geheim = code.split('"')[1]
+    assert all(geheim not in str(h) for h in treffer)
+
+
+@pytest.mark.parametrize("code", ['msg = "SG.x"', 'pkg = "npm_install"', 'h = "hf_hub_download"'])
+def test_key_formats_need_the_full_shape(code):
+    from aquaticy import review_scan
+
+    assert "CWE-798" not in [h.rule for h in review_scan.scan_file("x.js", code)]
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.py", "data = yaml.unsafe_load(blob)", "CWE-502"),
+    ("x.rb", "obj = Marshal.load(data)", "CWE-502"),
+    ("x.cs", "var o = new BinaryFormatter().Deserialize(stream);", "CWE-502"),
+    ("x.cs", "TypeNameHandling = TypeNameHandling.All", "CWE-502"),
+    ("x.go", 'db.Query(fmt.Sprintf("SELECT * FROM u WHERE id=%s", id))', "CWE-89"),
+    ("x.java", 'q = String.format("SELECT * FROM u WHERE n=\'%s\'", n);', "CWE-89"),
+    ("x.go", 'exec.Command("sh", "-c", userInput)', "CWE-78"),
+    ("x.go", 'exec.CommandContext(ctx, "/bin/bash", "-c", cmd)', "CWE-78"),
+    ("x.js", "spawn(cmd, { shell: true });", "CWE-78"),
+    ("x.java", 'Cipher c = Cipher.getInstance("AES");', "CWE-327/ECB"),
+    ("x.php", "$h = sha1($password);", "CWE-327"),
+    ("x.go", "h := md5.Sum(data)", "CWE-327"),
+    ("x.go", "h := sha1.New()", "CWE-327"),
+    ("x.js", "const c = crypto.createCipher('aes192', pw);", "CWE-327"),
+    ("x.js", "jwt.verify(t, key, { algorithms: ['none'] });", "CWE-347"),
+    ("x.py", "from lxml import etree", "CWE-611"),
+    ("x.java", "String token = String.valueOf(new Random().nextInt());", "CWE-338"),
+    ("x.go", "token := fmt.Sprint(rand.Intn(1000000))", "CWE-338"),
+    ("x.rb", "File.read(params[:f])", "CWE-22"),
+    ("x.java", 'new File(request.getParameter("f"))', "CWE-22"),
+    ("x.go", 'data, _ := os.ReadFile(r.FormValue("f"))', "CWE-22"),
+    ("x.java", 'response.sendRedirect(request.getParameter("u"));', "CWE-601"),
+    ("x.php", 'include $_GET["page"];', "CWE-98"),
+    ("x.js", 'require("./plugins/" + req.query.name);', "CWE-98"),
+])
+def test_review_scan_part8_finds(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.py", "data = yaml.safe_load(blob)", "CWE-502"),
+    ("x.js", "crypto.createCipheriv('aes-256-gcm', key, iv);", "CWE-327"),
+    ("x.java", 'Cipher.getInstance("AES/GCM/NoPadding");', "CWE-327/ECB"),
+    ("x.js", "el.innerHTML = '<b>Hallo</b>';", "CWE-79"),
+    ("x.js", "el.innerHTML = `<b>fest</b>`;", "CWE-79"),
+    ("x.py", "print(token_count)", "CWE-532"),
+    ("x.py", 'logger.debug("used %d", max_tokens)', "CWE-532"),
+    ("x.py", "print(n_tokens, prompt_tokens, completion_tokens)", "CWE-532"),
+    ("x.py", 'AWS_KEY = "AKIAIOSFODNN7EXAMPLE"', "CWE-798"),
+    ("x.js", 'const lib = require("./lib/util");', "CWE-98"),
+    ("x.py", "x = obj.sha1(data)", "CWE-327"),
+])
+def test_review_scan_part8_stays_quiet(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel not in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+@pytest.mark.parametrize("datei, code, regel", [
+    ("x.js", 'el.innerHTML = "<b>" + name + "</b>";', "CWE-79"),
+    ("x.js", "el.innerHTML = `<b>${name}</b>`;", "CWE-79"),
+    ("x.py", 'logger.info("t=%s", access_token)', "CWE-532"),
+    ("x.py", "print(self.token)", "CWE-532"),
+    ("x.py", 'AWS_KEY = "AKIAABCDEFGHIJKLMNOP"', "CWE-798"),
+])
+def test_review_scan_part8_still_finds(datei, code, regel):
+    from aquaticy import review_scan
+
+    assert regel in [h.rule for h in review_scan.scan_file(datei, code)]
+
+
+def test_review_scan_same_id_keeps_its_own_text():
+    from aquaticy import review_scan
+
+    hinweise = review_scan.scan_file("x.py", "h = hashlib.md5(pw)\nc = DES.new(k)\n")
+    texte = {h.lines: h.text for h in hinweise if h.rule == "CWE-327"}
+    assert texte[(1,)].startswith("Schwacher Hash")
+    assert texte[(2,)].startswith("Veraltete Verschlüsselung")
+    einmal = review_scan.scan_file("x.js", 'child_process.exec("ls " + req.query.dir);')
+    assert [h.rule for h in einmal].count("CWE-78") == 1
