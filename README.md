@@ -27,13 +27,22 @@ $ aquaticy
 
 ## Neu in 16.4.5
 
-- **Gründlich nach Fehlern gesucht.** Jeder Fund wurde nachgestellt, behoben und mit einem Test
-  abgesichert. Die Liste steht unten in den Einzelheiten.
-- **Aquaticy Standard rechnet und zählt richtig:** „Wann ist Ostern 2024?“ nennt 2024, nicht das
-  nächste Ostern. „Welches Datum ist morgen?“ nennt morgen. Große Zahlen stimmen auf die letzte
-  Stelle. „Trinkgeld 10 Prozent auf 45 Euro“ rechnet mit 45 €. „1 PS in kW“ rechnet um, statt die
-  Kalenderwoche zu nennen.
-- **Englische Fragen** bekommen englische Zahlen („16.0934 km“) und englische Antworten.
+- **296 weitere Fehler gefunden und behoben.** Zusammen mit den 104 aus 16.4.4 sind es 400.
+  Jeder Fund ist nachgestellt und behoben, fast alle haben einen Test. Ein Fehler mit derselben
+  Ursache zählt nur einmal.
+- **Aquaticy Standard antwortet öfter richtig:** „Wann ist Ostern 2024?“ nennt 2024.
+  „3 Stunden 20 Minuten in Minuten“ ergibt 200. „Welcher Tag ist Halloween?“ nennt Halloween,
+  nicht heute. „Wenn es in Berlin 9 Uhr ist, wie spät ist es in Tokio?“ rechnet um.
+  Werktage, Brüche, Teiler und Quersumme gehen jetzt auch.
+- **Englische Fragen** bekommen englische Zahlen und Antworten, auch für Kalenderwoche,
+  Würfeln und Muttertag.
+- **Code-Review prüft genauer:** Die Vorprüfung findet mehr Lücken, zum Beispiel SQL-Injection,
+  unsichere Deserialisierung, Shell-Aufrufe und Schlüssel in Go, Java, Ruby, PHP und C#.
+  Harmlose Stellen wie Token-Zähler meldet sie nicht mehr.
+- **Sicherheit:** Kaputte Adressen („http://xn--/“) brechen keinen Abruf mehr ab. Versteckte
+  Zeichen tarnen keine Prompt-Injection mehr.
+- **Messenger:** Die freigegebene Nummer „+49 (0) 170 …“ passt jetzt zum Absender. Vorher
+  passte sie nie.
 - **Links im Chat:** Ein Punkt am Satzende gehört nicht mehr zum Link. Wikipedia-Links mit Klammern
   funktionieren. „a * b * c“ bleibt eine Rechnung und wird nicht kursiv.
 - **Werkzeuge:** Schickt das Modell eine Zahl als Text, bricht kein Werkzeug mehr ab.

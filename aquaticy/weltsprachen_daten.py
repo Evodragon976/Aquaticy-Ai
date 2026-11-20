@@ -27,7 +27,8 @@ krise = umbringen; suizid; sterben will
 
 @en English | wiki=en | schrift=latin
 hallo = hello; hi; hey; good morning; good evening; good afternoon; hello there
-info = who are you; what can you do; help; what are you; what do you do
+info = who are you; what can you do; help; what are you; what do you do;
+  what's your name; what is your name; whats your name; tell me your name
 danke = thanks; thank you; thank you very much; thanks a lot; many thanks
 tschuess = bye; goodbye; see you; see you later; good night
 wiegehts = how are you; how are you doing; how is it going; how's it going

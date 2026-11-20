@@ -120,8 +120,9 @@ def test_english_questions_get_english_numbers(frage, erwartet):
     assert frag(frage) == erwartet
 
 
-# "Is 2024 a leap year?" hat seit Teil 5 eine eigene englische Antwort.
-@pytest.mark.parametrize("frage", ["Flip a coin", "Roll a die", "Tell me a joke"])
+# "Is 2024 a leap year?" hat seit Teil 5 eine eigene englische Antwort, "Flip a coin" und
+# "Roll a die" seit Teil 9 (Fund 393).
+@pytest.mark.parametrize("frage", ["Sing me a song", "Tell me a story", "Tell me a joke"])
 def test_english_commands_get_an_english_fallback(frage):
     assert weltsprachen.sprache_von(frage) == "en"
     assert frag(frage).startswith("Sorry")
@@ -1487,6 +1488,137 @@ def test_large_day_counts_have_thousands_separators():
     assert frag("Wie viele Tage bis zum 1.1.2000?") == "Der 01.01.2000 war vor **9.819 Tagen**."
 
 
+@pytest.mark.parametrize("frage, erwartet", [
+    ("What week number is it?", "It is **week 47**."),
+    ("What's the week number?", "It is **week 47**."),
+    ("How many days are in February 2028?", "February 2028 has **29 days**."),
+    ("What day of the week is Christmas?", "Christmas 2026 (December 25) is a **Friday**."),
+    ("What day is Christmas 2027?", "Christmas 2027 (December 25) is a **Saturday**."),
+    ("What day of the week is Halloween 2025?", "Halloween 2025 (October 31) was a **Friday**."),
+    ("How many weeks until New Year?",
+     "There are **6 weeks and 1 day** until New Year (2027-01-01)."),
+    ("How many days until Christmas?", "There are **36 days** until Christmas (2026-12-25)."),
+    ("When is Mother's Day?",
+     "Mother's Day (Germany and the US) is on **Sunday, May 9, 2027**."),
+    ("When is Mother's Day 2026?",
+     "Mother's Day (Germany and the US) is on **Sunday, May 10, 2026**."),
+    ("What is 3/4 of 200?", "3/4 of 200 is **150**."),
+])
+def test_english_questions_part9(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+def test_english_dice_and_coin():
+    assert re.fullmatch(r"🎲 Rolled: \*\*[1-6]\*\*", frag("Roll a dice"))
+    assert frag("Flip a coin") in ("🪙 **Heads**", "🪙 **Tails**")
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Welcher Wochentag ist Heiligabend?", "Heiligabend ist am **Donnerstag, 24.12.2026**."),
+    ("Welcher Wochentag ist Silvester?", "Silvester ist am **Donnerstag, 31.12.2026**."),
+    ("Auf welchen Tag fällt Weihnachten 2027?", "Heiligabend ist am **Freitag, 24.12.2027**."),
+    ("Welcher Tag ist Halloween?", "Halloween ist am **Sonntag, 31.10.2027**."),
+    ("Welcher Tag ist Muttertag?", "Muttertag ist am **Sonntag, 09.05.2027**."),
+    ("Welcher Wochentag ist Neujahr?", "Neujahr ist am **Freitag, 01.01.2027**."),
+    ("Welcher Tag ist heute?", "Heute ist **Donnerstag, der 19.11.2026** (KW 47)."),
+    ("Welcher Tag ist morgen?", "Morgen ist **Freitag, der 20.11.2026** (KW 47)."),
+])
+def test_weekday_of_a_named_day(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+@pytest.mark.parametrize("frage", ["What's your name?", "What is your name?"])
+def test_english_name_question(frage):
+    assert frag(frage).startswith("Hello! I'm Aquaticy Standard.")
+
+
+def test_password_length_limits_are_told():
+    kurz = frag("Passwort mit 8 Zeichen ohne Sonderzeichen")
+    assert "mit 12 Zeichen" in kurz and kurz.endswith(
+        "Kürzer als 12 Zeichen mache ich keine Passwörter – die wären zu leicht zu erraten.")
+    lang = frag("Gib mir ein Passwort mit 100 Zeichen")
+    assert "mit 64 Zeichen" in lang and lang.endswith(
+        "Länger als 64 Zeichen mache ich keine Passwörter.")
+    assert "Kürzer" not in frag("Gib mir ein Passwort mit 16 Zeichen")
+
+
+@pytest.mark.parametrize("frage, erwartet", [
+    ("Ist 12 gerade?", "Ja, 12 ist eine **gerade** Zahl."),
+    ("Ist 7 gerade?", "Nein, 7 ist eine **ungerade** Zahl."),
+    ("Ist 0 eine gerade Zahl?", "Ja, 0 ist eine **gerade** Zahl."),
+    ("Ist 1001 durch 7 teilbar?", "Ja, 1.001 ist durch 7 teilbar: 1.001 : 7 = **143**."),
+    ("Ist 100 durch 7 teilbar?",
+     "Nein, 100 ist nicht durch 7 teilbar – es bleibt der Rest **2**."),
+    ("Ist 5 durch 0 teilbar?", "Durch null kann man nicht teilen."),
+    ("Welche Teiler hat 28?", "28 hat **6 Teiler**: 1, 2, 4, 7, 14, 28."),
+    ("Was ist die Quersumme von 12345?", "Die Quersumme von 12345 ist **15**."),
+])
+def test_number_properties(frage, erwartet):
+    assert frag(frage) == erwartet
+
+
+@pytest.mark.parametrize("frage", ["Bist du eine KI?", "Bist du ein Mensch?", "Bist du ein Bot?",
+                                   "Welche Sprachen sprichst du?", "Kannst du Englisch?"])
+def test_smalltalk_answers_do_not_say_yes_or_no_to_the_wrong_question(frage):
+    from aquaticy import smalltalk
+
+    art = smalltalk.art_von(frage)
+    assert art is not None
+    for text in art.antworten:
+        assert not re.match(r"(?:Ja|Nein|Yes|No)\b", text), text
+
+
+def test_conditional_time_in_another_city():
+    from urllib.parse import unquote
+
+    zonen = {"tokio": "Asia/Tokyo", "new york": "America/New_York", "berlin": "Europe/Berlin",
+             "london": "Europe/London", "sydney": "Australia/Sydney"}
+
+    def holen(url):
+        name = unquote(url.split("name=", 1)[1])
+        zone = zonen.get(name.lower())
+        return {"results": [{"name": name, "timezone": zone}] if zone else []}
+
+    def frage(text):
+        return standard._antwort(text, [], holen=holen, jetzt=JETZT)
+
+    assert frage("Wenn es in Berlin 9 Uhr ist, wie spät ist es dann in Tokio?") == (
+        "Wenn es in Berlin 09:00 Uhr ist, ist es in **Tokio** **17:00 Uhr**.")
+    assert frage("Wie spät ist es in New York, wenn es bei uns 18 Uhr ist?") == (
+        "Wenn es bei dir 18:00 Uhr ist, ist es in **New York** **12:00 Uhr**.")
+    assert frage("Wie spät ist es in Sydney, wenn es in London 20:30 Uhr ist?") == (
+        "Wenn es in London 20:30 Uhr ist, ist es in **Sydney** **07:30 Uhr** – am nächsten Tag.")
+    assert frage("Wenn es in Tokio 7 Uhr ist, wie spät ist es dann in New York?") == (
+        "Wenn es in Tokio 07:00 Uhr ist, ist es in **New York** **17:00 Uhr** – am Tag davor.")
+    assert frage("Wie spät ist es in Tokio?").startswith("In **Tokio** ist es gerade **22:30 Uhr**")
+
+
+def test_time_difference_between_two_cities():
+    from urllib.parse import unquote
+
+    zonen = {"tokio": "Asia/Tokyo", "new york": "America/New_York", "berlin": "Europe/Berlin",
+             "london": "Europe/London", "sydney": "Australia/Sydney"}
+
+    def holen(url):
+        name = unquote(url.split("name=", 1)[1])
+        zone = zonen.get(name.lower())
+        return {"results": [{"name": name, "timezone": zone}] if zone else []}
+
+    def frage(text):
+        return standard._antwort(text, [], holen=holen, jetzt=JETZT)
+
+    assert frage("Wie viele Stunden Zeitunterschied zwischen Berlin und New York?") == (
+        "Zwischen **Berlin** und **New York** liegen gerade **6 Stunden** – in New York ist es "
+        "früher.")
+    assert frage("Zeitverschiebung zwischen Sydney und Berlin") == (
+        "Zwischen **Sydney** und **Berlin** liegen gerade **10 Stunden** – in Berlin ist es "
+        "früher.")
+    assert frage("Zeitunterschied zwischen Berlin und London") == (
+        "Zwischen **Berlin** und **London** liegen gerade **1 Stunde** – in London ist es früher.")
+    assert frage("Wie spät ist es in London?").endswith("Das ist 1 Stunde weniger als bei dir.")
+    assert frage("Wie spät ist es in Tokio?").endswith("Das sind 8 Stunden mehr als bei dir.")
+
+
 @pytest.mark.parametrize("text, land", [
     ("Ich wohne in Österreich und arbeite in Wien", "at"),
     ("Ich lebe in Italien und liebe es", "it"),
@@ -1686,3 +1818,14 @@ def test_review_scan_same_id_keeps_its_own_text():
     assert texte[(2,)].startswith("Veraltete Verschlüsselung")
     einmal = review_scan.scan_file("x.js", 'child_process.exec("ls " + req.query.dir);')
     assert [h.rule for h in einmal].count("CWE-78") == 1
+
+
+def test_review_syntax_check_keeps_parser_warnings_out_of_the_log():
+    import warnings
+
+    from aquaticy import review_scan
+
+    with warnings.catch_warnings(record=True) as liste:
+        warnings.simplefilter("always")
+        assert review_scan.syntax_problems('[Datei a.py]\nmuster = "\\d+"\n') == []
+    assert not [w for w in liste if issubclass(w.category, (SyntaxWarning, DeprecationWarning))]

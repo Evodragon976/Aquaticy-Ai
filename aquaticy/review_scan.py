@@ -630,6 +630,7 @@ def syntax_problems(text: str) -> list[str]:
     """
     import ast
     import json
+    import warnings
 
     befunde: list[str] = []
     for unit in code_units(text):
@@ -637,7 +638,11 @@ def syntax_problems(text: str) -> list[str]:
         quelle = "\n".join(unit.lines)[:MAX_TOTAL_CHARS]
         try:
             if sprache == "python":
-                ast.parse(quelle)
+                # 16.4.5: Unter Python 3.12 schrieb ast.parse fuer fremden Code wie "\d" eine
+                # SyntaxWarning ins Server-Log -- je Zeile, bei jedem Review.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    ast.parse(quelle)
             elif sprache == "json":
                 def invalid_constant(value: str) -> None:
                     raise ValueError(f"{value} ist keine gültige JSON-Konstante.")

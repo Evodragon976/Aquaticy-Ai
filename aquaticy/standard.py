@@ -339,6 +339,8 @@ def prozente(text: str) -> str:
     if treffer and int(treffer.group(2)) > 0:
         # 16.4.5: "3/4 von 200" und "1/3 von 90" gingen vorher an Wikipedia.
         z, n, g = int(treffer.group(1)), int(treffer.group(2)), zahl(treffer.group(3))
+        if re.search(r"\s+of\s+", treffer.group(0)):
+            return _englisch(f"{z}/{n} of {schoen(g)} is **{schoen(g * z / n)}**.")
         return f"{z}/{n} von {schoen(g)} sind **{schoen(g * z / n)}**."
     treffer = BRUCH_VON.search(kern)
     if treffer:
@@ -760,7 +762,8 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                  r"welche[rs]?\s+(tag|datum)|welchen\s+tag\s+haben\s+wir|den\s+wievielten|"
                  r"welches\s+datum|was\s+fuer\s+ein\s+(?:tag|datum)|"
                  r"was\s+(?:ist\s+|war\s+|haben\s+wir\s+)?(?:\w+\s+){0,3}fuer\s+ein\s+"
-                 r"(?:datum|tag|wochentag))\b", kern) and not datum_aus(kern, heute):
+                 r"(?:datum|tag|wochentag))\b", kern) and not datum_aus(kern, heute) \
+            and not _benannter_tag(kern, heute):
         from datetime import timedelta
 
         # 16.4.5: "Welches Datum war vor 100 Tagen?" nannte vorher das Datum von heute.
@@ -883,12 +886,18 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
             return (f"Seit dem {gesucht:%d.%m.%Y} sind **{schoen(tage)} "
                     f"{'Tag' if tage == 1 else 'Tage'}** vergangen.")
     treffer = re.search(r"\b(welche[rs]?\s+(?:wochen)?tag\s+(?:ist|war|wird|faellt)|"
-                        r"auf\s+welchen\s+tag)\b", kern)
+                        r"auf\s+welchen\s+tag|welches\s+datum\s+(?:ist|war|hat))\b", kern)
     if treffer:
         gesucht = datum_aus(kern, heute)
         if gesucht:
             zeitform = "war" if gesucht < heute else "ist"
             return f"Der {gesucht:%d.%m.%Y} {zeitform} ein **{WOCHENTAGE[gesucht.weekday()]}**."
+        benannt = _benannter_tag(kern, heute)
+        if benannt:
+            # 16.4.5: "Welcher Tag ist Halloween?" nannte vorher das Datum von heute.
+            name, tag = benannt
+            zeitform = "war" if tag < heute else "ist"
+            return f"{name} {zeitform} am **{WOCHENTAGE[tag.weekday()]}, {tag:%d.%m.%Y}**."
     if re.search(r"\bwann\s+(?:ist|war|wird|faellt)\s+ostern\b", kern):
         osterjahr = jahr_aus(kern)
         if osterjahr:
@@ -900,6 +909,30 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
             tag = ostern(heute.year + 1)
         return f"Ostersonntag ist am **{tag:%d.%m.%Y}**."
     return ""
+
+
+def _benannter_tag(kern: str, heute: date) -> tuple[str, date] | None:
+    """Ein benannter Tag in *kern* ("heiligabend", "halloween", "tag der arbeit") mit Datum.
+
+    Ohne Jahreszahl der naechste, sonst der im genannten Jahr.
+    """
+    jahr_ = jahr_aus(kern)
+    for jahr in ([jahr_] if jahr_ else [heute.year, heute.year + 1]):
+        tage_ = {"heiligabend": ("Heiligabend", date(jahr, 12, 24)),
+                 "weihnachten": ("Heiligabend", date(jahr, 12, 24)),
+                 "silvester": ("Silvester", date(jahr, 12, 31)),
+                 "neujahr": ("Neujahr", date(jahr, 1, 1)),
+                 "ostern": ("Ostersonntag", ostern(jahr))}
+        tage_.update(anlaesse(jahr))
+        nach_name = {name: tag for tag, name in feiertage(jahr)}
+        tage_.update({wort: (name, nach_name[name]) for wort, name in FEIERTAG_NAMEN.items()})
+        for wort in sorted(tage_, key=len, reverse=True):
+            if re.search(rf"\b{re.escape(wort)}\b", kern):
+                name, tag = tage_[wort]
+                if jahr_ or tag >= heute:
+                    return name, tag
+                break
+    return None
 
 
 def _sonntag_am_oder_vor(tag: date) -> date:
@@ -1827,6 +1860,112 @@ UHRZEIT_IN = re.compile(r"\b(?:wie\s*spaet|uhrzeit|wieviel\s+uhr|wie\s+viel\s+uh
                         r"(?:in|auf)\s+([a-z][a-z\s.,\-]{1,60})$")
 
 
+_ORT_ZEIT = r"([a-z][a-z.\-]*(?:\s+[a-z][a-z.\-]*){0,3}?)"
+UHRZEIT_WENN = (
+    re.compile(r"\bwenn\s+es\s+(?:bei\s+uns|hier|in\s+" + _ORT_ZEIT
+               + r")\s+(\d{1,2})(?:[:.](\d{2}))?"
+               r"\s*uhr\s+ist\s*,?\s+(?:wie\s*spaet|wie\s*viel\s+uhr)\s+ist\s+es\s+(?:dann\s+)?"
+               r"(?:in|auf)\s+" + _ORT_ZEIT + r"$"),
+    re.compile(r"\b(?:wie\s*spaet|wie\s*viel\s+uhr)\s+ist\s+es\s+(?:dann\s+)?(?:in|auf)\s+"
+               + _ORT_ZEIT + r"\s*,?\s+wenn\s+es\s+(?:bei\s+uns|hier|in\s+" + _ORT_ZEIT
+               + r")\s+(\d{1,2})(?:[:.](\d{2}))?\s*uhr\s+ist$"))
+
+
+def _zone_von(ort: str, holen: Holen) -> tuple[str, str] | str:
+    """(Zeitzone, Name) eines Ortes -- sonst der Satz, warum nicht."""
+    geo = holen("https://geocoding-api.open-meteo.com/v1/search?count=1&language=de&name="
+                + quote(ort))
+    if not isinstance(geo, dict):
+        return "Die Ortssuche antwortet gerade nicht. Versuch es gleich noch einmal."
+    treffer = geo.get("results")
+    erster = treffer[0] if isinstance(treffer, list) and treffer and isinstance(
+        treffer[0], dict) else {}
+    zone = erster.get("timezone") if isinstance(erster.get("timezone"), str) else ""
+    if not zone:
+        return f"Für „{ort}“ finde ich keine Zeitzone. Schreib die Stadt vielleicht etwas genauer?"
+    return zone, str(erster.get("name") or ort)
+
+
+def uhrzeit_wenn(frage: str, kern: str, holen: Holen, jetzt: datetime | None = None) -> str:
+    """16.4.5: "Wenn es in Berlin 9 Uhr ist, wie spät ist es dann in Tokio?" -- vorher kam die
+    aktuelle Zeit in Tokio bzw. die Zeit von hier."""
+    from datetime import timedelta, tzinfo
+    from zoneinfo import ZoneInfo
+
+    from aquaticy import zeit as zeit_mod
+
+    vorn = UHRZEIT_WENN[0].search(kern)
+    hinten = UHRZEIT_WENN[1].search(kern)
+    if vorn:
+        von, stunde, minute, nach = vorn.groups()
+    elif hinten:
+        nach, von, stunde, minute = hinten.groups()
+    else:
+        return ""
+    if int(stunde) > 24 or int(minute or 0) > 59:
+        return ""
+    hier = jetzt or zeit_mod.jetzt()
+    try:
+        if von:
+            gefunden = _zone_von(original(frage, von), holen)
+            if isinstance(gefunden, str):
+                return gefunden
+            zone_von: tzinfo = ZoneInfo(gefunden[0])
+            wo = f"in {gefunden[1]}"
+        else:
+            zone_von, wo = hier.tzinfo or ZoneInfo("Europe/Berlin"), "bei dir"
+        gefunden = _zone_von(original(frage, nach), holen)
+        if isinstance(gefunden, str):
+            return gefunden
+        zone_nach, name_nach = ZoneInfo(gefunden[0]), gefunden[1]
+    except Exception:
+        return "Diese Zeitzone kenne ich leider nicht."
+    tag = hier.astimezone(zone_von).date()
+    start = datetime(tag.year, tag.month, tag.day, tzinfo=zone_von) + timedelta(
+        hours=int(stunde), minutes=int(minute or 0))
+    dort = start.astimezone(zone_nach)
+    versatz = (dort.date() - start.date()).days
+    tag_text = {1: " – am nächsten Tag", -1: " – am Tag davor"}.get(versatz, "")
+    return (f"Wenn es {wo} {start:%H:%M} Uhr ist, ist es in **{name_nach}** "
+            f"**{dort:%H:%M} Uhr**{tag_text}.")
+
+
+ZEIT_ZWISCHEN = re.compile(r"\bzeit(?:verschiebung|unterschied|differenz)\s+zwischen\s+"
+                           + _ORT_ZEIT + r"\s+und\s+" + _ORT_ZEIT + r"$")
+
+
+def zeit_zwischen(frage: str, kern: str, holen: Holen, jetzt: datetime | None = None) -> str:
+    """16.4.5: "Wie viele Stunden Zeitunterschied zwischen Berlin und New York?" -- vorher
+    "kann ich nicht" ("Zeitverschiebung nach Tokio" ging schon)."""
+    from zoneinfo import ZoneInfo
+
+    from aquaticy import zeit as zeit_mod
+
+    treffer = ZEIT_ZWISCHEN.search(kern)
+    if not treffer:
+        return ""
+    jetzt_ = jetzt or zeit_mod.jetzt()
+    zonen = []
+    for ort in treffer.groups():
+        gefunden = _zone_von(original(frage, ort), holen)
+        if isinstance(gefunden, str):
+            return gefunden
+        zonen.append(gefunden)
+    try:
+        versatz = [jetzt_.astimezone(ZoneInfo(z)).utcoffset() for z, _ in zonen]
+    except Exception:
+        return "Diese Zeitzone kenne ich leider nicht."
+    if versatz[0] is None or versatz[1] is None:
+        return ""
+    diff = (versatz[1] - versatz[0]).total_seconds() / 3600
+    (_, a), (_, b) = zonen
+    if not diff:
+        return f"**{a}** und **{b}** haben gerade dieselbe Uhrzeit."
+    wort = "Stunde" if abs(diff) == 1 else "Stunden"
+    return (f"Zwischen **{a}** und **{b}** liegen gerade **{schoen(abs(diff), 1)} {wort}** – in "
+            f"{b} ist es {'später' if diff > 0 else 'früher'}.")
+
+
 def uhrzeit_in(ort: str, holen: Holen, jetzt: datetime | None = None) -> str:
     from zoneinfo import ZoneInfo
 
@@ -1852,7 +1991,9 @@ def uhrzeit_in(ort: str, holen: Holen, jetzt: datetime | None = None) -> str:
     diff = ((versatz_dort - versatz_hier).total_seconds() / 3600
             if versatz_dort is not None and versatz_hier is not None else 0.0)
     if diff:
-        unterschied = (f" Das sind {schoen(abs(diff), 1)} Stunden "
+        # 16.4.5: vorher "Das sind 1 Stunden weniger" (London).
+        unterschied = (f" Das {'ist' if abs(diff) == 1 else 'sind'} {schoen(abs(diff), 1)} "
+                       f"{'Stunde' if abs(diff) == 1 else 'Stunden'} "
                        f"{'mehr' if diff > 0 else 'weniger'} als bei dir.")
     else:
         unterschied = " Dieselbe Zeit wie bei dir."
@@ -2195,6 +2336,14 @@ def passwort(text: str) -> str:
         return ""
     laenge = re.search(r"\b(\d{1,3})\s*(?:zeichen|stellen|stellig|characters)", kern)
     n = max(12, min(64, int(laenge.group(1)))) if laenge else 20
+    # 16.4.5: Vorher kamen still 12 statt 8 Zeichen -- wer ein Feld mit 8 Zeichen hat, merkt es
+    # erst beim Einfuegen. Die Grenzen bleiben, die Antwort sagt sie jetzt.
+    hinweis = ""
+    if laenge and int(laenge.group(1)) < 12:
+        hinweis = ("\n\nKürzer als 12 Zeichen mache ich keine Passwörter – die wären zu leicht "
+                   "zu erraten.")
+    elif laenge and int(laenge.group(1)) > 64:
+        hinweis = "\n\nLänger als 64 Zeichen mache ich keine Passwörter."
     ohne = re.search(r"\b(?:ohne|keine)\s+sonderzeichen\b|\bnur\s+(?:buchstaben\s+und\s+)?"
                      r"(?:zahlen|ziffern)\s+und\s+buchstaben\b|\bwithout\s+special", kern)
     # 16.4.5: "ohne Sonderzeichen" galt vorher nicht.
@@ -2206,7 +2355,7 @@ def passwort(text: str) -> str:
             break
     return (f"Hier ist ein zufälliges Passwort mit {n} Zeichen:\n\n`{wort}`\n\nEs wurde nur für "
             "dich erzeugt und nirgends gespeichert. Am besten legst du es gleich in einem "
-            "Passwort-Manager ab.")
+            f"Passwort-Manager ab.{hinweis}")
 
 
 # -- Zahlen und Texte ---------------------------------------------------------------------------
@@ -2341,6 +2490,40 @@ def zahlenkram(text: str, heute: date) -> str:
             return (f"Nein, {schoen(n)} ist keine Primzahl: Sie lässt sich durch {schoen(teiler)} "
                     f"teilen ({schoen(teiler)} × {schoen(n // teiler)}).")
         return f"Ja, **{schoen(n)}** ist eine Primzahl."
+    # 16.4.5: "Ist 12 gerade?", "Ist 1001 durch 7 teilbar?", "Welche Teiler hat 28?",
+    # "Quersumme von 12345" -- vorher "kann ich nicht" bzw. Wikipedia.
+    treffer = re.search(r"\bist\s+(-?\d{1,15})\s+(?:eine\s+)?(gerade|ungerade)(?:\s+zahl)?\b", kern)
+    if treffer:
+        n = int(treffer.group(1))
+        art = "gerade" if n % 2 == 0 else "ungerade"
+        ja = art == treffer.group(2)
+        return f"{'Ja' if ja else 'Nein'}, {schoen(n)} ist eine **{art}** Zahl."
+    treffer = re.search(r"\bist\s+(-?\d{1,15})\s+(?:glatt\s+)?durch\s+(-?\d{1,15})\s+teilbar\b",
+                        kern)
+    if treffer:
+        a, b = int(treffer.group(1)), int(treffer.group(2))
+        if b == 0:
+            return "Durch null kann man nicht teilen."
+        if a % b == 0:
+            return (f"Ja, {schoen(a)} ist durch {schoen(b)} teilbar: {schoen(a)} : {schoen(b)} = "
+                    f"**{schoen(a // b)}**.")
+        return (f"Nein, {schoen(a)} ist nicht durch {schoen(b)} teilbar – es bleibt der Rest "
+                f"**{schoen(a % b)}**.")
+    treffer = re.search(r"\b(?:welche\s+teiler\s+hat(?:\s+die\s+zahl)?|(?:die\s+|alle\s+)?teiler\s+"
+                        r"(?:von|der\s+zahl))\s+(\d{1,9})\b", kern)
+    if treffer:
+        n = int(treffer.group(1))
+        if n == 0:
+            return "Jede Zahl außer 0 teilt 0 – die Liste hätte kein Ende."
+        klein = [t for t in range(1, math.isqrt(n) + 1) if n % t == 0]
+        alle = sorted(set(klein + [n // t for t in klein]))
+        if len(alle) > 60:
+            return f"{schoen(n)} hat **{len(alle)} Teiler**."
+        return f"{schoen(n)} hat **{len(alle)} Teiler**: {', '.join(schoen(t) for t in alle)}."
+    treffer = re.search(r"\bquersumme\s+(?:von\s+|aus\s+|der\s+zahl\s+)?(-?\d{1,40})\b", kern)
+    if treffer:
+        ziffern = treffer.group(1).lstrip("-")
+        return f"Die Quersumme von {treffer.group(1)} ist **{sum(int(z) for z in ziffern)}**."
     # 16.4.5: "Was ist ein Schaltjahr?", "Wann war das letzte Schaltjahr?" und "Wann ist das
     # nächste?" bekamen vorher alle "Nein, 2026 ist kein Schaltjahr".
     if re.search(r"\bschaltjahr", kern) and not re.search(r"\d{4}", kern):
@@ -3049,6 +3232,9 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         text = teil()
         if text:
             return text
+    text = uhrzeit_wenn(frage, kern, holen, jetzt) or zeit_zwischen(frage, kern, holen, jetzt)
+    if text:
+        return text
     treffer = UHRZEIT_IN.search(kern) or ZEITVERSCHIEBUNG.search(kern)
     if treffer:
         ort = re.sub(r"\s+", " ", re.sub(r"\b(gerade|jetzt|aktuell|denn|eigentlich)\b", " ",
@@ -3210,28 +3396,67 @@ def englisch_kram(kern: str, heute: date) -> str:
     """
     if re.fullmatch(r"(?:what|which)\s+year\s+is\s+it(?:\s+(?:now|today))?", kern):
         return f"It is **{heute.year}**."
-    if re.fullmatch(r"(?:what|which)\s+(?:calendar\s+)?week\s+(?:is\s+it|are\s+we\s+in)"
-                    r"(?:\s+(?:now|today))?|(?:what\s+is\s+the\s+)?(?:current\s+)?week\s+number",
-                    kern):
+    # 16.4.5: "What week number is it?" und "What's the week number?" verfehlten das Muster.
+    if re.fullmatch(r"(?:what|which)\s+(?:calendar\s+)?week(?:\s+number)?\s+(?:is\s+it|are\s+we"
+                    r"\s+in)(?:\s+(?:now|today))?|(?:what(?:\s+is|'s|s)?\s+the\s+)?(?:current\s+)?"
+                    r"week\s+number(?:\s+(?:now|today))?", kern):
         return f"It is **week {heute.isocalendar()[1]}**."
     ziele = {"christmas eve": (12, 24), "christmas": (12, 25), "new year's eve": (12, 31),
              "new years eve": (12, 31), "new year": (1, 1), "new year's": (1, 1),
              "new years": (1, 1), "halloween": (10, 31), "valentine's day": (2, 14),
              "valentines day": (2, 14)}
-    treffer = re.search(r"\bhow\s+(?:many\s+days|long)\s+(?:is\s+it\s+)?(?:until|till|til|to|"
-                        r"before)\s+(" + "|".join(sorted(ziele, key=len, reverse=True)) + r")\b",
+    namen_ = "|".join(sorted(ziele, key=len, reverse=True))
+    anlass_ = re.search(r"\bwhat\s+day\s+(?:of\s+the\s+week\s+)?(?:is|will\s+be|falls)\s+"
+                        r"(?:on\s+)?(" + namen_ + r")(?:\s+(?:in\s+)?(\d{4}))?\b", kern)
+    if anlass_:
+        # 16.4.5: "What day of the week is Christmas?" -- vorher "Sorry".
+        monat, tag_nr = ziele[anlass_.group(1)]
+        jahr_ = int(anlass_.group(2) or heute.year)
+        ziel = date(jahr_, monat, tag_nr)
+        if not anlass_.group(2) and ziel < heute:
+            ziel = date(heute.year + 1, monat, tag_nr)
+        name = anlass_.group(1).title().replace("'S", "'s")
+        zeitform = "was" if ziel < heute else "is"
+        return (f"{name} {ziel.year} ({MONTHS[ziel.month - 1].title()} {ziel.day}) {zeitform} a "
+                f"**{WEEKDAYS[ziel.weekday()]}**.")
+    treffer = re.search(r"\bhow\s+(?:many\s+(days|weeks)|long)\s+(?:is\s+it\s+|are\s+there\s+|"
+                        r"are\s+left\s+)?(?:until|till|til|to|before)\s+(" + namen_ + r")\b",
                         kern)
     if treffer:
-        monat, tag_nr = ziele[treffer.group(1)]
+        monat, tag_nr = ziele[treffer.group(2)]
         ziel = date(heute.year, monat, tag_nr)
         if ziel < heute:
             ziel = date(heute.year + 1, monat, tag_nr)
         tage = (ziel - heute).days
-        name = treffer.group(1).title().replace("'S", "'s")
+        name = treffer.group(2).title().replace("'S", "'s")
         if tage == 0:
             return f"{name} is today!"
+        if treffer.group(1) == "weeks" and tage >= 7:
+            # 16.4.5: "How many weeks until New Year?" -- vorher "Sorry".
+            wochen, rest = divmod(tage, 7)
+            mehr = f" and {rest} day{'s' * (rest != 1)}" if rest else ""
+            return (f"There are **{wochen} week{'s' * (wochen != 1)}{mehr}** until {name} "
+                    f"({ziel.isoformat()}).")
         return f"There {'is' if tage == 1 else 'are'} **{tage:,} day{'s' * (tage != 1)}** until " \
                f"{name} ({ziel.isoformat()})."
+    if re.fullmatch(r"(?:please\s+)?(?:roll|throw)\s+(?:a|one|the)\s+(?:dice|die)(?:\s+for\s+me)?|"
+                    r"(?:please\s+)?(?:flip|toss)\s+a\s+coin(?:\s+for\s+me)?", kern):
+        # 16.4.5: "Roll a dice", "Flip a coin" -- auf Deutsch ging es, auf Englisch "Sorry".
+        rnd = random.SystemRandom()
+        if "coin" in kern:
+            return f"🪙 **{rnd.choice(('Heads', 'Tails'))}**"
+        return f"🎲 Rolled: **{rnd.randint(1, 6)}**"
+    treffer = re.search(r"\bwhen\s+is\s+mother'?s\s+day(?:\s+(?:in\s+)?(\d{4}))?\b", kern)
+    if treffer:
+        # 16.4.5: Muttertag (zweiter Sonntag im Mai, in Deutschland und den USA) -- vorher "Sorry".
+        jahr_ = int(treffer.group(1) or heute.year)
+        erster = date(jahr_, 5, 1)
+        tag_ = erster.replace(day=1 + (6 - erster.weekday()) % 7 + 7)
+        if not treffer.group(1) and tag_ < heute:
+            erster = date(jahr_ + 1, 5, 1)
+            tag_ = erster.replace(day=1 + (6 - erster.weekday()) % 7 + 7)
+        return (f"Mother's Day (Germany and the US) is on **Sunday, {MONTHS[4].title()} "
+                f"{tag_.day}, {tag_.year}**.")
     treffer = re.search(r"\bwhen\s+is\s+easter(?:\s+sunday)?(?:\s+(?:in\s+)?(\d{4}))?\b", kern)
     if treffer:
         jahr = int(treffer.group(1) or heute.year)
@@ -3269,7 +3494,8 @@ def englisch_kram(kern: str, heute: date) -> str:
         ergebnis = sum(werte_) if treffer.group(1) == "sum" else sum(werte_) / len(werte_)
         art = "sum" if treffer.group(1) == "sum" else "average"
         return _englisch(f"The {art} of {len(werte_)} numbers is **{schoen(ergebnis, 4)}**.")
-    treffer = re.search(r"\bhow\s+many\s+days\s+(?:are\s+there\s+|does\s+)?(?:in\s+)?(" +
+    # 16.4.5: auch "How many days are in February 2028?" (vorher nur "are there in")
+    treffer = re.search(r"\bhow\s+many\s+days\s+(?:are\s+(?:there\s+)?|does\s+|is\s+)?(?:in\s+)?(" +
                         "|".join(MONTHS) + r")(?:\s+(\d{4}))?(?:\s+have)?\b", kern)
     if treffer:
         jahr = int(treffer.group(2) or heute.year)
