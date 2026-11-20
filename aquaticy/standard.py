@@ -2027,6 +2027,15 @@ def feiertag(text: str, heute: date) -> str:
     kern = falten(text)
     if "feiertag" not in kern and not any(k in kern for k in FEIERTAG_NAMEN):
         return ""
+    if re.search(r"\b(welche[rs]?\s+(?:wochen)?tag\s+(?:ist|war|wird|faellt)|auf\s+welchen\s+"
+                 r"(?:wochen)?tag)\b", kern) and not jahr_aus(kern):
+        # 16.4.6: "Welcher Wochentag ist Pfingstmontag?" bekam vorher die Liste der naechsten
+        # Feiertage.
+        benannt = _benannter_tag(kern, heute)
+        if benannt:
+            name, tag = benannt
+            zeitform = "war" if tag < heute else "ist"
+            return f"{name} {zeitform} am **{WOCHENTAGE[tag.weekday()]}, {tag:%d.%m.%Y}**."
     if re.search(r"\bwie\s*viele\s+(?:gesetzliche\s+)?feiertage\b", kern) and not re.search(
             r"\b(?:im|in|bis|noch)\b", kern):
         # 16.4.5: "Wie viele Feiertage hat Deutschland?" bekam vorher die naechsten drei.

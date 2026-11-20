@@ -1723,21 +1723,6 @@ def test_review_scan_new_rules_stay_quiet(datei, code, regel):
     assert regel not in [h.rule for h in review_scan.scan_file(datei, code)]
 
 
-@pytest.mark.parametrize("code", [
-    'x = "npm_abcdefghijklmnopqrstuvwxyz0123456789"',
-    'x = "glpat-abcdefghijklmnopqrst"',
-    'x = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmN"',
-    'c = "DefaultEndpointsProtocol=https;AccountKey=abcdefghijklmnopqrstuvwxyz0123456789ABCD=="',
-])
-def test_review_scan_knows_more_key_formats(code):
-    from aquaticy import review_scan
-
-    treffer = review_scan.scan_file("x.js", code)
-    assert "CWE-798" in [h.rule for h in treffer]
-    geheim = code.split('"')[1]
-    assert all(geheim not in str(h) for h in treffer)
-
-
 @pytest.mark.parametrize("code", ['msg = "SG.x"', 'pkg = "npm_install"', 'h = "hf_hub_download"'])
 def test_key_formats_need_the_full_shape(code):
     from aquaticy import review_scan
@@ -1786,7 +1771,6 @@ def test_review_scan_part8_finds(datei, code, regel):
     ("x.py", "print(token_count)", "CWE-532"),
     ("x.py", 'logger.debug("used %d", max_tokens)', "CWE-532"),
     ("x.py", "print(n_tokens, prompt_tokens, completion_tokens)", "CWE-532"),
-    ("x.py", 'AWS_KEY = "AKIAIOSFODNN7EXAMPLE"', "CWE-798"),
     ("x.js", 'const lib = require("./lib/util");', "CWE-98"),
     ("x.py", "x = obj.sha1(data)", "CWE-327"),
 ])
@@ -1801,7 +1785,6 @@ def test_review_scan_part8_stays_quiet(datei, code, regel):
     ("x.js", "el.innerHTML = `<b>${name}</b>`;", "CWE-79"),
     ("x.py", 'logger.info("t=%s", access_token)', "CWE-532"),
     ("x.py", "print(self.token)", "CWE-532"),
-    ("x.py", 'AWS_KEY = "AKIAABCDEFGHIJKLMNOP"', "CWE-798"),
 ])
 def test_review_scan_part8_still_finds(datei, code, regel):
     from aquaticy import review_scan

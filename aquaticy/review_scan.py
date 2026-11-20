@@ -268,7 +268,11 @@ RULES: tuple[Rule, ...] = (
     Rule("CWE-611", "security", "niedrig", "XML-Parser ohne Schutz vor externen Entitäten "
          "(defusedxml)",
          # 16.4.5: auch "from lxml import etree" (vorher nur "lxml.etree")
-         _r(r"\bresolve_entities\s*=\s*True|\bxml\.(?:etree|dom|sax)\b|\blxml\.etree\b|"
+         # 16.4.6: xml.etree/dom/sax loesen seit Python 3.7.1 keine externen Entitaeten auf --
+         # vorher meldete schon der Import einen fehlenden Schutz. Gemeldet wird, wer sie
+         # einschaltet.
+         _r(r"\bresolve_entities\s*=\s*True|\bfeature_external_(?:ges|pes)\s*,\s*(?:True|1)\b|"
+            r"\blxml\.etree\b|"
             r"\bfrom\s+lxml\s+import\s+(?:etree|objectify)\b|"
             r"XMLInputFactory|DocumentBuilderFactory|libxml_disable_entity_loader\(\s*false")),
     Rule("CWE-1333", "security", "niedrig", "Regulärer Ausdruck aus Nutzereingabe",
@@ -407,13 +411,34 @@ def mask_secrets(line: str) -> str:
     return _ASSIGNED_SECRET.sub(kuerze, line)
 
 
+def _kein_eingetragenes_geheimnis(value: str) -> bool:
+    """Wert, der im Review nicht als fest eingetragenes Geheimnis gemeldet wird (16.4.6).
+
+    Vorher meldete das Review im eigenen Code 15 Fehlalarme:
+    - Vorlagen: f"Bearer {token}", "${API_KEY}"
+    - Namen von Variablen: "AQUATICY_GITHUB_TOKEN", "github_token"
+    - Text: "Kontingent erreicht", "mit welchem Zugang ich GitHub lese"
+    - Code zwischen zwei Zeichenketten: b"Salt: " + b64encode(salz) + b"..."
+    Verdecken (mask_secrets) und Blockieren (github_write) bleiben davon unberuehrt.
+    """
+    if re.search(r"\{[^{}\s]+\}", value):
+        return True
+    if re.fullmatch(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|[a-z][a-z0-9]*(?:_[a-z0-9]+)+", value):
+        return True
+    if re.search(r"\s\+\s", value):
+        return True
+    return bool(re.search(r"\s", value) and re.search(r"[äöüßÄÖÜ]|\b[A-Z][a-z]{2,}\b", value)
+                and not re.search(r"[\d!@#$%^&*=]", value))
+
+
 def _secrets_in(line: str) -> str:
     """Welche Art Geheimnis steht fest in *line*? ("" = keins)."""
     for name, muster in SECRET_FORMATS:
         if muster.search(line):
             return name
     for m in _ASSIGNED_SECRET.finditer(line):
-        if _secret_value_ok(m.group(1), m.group(3)):
+        if _secret_value_ok(m.group(1), m.group(3)) and not _kein_eingetragenes_geheimnis(
+                m.group(3)):
             return "Fest eingetragenes Passwort oder Token"
     return ""
 

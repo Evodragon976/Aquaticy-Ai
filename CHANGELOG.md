@@ -3,6 +3,28 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.4.5:**
+
+- **296 weitere Fehler gefunden und behoben.** Zusammen mit den 104 aus 16.4.4 sind es 400.
+  Jeder Fund ist nachgestellt und behoben, fast alle haben einen Test. Ein Fehler mit derselben
+  Ursache zählt nur einmal.
+- **Aquaticy Standard antwortet öfter richtig:** „Wann ist Ostern 2024?“ nennt 2024.
+  „3 Stunden 20 Minuten in Minuten“ ergibt 200. „Welcher Tag ist Halloween?“ nennt Halloween,
+  nicht heute. „Wenn es in Berlin 9 Uhr ist, wie spät ist es in Tokio?“ rechnet um.
+  Werktage, Brüche, Teiler und Quersumme gehen jetzt auch.
+- **Englische Fragen** bekommen englische Zahlen und Antworten, auch für Kalenderwoche,
+  Würfeln und Muttertag.
+- **Code-Review prüft genauer:** Die Vorprüfung findet mehr Lücken, zum Beispiel SQL-Injection,
+  unsichere Deserialisierung, Shell-Aufrufe und Schlüssel in Go, Java, Ruby, PHP und C#.
+  Harmlose Stellen wie Token-Zähler meldet sie nicht mehr.
+- **Sicherheit:** Kaputte Adressen („http://xn--/“) brechen keinen Abruf mehr ab. Versteckte
+  Zeichen tarnen keine Prompt-Injection mehr.
+- **Messenger:** Die freigegebene Nummer „+49 (0) 170 …“ passt jetzt zum Absender. Vorher
+  passte sie nie.
+- **Links im Chat:** Ein Punkt am Satzende gehört nicht mehr zum Link. Wikipedia-Links mit Klammern
+  funktionieren. „a * b * c“ bleibt eine Rechnung und wird nicht kursiv.
+- **Werkzeuge:** Schickt das Modell eine Zahl als Text, bricht kein Werkzeug mehr ab.
+
 **Neu in 16.4.4:**
 
 - **Krisenhilfe kommt jetzt immer an.** Serbisch in lateinischer Schrift („ubijem se“) und
