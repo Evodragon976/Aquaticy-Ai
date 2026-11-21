@@ -4558,6 +4558,11 @@ class Toolbox:
                     )
                 }
             question = f"Soll ich wirklich {service} fuer {target} ausfuehren?"
+            # 16.4.7: _untrusted_gate fragt hier nicht noch einmal -- also gehoert seine
+            # Warnung in diese Frage (SEC-11 einer externen Pruefung).
+            if getattr(self, "untrusted_seen", False):
+                question = ("In diesem Gespräch stehen Inhalte aus dem Web oder aus Mails. "
+                            + question)
             self._emit("ask", question=question, options=["ja", "nein"])
             answer = (self.ask_handler(question, ["ja", "nein"]) or "").strip().lower()
             self._emit("ask_done", question=question, answer=answer)

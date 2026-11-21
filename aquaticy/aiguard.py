@@ -234,7 +234,7 @@ _KEINE_ARTEN_ENDUNGEN = (
     "sexbombe", "kalorienbombe", "vitaminbombe", "lifehacking", "badebombe", "antivirus",
     "lebensmittelvergiftung", "alkoholvergiftung", "pilzvergiftung", "rauchvergiftung",
     "blutvergiftung", "lärmbelästigung", "laermbelaestigung", "geruchsbelästigung",
-    "geruchsbelaestigung", "rechtschreibmord",
+    "geruchsbelaestigung", "rechtschreibmord", "wasserbombe",
 )
 
 
@@ -250,6 +250,12 @@ def _einzahl(wort: str) -> list[str]:
     for endung in ("ungen", "en", "es", "s", "n", "e"):
         if wort.endswith(endung) and len(wort) - len(endung) >= 4:
             formen.append(wort[: -len(endung)] + ("ung" if endung == "ungen" else ""))
+    # 16.4.7: Mehrzahl mit Umlaut -- "Anschlaege", "Giftanschlaege" blieben vorher ohne Art,
+    # "Anschlag" nicht.
+    umlaut = re.search(r"(ä|ö|ü)([^äöü]*)e$", wort)
+    if umlaut and len(wort) >= 6:
+        grund = {"ä": "a", "ö": "o", "ü": "u"}[umlaut.group(1)]
+        formen.append(wort[:umlaut.start()] + grund + umlaut.group(2))
     return formen
 
 
@@ -260,7 +266,10 @@ def normalize_category(art: str) -> str:
         return _SYNONYME[wort]
     teile = [t for t in re.split(r"[^a-zäöüß]+", wort) if t]
 
-    if _KEINE_ART.search(wort) or "".join(teile).endswith(_KEINE_ARTEN_ENDUNGEN):
+    # 16.4.7: auch in der Mehrzahl ("Lebensmittelvergiftungen", "Eisbomben") -- vorher galt
+    # sie als Missbrauchsart, weil die Ausnahmen nur die Grundform kannten.
+    if _KEINE_ART.search(wort) or any(form.endswith(_KEINE_ARTEN_ENDUNGEN)
+                                      for form in _einzahl("".join(teile))):
         return ""
 
     for form in ("-".join(teile), "".join(teile), " ".join(teile)):
@@ -272,7 +281,7 @@ def normalize_category(art: str) -> str:
                 return _SYNONYME[form]
 
     for teil in teile:
-        if teil.endswith(_KEINE_ARTEN_ENDUNGEN):
+        if any(form.endswith(_KEINE_ARTEN_ENDUNGEN) for form in _einzahl(teil)):
             continue
         for form in _einzahl(teil):
             for schluessel, kategorie in _SYNONYME_NACH_LAENGE:

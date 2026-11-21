@@ -411,7 +411,7 @@ def mask_secrets(line: str) -> str:
     return _ASSIGNED_SECRET.sub(kuerze, line)
 
 
-def _kein_eingetragenes_geheimnis(value: str) -> bool:
+def _kein_eingetragenes_geheimnis(value: str, name: str = "") -> bool:
     """Wert, der im Review nicht als fest eingetragenes Geheimnis gemeldet wird (16.4.6).
 
     Vorher meldete das Review im eigenen Code 15 Fehlalarme:
@@ -421,14 +421,34 @@ def _kein_eingetragenes_geheimnis(value: str) -> bool:
     - Code zwischen zwei Zeichenketten: b"Salt: " + b64encode(salz) + b"..."
     Verdecken (mask_secrets) und Blockieren (github_write) bleiben davon unberuehrt.
     """
-    if re.search(r"\{[^{}\s]+\}", value):
-        return True
+    # 16.4.7 enger (SEC-07 einer externen Pruefung): vorher fielen auch "letmein_2024",
+    # "PROD_DB_PASS_2024", "hunter2{x}" und password = "Mein Hund Bello" durch.
+    platzhalter = r"\$?\{[A-Za-z_][\w.\[\]'\"]*\}"
+    if re.search(platzhalter, value):
+        rest = re.sub(platzhalter, "", value)
+        return bool(re.fullmatch(r"[\s:=/-]*(?:(?:Bearer|Basic|Token|Bot|Key|ApiKey)[\s:=]*)?",
+                                 rest, re.I))
     if re.fullmatch(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+|[a-z][a-z0-9]*(?:_[a-z0-9]+)+", value):
+        teile = value.casefold().split("_")
+        return not any(teil.isdigit() for teil in teile) and any(
+            re.fullmatch(_NAMENSWORT, teil) for teil in teile)
+    if re.search(r"^\s*[\"']?\s*\+\s|\s\+\s*[bfru]{0,2}[\"']?\s*$", value):
         return True
-    if re.search(r"\s\+\s", value):
+    if not (re.search(r"\s", value) and re.search(r"[äöüßÄÖÜ]|\b[A-Z][a-z]{2,}\b", value)
+            and not re.search(r"[\d!@#$%^&*=]", value)):
+        return False
+    letzter = re.split(r"[_.-]|(?<=[a-z])(?=[A-Z])", name)[-1].casefold()
+    if not re.fullmatch(_NAMENSWORT, letzter):
         return True
-    return bool(re.search(r"\s", value) and re.search(r"[äöüßÄÖÜ]|\b[A-Z][a-z]{2,}\b", value)
-                and not re.search(r"[\d!@#$%^&*=]", value))
+    worte = value.split()
+    return len(worte) >= 4 and any(wort.casefold() in _FUELLWORTE for wort in worte)
+
+
+_NAMENSWORT = (r"(?:token|key|secret|password|passwort|pass|pwd|passwd|auth|credential|api|"
+               r"apikey)s?")
+_FUELLWORTE = frozenset({"ich", "du", "mit", "und", "der", "die", "das", "ist", "nicht", "für",
+                         "ein", "eine", "zu", "von", "the", "and", "with", "for", "is", "not",
+                         "to", "of", "a", "an", "your", "you"})
 
 
 def _secrets_in(line: str) -> str:
@@ -438,7 +458,7 @@ def _secrets_in(line: str) -> str:
             return name
     for m in _ASSIGNED_SECRET.finditer(line):
         if _secret_value_ok(m.group(1), m.group(3)) and not _kein_eingetragenes_geheimnis(
-                m.group(3)):
+                m.group(3), m.group(1)):
             return "Fest eingetragenes Passwort oder Token"
     return ""
 

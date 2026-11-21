@@ -3,6 +3,19 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Die aktuelle Fassung steht oben in der [README](README.md).
 
+**Neu in 16.4.6:**
+
+- **Sicherheitsupdate:** soupsieve, ein Baustein zum Lesen von Webseiten, hatte eine bekannte
+  Lücke (CVE-2026-126190). Aquaticy nutzt jetzt Version 4.0.1. Die Sicherheitsprüfung
+  (pip-audit) läuft wieder durch.
+- **Code-Review mit weniger Fehlalarmen:** Vorlagen wie `f"Bearer {token}"`, Namen von
+  Umgebungsvariablen und normaler Text gelten nicht mehr als eingetragenes Passwort. Ein Import
+  von `xml.etree` gilt nicht mehr als unsicher. Geheimnisse verdeckt Aquaticy so streng wie
+  bisher.
+- **Feiertage:** „Welcher Wochentag ist Pfingstmontag?“ nennt den Wochentag. Vorher kam eine
+  Liste der nächsten Feiertage.
+- **Tests:** Die gestellten Beispielschlüssel sind aus den Tests entfernt.
+
 **Neu in 16.4.5:**
 
 - **296 weitere Fehler gefunden und behoben.** Zusammen mit den 104 aus 16.4.4 sind es 400.

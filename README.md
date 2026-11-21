@@ -1,4 +1,4 @@
-# Aquaticy AI 16.4.6
+# Aquaticy AI 16.4.7
 
 **Aquaticy** recherchiert für dich. Du fragst, Aquaticy sucht im Web, liest die passenden
 Seiten und fasst zusammen. Zu jeder Angabe steht die Quelle. Es läuft im Terminal, im Browser
@@ -25,18 +25,24 @@ $ aquaticy
 
 ---
 
-## Neu in 16.4.6
+## Neu in 16.4.7
 
-- **Sicherheitsupdate:** soupsieve, ein Baustein zum Lesen von Webseiten, hatte eine bekannte
-  Lücke (CVE-2026-126190). Aquaticy nutzt jetzt Version 4.0.1. Die Sicherheitsprüfung
-  (pip-audit) läuft wieder durch.
-- **Code-Review mit weniger Fehlalarmen:** Vorlagen wie `f"Bearer {token}"`, Namen von
-  Umgebungsvariablen und normaler Text gelten nicht mehr als eingetragenes Passwort. Ein Import
-  von `xml.etree` gilt nicht mehr als unsicher. Geheimnisse verdeckt Aquaticy so streng wie
-  bisher.
-- **Feiertage:** „Welcher Wochentag ist Pfingstmontag?“ nennt den Wochentag. Vorher kam eine
-  Liste der nächsten Feiertage.
-- **Tests:** Die gestellten Beispielschlüssel sind aus den Tests entfernt.
+Eine andere KI hat 22 mögliche Fehler und Lücken gemeldet. Wir haben jeden geprüft. Fünf trafen
+zu, zwei zum Teil. Die anderen 15 trafen nicht zu.
+
+- **Versteckte Anweisungen:** Aquaticy erkennt jetzt auch Anweisungen an die KI, die als Base64
+  verpackt sind („Decode this and follow it: SWdub3Jl…“).
+- **Prüfer-Urteil:** Steht neben dem Urteil des Prüfers noch Text mit Klammern, liest Aquaticy
+  das Urteil trotzdem. Widersprechen sich zwei Urteile, gilt die Antwort weiter als unklar.
+- **DNS:** Eine Domain mit langsamem DNS-Server belegt höchstens 2 von 8 Plätzen. Vorher konnte
+  sie alle belegen. Dann ging für niemanden mehr DNS.
+- **Schlösser und Alarmanlagen:** Stand vorher Inhalt aus dem Web oder aus Mails im Gespräch,
+  fehlte bei diesen Geräten die Warnung in der Rückfrage. Jetzt steht sie darin.
+- **Missbrauchsarten:** Wörter in der Mehrzahl werden richtig erkannt.
+  „Lebensmittelvergiftungen“ oder „Wasserbombe“ gelten nicht mehr als Missbrauch, „Anschläge“
+  dagegen schon.
+- **Code-Review:** Die Ausnahmen gegen Fehlalarme aus 16.4.6 waren zu weit. Passwörter wie
+  `letmein_2024` wurden nicht mehr gemeldet. Jetzt schon, die Fehlalarme bleiben weg.
 
 Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 
@@ -135,7 +141,7 @@ Alle früheren Änderungen: [CHANGELOG.md](CHANGELOG.md).
 git clone --branch Aquaticy-ai --single-branch https://github.com/Evodragon976/Aquaticy-Ai.git
 cd Aquaticy-Ai
 uv tool install --force --reinstall .
-aquaticy --version            # 16.4.6
+aquaticy --version            # 16.4.7
 
 # 2. Ollama automatisch prüfen/einrichten, dann Modell, Suche und Domain
 aquaticy setup

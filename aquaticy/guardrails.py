@@ -583,18 +583,59 @@ class Verdict:
 ALLOWED = Verdict(True)
 
 
+def _urteil_json(raw: str) -> dict[str, Any] | None:
+    """Das JSON-Urteil in der Antwort des Pruefers -- auch zwischen erklaerendem Text.
+
+    Vorher galt alles vom ersten "{" bis zum letzten "}". Stand daneben noch eine Klammer
+    ("Format laut Vorgabe {zulaessig, grund}", ein Codeblock mit Hinweis), war das kein JSON
+    mehr: "keine eindeutige Antwort", also eine Absage ohne Grund (16.4.7).
+    Gezaehlt werden nur Objekte mit "zulaessig". Im Zweifel bleibt es unklar wie vorher:
+    - mehrere Urteile, die sich widersprechen (ein geschmuggeltes Urteil kippt so nichts),
+    - ein "zulaessig", das in keinem lesbaren Objekt steht (kaputtes oder abgeschnittenes JSON),
+    - mehr als 50 geschweifte Klammern.
+    """
+    if raw.count("{") > 50:
+        return None
+    gefunden: list[dict[str, Any]] = []
+    for treffer in re.finditer(r"\{", raw):
+        start = treffer.start()
+        tiefe, in_text, escape = 0, False, False
+        for stelle in range(start, min(len(raw), start + 20_000)):
+            zeichen = raw[stelle]
+            if in_text:
+                if escape:
+                    escape = False
+                elif zeichen == "\\":
+                    escape = True
+                elif zeichen == '"':
+                    in_text = False
+            elif zeichen == '"':
+                in_text = True
+            elif zeichen == "{":
+                tiefe += 1
+            elif zeichen == "}":
+                tiefe -= 1
+                if tiefe == 0:
+                    try:
+                        objekt = loads(raw[start:stelle + 1])
+                    except (ValueError, RecursionError):
+                        objekt = None
+                    if isinstance(objekt, dict) and "zulaessig" in objekt:
+                        gefunden.append(objekt)
+                    break
+    if not gefunden or len(re.findall(r'"zulaessig"\s*:', raw)) != len(gefunden):
+        return None
+    if any(g.get("zulaessig") != gefunden[0].get("zulaessig") for g in gefunden[1:]):
+        return None
+    return gefunden[0]
+
+
 def parse_verdict(raw: str, *, require_abuse: bool = False,
                   require_rule: bool = False) -> Verdict | None:
     """Liest die Antwort des Pruefers. `None` heisst: keine klare Antwort."""
     raw = (raw or "").strip()
-    start, end = raw.find("{"), raw.rfind("}")
-    if start == -1 or end <= start:
-        return None
-    try:
-        payload = loads(raw[start : end + 1])
-    except (ValueError, RecursionError):
-        return None
-    if not isinstance(payload, dict):
+    payload = _urteil_json(raw)
+    if payload is None:
         return None
     zulaessig = payload.get("zulaessig")
 

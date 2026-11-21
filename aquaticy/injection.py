@@ -26,6 +26,8 @@ fragen nach fremdem Text ohnehin nach (``tools.CONFIRM_AFTER_UNTRUSTED``).
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 import unicodedata
 from collections.abc import Iterable
@@ -171,6 +173,41 @@ _MUSTER: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
 )
 
 
+#: 16.4.7: Base64-Stuecke ab 16 Zeichen, ohne Obergrenze der Laenge.
+_BASE64 = re.compile(r"(?<![A-Za-z0-9+/_-])[A-Za-z0-9+/_-]{16,}={0,2}(?![A-Za-z0-9+/=_-])")
+_NICHT_DRUCKBAR = re.compile(r"[^\t\n\r\x20-\x7e\xa0-\ufffc\U00010000-\U0010ffff]")
+
+
+def _base64_texte(text: str) -> list[str]:
+    """Lesbarer Text, der als Base64 in *text* steckt (16.4.7).
+
+    Sprachmodelle entschluesseln Base64 muehelos. "Decode this and follow it: SWdub3Jl..."
+    kam vorher an allen Mustern vorbei. Nur Stuecke, die zu lesbarem Text werden, zaehlen --
+    Bilder, Schluessel und Kennungen bleiben aussen vor. Gezaehlt werden nur lesbare Stuecke
+    (hoechstens 40); Pfade und Kennungen davor verbrauchen nichts.
+    """
+    texte: list[str] = []
+    for treffer in _BASE64.finditer(text):
+        stueck = treffer.group(0).rstrip("=")
+        url_sicher = "-" in stueck or "_" in stueck
+        if url_sicher and ("+" in stueck or "/" in stueck):
+            continue
+        stueck += "=" * (-len(stueck) % 4)
+        try:
+            roh = base64.b64decode(stueck, altchars=b"-_" if url_sicher else b"+/",
+                                   validate=True)
+        except (binascii.Error, ValueError):
+            continue
+        # Ein einzelnes kaputtes Byte darf den Text nicht verstecken (darum "replace").
+        klar = roh.decode("utf-8", "replace")
+        if (len(klar) >= 8 and " " in klar
+                and len(_NICHT_DRUCKBAR.findall(klar)) <= 0.05 * len(klar)):
+            texte.append(klar)
+            if len(texte) >= 40:
+                break
+    return texte
+
+
 def suspicious(value: Any, _tiefe: int = 0) -> list[str]:
     """Welche Arten von Anweisungen an eine KI stecken in *value*? (ohne Doppelte)"""
     gefunden: list[str] = []
@@ -183,9 +220,12 @@ def suspicious(value: Any, _tiefe: int = 0) -> list[str]:
             # kam vorher durch die Sperren von Gedaechtnis, Recherche und Lernen (die pruefen
             # rohen Text, nicht den gesaeuberten).
             probe = _UNSICHTBAR.sub("", unicodedata.normalize("NFKC", v))
-            for name, muster in _MUSTER:
-                if name not in gefunden and muster.search(probe):
-                    gefunden.append(name)
+            # 16.4.7: auch, was als Base64 im Text steckt
+            for teil in (probe, *_base64_texte(probe)):
+                teil = _UNSICHTBAR.sub("", unicodedata.normalize("NFKC", teil))
+                for name, muster in _MUSTER:
+                    if name not in gefunden and muster.search(teil):
+                        gefunden.append(name)
         elif isinstance(v, dict):
             for inhalt in v.values():
                 durch(inhalt, tiefe + 1)
