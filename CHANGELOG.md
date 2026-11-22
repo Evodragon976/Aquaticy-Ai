@@ -1,7 +1,26 @@
 # Änderungen
 
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
-Die aktuelle Fassung steht oben in der [README](README.md).
+Zurück zur [README](README.md).
+
+**Neu in 16.4.7:**
+
+Eine andere KI hat 22 mögliche Fehler und Lücken gemeldet. Wir haben jeden geprüft. Fünf trafen
+zu, zwei zum Teil. Die anderen 15 trafen nicht zu.
+
+- **Versteckte Anweisungen:** Aquaticy erkennt jetzt auch Anweisungen an die KI, die als Base64
+  verpackt sind („Decode this and follow it: SWdub3Jl…“).
+- **Prüfer-Urteil:** Steht neben dem Urteil des Prüfers noch Text mit Klammern, liest Aquaticy
+  das Urteil trotzdem. Widersprechen sich zwei Urteile, gilt die Antwort weiter als unklar.
+- **DNS:** Eine Domain mit langsamem DNS-Server belegt höchstens 2 von 8 Plätzen. Vorher konnte
+  sie alle belegen. Dann ging für niemanden mehr DNS.
+- **Schlösser und Alarmanlagen:** Stand vorher Inhalt aus dem Web oder aus Mails im Gespräch,
+  fehlte bei diesen Geräten die Warnung in der Rückfrage. Jetzt steht sie darin.
+- **Missbrauchsarten:** Wörter in der Mehrzahl werden richtig erkannt.
+  „Lebensmittelvergiftungen“ oder „Wasserbombe“ gelten nicht mehr als Missbrauch, „Anschläge“
+  dagegen schon.
+- **Code-Review:** Die Ausnahmen gegen Fehlalarme aus 16.4.6 waren zu weit. Passwörter wie
+  `letmein_2024` wurden nicht mehr gemeldet. Jetzt schon, die Fehlalarme bleiben weg.
 
 **Neu in 16.4.6:**
 
