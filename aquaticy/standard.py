@@ -3405,6 +3405,28 @@ def englisch_kram(kern: str, heute: date) -> str:
     """
     if re.fullmatch(r"(?:what|which)\s+year\s+is\s+it(?:\s+(?:now|today))?", kern):
         return f"It is **{heute.year}**."
+    # 16.5.7: "What day is tomorrow?", "What day was yesterday?", "What day of the week is it?",
+    # "What is tomorrow's date?" -- vorher "Sorry"; "Welcher Tag ist morgen?" ging.
+    wann_ = (r"(today|tomorrow|yesterday|the\s+day\s+after\s+tomorrow|"
+             r"the\s+day\s+before\s+yesterday)")
+    relativ = (re.fullmatch(r"(?:what|which)\s+(?:day|date)(\s+of\s+the\s+week)?\s+"
+                            r"(?:is|was|will\s+be)(?:\s+it)?(?:\s+" + wann_ + r")?(?:\s+now)?",
+                            kern)
+               or re.fullmatch(r"what(?:\s+is|'s|s)?()\s+" + wann_ + r"(?:'s|s)?\s+date", kern))
+    if relativ and (relativ.group(1) or relativ.group(2)):
+        wort = re.sub(r"\s+", " ", relativ.group(2) or "today")
+        versatz = {"today": 0, "tomorrow": 1, "yesterday": -1, "the day after tomorrow": 2,
+                   "the day before yesterday": -2}[wort]
+        tag = date.fromordinal(heute.toordinal() + versatz)
+        verb = "was" if versatz < 0 else "is"
+        return (f"{wort[:1].upper()}{wort[1:]} {verb} **{WEEKDAYS[tag.weekday()]}, {tag.day} "
+                f"{MONTHS[tag.month - 1].title()} {tag.year}**.")
+    # 16.5.7: "How many days in 2028?" -- "Wie viele Tage hat 2028?" ging schon.
+    jahres_frage = re.fullmatch(r"how\s+many\s+days\s+(?:are\s+(?:there\s+)?in\s+|in\s+|does\s+)"
+                         r"(?:the\s+year\s+)?(\d{4})(?:\s+have)?", kern)
+    if jahres_frage and 1 <= int(jahres_frage.group(1)) <= 9999:
+        jahr = int(jahres_frage.group(1))
+        return f"{jahr} has **{366 if calendar.isleap(jahr) else 365} days**."
     # 16.4.5: "What week number is it?" und "What's the week number?" verfehlten das Muster.
     if re.fullmatch(r"(?:what|which)\s+(?:calendar\s+)?week(?:\s+number)?\s+(?:is\s+it|are\s+we"
                     r"\s+in)(?:\s+(?:now|today))?|(?:what(?:\s+is|'s|s)?\s+the\s+)?(?:current\s+)?"

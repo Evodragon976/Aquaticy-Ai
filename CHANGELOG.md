@@ -3,6 +3,15 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Zurück zur [README](README.md).
 
+**Neu in 16.5.7:** Nur Fehler behoben.
+
+- **Aquaticy Standard auf Englisch:** „What day is tomorrow?“, „What day was yesterday?“,
+  „What day of the week is it?“ und „How many days in 2028?“ bekamen nur „Sorry“. Auf Deutsch
+  ging das schon. Jetzt kommt die Antwort, zum Beispiel „Tomorrow is **Monday, 23 November
+  2026**.“
+- **Wetter auf Englisch:** Bei „What day will it rain in Berlin?“ suchte Aquaticy den Ort
+  „day Berlin“. Jetzt sucht es Berlin.
+
 **Neu in 16.4.7:**
 
 Eine andere KI hat 22 mögliche Fehler und Lücken gemeldet. Wir haben jeden geprüft. Fünf trafen

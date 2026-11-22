@@ -43,7 +43,7 @@ morgen = tomorrow
 wiki = what is {x}; what are {x}; who is {x}; who was {x}; tell me about {x}; what's {x}
 stopp = in; at; for; the; a; of; what; what's; whats; is; how; will; it; be; me; please;
   show; tell; like; today; tomorrow; now; current; going; to; there; do; i; need; an;
-  should; this; weekend; snowing; raining; and
+  should; this; weekend; snowing; raining; and; which; when; day
 krise = kill myself; suicide; want to die; end my life; take my own life
 A.intro = Hello! I'm Aquaticy Standard. I can tell you the weather, the time and the date,
   do calculations and look things up on Wikipedia.
