@@ -38,6 +38,17 @@ ULTRA_CODE_LEN = 14
 #: Einzelkonto (13.0.0 Luna): Das eine Konto braucht keine E-Mail. Es bekommt eine Adresse unter
 #: dieser Domain, die nie verschickt wird -- sie haelt nur die Tabelle zusammen.
 LOCAL_EMAIL_DOMAIN = "konto.aquaticy.lokal"
+#: 17.0.0: Gastzugang ("Ohne Anmeldung fortfahren"). ".invalid" ist nie eine echte Adresse.
+GAST_DOMAIN = "gast.invalid"
+#: So lange gilt ein Gast hoechstens. Danach loescht Aquaticy ihn, auch ohne neuen Aufruf.
+GAST_STUNDEN = 12
+#: So lange gilt eine Gastsitzung noch, wenn der Tab zugeht. Laedt die Seite nur neu, holt
+#: sie sich die volle Zeit gleich zurueck.
+GAST_PAUSE_SEKUNDEN = 120
+#: So viele Gaeste gibt es je Adresse gleichzeitig hoechstens.
+GAST_JE_ADRESSE = 3
+GAST_NAME_RESERVIERT = ("Namen mit „Gast-“ am Anfang sind für Gäste reserviert. "
+                        "Wähl einen anderen Nutzernamen.")
 SINGLE_TAKEN = ("Auf diesem Rechner gibt es schon ein Konto. Melde dich damit an. "
                 "Weitere Konten gibt es nur mit dem Kontensystem (aquaticy setup).")
 
@@ -93,6 +104,8 @@ class Account:
     last_seen: float = 0.0
 
     _credential: bytes = field(default=b"", repr=False, compare=False)
+    #: 17.0.0: Bei Gaesten der Schluessel ihres Zaehlers (haengt an der Adresse), sonst leer.
+    guest_key: str = field(default="", repr=False, compare=False)
 
     @property
     def pro(self) -> bool:
@@ -108,7 +121,14 @@ class Account:
         return self.plan in ("pro", "ultra")
 
     @property
+    def guest(self) -> bool:
+        """17.0.0: ein Gast -- ohne E-Mail und Passwort, nur fuer eine Sitzung."""
+        return bool(self.guest_key)
+
+    @property
     def plan_label(self) -> str:
+        if self.guest:
+            return "Gast"
         return {"ultra": "Ultra", "pro": "Pro"}.get(self.plan, "Normal")
 
 
@@ -220,6 +240,25 @@ def validate_password(password: str) -> None:
         password.encode("utf-8")
     except UnicodeError as exc:
         raise ValueError("Das Passwort enthält ungültige Zeichen.") from exc
+
+
+def gast_bereich(ip: str) -> str:
+    """17.0.0: Woran der Zaehler eines Gastes haengt: IPv4 genau, bei IPv6 das /64-Netz.
+
+    Ein IPv6-Anschluss bekommt meist ein ganzes /64-Netz. Mit der genauen Adresse bekaeme jeder
+    neue Gast dort wieder ein frisches Kontingent.
+    """
+    import ipaddress
+
+    try:
+        adresse = ipaddress.ip_address(str(ip or "").split("%", 1)[0])
+    except ValueError:
+        return str(ip or "")
+    if isinstance(adresse, ipaddress.IPv6Address) and adresse.ipv4_mapped is not None:
+        adresse = adresse.ipv4_mapped
+    if adresse.version == 6:
+        return str(ipaddress.ip_network(f"{adresse}/64", strict=False))
+    return str(adresse)
 
 
 def name_key(username: str) -> str:
@@ -542,6 +581,9 @@ class AuthStore:
                 if spalte not in columns:
                     conn.execute(
                         f"ALTER TABLE users ADD COLUMN {spalte} TEXT NOT NULL DEFAULT ''")
+            if "guest" not in columns:
+                # 17.0.0: Gaeste -- leer bei echten Konten, sonst der Schluessel ihres Zaehlers.
+                conn.execute("ALTER TABLE users ADD COLUMN guest TEXT NOT NULL DEFAULT ''")
             conn.execute("CREATE TABLE IF NOT EXISTS privacy_state ("
                          "name TEXT PRIMARY KEY, value TEXT NOT NULL)")
 
@@ -716,6 +758,7 @@ class AuthStore:
             str(row["last_ip"]) if "last_ip" in schluessel and row["last_ip"] else "",
             float(row["last_seen"]) if "last_seen" in schluessel and row["last_seen"] else 0.0,
             self._credential_for(row),
+            str(row["guest"] or "") if "guest" in schluessel else "",
         )
 
     def _credential_for(self, row: sqlite3.Row | dict) -> bytes:
@@ -763,6 +806,8 @@ class AuthStore:
         if len(fallback_username) < 2:
             fallback_username += "1"
         username = normalize_username(username or fallback_username)
+        if name_key(username).startswith("gast-"):
+            raise ValueError(GAST_NAME_RESERVIERT)
         validate_password(password)
         if not terms_accepted or not terms_version.strip():
             raise ValueError(
@@ -858,6 +903,117 @@ class AuthStore:
                        now if adresse else 0.0, self._credential_for({
                            "id": user_id, "password_hash": password_hash, "password_salt": salt}))
 
+    def create_guest(self, *, ip: str = "", device: Any = None,
+                     terms_version: str = "") -> Account:
+        """17.0.0: Ein Gast -- "Ohne Anmeldung fortfahren".
+
+        Ohne E-Mail und mit einem zufaelligen Passwort, das niemand kennt: Anmelden kann sich so
+        niemand. Die Sitzung gilt hoechstens GAST_STUNDEN. Der Zaehler haengt an der Adresse
+        (Spalte ``guest``). Geraete werden wie bei jedem Konto gemerkt, damit eine Sperre beim
+        Loeschen auf sie uebergeht. Nie im Einzelkonto: Dort gehoeren alle Schluessel dem einen.
+
+        Raises:
+            ValueError: Einzelkonto, ohne Zustimmung oder zu viele Gaeste von dieser Adresse.
+        """
+        if self.single:
+            raise ValueError("Im Einzelkonto gibt es keinen Gastzugang.")
+        if not str(terms_version or "").strip():
+            raise ValueError(
+                "Stimm zuerst der Datenschutzerklärung und den Nutzungsbedingungen zu.")
+        from aquaticy.aiguard import _norm_ip
+
+        adresse = _norm_ip(ip)
+        zaehler = "gast:" + _secret_hash(gast_bereich(adresse), self._pepper)[:32]
+        salt = secrets.token_bytes(16)
+        password_hash = _argon_hash(secrets.token_urlsafe(32), salt, self._pepper)
+        user_id = secrets.token_hex(16)
+        email = f"gast-{user_id[:16]}@{GAST_DOMAIN}"
+        now = time.time()
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            schon = conn.execute("SELECT COUNT(*) FROM users WHERE guest = ?",
+                                 (zaehler,)).fetchone()[0]
+            if int(schon) >= GAST_JE_ADRESSE:
+                raise ValueError("Von hier sind gerade schon genug Gäste da. Melde dich an "
+                                 "oder versuch es später noch einmal.")
+            namen = {name_key(str(row[0])) for row in conn.execute("SELECT username FROM users")}
+            username = next((name for name in (f"Gast-{secrets.token_hex(3).upper()}"
+                                               for _ in range(20))
+                             if name_key(name) not in namen), "")
+            if not username:  # pragma: no cover -- 16 Mio. Namen, 20 Versuche
+                raise ValueError("Gerade geht kein Gastzugang. Versuch es gleich noch einmal.")
+            conn.execute(
+                "INSERT INTO users "
+                "(id, email, username, password_hash, password_salt, plan, created_at, "
+                "terms_version, terms_accepted_at, created_ip, last_ip, last_seen, "
+                "email_enc, last_ip_enc, guest) "
+                "VALUES (?, ?, ?, ?, ?, 'normal', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (user_id, self._email_key(email), username, password_hash, salt, now,
+                 str(terms_version).strip(), now, self.ip_key(adresse), self.ip_key(adresse),
+                 now if adresse else 0.0, self._secrets.seal(email, "users.email"),
+                 self._secrets.seal(adresse, "users.last_ip"), zaehler),
+            )
+            self._store_device(conn, user_id, device, now)
+        secure_directory(self.profile_dir(user_id))
+        return Account(user_id, email, "normal", now, username, self.ip_key(adresse),
+                       now if adresse else 0.0, self._credential_for({
+                           "id": user_id, "password_hash": password_hash,
+                           "password_salt": salt}), zaehler)
+
+    def guest_session_pause(self, token: str, *, weiter: bool = False) -> bool:
+        """17.0.0: Der Tab geht zu (oder laedt neu): Die Gastsitzung gilt nur noch kurz.
+
+        Args:
+            weiter: Die Seite ist wieder da. Dann gilt die Sitzung wieder bis GAST_STUNDEN nach
+                dem Anlegen des Gastes, nie laenger.
+
+        Returns: ob eine Gastsitzung geaendert wurde (nur Gaeste, nur gueltige Sitzungen).
+        """
+        if not token:
+            return False
+        jetzt = time.time()
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT sessions.token_hash, users.created_at FROM sessions "
+                "JOIN users ON users.id = sessions.user_id "
+                "WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND users.guest != ''",
+                (_secret_hash(token, self._pepper), jetzt)).fetchone()
+            if row is None:
+                return False
+            ende = float(row[1]) + GAST_STUNDEN * 3600
+            if not weiter:
+                ende = min(ende, jetzt + GAST_PAUSE_SEKUNDEN)
+            conn.execute("UPDATE sessions SET expires_at = ? WHERE token_hash = ?",
+                         (ende, str(row[0])))
+        return True
+
+    def expired_guests(self) -> list[str]:
+        """17.0.0: Gaeste, die weg sollen: aelter als GAST_STUNDEN oder ohne gueltige Sitzung.
+
+        Fuenf Minuten Schonzeit: Zwischen Anlegen und Sitzung liegt ein Augenblick.
+        """
+        jetzt = time.time()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT id FROM users WHERE guest != '' AND (created_at < ? OR (created_at < ? "
+                "AND NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.user_id = users.id "
+                "AND sessions.expires_at > ?)))",
+                (jetzt - GAST_STUNDEN * 3600, jetzt - 300, jetzt)).fetchall()
+        return [str(row[0]) for row in rows]
+
+    def forget_old_guest_usage(self) -> None:
+        """17.0.0: Zaehler von Gaesten, die acht Tage nichts genutzt haben, ganz loeschen."""
+        from aquaticy.quota import KEEP_SECONDS
+
+        grenze = time.time() - KEEP_SECONDS
+        with self._lock, self._connect() as conn:
+            for tabelle, spalte in (("token_usage", "at"), ("token_sessions", "started_at")):
+                if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                                (tabelle,)).fetchone():
+                    # nosec B608 -- feste Tabellen- und Spaltennamen aus der Liste oben
+                    conn.execute(f"DELETE FROM {tabelle} WHERE account_id LIKE 'gast:%' "  # nosec
+                                 f"AND {spalte} < ?", (grenze,))
+
     def _assess(self, conn: sqlite3.Connection, email: str, ip: str,
                 device: Any) -> Any:
         """Punkte der neuen Registrierung gegen jedes vorhandene Konto (hoechster zaehlt)."""
@@ -870,7 +1026,10 @@ class AuthStore:
             geraete.setdefault(str(row[0]), []).append((str(row[1]), str(row[2]), str(row[3])))
         bestes = Assessment()
         for row in conn.execute(
-                "SELECT id, email_enc, username, created_ip, last_ip FROM users"):
+                # 17.0.0: Gaeste zaehlen nicht -- sonst sperrt ein uebrig gebliebener Gast
+                # die echte Registrierung vom selben Geraet.
+                "SELECT id, email_enc, username, created_ip, last_ip FROM users "
+                "WHERE guest = ''"):
             adressen = {str(row[3] or ""), str(row[4] or "")} - {""}
             andere = self._secrets.open(str(row[1] or ""), "users.email")
             punkte, gruende = score(email=email, ip=ip, device=geraet, other_email=andere,
@@ -982,7 +1141,8 @@ class AuthStore:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM users WHERE email = ?",
                                (self._email_key(email),)).fetchone()
-        if row is None:
+        if row is None or row["guest"]:
+            # 17.0.0: Gaeste haben kein Passwort, das jemand kennt -- sie melden sich nie an.
             _argon_hash(password, b"\0" * 16, self._pepper)
             return None
         salz, gespeichert = bytes(row["password_salt"]), bytes(row["password_hash"])
@@ -1041,7 +1201,8 @@ class AuthStore:
 
                     _secret_hash(ip_scope(ip), self._pepper),
                     now,
-                    now + SESSION_DAYS * 86400,
+                    # 17.0.0: Ein Gast gilt hoechstens GAST_STUNDEN, ein Konto 30 Tage.
+                    now + (GAST_STUNDEN * 3600 if account.guest else SESSION_DAYS * 86400),
                 ),
             )
         return token
@@ -1099,6 +1260,10 @@ class AuthStore:
         """
         from aquaticy.quota import Quota
 
+        if account.guest:
+            # 17.0.0: Ein Gast zaehlt auf seine Adresse, nicht auf sein Konto. Sonst gaebe jeder
+            # neue Tab ein frisches Kontingent. Der Zaehler bleibt, wenn der Gast geht.
+            return Quota(self.db_path, account.guest_key, 0.0, plan="normal")
         return Quota(self.db_path, account.id, float(account.created_at or 0.0),
                      plan=account.plan)
 
@@ -1133,7 +1298,8 @@ class AuthStore:
         if gemerkt is not None:
             return conn.execute("SELECT * FROM users WHERE id = ?", (str(gemerkt[0]),)).fetchone()
         row = conn.execute(
-            "SELECT * FROM users ORDER BY plan = 'ultra' DESC, created_at, id LIMIT 1").fetchone()
+            "SELECT * FROM users WHERE guest = '' "  # 17.0.0: nie ein Gast
+            "ORDER BY plan = 'ultra' DESC, created_at, id LIMIT 1").fetchone()
         if row is not None:
             conn.execute("INSERT OR IGNORE INTO single_owner (slot, user_id) VALUES (1, ?)",
                          (str(row["id"]),))

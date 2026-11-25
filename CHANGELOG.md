@@ -3,6 +3,33 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Zurück zur [README](README.md).
 
+**Neu in 17.0.0:**
+
+- **Ohne Anmeldung fortfahren:** Auf der Anmeldekarte gibt es einen neuen Knopf (nur mit dem
+  Kontensystem, nicht im Einzelkonto). Damit nutzt du Aquaticy als Gast, ohne E-Mail und ohne
+  Passwort. Dem Datenschutz und den Nutzungsbedingungen stimmst du trotzdem zu. Alles gilt nur in
+  diesem Tab. Schließt du ihn, löscht Aquaticy das Gastkonto samt Chats und Einstellungen nach
+  wenigen Minuten. Nach 12 Stunden endet jeder Gastzugang. Der Anmelde-Cookie hat kein Ablaufdatum
+  und ist weg, wenn der Browser zugeht. Unter *Einstellungen → Konto* steht für Gäste „Anmelden“ –
+  nur für Gäste. Ein neuer Tab fängt nicht wieder bei null an: Der Nutzungszähler für Gäste hängt an
+  der Adresse (als Hash). Pro Adresse gibt es höchstens 3 Gäste gleichzeitig. Für Gäste gibt es kein
+  Passwort, kein Google-Konto und kein Gemeinsames Lernen. Der Bot-Schutz der Anmeldung gilt auch
+  hier.
+- **Sicherheit (20 Angriffe aus einer Liste geprüft):** Zwei waren echt und sind behoben.
+  - **ReDoS in Aquaticy Standard:** 2000 Ziffern in einer Nachricht ließen Standard rund 40 Sekunden
+    rechnen. Zahl und Einheit durften sich Ziffern teilen. Jetzt dauert es unter einer halben
+    Sekunde. Die Antworten bleiben gleich (49 Einheiten-Fragen verglichen).
+  - **Prototyp-Schlüssel:** Hieß eine Einheit oder Währung „constructor“ oder „toString“, zeigte die
+    Übersetzung der Oberfläche Programmcode.
+  - Nicht betroffen: HTTP/2 Rapid Reset, Nutzernamen mit 52 Zeichen, SAML, nOAuth, GraphQL-Aliase,
+    wiederverwendete Codes, JWT-Algorithmen, Request Smuggling, Cache Poisoning, gefälschte
+    IP-Kopfzeilen, Views an RLS vorbei, Math.random für Schlüssel, Timing-Angriffe, Padding Oracle,
+    Template Injection, XXE, WebSocket-Hijacking und Unicode-Namen, die wie andere aussehen.
+- **Aquaticy Standard:** „Wie viele Tage hat der Monat?“ geht jetzt („dieser Monat“ ging schon). Ein
+  Datum, das es nicht gibt, bekommt einen Hinweis: „Den 29.02.2027 gibt es nicht – 2027 ist kein
+  Schaltjahr.“
+- **Datenschutz:** neuer Absatz zum Gastzugang (Stand 2026-11-24.1).
+
 **Neu in 16.5.7:** Nur Fehler behoben.
 
 - **Aquaticy Standard auf Englisch:** „What day is tomorrow?“, „What day was yesterday?“,

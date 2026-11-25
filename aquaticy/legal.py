@@ -5,7 +5,7 @@ Die Seiten beschreiben nur Verhalten, das im Code nachpruefbar ist.
 
 from __future__ import annotations
 
-LEGAL_VERSION = "2026-10-07.1"
+LEGAL_VERSION = "2026-11-24.1"
 LEGAL_ROUTES = ("/privacy", "/cookies", "/terms", "/accessibility")
 
 
@@ -149,6 +149,16 @@ Im verbundenen Server-Verbund wird er zur Nutzung desselben Kontos repliziert;
 andere Konten erhalten keinen Zugriff. Löschungen im Verbund gelten nach dem nächsten
 erfolgreichen Abgleich. Bestehende Chatverläufe, Sicherungen und das verschlüsselte
 Verbund-Änderungsprotokoll haben ihre eigenen Aufbewahrungsfristen.</p>
+<p><strong>Ohne Anmeldung (Gast):</strong> Aquaticy legt dafür ein vorläufiges Konto an,
+ohne E-Mail und ohne Passwort. Der Anmelde-Cookie hat kein Ablaufdatum und ist weg, wenn du
+den Browser schließt. Schließt du den Tab, gilt die Sitzung noch 2 Minuten.
+Danach löscht Aquaticy das Gastkonto samt Chats, Einstellungen und Geräteangaben bei der nächsten
+Anfrage an den Server. Öffnest du Aquaticy vorher wieder, löscht es den Gast sofort. Nach
+12 Stunden endet jeder Gastzugang. Was bleibt:
+der Nutzungszähler für Gäste. Er hängt an einem Hash deiner IP-Adresse (bei IPv6 an deinem
+Netz), damit ein neuer Gast nicht wieder bei null anfängt. Nutzt acht Tage lang kein Gast
+von dort Aquaticy, wird er gelöscht. Ai-guard-Vermerke und Sperren bleiben wie beim Löschen
+eines Kontos. Im Einzelkonto gibt es keinen Gastzugang.</p>
 <p>Sitzungen laufen nach 30 Tagen ab. Alte Werkstätten werden nach ihrer Leerlaufzeit entfernt.
 Chats, Uploads, Erinnerungen und Aufträge bleiben bis zum Löschen durch den Nutzer oder
 Betreiber erhalten. In der Web-App kannst du Chats einzeln entfernen, Uploads leeren und

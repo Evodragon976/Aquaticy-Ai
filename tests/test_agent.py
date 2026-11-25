@@ -968,10 +968,12 @@ def test_final_answer_sends_a_sanitized_history(
 
 def test_system_prompt_carries_todays_date(settings: Settings, toolbox: Toolbox) -> None:
     """Sonst sucht ein Modell mit altem Wissensstand nach "Test 2024"."""
-    from datetime import date
+    from aquaticy import zeit
 
     agent = Agent(settings, cache=None, toolbox=toolbox)
-    assert date.today().strftime("%d.%m.%Y") in agent.messages[0]["content"]
+    # 17.0.0: das Datum in Deutschland (aquaticy/zeit.py), wie im Agenten -- mit date.today()
+    # schlug der Test zwischen 23 und 24 Uhr UTC fehl, weil dort schon der naechste Tag ist.
+    assert zeit.heute().strftime("%d.%m.%Y") in agent.messages[0]["content"]
 
 
 def test_notes_are_injected_into_the_system_prompt(
@@ -2481,6 +2483,9 @@ def test_the_system_prompt_only_changes_when_the_situation_does(
     """Der Systemtext steht am Anfang -- wer ihn anfasst, wirft den beim
     Anbieter zwischengespeicherten Prefix weg und zahlt ihn neu."""
     monkeypatch.setattr("litellm.completion", ScriptedLLM(_message(content="Fertig.")))
+    # 17.0.0: Die Uhr steht still. Der Systemtext nennt die Minute; lagen die beiden Fragen in
+    # verschiedenen Minuten, war das zu Recht eine neue Lage -- und der Test schlug zufaellig fehl.
+    monkeypatch.setattr(Agent, "_clock_now", staticmethod(lambda: "2026-11-24 12:00"))
     agent = Agent(settings, cache=None, toolbox=toolbox)
 
     agent.ask("Erste Frage", stream=False, structured=False)

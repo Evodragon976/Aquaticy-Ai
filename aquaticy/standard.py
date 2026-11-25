@@ -133,7 +133,10 @@ def schoen(wert: float, stellen: int = 2) -> str:
     return text.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
 
 
-ZAHL = r"(-?\d[\d.,]*)"
+# 17.0.0: nie mitten in einer Ziffernfolge beginnen -- sonst bis zu 40 s fuer 2000 Ziffern.
+ZAHL = r"(-?(?<!\d)(?<!\d[.,])\d[\d.,]*)"
+#: Eine Einheit beginnt nie mit einer Ziffer ("km2" ja, "2km" nein) -- sonst wieder n hoch 3.
+EINHEIT = r"([a-z°/][a-z°/0-9]*)"
 
 
 def jahr_aus(kern: str) -> int | None:
@@ -433,7 +436,7 @@ EINHEITEN: dict[str, tuple[str, float]] = {
     name: (art, faktor) for art, liste in _EINHEITEN_JE_ART.items() for name, faktor in liste}
 TEMPERATUR = {"c": "c", "grad": "c", "celsius": "c", "°c": "c", "f": "f", "fahrenheit": "f",
               "°f": "f", "k": "k", "kelvin": "k"}
-UMRECHNEN = re.compile(rf"{ZAHL}\s*([a-z°/0-9]+)\s+(?:in|nach|zu|to|into|=)\s+([a-z°/0-9]+)")
+UMRECHNEN = re.compile(rf"{ZAHL}\s*{EINHEIT}\s+(?:in|nach|zu|to|into|=)\s+{EINHEIT}")
 #: 16.3.0: englische Namen der Einheiten.
 for _name, _gleich in (("gram", "g"), ("grams", "g"), ("kilogram", "kg"), ("kilograms", "kg"),
                        ("pound", "lb"), ("pounds", "lb"), ("ounce", "oz"), ("ounces", "oz"),
@@ -468,9 +471,9 @@ def anzeige(name: str) -> str:
 
 
 #: 16.3.0: andersherum gefragt -- "Wie viele Minuten haben 3 Stunden?", "how many km is ...".
-UMRECHNEN_FRAGE = re.compile(rf"\b(?:wie\s*viele?|how\s+many)\s+([a-z°/0-9]+)\s+"
+UMRECHNEN_FRAGE = re.compile(rf"\b(?:wie\s*viele?|how\s+many)\s+{EINHEIT}\s+"
                              r"(?:sind|ist|hat|haben|ergeben|machen|is|are|in)\s+"
-                             rf"(?:{ZAHL}|(einen|eine|ein|one|an|a)\b)\s*([a-z°/0-9]+)")
+                             rf"(?:{ZAHL}|(einen|eine|ein|one|an|a)\b)\s*{EINHEIT}")
 
 
 def _englisch(text: str) -> str:
@@ -488,10 +491,12 @@ _DAUER_ZIEL = {"stunden": ("Stunden", 3600), "stunde": ("Stunden", 3600), "h": (
                "minuten": ("Minuten", 60), "minute": ("Minuten", 60), "min": ("Minuten", 60),
                "sekunden": ("Sekunden", 1), "sekunde": ("Sekunden", 1), "s": ("Sekunden", 1),
                "hours": ("hours", 3600), "minutes": ("minutes", 60), "seconds": ("seconds", 1)}
+#: 17.0.0: Jede Zahl beginnt am Anfang ihrer Ziffernfolge (wie ZAHL) -- sonst n hoch 2.
+_ANFANG = r"(?<!\d)(?<!\d[.,])"
 _DAUER = re.compile(
-    r"(?:(\d+(?:[.,]\d+)?)\s*(?:stunden?|std|h|hours?)\s+(?:und\s+|and\s+)?)?"
-    r"(?:(\d+(?:[.,]\d+)?)\s*(?:minuten?|min|minutes?)\s*(?:und\s+|and\s+)?)?"
-    r"(?:(\d+(?:[.,]\d+)?)\s*(?:sekunden?|sek|s|seconds?))?"
+    rf"(?:{_ANFANG}(\d+(?:[.,]\d+)?)\s*(?:stunden?|std|h|hours?)\s+(?:und\s+|and\s+)?)?"
+    rf"(?:{_ANFANG}(\d+(?:[.,]\d+)?)\s*(?:minuten?|min|minutes?)\s*(?:und\s+|and\s+)?)?"
+    rf"(?:{_ANFANG}(\d+(?:[.,]\d+)?)\s*(?:sekunden?|sek|s|seconds?))?"
     r"\s+(?:in|nach|zu|to|into)\s+(stunden?|h|minuten?|min|sekunden?|s|hours|minutes|seconds)\b")
 
 
@@ -532,8 +537,8 @@ def einheiten(text: str) -> str:
         return dauer
     treffer = UMRECHNEN.search(gefaltet)
     # "5 km sind wie viele Meilen?" (16.4.5)
-    vorn = re.search(rf"{ZAHL}\s*([a-z°/0-9]+)\s+(?:sind|ist|ergeben|machen)\s+wie\s*viele?\s+"
-                     r"([a-z°/0-9]+)", gefaltet)
+    vorn = re.search(rf"{ZAHL}\s*{EINHEIT}\s+(?:sind|ist|ergeben|machen)\s+wie\s*viele?\s+"
+                     rf"{EINHEIT}", gefaltet)
     if vorn and not treffer:
         treffer = vorn
     if treffer:
@@ -614,6 +619,22 @@ def datum_aus(text: str, heute: date) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def ungueltiges_datum(text: str) -> str:
+    """16.6.7: Ein Datum, das es nicht gibt ("29.02.2027", "31.04.2026") -- der Satz dazu."""
+    treffer = re.search(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b", text)
+    if not treffer:
+        return ""
+    tag, monat, jahr = (int(x) for x in treffer.groups())
+    try:
+        date(jahr, monat, tag)
+    except ValueError:
+        anzeige = f"{tag:02d}.{monat:02d}.{jahr}"
+        if monat == 2 and tag == 29:
+            return f"Den {anzeige} gibt es nicht – {jahr} ist kein Schaltjahr."
+        return f"Den {anzeige} gibt es nicht."
+    return ""
 
 
 def im_jahr(tag: date, jahr: int) -> date:
@@ -815,11 +836,11 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
             jahr_kw, woche_kw = tag_kw.isocalendar()[:2]
             return f"Der {tag_kw:%d.%m.%Y} liegt in **KW {woche_kw}** ({jahr_kw})."
         return f"Wir haben **KW {heute.isocalendar()[1]}**."
-    if re.search(r"\bwie\s*viele\s+tage\s+hat\s+(?:dieser|der\s+aktuelle|unser)\s+monat\b",
-                 kern):
+    # 16.6.7: auch "Wie viele Tage hat der Monat?" -- aber nicht "der Monat Februar".
+    dieser_monat = r"\b(?:dieser|der\s+aktuelle|unser|der(?=\s+monat\s*$))\s+monat\b"
+    if re.search(r"\bwie\s*viele\s+tage\s+hat\s+" + dieser_monat[2:], kern):
         # 16.4.5: "Wie viele Tage hat dieser Monat?"
-        kern = re.sub(r"\b(?:dieser|der\s+aktuelle|unser)\s+monat\b",
-                      f"{MONATE[heute.month - 1]} {heute.year}", kern)
+        kern = re.sub(dieser_monat, f"{MONATE[heute.month - 1]} {heute.year}", kern)
     arbeit = re.search(r"\bwie\s*viele\s+(?:arbeits|werk)tage\s+(?:hat|haben|gibt\s+es\s+im)\s+"
                        r"(?:der\s+|dieser\s+|im\s+)?(" + "|".join(MONATE)
                        + r")(?:\s+(\d{4}))?\b", kern)
@@ -868,6 +889,8 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
             nummer = WOCHENTAG_WORT.index(wochentag.group(1))
             return tage_text((nummer - heute.weekday()) % 7, WOCHENTAGE[nummer])
         gesucht = datum_aus(kern, heute)
+        if not gesucht and ungueltiges_datum(kern):
+            return ungueltiges_datum(kern)
         if gesucht:
             if gesucht < heute and not re.search(r"\d{4}", kern):
                 gesucht = im_jahr(gesucht, gesucht.year + 1)
@@ -892,6 +915,8 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
         if gesucht:
             zeitform = "war" if gesucht < heute else "ist"
             return f"Der {gesucht:%d.%m.%Y} {zeitform} ein **{WOCHENTAGE[gesucht.weekday()]}**."
+        if ungueltiges_datum(kern):
+            return ungueltiges_datum(kern)
         benannt = _benannter_tag(kern, heute)
         if benannt:
             # 16.4.5: "Welcher Tag ist Halloween?" nannte vorher das Datum von heute.

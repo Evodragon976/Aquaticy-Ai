@@ -565,6 +565,7 @@ CLUSTER_LOCAL = frozenset({"/api/auth/status", "/api/auth/login", "/api/auth/reg
 
 POST_WHEN_BANNED = frozenset({
     "/api/auth/logout", "/api/auth/login", "/api/auth/register", "/api/consent",
+    "/api/auth/guest/end", "/api/auth/guest/pause", "/api/auth/guest/resume",
     "/api/prefs", "/api/stop", "/api/clear", "/api/open", "/api/chat-edit",
 
     "/api/account/delete", "/api/account/wipe", "/api/account/password",
@@ -580,6 +581,10 @@ ACCOUNT_ROUTES = frozenset({
 DELETE_WORD = "LÖSCHEN"
 WRONG_LOGIN_SINGLE = "Nutzername oder Passwort stimmt nicht."
 AUTH_LIMIT = RateLimiter(attempts=8, window_seconds=60)
+#: 17.0.0: Gaeste je Adresse und Stunde -- dazu die feste Grenze GAST_JE_ADRESSE (auth.py).
+GAST_LIMIT = RateLimiter(attempts=6, window_seconds=3600)
+GAST_NUR_KONTO = "Als Gast geht das nicht. Melde dich an oder leg ein Konto an."
+GAST_ZUSTIMMUNG = "Stimm zuerst der Datenschutzerklärung und den Nutzungsbedingungen zu."
 
 
 LOGIN_FAILS = RateLimiter(attempts=10, window_seconds=15 * 60)
@@ -3096,6 +3101,64 @@ def _stop_schedulers() -> None:
         coworker_mod.stop_boxes()
 
 
+def konto_entfernen(konto: Account) -> None:
+    """Loescht ein Konto samt Daten: "Konto loeschen" und Gaeste (17.0.0) -- ein Weg fuer beide.
+
+    Eine Sperre bleibt: Sie geht vorher auf die Geraete und die letzte Adresse ueber, damit
+    niemand sie durch Loeschen umgeht. Raises: ValueError (das Konto gibt es nicht mehr).
+    """
+    if AUTH is None:
+        return
+    forget_account_runtime(konto)
+    if AIGUARD is not None:
+        sperre = AIGUARD.is_banned(user_id=konto.id)
+        if sperre is not None:
+            for keks in AUTH.device_cookie_hashes(konto.id):
+                AIGUARD.ban_device(keks, reason=sperre.reason, until=sperre.until)
+
+            with contextlib.suppress(Exception):
+                adresse = AUTH.last_address(konto.id)
+                if adresse:
+                    AIGUARD.ban_ip(adresse, reason=sperre.reason, by="konto-geloescht",
+                                   until=sperre.until)
+    AUTH.remove_account(konto)
+
+
+#: 17.0.0: Wann zuletzt nach abgelaufenen Gaesten gesehen wurde (monotone Uhr).
+_GAESTE_ZULETZT = [0.0]
+
+
+def gaeste_aufraeumen(*, sofort: bool = False) -> int:
+    """17.0.0: Loescht abgelaufene Gaeste samt Daten -- hoechstens einmal pro Minute.
+
+    Laeuft bei Statusabfragen und vor jedem neuen Gast, ohne eigenen Hintergrund-Thread.
+    Returns: wie viele Gaeste geloescht wurden.
+    """
+    if AUTH is None:
+        return 0
+    jetzt = time.monotonic()
+    if not sofort and jetzt - _GAESTE_ZULETZT[0] < 60:
+        return 0
+    _GAESTE_ZULETZT[0] = jetzt
+    weg = 0
+    try:
+        kennungen = AUTH.expired_guests()
+        AUTH.forget_old_guest_usage()
+    except Exception:
+        return 0
+    for kennung in kennungen:
+        konto = AUTH.account(kennung)
+        if konto is None or not konto.guest:
+            continue
+        try:
+            konto_entfernen(konto)
+        # Klappt es nicht, beim naechsten Mal wieder -- ein Fehler haelt die anderen nicht auf.
+        except Exception:  # nosec B112
+            continue
+        weg += 1
+    return weg
+
+
 def forget_account_runtime(account: Account) -> None:
     """Haelt alles an, was fuer ein Konto laeuft: Auftraege, virtual machine, Sitzung.
 
@@ -4839,6 +4902,9 @@ class Handler(BaseHTTPRequestHandler):
             "/api/auth/challenge",
 
             "/api/auth/logout",
+            # 17.0.0: Ohne Anmeldung fortfahren -- und den Gast wieder beenden.
+            "/api/auth/guest",
+            "/api/auth/guest/end",
         }
         if AUTH is not None and route.startswith("/api/") and not public and account is None:
             self._json({"error": "Bitte melde dich an."}, 401)
@@ -5201,7 +5267,8 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": message or GENERIC_ERROR}, status)
 
     def _json_cookie(
-        self, payload: dict[str, Any], name: str, value: str, max_age: int, status: int = 200,
+        self, payload: dict[str, Any], name: str, value: str, max_age: int | None,
+        status: int = 200,
         extra: tuple[tuple[str, str, int], ...] = (),
     ) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode()
@@ -5299,11 +5366,13 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return (self.headers.get("X-Forwarded-Proto") or "").strip().lower() == "https"
 
-    def _set_cookie(self, name: str, value: str, max_age: int) -> None:
+    def _set_cookie(self, name: str, value: str, max_age: int | None) -> None:
         secure = "; Secure" if self._https() else ""
+        # 17.0.0: None -- ein Sitzungskeks ohne Max-Age (Gaeste): weg, wenn der Browser zugeht.
+        alter = "" if max_age is None else f" Max-Age={max_age};"
         self.send_header(
             "Set-Cookie",
-            f"{name}={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Strict{secure}",
+            f"{name}={value}; Path=/;{alter} HttpOnly; SameSite=Strict{secure}",
         )
 
     def _authorized(self) -> bool:
@@ -5605,8 +5674,12 @@ class Handler(BaseHTTPRequestHandler):
                     "single": bool(AUTH is not None and AUTH.single),
                     "setup_needed": bool(AUTH is not None and AUTH.single
                                          and account is None and AUTH.owner() is None),
+                    # 17.0.0: Gastzugang -- nie im Einzelkonto.
+                    "guest": bool(account is not None and account.guest),
+                    "guest_allowed": bool(AUTH is not None and not AUTH.single),
                 }
             )
+            gaeste_aufraeumen()
         elif route == "/api/auth/challenge":
             self._json(botguard.issue("visit"))
         elif route == "/api/learning":
@@ -5648,6 +5721,7 @@ class Handler(BaseHTTPRequestHandler):
                     "plan": account.plan,
                     "pro": account.elevated,
                     "ultra": account.ultra,
+                    "guest": account.guest,
                     "plan_label": account.plan_label,
                     "usage": usage_view(SESSION.settings()),
 
@@ -6080,8 +6154,24 @@ class Handler(BaseHTTPRequestHandler):
             )
         elif route == "/api/auth/logout":
             if AUTH is not None:
+                gast = self._account()
+                if gast is not None and gast.guest:
+                    # 17.0.0: Ein Gast meldet sich nicht ab, er geht -- samt seinen Daten.
+                    with contextlib.suppress(Exception):
+                        konto_entfernen(gast)
                 AUTH.logout(self._cookie(AUTH_COOKIE))
             self._json_cookie({"ok": True}, AUTH_COOKIE, "", 0)
+        elif route == "/api/auth/guest":
+            self._gast_anlegen()
+        elif route == "/api/auth/guest/end":
+            self._gast_beenden()
+        elif route in {"/api/auth/guest/pause", "/api/auth/guest/resume"}:
+            # 17.0.0: Tab zu -> Sitzung nur noch kurz; Seite wieder da -> volle Zeit zurueck.
+            gast = self._account()
+            geaendert = bool(AUTH is not None and gast is not None and gast.guest
+                             and AUTH.guest_session_pause(self._cookie(AUTH_COOKIE),
+                                                          weiter=route.endswith("resume")))
+            self._json({"ok": geaendert})
         elif route in ACCOUNT_ROUTES:
             self._account_action(route, self._read_json(limit=AUTH_BODY_BYTES))
         elif route == "/api/cluster":
@@ -6091,6 +6181,9 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/linked":
             antwort, status = linked_action(self._read_json(limit=AUTH_BODY_BYTES))
             self._json(antwort, status)
+        elif route == "/api/learning" and getattr(self._account(), "guest", False):
+            # 17.0.0: Gemeinsames Lernen braucht ein Konto -- ein Gast ist nach dem Tab weg.
+            self._json({"ok": False, "error": GAST_NUR_KONTO}, 403)
         elif route == "/api/learning":
             from aquaticy.learning import Learning
 
@@ -6163,7 +6256,12 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "/api/probe":
             self._json(self._probe(self._read_json()))
         elif route == "/api/google":
-            self._json(self._google(self._read_json()))
+            gast = self._account()
+            if gast is not None and gast.guest:
+                # 17.0.0: Ein Gast verbindet kein Google-Konto -- es waere nach dem Tab weg.
+                self._json({"ok": False, "error": GAST_NUR_KONTO}, 403)
+            else:
+                self._json(self._google(self._read_json()))
         elif route == "/api/storage":
             if not SESSION.ultra:
                 self._json({"ok": False,
@@ -6718,6 +6816,99 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             return False
         return True
 
+    def _gast_anlegen(self) -> None:
+        """17.0.0: POST /api/auth/guest -- "Ohne Anmeldung fortfahren".
+
+        Dieselben Schranken wie bei der Anmeldung: Zustimmung zum Datenschutzhinweis und zu den
+        Bedingungen, Grenzen je Adresse, Bot-Schutz und Sperren. Nie im Einzelkonto.
+        """
+        if AUTH is None:
+            self._json({"error": "Die Kontoverwaltung ist nicht gestartet."}, 503)
+            return
+        if AUTH.single:
+            self._json({"ok": False, "error": "Im Einzelkonto gibt es keinen Gastzugang."}, 403)
+            return
+        if self._cookie(CONSENT_COOKIE) != "yes":
+            self._json({"error": "Bitte bestätige zuerst den Datenschutzhinweis."}, 403)
+            return
+        adresse = self._client_ip()
+        if not AUTH_LIMIT.allow(adresse) or not GAST_LIMIT.allow(adresse):
+            self._json({"ok": False, "error": "Zu viele Versuche von hier. Warte ein wenig "
+                                              "und versuch es dann noch einmal."}, 429)
+            return
+        payload = self._read_json(limit=AUTH_BODY_BYTES)
+        if payload.get("terms_accepted") is not True:
+            self._json({"ok": False, "error": GAST_ZUSTIMMUNG}, 400)
+            return
+        from aquaticy.devices import (
+            DEVICE_COOKIE,
+            DEVICE_COOKIE_AGE,
+            clean_device,
+            new_device_token,
+            token_hash,
+        )
+
+        geraete_kennung = self._cookie(DEVICE_COOKIE)
+        neue_kennung = not token_hash(geraete_kennung)
+        if neue_kennung:
+            geraete_kennung = new_device_token()
+        geraet = clean_device(
+            payload.get("device"),
+            user_agent=self.headers.get("User-Agent") or "",
+            accept_language=self.headers.get("Accept-Language") or "",
+            cookie=geraete_kennung,
+        )
+        if not self._bot_gate(payload, geraet, neue_kennung):
+            return
+        if AIGUARD is not None:
+            from aquaticy.aiguard import BANNED_MESSAGE
+
+            if AIGUARD.is_banned(ip=adresse, device=geraet.cookie_hash) is not None:
+                self._json({"ok": False, "error": BANNED_MESSAGE, "code": "banned"}, 403)
+                return
+        gaeste_aufraeumen(sofort=True)
+        try:
+            konto = AUTH.create_guest(ip=adresse, device=geraet, terms_version=LEGAL_VERSION)
+        except ValueError as exc:
+            self._json({"ok": False, "error": str(exc)}, 429)
+            return
+        try:
+            token = AUTH.create_session(konto, self._device(), adresse)
+        except ValueError as exc:
+            self._json({"ok": False, "error": str(exc)}, 409)
+            return
+        AUTH.note_seen(konto.id, adresse)
+        with contextlib.suppress(Exception):
+            AUTH.note_device(konto.id, geraet)
+        # Kein eigener Zeitplan (start_user_scheduler): Ein Gast ist nur fuer diesen Tab da.
+        self._json_cookie(
+            {"ok": True, "account": {"email": "", "username": konto.username,
+                                     "plan": konto.plan, "guest": True}},
+            AUTH_COOKIE, token, None,
+            extra=((DEVICE_COOKIE, geraete_kennung, DEVICE_COOKIE_AGE),)
+            if neue_kennung else (),
+        )
+
+    def _gast_beenden(self) -> None:
+        """17.0.0: POST /api/auth/guest/end -- der Gast geht, seine Daten sind weg.
+
+        Die Oberflaeche ruft das, wenn der Tab zu war, und vor "Anmelden". Ein echtes Konto
+        wird hier nie geloescht.
+        """
+        konto = self._account()
+        if konto is not None and not konto.guest:
+            self._json({"ok": False, "error": "Das geht nur als Gast."}, 400)
+            return
+        if konto is not None:
+            try:
+                konto_entfernen(konto)
+            except (ValueError, TimeoutError) as exc:
+                self._json({"ok": False, "error": str(exc)}, 409)
+                return
+        if AUTH is not None:
+            AUTH.logout(self._cookie(AUTH_COOKIE))
+        self._json_cookie({"ok": True, "ended": konto is not None}, AUTH_COOKIE, "", 0)
+
     def _account_action(self, route: str, payload: dict[str, Any]) -> None:
         """Das eigene Konto verwalten (9.5.32).
 
@@ -6730,6 +6921,11 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             self._json({"ok": False, "error": "Bitte melde dich an."}, 401)
             return
         token = self._cookie(AUTH_COOKIE)
+        if konto.guest and route in {"/api/account/password", "/api/account/wipe",
+                                     "/api/account/delete"}:
+            # 17.0.0: Ein Gast hat kein Passwort. Er geht mit /api/auth/guest/end.
+            self._json({"ok": False, "error": GAST_NUR_KONTO}, 403)
+            return
         if route == "/api/account/events-seen":
             AUTH.mark_events_seen(konto.id)
             self._json({"ok": True})
@@ -6779,19 +6975,8 @@ p{{margin:0 0 8px;color:#57534a}}</style></head><body><main>
             self._json({"ok": True})
             return
 
-        if AIGUARD is not None:
-            sperre = AIGUARD.is_banned(user_id=konto.id)
-            if sperre is not None:
-                for keks in AUTH.device_cookie_hashes(konto.id):
-                    AIGUARD.ban_device(keks, reason=sperre.reason, until=sperre.until)
-
-                with contextlib.suppress(Exception):
-                    adresse = AUTH.last_address(konto.id)
-                    if adresse:
-                        AIGUARD.ban_ip(adresse, reason=sperre.reason, by="konto-geloescht",
-                                       until=sperre.until)
         try:
-            AUTH.remove_account(konto)
+            konto_entfernen(konto)
         except ValueError as exc:
             self._json({"ok": False, "error": str(exc)}, 409)
             return

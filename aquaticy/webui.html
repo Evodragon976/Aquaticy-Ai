@@ -1050,6 +1050,10 @@ input:focus,select:focus{border-color:var(--accent)}
 .auth-legal a,.legal-links a,.terms-check a{color:var(--accent-text)}
 .terms-check{display:flex!important;align-items:flex-start;gap:9px;color:var(--text-2)}
 .terms-check[hidden]{display:none!important}
+/* 17.0.0: Ohne Anmeldung fortfahren */
+.gast-bereich{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
+  display:grid;gap:10px}
+.gast-bereich[hidden],[data-kein-gast][hidden],.gast-konto[hidden]{display:none!important}
 .terms-check input{flex:none;margin-top:5px}
 .auth-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}
 .auth-tabs,.plan-choice{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0}
@@ -1537,6 +1541,21 @@ html.vv,html.vv body{height:var(--app-h)}
         <button type="submit" class="btn primary" id="auth-submit">Konto erstellen</button>
       </div>
     </form>
+    <!-- 17.0.0: Ohne Anmeldung fortfahren -- ein Gastkonto nur fuer diesen Tab. -->
+    <div class="gast-bereich" id="gast-bereich" hidden>
+      <label class="terms-check">
+        <input type="checkbox" id="gast-terms">
+        <span>Ich stimme der <a href="/privacy" target="_blank"
+          rel="noopener">Datenschutzerklärung</a> und den <a href="/terms" target="_blank"
+          rel="noopener">Nutzungsbedingungen</a> zu.</span>
+      </label>
+      <div class="auth-actions">
+        <button type="button" class="btn" id="gast-los">Ohne Anmeldung fortfahren</button>
+      </div>
+      <p class="note">Ohne Konto gilt alles nur in diesem Tab. Schließt du ihn, löscht Aquaticy
+        nach wenigen Minuten deine Chats und Einstellungen.</p>
+      <div class="auth-error" id="gast-error" role="alert"></div>
+    </div>
   </section>
 
   <section class="auth-card" id="leave-card" hidden>
@@ -2216,13 +2235,23 @@ html.vv,html.vv body{height:var(--app-h)}
     </div>
     <form id="settings">
       <fieldset><legend>Konto</legend>
+        <!-- 17.0.0: nur fuer Gaeste -- sie melden sich hier an. -->
+        <div class="gast-konto" id="gast-konto" hidden>
+          <p class="note">Du nutzt Aquaticy gerade ohne Konto. Alles gilt nur in diesem Tab.
+            Schließt du ihn, löscht Aquaticy nach wenigen Minuten deine Chats und
+            Einstellungen. Ein zweiter Tab beendet den Gastzugang. In ein Konto ziehen
+            deine Chats nicht mit.</p>
+          <div class="actions section">
+            <button type="button" class="btn primary" id="gast-anmelden">Anmelden</button>
+          </div>
+        </div>
         <div class="account-grid">
           <span>Nutzername</span><strong id="account-username">…</strong>
           <span>E-Mail</span><strong id="account-email">…</strong>
           <span>Kontotyp</span><strong id="account-plan">…</strong>
           <span>Nutzung</span><strong id="account-tokens">…</strong>
         </div>
-        <div class="actions section">
+        <div class="actions section" data-kein-gast>
           <span class="note">Deine Chats und Einstellungen gehören nur zu diesem Konto.</span>
           <button type="button" class="btn" id="account-logout">Abmelden</button>
         </div>
@@ -2232,16 +2261,17 @@ html.vv,html.vv body{height:var(--app-h)}
             auch aus dem Chat.</span>
           <button type="button" class="btn" id="ort-open">Ort &amp; Sprache einstellen</button>
         </div>
-        <div class="group">Sicherheit</div>
-        <p class="note">Deine Geräte und deine Adresse sind verschlüsselt. Nur du siehst sie hier,
+        <div class="group" data-kein-gast>Sicherheit</div>
+        <p class="note" data-kein-gast>Deine Geräte und deine Adresse sind verschlüsselt.
+          Nur du siehst sie hier,
           der Betreiber nicht.</p>
-        <ul class="device-list" id="device-list"></ul>
-        <div class="note" id="security-summary"></div>
-        <div class="actions section">
+        <ul class="device-list" id="device-list" data-kein-gast></ul>
+        <div class="note" id="security-summary" data-kein-gast></div>
+        <div class="actions section" data-kein-gast>
           <button type="button" class="btn" id="account-password">Passwort ändern</button>
           <button type="button" class="btn" id="account-logout-all">Überall sonst abmelden</button>
         </div>
-        <div class="danger-zone">
+        <div class="danger-zone" data-kein-gast>
           <strong>Daten und Konto löschen</strong>
           <p class="note">„Alle Daten löschen“ löscht Chats, Bilder, Dateien, Erinnerungen,
             Coworker, Einstellungen, Schlüssel, die Google-Verbindung und Geräte. Das Konto bleibt.
@@ -2847,7 +2877,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "16.5.7";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "17.0.0";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -3297,7 +3327,7 @@ function setAuthMode(mode){
   $("#auth-error").textContent = "";
 
   $("#human-check").hidden = true;
-  menschAufgabe = null; menschNachweis = null;
+  menschAufgabe = null; menschNachweis = null; gastWartet = false;
   showProCode();
   if (einzelKonto) einzelKontoZeigen(registering);
 }
@@ -3473,6 +3503,7 @@ $("#human-slider").addEventListener("change", async () => {
   menschNachweis = {...geloest, track: reglerWeg.slice()};
   menschAufgabe = null;
   $("#human-check").hidden = true;
+  if (gastWartet){ gastWartet = false; $("#auth-error").textContent = ""; gastLos(); return; }
   const formular = $("#auth-form");
   if (formular.requestSubmit) formular.requestSubmit(); else $("#auth-submit").click();
 });
@@ -3528,13 +3559,97 @@ $("#auth-form").addEventListener("submit", async (event) => {
   } catch { error.textContent = "Aquaticy ist gerade nicht erreichbar. Versuch es gleich noch einmal."; }
 });
 
+// 17.0.0: Ohne Anmeldung fortfahren. Der Merker in sessionStorage lebt nur so lange wie der Tab.
+// Fehlt er beim Laden, war der Tab zu (oder es ist ein zweiter): Dann geht der Gast samt Daten.
+const GAST_MERKER = "aquaticy-gast";
+let gastErlaubt = false, istGast = false, gastWartet = false;
+function gastMerker(setzen){
+  try {
+    if (setzen === true) sessionStorage.setItem(GAST_MERKER, "1");
+    else if (setzen === false) sessionStorage.removeItem(GAST_MERKER);
+    return sessionStorage.getItem(GAST_MERKER) === "1";
+  } catch { return false; }
+}
+async function gastLos(){
+  const fehler = $("#gast-error");
+  fehler.textContent = "";
+  if (!$("#gast-terms").checked){
+    fehler.textContent = "Stimm zuerst der Datenschutzerklärung und den Nutzungsbedingungen zu.";
+    return;
+  }
+  $("#gast-los").disabled = true;
+  try {
+    const body = { terms_accepted: true, device: geraeteInfo(), lang: sprache,
+      webdriver: navigator.webdriver === true };
+    body.proof = await frischerBesuchsNachweis();
+    if (!body.proof){ neuerBesuchsNachweis(); body.proof = await besuchsNachweis; }
+    if (menschNachweis){ body.human = menschNachweis; menschNachweis = null; }
+    neuerBesuchsNachweis();
+    const res = await api("/api/auth/guest", {method:"POST", quietErrors:true,
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (res.status === 428 && data.challenge){
+      gastWartet = true; zeigeMenschCheck(data.challenge); return;
+    }
+    if (!res.ok || !data.ok){
+      fehler.textContent = data.error || "Das hat nicht geklappt."; return;
+    }
+    gastMerker(true);
+    location.reload();
+  } catch {
+    fehler.textContent = "Aquaticy ist gerade nicht erreichbar. Versuch es gleich noch einmal.";
+  } finally { $("#gast-los").disabled = false; }
+}
+$("#gast-los").addEventListener("click", gastLos);
+// Geht der Tab zu (oder laedt neu), gilt die Gastsitzung nur noch 2 Minuten. Laedt die Seite neu,
+// holt sie sich die volle Zeit gleich zurueck. Ist der Tab zu, loescht Aquaticy den Gast danach.
+function gastWeiter(){
+  if (istGast) api("/api/auth/guest/resume", {method:"POST", quietErrors:true})
+    .then(res => res.text()).catch(() => "");
+}
+window.addEventListener("pagehide", () => {
+  if (!istGast) return;
+  try {
+    api("/api/auth/guest/pause", {method:"POST", keepalive:true, quietErrors:true,
+      headers:{"Content-Type":"application/json"}, body:"{}"}).catch(() => {});
+  } catch { /* beim Schliessen egal */ }
+});
+window.addEventListener("pageshow", (event) => { if (event.persisted) gastWeiter(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") gastWeiter();
+});
+$("#gast-anmelden").addEventListener("click", async () => {
+  if (!await frage("Jetzt anmelden?",
+      "Deine Chats als Gast sind danach weg. In ein Konto ziehen sie nicht mit.",
+      "Anmelden")) return;
+  await api("/api/auth/guest/end", {method:"POST", quietErrors:true});
+  gastMerker(false);
+  location.reload();
+});
+
 async function bootAuth(){
   try {
     const state = await (await api("/api/auth/status")).json();
     learningVersion = state.learning_version || "";
     einzelKonto = state.single === true;
     kontoEinrichten = state.setup_needed === true;
+    gastErlaubt = state.guest_allowed === true;
+    $("#gast-bereich").hidden = !gastErlaubt;
     if (!state.consent){ showAuth(consentCard); return; }
+    if (state.authenticated && state.guest && !gastMerker()){
+      // 17.0.0: Der Tab war zu -- der Gast und seine Daten gehen.
+      await api("/api/auth/guest/end", {method:"POST", quietErrors:true});
+      anmeldeKarte();
+      neuerBesuchsNachweis();
+      return;
+    }
+    istGast = state.authenticated === true && state.guest === true;
+    if (istGast){
+      // Nach dem Neuladen: volle Zeit zurueck -- und nach 5 s noch einmal, falls die kurze
+      // Pause der alten Seite erst danach ankommt.
+      gastWeiter();
+      setTimeout(gastWeiter, 5000);
+    }
     if (!state.authenticated){
       anmeldeKarte();
 
@@ -5600,6 +5715,20 @@ try {
 
 
 const EN = {
+"Ohne Anmeldung fortfahren": "Continue without signing in",
+"Ohne Konto gilt alles nur in diesem Tab. Schließt du ihn, löscht Aquaticy nach wenigen Minuten deine Chats und Einstellungen.": "Without an account, everything only lasts in this tab. Close it and Aquaticy deletes your chats and settings within a few minutes.",
+"Stimm zuerst der Datenschutzerklärung und den Nutzungsbedingungen zu.": "First agree to the privacy policy and the terms of use.",
+"Du nutzt Aquaticy gerade ohne Konto. Alles gilt nur in diesem Tab. Schließt du ihn, löscht Aquaticy nach wenigen Minuten deine Chats und Einstellungen. Ein zweiter Tab beendet den Gastzugang. In ein Konto ziehen deine Chats nicht mit.": "You're using Aquaticy without an account right now. Everything only lasts in this tab. Close it and Aquaticy deletes your chats and settings within a few minutes. A second tab ends guest access. Your chats don't move into an account.",
+"Keine, du bist Gast": "None, you're a guest",
+"Gast": "Guest",
+"Jetzt anmelden?": "Sign in now?",
+"Deine Chats als Gast sind danach weg. In ein Konto ziehen sie nicht mit.": "Your guest chats will be gone. They don't move into an account.",
+"Als Gast geht das nicht. Melde dich an oder leg ein Konto an.": "Guests can't do that. Sign in or create an account.",
+"Von hier sind gerade schon genug Gäste da. Melde dich an oder versuch es später noch einmal.": "There are already enough guests from here. Sign in or try again later.",
+"Zu viele Versuche von hier. Warte ein wenig und versuch es dann noch einmal.": "Too many attempts from here. Wait a little, then try again.",
+"Im Einzelkonto gibt es keinen Gastzugang.": "There's no guest access with a single account.",
+"Das geht nur als Gast.": "That only works as a guest.",
+"Namen mit „Gast-“ am Anfang sind für Gäste reserviert. Wähl einen anderen Nutzernamen.": "Names starting with “Gast-” are reserved for guests. Choose a different username.",
 "keine Chat-Kennung": "no chat ID",
 "x und y bitte als Zahlen.": "x and y must be numbers.",
 "kein Lauf": "no run",
@@ -7004,7 +7133,10 @@ const EN_MUSTER = [
 function aufEnglisch(text, tiefe = 0, nurFest = false){
   const k = schluessel(String(text || ""));
   if (!k) return "";
-  if (EN[k] || nurFest) return EN[k] || "";
+  // 16.6.7: nur eigene Eintraege -- "constructor" oder "toString" fanden sonst die eingebaute
+  // Funktion von Object und zeigten deren Code an.
+  const eintrag = Object.prototype.hasOwnProperty.call(EN, k) ? EN[k] : "";
+  if (eintrag || nurFest) return eintrag;
 
 
   if (k.length > 400) return "";
@@ -7998,6 +8130,10 @@ async function loadAccount(account){
   }
 
   kontoUltra = ultra;
+  // 17.0.0: Gaeste sehen hier nur "Anmelden" -- kein Passwort, keine Geraete, nichts zu loeschen.
+  $("#gast-konto").hidden = !istGast;
+  document.querySelectorAll("[data-kein-gast]").forEach(tag => { tag.hidden = istGast; });
+  if (istGast) $("#account-email").textContent = "Keine, du bist Gast";
 
   for (const id of ["usermode", "vminternet", "vmlan"]){
     const schalter = $("#" + id);

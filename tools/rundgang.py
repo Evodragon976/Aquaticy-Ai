@@ -2395,16 +2395,28 @@ def rundgang(pg: Any, log: Protokoll, agent: FakeAgent, bilder: Path | None,
         auswahl.select_option("30")
         aendern.get_by_role("button", name="Speichern", exact=True).click()
         pg.wait_for_function("() => document.querySelector('.cw-rhythmus')?.value === '30'")
-        pg.wait_for_function("() => document.querySelector('.cw-karte')?.innerText"
-                             ".includes('Alle 30 Sekunden')")
+        # 17.0.0: auf die Zeile unter der Aufgabe warten -- sie kommt vom Server. Denselben Text
+        # gibt es auch in der Auswahl; darauf zu warten, fragte den Server zu frueh.
+        pg.wait_for_function("() => [...document.querySelectorAll('.cw-karte > p.note')]"
+                             ".some(p => p.textContent.includes('Alle 30 Sekunden'))")
         gespeichert = pg.evaluate("async () => (await (await fetch('/api/coworkers'))"
                                  ".json()).coworkers[0].interval_seconds")
         log.pruefe(gespeichert == 30, "der gewählte Rhythmus wird serverseitig gespeichert")
-        karte.locator("details").filter(
-            has=pg.locator("summary", has_text="Regeln — was")).evaluate("e => e.open = true")
+        regeln = karte.locator("details").filter(
+            has=pg.locator("summary", has_text="Regeln — was"))
         haus = karte.locator(".recht").filter(has_text="Im Haus etwas schalten")
         # Erst warten, bis alle drei Knoepfe stehen -- unter Last las der Rundgang zu frueh.
-        haus.get_by_role("radio").nth(2).wait_for()
+        # 17.0.0: Arbeitet der Coworker gerade (Takt 30 s), baut die Seite die Karte neu; fiel
+        # das zwischen Oeffnen und Lesen, war der Bereich wieder zu. Dann noch einmal oeffnen.
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+        for _ in range(6):
+            regeln.evaluate("e => e.open = true")
+            try:
+                haus.get_by_role("radio").nth(2).wait_for(timeout=5000)
+                break
+            except PlaywrightTimeout:
+                continue
         log.pruefe(haus.get_by_role("radio").all_text_contents() ==
                    ["Erlauben", "Fragen", "Sperren"],
                    "Erlauben steht direkt in der Haus-Regel")

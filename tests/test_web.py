@@ -3486,7 +3486,9 @@ def test_no_plain_checkbox_is_left_over() -> None:
     html = web.UI_FILE.read_text(encoding="utf-8")
     roh = html.count('<input type="checkbox"')
     angezogen = html.count('<input type="checkbox" role="switch" class="schalter"')
-    assert roh == angezogen + 5
+    # 17.0.0: dazu die Zustimmung beim Gastzugang ("Ohne Anmeldung fortfahren").
+    assert roh == angezogen + 6
+    assert '<input type="checkbox" id="gast-terms">' in html
     assert '<input type="checkbox" id="cw-sharing-chats">' in html
     assert '<input type="checkbox" id="cw-sharing-coworkers">' in html
     assert '<input type="checkbox" id="auth-terms" required>' in html
