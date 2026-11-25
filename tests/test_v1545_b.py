@@ -19,7 +19,7 @@ from aquaticy import (
     voice,
 )
 from aquaticy.learning import Learning
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_VERSION
 
 
 @pytest.mark.parametrize('payload', [{}, {'error': {'message': 'Not accepted'}}])
@@ -77,7 +77,7 @@ def test_f016_literal_credentials_are_not_mistaken_for_symbolic_references(secre
 
 def test_one_damaged_shared_fact_does_not_hide_other_confirmed_facts(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     first = ('Photosynthese bezeichnet die Umwandlung von Lichtenergie in chemische Energie '
              'durch Pflanzen und andere Organismen unter Verwendung lichtabsorbierender Stoffe.')
     second = ('Photosynthese liefert Pflanzen chemische Energie aus Lichtenergie und ermöglicht '

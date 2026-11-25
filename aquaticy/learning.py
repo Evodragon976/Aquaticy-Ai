@@ -17,7 +17,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from aquaticy.injection import clean_text, suspicious
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_GLEICHER_ABSATZ, LEARNING_VERSION
 from aquaticy.memory import secure_file
 from aquaticy.privacy import ServerSecrets, key_root
 
@@ -220,6 +220,10 @@ class Learning:
         self.account_id = owner if owner != "lokal" else ""
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            # 17.1.0: Wer unter 17.0.0 zugestimmt hat, stimmte demselben Absatz zu -- und bleibt
+            # dabei. Wer das Lernen abgeschaltet hat, bleibt abgeschaltet (enabled bleibt).
+            conn.executemany("UPDATE learning_consent SET version=? WHERE version=?",
+                             [(LEARNING_VERSION, alt) for alt in LEARNING_GLEICHER_ABSATZ])
         from aquaticy.research import ResearchCache
 
         self.research = ResearchCache(self)
@@ -241,7 +245,7 @@ class Learning:
                 return self.ticket(current)
         row = conn.execute(
             "SELECT epoch FROM learning_consent WHERE owner=? AND enabled=1 AND version=?",
-            (self.owner, LEGAL_VERSION),
+            (self.owner, LEARNING_VERSION),
         ).fetchone()
         return str(row[0]) if row else ""
 
@@ -257,7 +261,7 @@ class Learning:
             ).fetchone()[0]
             return {
                 "enabled": bool(self.ticket(conn)),
-                "version": LEGAL_VERSION,
+                "version": LEARNING_VERSION,
                 "contributions": count,
                 "research_items": conn.execute(
                     "SELECT COUNT(*) FROM research_facts WHERE owner=?",
@@ -282,7 +286,7 @@ class Learning:
             self._prune(conn, now)
 
     def set_consent(self, enabled: object, version: str) -> dict:
-        if type(enabled) is not bool or (enabled and version != LEGAL_VERSION):
+        if type(enabled) is not bool or (enabled and version != LEARNING_VERSION):
             raise ValueError("Bitte bestätige die aktuelle Erklärung zum gemeinsamen Lernen.")
         with self.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -296,7 +300,7 @@ class Learning:
                 raise ValueError("Das Konto existiert nicht mehr.")
             conn.execute(
                 "INSERT OR REPLACE INTO learning_consent VALUES (?, ?, ?, ?, ?)",
-                (self.owner, LEGAL_VERSION, int(enabled), secrets.token_hex(16), time.time()),
+                (self.owner, LEARNING_VERSION, int(enabled), secrets.token_hex(16), time.time()),
             )
             if not enabled:
                 self._erase(conn)
@@ -421,8 +425,8 @@ class Learning:
                 "JOIN learning_consent s ON s.owner=c.owner "
                 "WHERE c.fact=f.id AND c.owner=? AND s.enabled=1 AND s.version=?)) "
                 "GROUP BY f.id ORDER BY COUNT(*) DESC,f.created DESC,f.id LIMIT 3",
-                (*hashes, time.time(), LEGAL_VERSION, MIN_CONFIRMATIONS, self.owner,
-                 LEGAL_VERSION),
+                (*hashes, time.time(), LEARNING_VERSION, MIN_CONFIRMATIONS, self.owner,
+                 LEARNING_VERSION),
             ).fetchall()
         result = []
         for key, sealed, source in rows:
@@ -451,7 +455,7 @@ class Learning:
                 "(SELECT COUNT(*) FROM learning_contributions c "
                 "JOIN learning_consent s ON s.owner=c.owner "
                 "WHERE c.fact=f.id AND s.enabled=1 AND s.version=?)>=?",
-                (time.time(), LEGAL_VERSION, MIN_CONFIRMATIONS),
+                (time.time(), LEARNING_VERSION, MIN_CONFIRMATIONS),
             ).fetchall())
 
     def confirmed_facts(self, limit: int = 60, *, metadata: bool = False,
@@ -476,7 +480,7 @@ class Learning:
                 "JOIN learning_consent s ON s.owner=c.owner "
                 "WHERE c.fact=f.id AND s.enabled=1 AND s.version=?)>=? " + selection + " "
                 "ORDER BY f.created,f.id LIMIT ?",
-                (time.time(), LEGAL_VERSION, MIN_CONFIRMATIONS, *(selected or ()),
+                (time.time(), LEARNING_VERSION, MIN_CONFIRMATIONS, *(selected or ()),
                  min(60, max(0, int(limit)))),
             ).fetchall()
         result = []

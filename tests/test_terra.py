@@ -12,7 +12,7 @@ import pytest
 from aquaticy import VERSION_LABEL, research
 from aquaticy.agent import Agent, AgentResult
 from aquaticy.learning import Learning
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_VERSION
 from aquaticy.models import PageResult
 from aquaticy.privacy import TEXT_PREFIX
 from aquaticy.tools import Toolbox
@@ -34,10 +34,10 @@ def remember(store, text=FACT, question=QUESTION, source=SOURCE, ticket=None):
 def test_person_cache_is_private_encrypted_and_not_a_saved_answer(learners):
     _, accounts, (first, second) = learners
     assert remember(first) == 0
-    first.set_consent(True, LEGAL_VERSION)
+    first.set_consent(True, LEARNING_VERSION)
     assert remember(first) == 1
     assert first.research.recall(QUESTION) == [{"text": "- " + FACT, "source": SOURCE}]
-    second.set_consent(True, LEGAL_VERSION)
+    second.set_consent(True, LEARNING_VERSION)
     assert second.research.recall(QUESTION) == []
     assert first.recall(QUESTION) == second.recall(QUESTION) == []
     with first.connect() as conn:
@@ -59,7 +59,7 @@ def test_person_cache_is_private_encrypted_and_not_a_saved_answer(learners):
 
 def test_expiry_is_fixed_exact_and_removes_index_and_ciphertext(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     clock = [1000.0]
     monkeypatch.setattr(research, "time", SimpleNamespace(time=lambda: clock[0]))
     assert remember(store) == 1
@@ -74,7 +74,7 @@ def test_expiry_is_fixed_exact_and_removes_index_and_ciphertext(tmp_path, monkey
 
 def test_forged_late_expiry_cannot_extend_48_hours(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     clock = [1000.0]
     monkeypatch.setattr(research, "time", SimpleNamespace(time=lambda: clock[0]))
     remember(store)
@@ -87,12 +87,12 @@ def test_forged_late_expiry_cannot_extend_48_hours(tmp_path, monkeypatch):
 @pytest.mark.parametrize("action", ["withdraw", "wipe_data", "remove_account"])
 def test_erasure_removes_person_data_and_invalidates_inflight_turns(learners, action):
     auth, accounts, (store, _) = learners
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     old = store.ticket()
     remember(store)
     if action == "withdraw":
         store.set_consent(False, "")
-        store.set_consent(True, LEGAL_VERSION)
+        store.set_consent(True, LEARNING_VERSION)
     else:
         getattr(auth, action)(accounts[0])
     assert store.research.recall(QUESTION) == []
@@ -111,7 +111,7 @@ def test_erasure_removes_person_data_and_invalidates_inflight_turns(learners, ac
 ])
 def test_sensitive_personal_or_instructional_material_is_rejected(tmp_path, extra):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     text = FACT[:-1] + extra
     assert remember(store, text=text) == 0
     assert store.research.recall(QUESTION) == []
@@ -135,7 +135,7 @@ def test_person_source_policy_remains_strict(url):
 
 def test_private_question_known_private_term_and_unrelated_answer_not_saved(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     assert remember(store, question="Mein Bekannter Albert Einstein") == 0
     assert store.research.learn(store.ticket(), QUESTION, FACT, [(SOURCE, FACT)],
                                  {"Relativitätstheorie"}) == 0
@@ -146,7 +146,7 @@ def test_private_question_known_private_term_and_unrelated_answer_not_saved(tmp_
 
 def test_concurrent_dedup_limits_and_authentication_of_ciphertext(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert sum(pool.map(lambda _: remember(store), range(16))) == 1
     monkeypatch.setattr(research, "MAX_OWN", 1)
@@ -161,7 +161,7 @@ def test_concurrent_dedup_limits_and_authentication_of_ciphertext(tmp_path, monk
 
 def test_cleanup_runs_without_any_chat_and_stops(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     monkeypatch.setattr(research, "LIFETIME", 0.1)
     remember(store)
     cleaned = threading.Event()
@@ -211,7 +211,7 @@ def test_fetch_redirects_and_reset_keep_person_capture_bound_to_turn(settings):
 @pytest.mark.parametrize("failure", ["error", "stop", "guard"])
 def test_rejected_or_incomplete_answers_do_not_seed_person_cache(settings, monkeypatch, failure):
     store = Learning(settings.data_dir)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     agent = Agent(settings)
     agent.learning = store
     try:
@@ -235,7 +235,7 @@ def test_rejected_or_incomplete_answers_do_not_seed_person_cache(settings, monke
 def test_real_research_then_fresh_chat_uses_facts_for_new_answer(learners, settings, monkeypatch):
     auth, accounts, (store, _) = learners
     own = replace(settings, data_dir=auth.profile_dir(accounts[0].id))
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
 
     class Fetcher:
         def fetch(self, url, **kwargs):

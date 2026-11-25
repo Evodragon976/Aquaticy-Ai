@@ -2877,7 +2877,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "17.0.0";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "17.1.0";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -3607,8 +3607,10 @@ function gastWeiter(){
   if (istGast) api("/api/auth/guest/resume", {method:"POST", quietErrors:true})
     .then(res => res.text()).catch(() => "");
 }
-window.addEventListener("pagehide", () => {
-  if (!istGast) return;
+window.addEventListener("pagehide", (event) => {
+  // 17.1.0: Bleibt die Seite im Zwischenspeicher (persisted, etwa beim Wechsel der App auf dem
+  // Handy), ist der Tab nicht zu -- dann keine Pause, sonst ginge der Gast verloren.
+  if (!istGast || event.persisted) return;
   try {
     api("/api/auth/guest/pause", {method:"POST", keepalive:true, quietErrors:true,
       headers:{"Content-Type":"application/json"}, body:"{}"}).catch(() => {});
@@ -3624,6 +3626,8 @@ $("#gast-anmelden").addEventListener("click", async () => {
       "Anmelden")) return;
   await api("/api/auth/guest/end", {method:"POST", quietErrors:true});
   gastMerker(false);
+  // 17.1.0: Nach dem Neuladen gleich der Reiter "Anmelden", nicht "Registrieren".
+  try { sessionStorage.setItem("aquaticy-anmelden", "1"); } catch { /* dann Registrieren */ }
   location.reload();
 });
 
@@ -3652,6 +3656,12 @@ async function bootAuth(){
     }
     if (!state.authenticated){
       anmeldeKarte();
+      try {
+        if (sessionStorage.getItem("aquaticy-anmelden") === "1"){
+          sessionStorage.removeItem("aquaticy-anmelden");
+          setAuthMode("login");
+        }
+      } catch { /* ohne Speicher bleibt es beim Registrieren */ }
 
       neuerBesuchsNachweis();
       return;
@@ -8133,7 +8143,8 @@ async function loadAccount(account){
   // 17.0.0: Gaeste sehen hier nur "Anmelden" -- kein Passwort, keine Geraete, nichts zu loeschen.
   $("#gast-konto").hidden = !istGast;
   document.querySelectorAll("[data-kein-gast]").forEach(tag => { tag.hidden = istGast; });
-  if (istGast) $("#account-email").textContent = "Keine, du bist Gast";
+  // 17.1.0: #account-email wird nicht uebersetzt (echte Adressen) -- deshalb hier beide Sprachen.
+  if (istGast) $("#account-email").textContent = sp("Keine, du bist Gast", "None, you're a guest");
 
   for (const id of ["usermode", "vminternet", "vmlan"]){
     const schalter = $("#" + id);

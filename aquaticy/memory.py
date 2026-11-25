@@ -349,21 +349,30 @@ class Memory:
             self.db_path.with_name(self.db_path.name + "-journal"),
         )
 
+    def grenze(self) -> int:
+        """17.1.0: Die Speichergrenze dieses Profils -- bei Gaesten hoechstens 20 MB."""
+        from aquaticy.budget import GAST_MARKE, GAST_MAX_BYTES
+
+        if (self.data_dir / GAST_MARKE).exists():
+            return min(MAX_BYTES, GAST_MAX_BYTES)
+        return MAX_BYTES
+
     def usage(self) -> dict[str, object]:
         """Belegung in Zahlen, die sich anzeigen lassen."""
         used = self.used_bytes()
+        grenze = self.grenze()
         return {
             "used_bytes": used,
-            "limit_bytes": MAX_BYTES,
+            "limit_bytes": grenze,
             "used_mb": round(used / 1_000_000, 1),
-            "limit_mb": round(MAX_BYTES / 1_000_000),
-            "percent": round(used / MAX_BYTES * 100, 1),
+            "limit_mb": round(grenze / 1_000_000),
+            "percent": round(used / grenze * 100, 1),
             "entries": self.count(),
             "uploads": folder_bytes(self.data_dir / "uploads"),
         }
 
     def full(self) -> bool:
-        return self.used_bytes() >= MAX_BYTES
+        return self.used_bytes() >= self.grenze()
 
     def revision(self) -> int:
         with closing(self._connect()) as conn:
@@ -407,11 +416,11 @@ class Memory:
 
         encrypted_topic, encrypted_text = self._cipher.encrypt(topic), self._cipher.encrypt(text)
         incoming = len(encrypted_topic.encode()) + len(encrypted_text.encode()) + 8192
-        if self.used_bytes() + incoming > MAX_BYTES * CLEANUP_AT:
+        if self.used_bytes() + incoming > self.grenze() * CLEANUP_AT:
             self.make_room()
-        if self.used_bytes() + incoming > MAX_BYTES:
+        if self.used_bytes() + incoming > self.grenze():
             raise MemoryFull(
-                f"Der Speicher ist voll ({MAX_BYTES // 1_000_000} MB). "
+                f"Der Speicher ist voll ({self.grenze() // 1_000_000} MB). "
                 "Lösche alte Chats, Hochgeladenes oder Notizen, die du nicht mehr brauchst."
             )
 
@@ -422,7 +431,7 @@ class Memory:
                     "SELECT version FROM memory_revision WHERE id=1").fetchone()[0]
                 if version != expected_revision:
                     raise ValueError("Der Speicher wurde inzwischen geändert.")
-            if self.used_bytes() + incoming > MAX_BYTES:
+            if self.used_bytes() + incoming > self.grenze():
                 raise MemoryFull("Die neue Notiz passt nicht mehr in deinen Speicher.")
             cur = conn.execute(
                 "INSERT INTO memory (topic, text) VALUES (?, ?)",
@@ -549,7 +558,7 @@ class Memory:
                 key=modified,
             )
             for path in files:
-                if self.used_bytes() <= MAX_BYTES * 0.7:
+                if self.used_bytes() <= self.grenze() * 0.7:
                     break
                 try:
                     size = path.stat().st_size

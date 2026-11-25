@@ -38,7 +38,7 @@ import re
 import statistics
 import unicodedata
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -595,7 +595,10 @@ def datum_aus(text: str, heute: date) -> date | None:
         except ValueError:
             return None
     # Am Satzende fehlt der letzte Punkt oft ("bis zum 24.12?").
-    treffer = re.search(r"\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4})?|(?=\s*$))", text)
+    # 17.1.0: nie mitten in einer Zahlenkette ("1.1.1", "Version 1.24.12") und kein Jahr mit
+    # mehr als vier Ziffern -- vorher galt "1.1.1" als 1. Januar dieses Jahres.
+    treffer = re.search(r"(?<![\d.])\b(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4})?(?!\d)|(?=\s*$))",
+                        text)
     if treffer:
         tag, monat, jahr_text = int(treffer.group(1)), int(treffer.group(2)), treffer.group(3)
     else:
@@ -606,7 +609,7 @@ def datum_aus(text: str, heute: date) -> date | None:
         jahr_text = treffer.group(3)
     if jahr_text:
         jahr = int(jahr_text)
-        if jahr < 100:
+        if jahr < 100 and len(jahr_text) <= 2:  # 17.1.0: "0000" ist nicht 2000
             # 16.1.6: "05.05.90" ist 1990, nicht 2090 -- mehr als 20 Jahre voraus gilt als 19xx.
             jahr += 2000 if 2000 + jahr <= heute.year + 20 else 1900
         jahre: tuple[int, ...] = (jahr,)
@@ -630,8 +633,8 @@ def ungueltiges_datum(text: str) -> str:
     try:
         date(jahr, monat, tag)
     except ValueError:
-        anzeige = f"{tag:02d}.{monat:02d}.{jahr}"
-        if monat == 2 and tag == 29:
+        anzeige = f"{tag:02d}.{monat:02d}.{jahr:04d}"
+        if monat == 2 and tag == 29 and 1 <= jahr <= 9999:
             return f"Den {anzeige} gibt es nicht – {jahr} ist kein Schaltjahr."
         return f"Den {anzeige} gibt es nicht."
     return ""
@@ -655,8 +658,6 @@ def in_tagen(tage: int) -> str:
 
 def arbeitstage(von: date, bis: date) -> int:
     """Montag bis Freitag ohne bundesweite Feiertage, *von* und *bis* mitgezaehlt."""
-    from datetime import timedelta
-
     if bis < von:
         return 0
     frei = {t for jahr_ in range(von.year, bis.year + 1) for t, _ in feiertage(jahr_)}
@@ -668,8 +669,6 @@ def in_einheit(text: str, kern: str, tage: int, heute: date | None = None) -> st
     """"Wie viele Wochen bis ...?" bekam vorher nur Tage (16.4.5)."""
     if heute is not None and 1 <= tage <= 3660 and re.search(r"\b(?:werk|arbeits)tage?\b", kern):
         # 16.4.5: "Wie viele Werktage bis Weihnachten?" nannte vorher alle Kalendertage.
-        from datetime import timedelta
-
         anzahl = arbeitstage(heute + timedelta(days=1), heute + timedelta(days=tage - 1))
         wort = "Arbeitstag" if anzahl == 1 else "Arbeitstage"
         return (text + f" Dazwischen liegen **{anzahl} {wort}** (Montag bis Freitag, ohne "
@@ -741,8 +740,6 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
     # 16.4.5: "Wie spät ist es in 3 Stunden?" nannte vorher die Uhrzeit von jetzt.
     spaeter = re.search(r"\b(in|vor)\s+(\d{1,3})\s+(stunden?|minuten?)\b", kern)
     if spaeter and re.search(r"\b(wie\s*spaet|uhrzeit|wieviel\s+uhr|wie\s+viel\s+uhr)\b", kern):
-        from datetime import timedelta
-
         menge = int(spaeter.group(2))
         schritt = timedelta(hours=menge) if spaeter.group(3).startswith("stunde") else timedelta(
             minutes=menge)
@@ -758,8 +755,6 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                         r"(?:\s+(?:noch|ist\s+es))*|"
                         r"wann\s+ist\s+es)\s+bis\s+(\d{1,2})(?::(\d{2}))?\s*uhr\b", kern)
     if bis_uhr and int(bis_uhr.group(1)) <= 24 and int(bis_uhr.group(2) or 0) < 60:
-        from datetime import timedelta
-
         stunde, minute = int(bis_uhr.group(1)) % 24, int(bis_uhr.group(2) or 0)
         ziel = jetzt.replace(hour=stunde, minute=minute, second=0, microsecond=0)
         if ziel <= jetzt:
@@ -785,8 +780,6 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                  r"was\s+(?:ist\s+|war\s+|haben\s+wir\s+)?(?:\w+\s+){0,3}fuer\s+ein\s+"
                  r"(?:datum|tag|wochentag))\b", kern) and not datum_aus(kern, heute) \
             and not _benannter_tag(kern, heute):
-        from datetime import timedelta
-
         # 16.4.5: "Welches Datum war vor 100 Tagen?" nannte vorher das Datum von heute.
         versatz_ = re.search(r"\b(in|vor)\s+(\d{1,4})\s+(tag|tagen|woche|wochen)\b", kern)
         if versatz_:
@@ -798,9 +791,11 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
                     f"**{WOCHENTAGE[tag.weekday()]}, der {tag:%d.%m.%Y}**.")
 
         # "Welches Datum ist morgen?" nannte vorher das Datum von heute.
+        # 17.1.0: "heute Morgen" ist heute -- vorher kam das Datum von morgen.
+        ohne_morgen = re.sub(r"\b(?:guten|heute)\s+morgen\b", " ", kern)
         for wort, name, versatz in (("uebermorgen", "Übermorgen", 2), ("vorgestern", "Vorgestern",
                                     -2), ("morgen", "Morgen", 1), ("gestern", "Gestern", -1)):
-            if re.search(rf"\b{wort}\b", kern):
+            if re.search(rf"\b{wort}\b", ohne_morgen):
                 tag = heute + timedelta(days=versatz)
                 zeitform = "war" if versatz < 0 else "ist"
                 return (f"{name} {zeitform} **{WOCHENTAGE[tag.weekday()]}, der {tag:%d.%m.%Y}** "
@@ -832,6 +827,18 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
             and not re.search(r"\d\s*(?:kw|ps|w|watt)\b|\b(?:in|nach|zu)\s+(?:kw|ps)\b", kern)):
         # 16.4.5: "Welche KW ist der 1. März?" nannte vorher die Woche von heute.
         tag_kw = datum_aus(kern, heute)
+        if not tag_kw:
+            # 17.1.0: "Welche KW ist der 29.02.2027?" und "Welche KW ist morgen?" nannten vorher
+            # auch die Woche von heute.
+            falsch = ungueltiges_datum(kern)
+            if falsch:
+                return falsch
+            ohne_gruss = re.sub(r"\b(?:guten|heute)\s+morgen\b", " ", kern)
+            versatz = next((tage for wort, tage in (("uebermorgen", 2), ("vorgestern", -2),
+                                                    ("morgen", 1), ("gestern", -1))
+                            if re.search(rf"\b{wort}\b", ohne_gruss)), 0)
+            if versatz:
+                tag_kw = heute + timedelta(days=versatz)
         if tag_kw:
             jahr_kw, woche_kw = tag_kw.isocalendar()[:2]
             return f"Der {tag_kw:%d.%m.%Y} liegt in **KW {woche_kw}** ({jahr_kw})."
@@ -853,7 +860,9 @@ def zeit(text: str, jetzt: datetime | None = None) -> str:
         name = "März" if nummer == 3 else arbeit.group(1).capitalize()
         return (f"Der {name} {jahr} hat **{anzahl} Arbeitstage** (Montag bis Freitag, ohne "
                 "bundesweite Feiertage).")
-    monat = re.search(r"\bwie\s*viele\s+tage\s+hat\s+(?:der\s+|dieser\s+)?(" + "|".join(MONATE)
+    # 17.1.0: auch "Wie viele Tage hat der Monat Februar (2028)?"
+    monat = re.search(r"\bwie\s*viele\s+tage\s+hat\s+(?:(?:der|dieser)\s+)?(?:monat\s+)?("
+                      + "|".join(MONATE)
                       + r")(?:\s+(\d{4}))?\b", kern)
     if monat:
         jahr = int(monat.group(2) or heute.year)
@@ -961,15 +970,11 @@ def _benannter_tag(kern: str, heute: date) -> tuple[str, date] | None:
 
 
 def _sonntag_am_oder_vor(tag: date) -> date:
-    from datetime import timedelta
-
     return tag - timedelta(days=(tag.weekday() + 1) % 7)
 
 
 def anlaesse(jahr: int) -> dict[str, tuple[str, date]]:
     """Besondere Tage eines Jahres: Suchwort -> (Name, Datum)."""
-    from datetime import timedelta
-
     o = ostern(jahr)
     vierter_advent = _sonntag_am_oder_vor(date(jahr, 12, 24))
     erster_mai = date(jahr, 5, 1)
@@ -2031,8 +2036,6 @@ def uhrzeit_in(ort: str, holen: Holen, jetzt: datetime | None = None) -> str:
 
 def feiertage(jahr: int) -> list[tuple[date, str]]:
     """Die bundesweiten Feiertage in Deutschland."""
-    from datetime import timedelta
-
     o = ostern(jahr)
     return sorted([
         (date(jahr, 1, 1), "Neujahr"), (o - timedelta(days=2), "Karfreitag"),
@@ -2137,8 +2140,6 @@ def feiertag(text: str, heute: date) -> str:
             wann = "heute" if tag == heute else in_tagen((tag - heute).days)
             return (f"{name} ist dieses Mal am **{WOCHENTAGE[tag.weekday()]}, {tag:%d.%m.%Y}** – "
                     f"{wann}.")
-    from datetime import timedelta
-
     gefragt: tuple[str, date] | None = None
     for wort, name, versatz in (("uebermorgen", "übermorgen", 2), ("morgen", "morgen", 1),
                                 ("heute", "heute", 0)):
@@ -3298,7 +3299,10 @@ def _antwort(frage: str, verlauf: list[dict[str, Any]] | None = None, *, secure:
         text = teil()
         if text:
             # "Convert 10 miles to km" bekam vorher "10 Miles sind **16,0934 km**".
-            englisch_gefragt = sprache == "en" or re.search(r"\b(?:to|into)\b|\bhow\s+many\b", kern)
+            # 17.1.0: auch "100 km in miles" -- vorher "100 km sind **62,1371 Miles**".
+            englisch_gefragt = sprache == "en" or re.search(
+                r"\b(?:to|into)\b|\bhow\s+many\b|\b(?:miles?|degrees?|feet|foot|inch(?:es)?|"
+                r"yards?|pounds?|ounces?|gallons?)\b", kern)
             # 16.4.5: "1 km2 ist 100 Hektar" -- falten() macht aus "km²" ein "km2".
             text = re.sub(r"\b(k?m|cm|mm|dm)([23])\b",
                           lambda t: t.group(1) + {"2": "²", "3": "³"}[t.group(2)], text)
@@ -3550,6 +3554,11 @@ def englisch_kram(kern: str, heute: date) -> str:
         ergebnis = sum(werte_) if treffer.group(1) == "sum" else sum(werte_) / len(werte_)
         art = "sum" if treffer.group(1) == "sum" else "average"
         return _englisch(f"The {art} of {len(werte_)} numbers is **{schoen(ergebnis, 4)}**.")
+    # 17.1.0: "How many days does this month have?", "... in the current month?"
+    if re.search(r"\bhow\s+many\s+days\b", kern):
+        kern = re.sub(r"\b(?:this|the\s+current|current)\s+month\b|"
+                      r"\bthe\s+month(?=\s+have\b|\s*$)",
+                      f"{MONTHS[heute.month - 1]} {heute.year}", kern)
     # 16.4.5: auch "How many days are in February 2028?" (vorher nur "are there in")
     treffer = re.search(r"\bhow\s+many\s+days\s+(?:are\s+(?:there\s+)?|does\s+|is\s+)?(?:in\s+)?(" +
                         "|".join(MONTHS) + r")(?:\s+(\d{4}))?(?:\s+have)?\b", kern)
@@ -3769,7 +3778,11 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
     gefaltet = weltsprachen.norm(frage)
     if weltsprachen.nur_aus(frage, sprache, plaudern):
         gefunden = weltsprachen.treffer(gefaltet, sprache, plaudern)
-        if gefunden:
+        # 17.1.0: "Hello, what day is it?" kam nur als Gruss an -- "what", "day", "is" und "it"
+        # sind Fuellwoerter. Steht nach dem Gruss noch eine Frage nach Datum oder Uhrzeit, gilt sie.
+        frage_dabei = any(liste in ("zeit", "datum") for liste, _ in weltsprachen.treffer(
+            gefaltet, sprache, (*plaudern, "zeit", "datum")))
+        if gefunden and not frage_dabei:
             liste = gefunden[0][0]
             return a["intro" if liste in ("info", "hallo") else liste]
     # Ungarisch "idő", Lettisch "laiks", Serbisch "време" heissen Wetter und Zeit: Steht das
@@ -3790,8 +3803,6 @@ def welt_antwort(frage: str, code: str, holen: Holen, jetzt: datetime, wohnort: 
     if "datum" in arten and not wetter:
         if weltsprachen.enthaelt(frage, sprache, "morgen"):
             # "What is the date tomorrow?" nannte vorher das Datum von heute.
-            from datetime import timedelta
-
             wort = sprache.listen["morgen"][0]
             morgen = (jetzt.date() + timedelta(days=1)).isoformat()
             return f"{wort[:1].upper()}{wort[1:]}: **{morgen}**"

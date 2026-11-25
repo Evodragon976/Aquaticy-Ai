@@ -966,16 +966,26 @@ def _dritte_person(teil: str) -> str:
     return re.sub(r"^(ist|is)\s+(?:ki|ai)\b", r"\1 technik", teil)
 
 
+_BUCHSTABE = re.compile(r"[^\W\d_]")
+#: 17.1.0: Die Muster der Wendungen einmal bauen, nicht fuer jeden Satzteil neu.
+_WENDUNG_MUSTER = tuple((wert, wendung, re.compile(rf"\b{re.escape(wendung)}\b"))
+                        for wert, wendung in _BELEIDIGUNG_WENDUNGEN)
+
+
 def _satzteil_stufe(teil: str, ganze_woerter: int, anrede: bool = False) -> int:
     """Stufe einer gerichteten Beleidigung in einem Satzteil (ohne Satzzeichen).
 
     *anrede*: spricht die Nachricht irgendwo jemanden an ("du", "you", "KI")?
     """
+    # 17.1.0: Ohne Buchstaben keine Beleidigung -- jede Wendung und jedes Wort hat welche. Vorher
+    # lief fuer "1,1,1,..." alles 50.000 Mal durch (2 s fuer eine lange Nachricht).
+    if not _BUCHSTABE.search(teil):
+        return 0
     stufe = 0
     teil = _dritte_person(teil)
     woerter = re.findall(r"[^\W\d_]+(?:'[^\W\d_]+)?", teil)
-    for wert, wendung in _BELEIDIGUNG_WENDUNGEN:
-        if not re.search(rf"\b{re.escape(wendung)}\b", teil):
+    for wert, wendung, muster in _WENDUNG_MUSTER:
+        if not muster.search(teil):
             continue
 
         extra = 0 if wendung in _NUR_ALLEIN else 2

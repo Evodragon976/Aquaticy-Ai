@@ -14,7 +14,7 @@ from aquaticy.agent import Agent, AgentResult
 from aquaticy.auth import AuthStore
 from aquaticy.cluster import SharedDb
 from aquaticy.learning import Learning
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_VERSION
 from aquaticy.models import PageResult
 from aquaticy.privacy import TEXT_PREFIX
 from aquaticy.tools import Toolbox
@@ -44,10 +44,10 @@ def test_no_retroactive_learning_and_explicit_current_consent(learners):
     _, _, (first, second) = learners
     assert not first.ticket() and not first.status()["enabled"]
     assert contribute(first) == 0 and second.recall(QUESTION) == []
-    for enabled, version in (("true", LEGAL_VERSION), (1, LEGAL_VERSION), (True, "old")):
+    for enabled, version in (("true", LEARNING_VERSION), (1, LEARNING_VERSION), (True, "old")):
         with pytest.raises(ValueError):
             first.set_consent(enabled, version)
-    first.set_consent(True, LEGAL_VERSION)
+    first.set_consent(True, LEARNING_VERSION)
     assert contribute(first) == 1
 
 
@@ -58,7 +58,7 @@ def test_no_retroactive_learning_and_explicit_current_consent(learners):
     third_account = auth.register("person9@example.org", "ein-test-passwort", "normal",
                                   terms_accepted=True, terms_version="old")
     third = Learning(auth.profile_dir(third_account.id))
-    third.set_consent(True, LEGAL_VERSION)
+    third.set_consent(True, LEARNING_VERSION)
     assert contribute(third) == 1
     assert second.recall(QUESTION) == [{"text": FACT, "source": SOURCE}]
     assert not second.status()["enabled"]
@@ -66,7 +66,7 @@ def test_no_retroactive_learning_and_explicit_current_consent(learners):
 
 def test_encrypted_data_and_blind_search_index(learners):
     _, accounts, (store, _) = learners
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     assert contribute(store) == 1
     with store.connect() as conn:
         row = conn.execute("SELECT id,text,source FROM learning_facts").fetchone()
@@ -106,7 +106,7 @@ def test_source_policy_rejects_personal_untrusted_or_ambiguous_urls(url):
 ])
 def test_personal_secrets_and_instructions_are_rejected(tmp_path, extra):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     text = FACT[:-1] + extra
     assert store.learn(store.ticket(), QUESTION, text, [(SOURCE, text)]) == 0
     assert not store.recall(QUESTION)
@@ -114,7 +114,7 @@ def test_personal_secrets_and_instructions_are_rejected(tmp_path, extra):
 
 def test_private_terms_wrong_source_and_unrelated_answer_never_publish(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     ticket = store.ticket()
     assert store.learn(ticket, QUESTION, FACT, [(SOURCE, FACT)], {"Lichtenergie"}) == 0
     assert store.learn(ticket, QUESTION, FACT, [("https://example.org", FACT)]) == 0
@@ -125,15 +125,15 @@ def test_private_terms_wrong_source_and_unrelated_answer_never_publish(tmp_path)
 
 def test_withdrawal_and_new_consent_cannot_publish_an_old_turn(learners):
     _, _, (first, second) = learners
-    first.set_consent(True, LEGAL_VERSION)
+    first.set_consent(True, LEARNING_VERSION)
     old = first.ticket()
     assert contribute(first) == 1
     first.set_consent(False, "")
     assert second.recall(QUESTION) == []
-    first.set_consent(True, LEGAL_VERSION)
+    first.set_consent(True, LEARNING_VERSION)
     assert first.learn(old, QUESTION, FACT, [(SOURCE, FACT)]) == 0
     assert contribute(first) == 1
-    second.set_consent(True, LEGAL_VERSION)
+    second.set_consent(True, LEARNING_VERSION)
     assert contribute(second) == 1
     first.set_consent(False, "")
     assert first.status()["contributions"] == 0
@@ -145,7 +145,7 @@ def test_withdrawal_and_new_consent_cannot_publish_an_old_turn(learners):
 @pytest.mark.parametrize("action", ["wipe_data", "remove_account"])
 def test_account_erasure_revokes_consent_and_removes_contributions(learners, action):
     auth, accounts, (store, other) = learners
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     ticket = store.ticket()
     assert contribute(store) == 1
     getattr(auth, action)(accounts[0])
@@ -153,12 +153,12 @@ def test_account_erasure_revokes_consent_and_removes_contributions(learners, act
     assert store.learn(ticket, QUESTION, FACT, [(SOURCE, FACT)]) == 0
     if action == "remove_account":
         with pytest.raises(ValueError):
-            store.set_consent(True, LEGAL_VERSION)
+            store.set_consent(True, LEARNING_VERSION)
 
 
 def test_expiration_limits_and_concurrent_deduplication(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     with ThreadPoolExecutor(max_workers=8) as pool:
         assert sum(pool.map(lambda _: contribute(store), range(16))) == 1
     monkeypatch.setattr(learning, "MAX_FACTS", 1)
@@ -200,7 +200,7 @@ def test_fetch_collects_only_this_turn_approved_public_sources(settings):
 
 def test_agent_shares_after_safety_check_and_marks_recalled_material(settings, monkeypatch):
     store = Learning(settings.data_dir)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     agent = Agent(settings)
     agent.learning = store
     try:
@@ -215,7 +215,7 @@ def test_agent_shares_after_safety_check_and_marks_recalled_material(settings, m
         assert agent.messages[0]["role"] == "system" and FACT not in agent.messages[0]["content"]
         store.set_consent(False, "")
         assert FACT not in agent._with_context(QUESTION)
-        store.set_consent(True, LEGAL_VERSION)
+        store.set_consent(True, LEARNING_VERSION)
         agent.toolbox.learning_ticket = store.ticket()
         agent.toolbox.stats.learning_pages = [(SOURCE, FACT)]
         monkeypatch.setattr(
@@ -247,7 +247,7 @@ def test_real_chat_turn_then_another_account_uses_shared_knowledge(
     def completion(**kwargs):
 
         if not first.ticket():
-            first.set_consent(True, LEGAL_VERSION)
+            first.set_consent(True, LEARNING_VERSION)
         return scripted(**kwargs)
 
     monkeypatch.setattr("litellm.completion", completion)
@@ -264,7 +264,7 @@ def test_real_chat_turn_then_another_account_uses_shared_knowledge(
         drittes = auth.register("person8@example.org", "ein-test-passwort", "normal",
                                 terms_accepted=True, terms_version="old")
         third = Learning(auth.profile_dir(drittes.id))
-        third.set_consent(True, LEGAL_VERSION)
+        third.set_consent(True, LEARNING_VERSION)
         assert contribute(third) == 1
         assert second.recall(QUESTION)
     finally:
@@ -287,7 +287,7 @@ def test_real_chat_turn_then_another_account_uses_shared_knowledge(
 @pytest.mark.parametrize("stopped,error", [(True, None), (False, "Fehler")])
 def test_stopped_or_failed_runs_do_not_contribute(settings, monkeypatch, stopped, error):
     store = Learning(settings.data_dir)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     agent = Agent(settings)
     agent.learning = store
     monkeypatch.setattr(agent, "_check_answer", lambda result, question="": None)
@@ -314,7 +314,7 @@ def test_consent_and_knowledge_replicate_with_authenticated_cluster(tmp_path):
     logs = [SharedDb(s.path) for s in (first, second)]
     for log in logs:
         log.install()
-    first.set_consent(True, LEGAL_VERSION)
+    first.set_consent(True, LEARNING_VERSION)
     assert contribute(first) == 1
     batch = logs[0].changes(0)
     assert logs[1].apply("first", batch["entries"]) > 0
@@ -331,10 +331,10 @@ def test_http_learning_requires_auth_origin_and_exact_consent(parallel_site):
         assert outsider.post("/api/learning", json={"enabled": True}).status_code == 401
         assert outsider.post("/api/consent", json={"accepted": "false"}).status_code == 403
     assert client.get("/api/learning").json()["enabled"] is False
-    for payload in ({"enabled": "true", "version": LEGAL_VERSION},
+    for payload in ({"enabled": "true", "version": LEARNING_VERSION},
                     {"enabled": True, "version": "old"}):
         assert client.post("/api/learning", json=payload).status_code == 400
-    payload = {"enabled": True, "version": LEGAL_VERSION}
+    payload = {"enabled": True, "version": LEARNING_VERSION}
     assert client.post("/api/learning", json=payload,
                        headers={"Origin": "https://evil.example"}).status_code == 403
     assert client.post("/api/learning", json=payload).json()["enabled"] is True
@@ -348,7 +348,7 @@ def test_login_only_grants_learning_with_separate_current_agreement(parallel_sit
     assert client.post("/api/auth/login", headers=FETCH,
                        json=wie_die_app(credentials)).status_code == 200
     assert not client.get("/api/learning").json()["enabled"]
-    credentials["learning_version"] = LEGAL_VERSION
+    credentials["learning_version"] = LEARNING_VERSION
     assert client.post("/api/auth/login", headers=FETCH,
                        json=wie_die_app(credentials)).status_code == 200
     assert client.get("/api/learning").json()["enabled"]
@@ -356,7 +356,7 @@ def test_login_only_grants_learning_with_separate_current_agreement(parallel_sit
 
 def test_learning_can_be_withdrawn_while_the_account_is_banned(parallel_site, monkeypatch):
     client, _, _, _, _, _ = parallel_site
-    client.post("/api/learning", json={"enabled": True, "version": LEGAL_VERSION})
+    client.post("/api/learning", json={"enabled": True, "version": LEARNING_VERSION})
 
     class Guard:
         def is_banned(self, **kwargs):
@@ -364,11 +364,11 @@ def test_learning_can_be_withdrawn_while_the_account_is_banned(parallel_site, mo
 
     monkeypatch.setattr(web, "AIGUARD", Guard())
     assert client.post("/api/learning", json={
-        "enabled": True, "version": LEGAL_VERSION}).status_code == 403
+        "enabled": True, "version": LEARNING_VERSION}).status_code == 403
     assert client.post("/api/learning", json={"enabled": False}).json()["enabled"] is False
     assert client.post("/api/auth/login", headers=FETCH, json=wie_die_app({
         "email": "parallel@example.org", "password": "parallel-test-passwort",
-        "learning_accepted": True, "learning_version": LEGAL_VERSION})).status_code == 200
+        "learning_accepted": True, "learning_version": LEARNING_VERSION})).status_code == 200
     assert not client.get("/api/learning").json()["enabled"]
 
 
@@ -448,7 +448,7 @@ def test_browser_learning_controls_and_batched_renderer(parallel_site):
 def test_single_contributor_cannot_spread_a_fact_alone(learners):
     """9.6.8 Sol: ein einzelnes (womoeglich praepariertes) Konto verbreitet nichts."""
     _, _, (first, second) = learners
-    first.set_consent(True, LEGAL_VERSION)
+    first.set_consent(True, LEARNING_VERSION)
     assert contribute(first) == 1
     assert first.recall(QUESTION) and not second.recall(QUESTION)
     assert learning.MIN_CONFIRMATIONS >= 2

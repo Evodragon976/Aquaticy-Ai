@@ -17,7 +17,7 @@ import pytest
 
 from aquaticy import aiguard, guardrails, lan, metering, sharding
 from aquaticy.guardrails import Guard
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_VERSION
 from tests.test_guardrails import Pruefer
 from tests.test_v965 import parallel_site  # noqa: F401
 from tests.test_v967 import QUESTION, contribute, learners  # noqa: F401
@@ -128,11 +128,11 @@ def test_image_baseline_needs_an_explicit_rule(settings, payload):
     assert not result.allowed and result.source == "unklar"
 
 
-@pytest.mark.parametrize("enabled,version", [(1, "old"), (0, LEGAL_VERSION)])
+@pytest.mark.parametrize("enabled,version", [(1, "old"), (0, LEARNING_VERSION)])
 def test_recall_ignores_outdated_or_disabled_contributors(learners, enabled, version):  # noqa: F811
     _, _, (first, second) = learners
     for store in (first, second):
-        store.set_consent(True, LEGAL_VERSION)
+        store.set_consent(True, LEARNING_VERSION)
         assert contribute(store) == 1
     with first.connect() as conn:
         conn.execute("UPDATE learning_consent SET enabled=?,version=?", (enabled, version))

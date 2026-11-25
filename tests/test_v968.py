@@ -34,7 +34,7 @@ from aquaticy.calc import CalcError, calculate
 from aquaticy.extract import extract_product
 from aquaticy.jsonutil import MAX_DEPTH, JsonDepthError, loads
 from aquaticy.learning import Learning
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_VERSION
 from tests.test_terra import FACT, QUESTION, SOURCE, remember
 from tests.test_v965 import parallel_site as parallel_site
 
@@ -280,7 +280,7 @@ def test_deep_safety_responses_remain_unclear_and_do_not_grant_approval():
 
 def test_named_people_with_same_surname_do_not_share_cached_facts(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     assert remember(store) == 1
     assert store.research.recall("Welche Arbeiten von Mileva Einstein sind bekannt?") == []
     assert store.research.recall(QUESTION) == [{"text": "- " + FACT, "source": SOURCE}]

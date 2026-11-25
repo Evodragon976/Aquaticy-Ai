@@ -34,6 +34,10 @@ from pathlib import Path
 from typing import Any
 
 MAX_BYTES = 400_000_000
+#: 17.1.0: Ein Gast ist nur fuer einen Tab da -- sein Profil (mit der Datei GAST_MARKE) hat
+#: hoechstens 20 MB. Sonst fuellten drei Gaeste je Adresse 1,2 GB.
+GAST_MAX_BYTES = 20_000_000
+GAST_MARKE = ".gast"
 
 
 CLEANUP_AT = 0.9
@@ -118,9 +122,16 @@ def note_written(data_dir: Path | str, amount: int) -> None:
             _messungen[schluessel] = (bekannt[0], bekannt[1] + max(0, int(amount)))
 
 
+def grenze(data_dir: Path | str) -> int:
+    """17.1.0: Die Speichergrenze dieses Profils -- bei Gaesten GAST_MAX_BYTES."""
+    if (Path(data_dir) / GAST_MARKE).exists():
+        return min(MAX_BYTES, GAST_MAX_BYTES)
+    return MAX_BYTES
+
+
 def fits(data_dir: Path | str, incoming: int = 0) -> bool:
     """Passt *incoming* unter die Aufraeum-Schwelle -- ohne aufzuraeumen?"""
-    return used_bytes(data_dir) + max(0, incoming) <= MAX_BYTES * CLEANUP_AT
+    return used_bytes(data_dir) + max(0, incoming) <= grenze(data_dir) * CLEANUP_AT
 
 
 def forget(data_dir: Path | str | None = None) -> None:
@@ -178,7 +189,7 @@ def make_room(data_dir: Path | str) -> int:
 
     ordner = Path(data_dir)
     vorher = used_bytes(ordner, fresh=True)
-    ziel = MAX_BYTES * CLEANUP_TO
+    ziel = grenze(ordner) * CLEANUP_TO
 
     def genug() -> bool:
         forget(ordner)
@@ -201,7 +212,7 @@ def make_room(data_dir: Path | str) -> int:
                 entfernbar += datei.stat().st_size
     forget(ordner)
     if used_bytes(ordner, fresh=True) - entfernbar > ziel:
-        ziel = MAX_BYTES * CLEANUP_AT
+        ziel = grenze(ordner) * CLEANUP_AT
         if used_bytes(ordner, fresh=True) - entfernbar > ziel:
             forget(ordner)
             return max(0, vorher - used_bytes(ordner, fresh=True))
@@ -218,16 +229,16 @@ def make_room(data_dir: Path | str) -> int:
 def has_room(data_dir: Path | str, incoming: int = 0) -> bool:
     """Passt *incoming* noch hinein -- notfalls nach dem Aufraeumen?"""
     ordner = Path(data_dir)
-    if used_bytes(ordner) + max(0, incoming) <= MAX_BYTES * CLEANUP_AT:
+    if used_bytes(ordner) + max(0, incoming) <= grenze(ordner) * CLEANUP_AT:
         return True
     make_room(ordner)
-    return used_bytes(ordner, fresh=True) + max(0, incoming) <= MAX_BYTES
+    return used_bytes(ordner, fresh=True) + max(0, incoming) <= grenze(ordner)
 
 
 def ensure_room(data_dir: Path | str, incoming: int = 0) -> None:
     """Wie ``has_room`` -- nur dass es ``StorageFull`` wirft, statt False zu sagen."""
     if not has_room(data_dir, incoming):
         raise StorageFull(
-            f"Dein Speicher ist voll ({MAX_BYTES // 1_000_000} MB). Lösche alte Chats, "
+            f"Dein Speicher ist voll ({grenze(data_dir) // 1_000_000} MB). Lösche alte Chats, "
             "Notizen oder hochgeladene Dateien in den Einstellungen unter Speicher."
         )

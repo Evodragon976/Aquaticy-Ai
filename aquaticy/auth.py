@@ -954,7 +954,12 @@ class AuthStore:
                  self._secrets.seal(adresse, "users.last_ip"), zaehler),
             )
             self._store_device(conn, user_id, device, now)
-        secure_directory(self.profile_dir(user_id))
+        ordner = self.profile_dir(user_id)
+        secure_directory(ordner)
+        # 17.1.0: Die Marke begrenzt den Speicher des Gastes (aquaticy/budget.py: GAST_MAX_BYTES).
+        from aquaticy.budget import GAST_MARKE
+
+        (ordner / GAST_MARKE).write_text("Gast\n", encoding="utf-8")
         return Account(user_id, email, "normal", now, username, self.ip_key(adresse),
                        now if adresse else 0.0, self._credential_for({
                            "id": user_id, "password_hash": password_hash,
@@ -987,18 +992,28 @@ class AuthStore:
                          (ende, str(row[0])))
         return True
 
-    def expired_guests(self) -> list[str]:
+    def expired_guests(self, vorrang_ip: str = "") -> list[str]:
         """17.0.0: Gaeste, die weg sollen: aelter als GAST_STUNDEN oder ohne gueltige Sitzung.
 
         Fuenf Minuten Schonzeit: Zwischen Anlegen und Sitzung liegt ein Augenblick.
+
+        Args:
+            vorrang_ip: 17.1.0: Gaeste dieser Adresse zuerst, dann die aeltesten. Vor einem neuen
+                Gast zaehlt create_guest() die Gaeste der Adresse -- abgelaufene sollen dann
+                schon weg sein, auch wenn das Aufraeumen nicht alle auf einmal schafft.
         """
+        from aquaticy.aiguard import _norm_ip
+
+        vorrang = ("gast:" + _secret_hash(gast_bereich(_norm_ip(vorrang_ip)), self._pepper)[:32]
+                   if vorrang_ip else "")
         jetzt = time.time()
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT id FROM users WHERE guest != '' AND (created_at < ? OR (created_at < ? "
                 "AND NOT EXISTS (SELECT 1 FROM sessions WHERE sessions.user_id = users.id "
-                "AND sessions.expires_at > ?)))",
-                (jetzt - GAST_STUNDEN * 3600, jetzt - 300, jetzt)).fetchall()
+                "AND sessions.expires_at > ?))) "
+                "ORDER BY CASE WHEN guest = ? THEN 0 ELSE 1 END, created_at",
+                (jetzt - GAST_STUNDEN * 3600, jetzt - 300, jetzt, vorrang)).fetchall()
         return [str(row[0]) for row in rows]
 
     def forget_old_guest_usage(self) -> None:
@@ -1141,7 +1156,8 @@ class AuthStore:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM users WHERE email = ?",
                                (self._email_key(email),)).fetchone()
-        if row is None or row["guest"]:
+        spalten = row.keys() if row is not None else ()
+        if row is None or ("guest" in spalten and row["guest"]):
             # 17.0.0: Gaeste haben kein Passwort, das jemand kennt -- sie melden sich nie an.
             _argon_hash(password, b"\0" * 16, self._pepper)
             return None

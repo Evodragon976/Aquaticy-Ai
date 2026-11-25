@@ -8,7 +8,7 @@ import pytest
 
 from aquaticy import research
 from aquaticy.learning import Learning
-from aquaticy.legal import LEGAL_VERSION
+from aquaticy.legal import LEARNING_VERSION
 from tests.test_terra import FACT, QUESTION, SOURCE, remember
 
 FACTS = [
@@ -23,7 +23,7 @@ FACTS = [
 
 def test_collects_additional_facts_without_repeating_subject_or_previous_answer(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     body = "\n".join([*FACTS, FACTS[1]])
     assert store.research.learn(store.ticket(), QUESTION, FACT, [(SOURCE, body)]) == len(FACTS)
     recalled = store.research.recall("Was ist über Albert Einstein bekannt?")
@@ -39,7 +39,7 @@ def test_collects_additional_facts_without_repeating_subject_or_previous_answer(
 
 def test_non_person_source_text_keeps_qualifications_and_negations(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     url = "https://de.wikipedia.org/wiki/Photosynthese"
     facts = [
         "Photosynthese wandelt Lichtenergie unter bestimmten Bedingungen in chemische Energie um.",
@@ -55,7 +55,7 @@ def test_non_person_source_text_keeps_qualifications_and_negations(tmp_path):
 
 def test_old_terra_rows_remain_bullets_without_extending_expiry(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     clock = [1000.0]
     monkeypatch.setattr(research, "time", SimpleNamespace(time=lambda: clock[0]))
     remember(store)
@@ -92,14 +92,14 @@ def test_year_at_end_does_not_join_next_fact_and_drop_information():
 
 def test_private_use_markers_cannot_be_reinterpreted_as_source_punctuation(tmp_path):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     assert remember(store, text=FACT[:-1] + "\ue000") == 0
     assert not store.research.recall(QUESTION)
 
 
 def test_more_coverage_preserves_filters_and_context_limits(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     facts = [FACT.replace("moderne", f"heutige ({i})") for i in range(25)]
     unsafe = FACT[:-1] + " Kontakt: person@example.org."
     assert store.research.learn(store.ticket(), QUESTION, FACT,
@@ -114,7 +114,7 @@ def test_more_coverage_preserves_filters_and_context_limits(tmp_path, monkeypatc
 
 def test_broader_collection_still_respects_storage_limits(tmp_path, monkeypatch):
     store = Learning(tmp_path)
-    store.set_consent(True, LEGAL_VERSION)
+    store.set_consent(True, LEARNING_VERSION)
     monkeypatch.setattr(research, "MAX_OWN", 5)
     assert store.research.learn(store.ticket(), QUESTION, FACT,
                                  [(SOURCE, "\n".join(FACTS))]) == 5

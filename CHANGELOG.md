@@ -3,6 +3,28 @@
 Was sich in den einzelnen Fassungen von Aquaticy geändert hat, die neueste zuerst.
 Zurück zur [README](README.md).
 
+**Neu in 17.1.0:** Nur Fehler behoben.
+
+- **Gemeinsames Lernen:** In 17.0.0 schaltete der neue Absatz zum Gastzugang die Zustimmung zum
+  Lernen bei allen ab, weil sie an der Fassung der ganzen Rechtstexte hing. Jetzt hängt sie am
+  Absatz über das Lernen (Fassung 2026-10-07.1). Wer zugestimmt hatte, ist wieder dabei, auch wer
+  unter 17.0.0 zugestimmt hat. Wer abgeschaltet hat, bleibt abgeschaltet.
+- **Speicher für Gäste:** Ein Gast bekam 400 MB wie ein Konto. Drei Gäste je Adresse konnten so 1,2
+  GB füllen. Jetzt hat ein Gast höchstens 20 MB.
+- **Gastzugang:** Gäste sahen in den Antworten des Servers ihre interne Adresse
+  „gast-…@gast.invalid“. „Keine, du bist Gast“ blieb in der englischen Oberfläche deutsch.
+  „Anmelden“ in den Einstellungen öffnete den Reiter „Registrieren“. Auf dem Handy konnte ein
+  Wechsel der App wie das Schließen des Tabs wirken, dann war der Gast nach 2 Minuten weg. Ein
+  Aufräumen löscht höchstens 25 Gäste auf einmal. Vor einem neuen Gast kommen die Gäste derselben
+  Adresse zuerst dran.
+- **Aquaticy Standard:** „Wie viele Tage hat der Monat Februar?“ und „How many days does this month
+  have?“ gehen jetzt. „29.02.0000“ wurde zum Jahr 2000, und „1.1.1“ galt als 1. Januar dieses
+  Jahres. „Welche Kalenderwoche ist morgen?“ und „… ist der 29.02.2027?“ nannten die Woche von
+  heute. Auf „Hello, what day is it?“ kam nur ein Gruß zurück, und „Welches Datum ist heute Morgen?“
+  nannte das Datum von morgen. „100 km in miles“ bekam eine deutsche Antwort.
+- **Schneller:** Die Prüfung auf Beleidigungen braucht für eine Nachricht mit 100.000 Zeichen etwa
+  0,3 bis 0,5 statt bis zu 2,2 Sekunden. Sie findet dasselbe wie vorher (19.212 Sätze verglichen).
+
 **Neu in 17.0.0:**
 
 - **Ohne Anmeldung fortfahren:** Auf der Anmeldekarte gibt es einen neuen Knopf (nur mit dem

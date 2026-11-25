@@ -6,6 +6,14 @@ Die Seiten beschreiben nur Verhalten, das im Code nachpruefbar ist.
 from __future__ import annotations
 
 LEGAL_VERSION = "2026-11-24.1"
+#: 17.1.0: Die Fassung des Absatzes "Freiwilliges gemeinsames Lernen". Die Zustimmung zum
+#: Lernen haengt an diesem Absatz, nicht an jeder Aenderung der Rechtstexte -- sonst schaltete
+#: der neue Absatz zum Gastzugang (17.0.0) das Lernen bei allen still ab. Aendert sich der
+#: Absatz, hier hochzaehlen: Dann muss jeder neu zustimmen.
+LEARNING_VERSION = "2026-10-07.1"
+#: 17.1.0: Unter diesen Fassungen speicherte Aquaticy die Zustimmung zum Lernen, obwohl der Absatz
+#: zum Lernen derselbe war (17.0.0: 2026-11-24.1 kam nur der Absatz zum Gastzugang dazu).
+LEARNING_GLEICHER_ABSATZ = ("2026-11-24.1",)
 LEGAL_ROUTES = ("/privacy", "/cookies", "/terms", "/accessibility")
 
 
