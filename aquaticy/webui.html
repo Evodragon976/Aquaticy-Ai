@@ -2877,7 +2877,7 @@ const thread = $("#thread"), main = $("#main"), input = $("#input"), send = $("#
 let busy = false;
 let currentChat = "";
 let secureChat = false;
-const aquaticyVersion = window.__AQUATICY_VERSION__ || "17.1.0";
+const aquaticyVersion = window.__AQUATICY_VERSION__ || "17.1.1";
 $("#version").textContent = "v" + aquaticyVersion;
 // Laeuft noch die alte Version, obwohl eine neue installiert ist? (15.0.0)
 const aquaticyInstalliert = window.__AQUATICY_INSTALLED__ || "";
@@ -3246,7 +3246,11 @@ function api(path, options = {}, versuch = 0){
 
 
   const lesen = !options.method || options.method.toUpperCase() === "GET";
-  const nochmal = () => lesen && versuch < 2 && !options.signal?.aborted;
+  // 17.1.1: "Neuer Chat" und "Chat öffnen" lassen sich gefahrlos wiederholen. Auf Vercel kommt
+  // beim Kaltstart einer Instanz manchmal kurz 502/503/504 -- vorher hieß es dann gleich
+  // "Der Chat ließ sich gerade nicht öffnen".
+  const wiederholbar = lesen || ["/api/open", "/api/clear"].includes(path);
+  const nochmal = () => wiederholbar && versuch < 2 && !options.signal?.aborted;
   return fetch(path, Object.assign({credentials:"same-origin"}, requestOptions, { headers }))
     .then(async (res) => {
       if ([502, 503, 504].includes(res.status) && nochmal()){
@@ -11748,7 +11752,8 @@ function greet(){
   const saetze = englisch ? (GRUSS_EN[modus] || GRUSS_EN.normal)
     : (TEXTE.greetings[modus] || TEXTE.greetings.normal
        || ["{gruss}, {name}. Wobei kann ich dir helfen?"]);
-  $("#greeting").textContent = grussZiehen(saetze, when, currentUsername);
+  // 17.1.1: Gaeste ohne Namen -- vorher stand dort "Hallo, Gast-4FE682".
+  $("#greeting").textContent = grussZiehen(saetze, when, istGast ? "" : currentUsername);
   rotateSuggestions();
 }
 

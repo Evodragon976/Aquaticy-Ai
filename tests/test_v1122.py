@@ -661,7 +661,9 @@ console.log(JSON.stringify({kaputt, mit,
     assert ergebnis["ohne"] == "Womit fangen wir an?"
 
     assert ergebnis["dollar"] == "Womit fangen wir an, Jo$&nas$1?"
-    assert "grussZiehen(saetze, when, currentUsername)" in html
+    # 17.1.1: Gäste sehen den Gruß ohne ihren Gastnamen (Wunsch des Nutzers),
+    # angemeldete Konten weiter mit Namen.
+    assert 'grussZiehen(saetze, when, istGast ? "" : currentUsername)' in html
 
 
 

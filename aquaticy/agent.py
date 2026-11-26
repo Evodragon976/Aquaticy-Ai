@@ -540,13 +540,27 @@ def smalltalk_fuer(agent: Any, question: str) -> str:
     art = smalltalk.art_von(question, frage_offen=bool(frage()) if callable(frage) else False)
     if art is None or (art.name == "faehigkeiten" and agent._standard_model()):
         return ""
+    from aquaticy import weltsprachen
+
+    sprache = weltsprachen.sprache_von(question)
     if agent._standard_model():
         # 16.4.2: In einer anderen Sprache antwortet Aquaticy Standard selbst -- in dieser.
-        from aquaticy import weltsprachen
-
-        if weltsprachen.sprache_von(question) not in ("", "de"):
+        if sprache not in ("", "de"):
             return ""
+    elif sprache == "en":
+        # 17.1.1: Mit einem Sprachmodell bekam "Thanks" vorher "Keine Ursache!".
+        return SMALLTALK_EN.get(art.name, "")
+    elif sprache not in ("", "de"):
+        return ""
     return smalltalk.waehle(art)
+
+
+#: 17.1.1: Kurze englische Antworten fuer englischen Smalltalk mit einem Sprachmodell. Was hier
+#: fehlt, beantwortet das Modell selbst.
+SMALLTALK_EN = {"danke": "You're welcome!", "abschied": "Goodbye! See you soon.",
+                "wie_gehts": "I'm fine, thanks! How can I help you?",
+                "gute_nacht": "Good night! Sleep well.", "begruessung": "Hi! How can I help you?",
+                "morgen": "Good morning! How can I help you?"}
 
 
 def standard_chat_reply(question: str, *, frage_offen: bool = False) -> str:

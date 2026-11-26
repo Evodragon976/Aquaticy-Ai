@@ -1293,7 +1293,7 @@ class ChatSession:
                 elif session._agent is not None:
                     session._agent.close()
 
-    def resolve_chat(self, chat_id: str = "") -> ChatSession:
+    def resolve_chat(self, chat_id: str = "", neu_erlaubt: bool = False) -> ChatSession:
         owner = self._owner
         with owner._chat_lock:
             if not chat_id:
@@ -1305,6 +1305,15 @@ class ChatSession:
             cache = Cache(self.settings().db_path, self.settings().cache_ttl_hours)
             entries = cache.chat_history(chat_id)
             if not entries:
+                # 17.1.1: Ein neuer, noch leerer Chat lebt nur im Speicher der Instanz, die ihn
+                # angelegt hat. Auf Vercel landet die erste Nachricht oft bei einer anderen
+                # (etwa nach einem Kaltstart). Vorher hiess es dort "Diesen Chat gibt es nicht
+                # mehr" -- auch fuer "Neuer Chat" und "Oeffnen", bis die Seite neu geladen war.
+                # Beim Senden, "Neuer Chat", "Oeffnen" und der Chatliste gibt es deshalb einen
+                # frischen Chat mit einer NEUEN Kennung (die Seite uebernimmt sie). Eine fremde
+                # Kennung wird nie uebernommen; alle anderen Wege lehnen sie weiter ab.
+                if neu_erlaubt and CHAT_KENNUNG.fullmatch(chat_id):
+                    return self._new_chat_session()
                 raise BadRequest("Diesen Chat gibt es nicht mehr.")
             return self._new_chat_session(chat_id, entries)
 
@@ -2236,6 +2245,10 @@ def resolve_image(target: Path) -> Path:
 
 DEFAULT_SESSION = ChatSession()
 _REQUEST = threading.local()
+
+
+#: 17.1.1: So sieht die Kennung eines Chats aus (agent.new_session_id: Sekunden-Bindestrich-8 hex).
+CHAT_KENNUNG = re.compile(r"\d{9,12}-[0-9a-f]{8}")
 
 
 class SessionRegistry:
@@ -4954,7 +4967,8 @@ class Handler(BaseHTTPRequestHandler):
                                   "/api/run", "/api/runstate", "/api/stop", "/api/answer",
                                   "/api/command", "/api/chat-edit", "/api/chatexport"}
             _REQUEST.session = base.resolve_chat(
-                self.headers.get("X-Aquaticy-Chat", "") if chat_route else "")
+                self.headers.get("X-Aquaticy-Chat", "") if chat_route else "",
+                neu_erlaubt=route in {"/api/chat", "/api/clear", "/api/open", "/api/chats"})
             handler()
         except (BrokenPipeError, ConnectionResetError):
             pass

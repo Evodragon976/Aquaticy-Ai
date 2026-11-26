@@ -121,8 +121,8 @@ def test_english_questions_get_english_numbers(frage, erwartet):
 
 
 # "Is 2024 a leap year?" hat seit Teil 5 eine eigene englische Antwort, "Flip a coin" und
-# "Roll a die" seit Teil 9 (Fund 393).
-@pytest.mark.parametrize("frage", ["Sing me a song", "Tell me a story", "Tell me a joke"])
+# "Roll a die" seit Teil 9 (Fund 393), "Tell me a joke" seit 17.1.1 (test_v1711.py).
+@pytest.mark.parametrize("frage", ["Sing me a song", "Tell me a story"])
 def test_english_commands_get_an_english_fallback(frage):
     assert weltsprachen.sprache_von(frage) == "en"
     assert frag(frage).startswith("Sorry")
@@ -292,7 +292,8 @@ def test_the_german_thousands_separator(frage, erwartet):
     ("Wie viel sind 1.000 Euro in Dollar?", "1.000 EUR sind **1.100 USD**"),
     ("1,5 Mio Euro in Dollar", "1.500.000 EUR sind **1.650.000 USD**"),
     ("100 Euro in Schweizer Franken", "100 EUR sind **110 CHF**"),
-    ("100 euro to pounds", "100 EUR sind **110 GBP**"),
+    # 17.1.1: Eine englische Frage bekommt eine englische Antwort (vorher "sind").
+    ("100 euro to pounds", "100 EUR is **110 GBP**"),
     ("Wie viele Dollar bekomme ich für 200 Euro?", "200 EUR sind **220 USD**"),
     ("200 Euro sind wie viel Dollar?", "200 EUR sind **220 USD**"),
     ("Wie steht der Dollar?", "1 EUR ist **1,1 USD**"),
